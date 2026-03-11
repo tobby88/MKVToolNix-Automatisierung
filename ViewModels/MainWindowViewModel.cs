@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -37,10 +38,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public static MainWindowViewModel CreateDefault()
     {
-        var appServices = new AppServices(
-            new MkvToolNixLocator(),
-            new MkvMergeProbeService(),
-            new MuxExecutionService());
+        var locator = new MkvToolNixLocator();
+        var probeService = new MkvMergeProbeService();
+        var planner = new SeriesEpisodeMuxPlanner(locator, probeService);
+        var executionService = new MuxExecutionService();
+        var outputParser = new MkvMergeOutputParser();
+        var muxService = new SeriesEpisodeMuxService(planner, executionService, outputParser);
+        var appServices = new AppServices(muxService);
 
         var dialogService = new UserDialogService();
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);

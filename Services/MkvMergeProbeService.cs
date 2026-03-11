@@ -52,18 +52,20 @@ public sealed class MkvMergeProbeService
             ? ParseWidth(pixelDimensionsElement.GetString())
             : 0;
 
-        var codec = NormalizeCodecName(ReadCodec(videoTrack.Value, videoProperties));
+        var videoCodec = NormalizeVideoCodecName(ReadCodec(videoTrack.Value, videoProperties));
+        var audioCodec = NormalizeAudioCodecName(ReadCodec(audioTrack.Value, audioProperties));
 
         return new MediaTrackMetadata(
             VideoTrackId: ReadTrackId(videoTrack.Value),
             AudioTrackId: ReadTrackId(audioTrack.Value),
             ResolutionLabel: ResolutionLabel.FromWidth(width),
-            VideoCodecLabel: codec,
+            VideoCodecLabel: videoCodec,
+            AudioCodecLabel: audioCodec,
             VideoLanguage: NormalizeLanguage(videoProperties),
             AudioLanguage: NormalizeLanguage(audioProperties));
     }
 
-    public async Task<int> ReadFirstAudioTrackIdAsync(string mkvMergePath, string inputFilePath)
+    public async Task<AudioTrackMetadata> ReadFirstAudioTrackMetadataAsync(string mkvMergePath, string inputFilePath)
     {
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
         var tracks = trackDocument.RootElement.GetProperty("tracks");
@@ -72,7 +74,14 @@ public sealed class MkvMergeProbeService
         {
             if (track.TryGetProperty("type", out var typeElement) && typeElement.GetString() == "audio")
             {
-                return ReadTrackId(track);
+                var properties = track.TryGetProperty("properties", out var propertiesElement)
+                    ? propertiesElement
+                    : default;
+
+                return new AudioTrackMetadata(
+                    TrackId: ReadTrackId(track),
+                    CodecLabel: NormalizeAudioCodecName(ReadCodec(track, properties)),
+                    Language: NormalizeLanguage(properties));
             }
         }
 
@@ -83,7 +92,7 @@ public sealed class MkvMergeProbeService
     {
         if (!track.TryGetProperty("id", out var idElement) || !idElement.TryGetInt32(out var trackId))
         {
-            throw new InvalidOperationException("mkvmerge hat keine gültige Track-ID geliefert.");
+            throw new InvalidOperationException("mkvmerge hat keine gueltige Track-ID geliefert.");
         }
 
         return trackId;
@@ -150,7 +159,7 @@ public sealed class MkvMergeProbeService
         return int.TryParse(firstPart, out var width) ? width : 0;
     }
 
-    private static string NormalizeCodecName(string? codecId)
+    private static string NormalizeVideoCodecName(string? codecId)
     {
         if (string.IsNullOrWhiteSpace(codecId))
         {
@@ -162,9 +171,58 @@ public sealed class MkvMergeProbeService
             return "H.265";
         }
 
-        if (codecId.Contains("AVC", StringComparison.OrdinalIgnoreCase) || codecId.Contains("H.264", StringComparison.OrdinalIgnoreCase) || codecId.Contains("H/264", StringComparison.OrdinalIgnoreCase))
+        if (codecId.Contains("AVC", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("H.264", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("H/264", StringComparison.OrdinalIgnoreCase))
         {
             return "H.264";
+        }
+
+        return codecId;
+    }
+
+    private static string NormalizeAudioCodecName(string? codecId)
+    {
+        if (string.IsNullOrWhiteSpace(codecId))
+        {
+            return "Audio";
+        }
+
+        if (codecId.Contains("E-AC-3", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("EAC3", StringComparison.OrdinalIgnoreCase))
+        {
+            return "E-AC-3";
+        }
+
+        if (codecId.Contains("AC-3", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("AC3", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AC-3";
+        }
+
+        if (codecId.Contains("AAC", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AAC";
+        }
+
+        if (codecId.Contains("Opus", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Opus";
+        }
+
+        if (codecId.Contains("Vorbis", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Vorbis";
+        }
+
+        if (codecId.Contains("MP3", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MP3";
+        }
+
+        if (codecId.Contains("MP2", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MP2";
         }
 
         return codecId;

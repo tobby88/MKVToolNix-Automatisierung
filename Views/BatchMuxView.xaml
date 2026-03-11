@@ -35,7 +35,7 @@
             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputDirectory, Mode=OneWay}" />
             <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputDirectoryCommand}" Content="Ordner aendern" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Der Batch sucht Hauptdateien im Quellordner, ignoriert AD-Dateien als Startpunkte und erstellt fuer jede gefundene Episode einen Plan." />
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Der Batch sucht Hauptdateien im Quellordner, ignoriert AD-Dateien als Startpunkte und erstellt fuer jede gefundene Episode einen Plan. Bereits vorhandene Ausgabedateien werden beim Scan zunaechst abgewaehlt." />
         </Grid>
 
         <Grid Grid.Row="2">
@@ -49,13 +49,16 @@
             <GroupBox Grid.Row="0" Header="Gefundene Episoden">
                 <DataGrid ItemsSource="{Binding EpisodeItems}"
                           AutoGenerateColumns="False"
-                          IsReadOnly="True"
+                          IsReadOnly="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
                           HeadersVisibility="Column"
                           Margin="8">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" />
-                        <DataGridTextColumn Header="Datei" Binding="{Binding MainVideoFileName}" Width="2*" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                        <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
+                        <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Datei" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>

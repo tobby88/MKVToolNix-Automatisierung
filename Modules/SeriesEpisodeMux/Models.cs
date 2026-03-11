@@ -24,8 +24,14 @@ public sealed record MediaTrackMetadata(
     int AudioTrackId,
     ResolutionLabel ResolutionLabel,
     string VideoCodecLabel,
+    string AudioCodecLabel,
     string VideoLanguage,
     string AudioLanguage);
+
+public sealed record AudioTrackMetadata(
+    int TrackId,
+    string CodecLabel,
+    string Language);
 
 public sealed record EpisodeTrackMetadata(
     string VideoTrackName,
@@ -34,7 +40,7 @@ public sealed record EpisodeTrackMetadata(
 
 public sealed record SubtitleFile(string FilePath, SubtitleKind Kind)
 {
-    public string TrackName => $"Deutsch (hörgeschädigte) - {Kind.DisplayName}";
+    public string TrackName => $"Deutsch (hoergeschaedigte) - {Kind.DisplayName}";
 }
 
 public sealed record SubtitleKind(string DisplayName)

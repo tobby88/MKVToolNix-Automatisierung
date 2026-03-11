@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 public sealed class SeriesEpisodeMuxPlan
@@ -125,6 +127,22 @@ public sealed class SeriesEpisodeMuxPlan
     public string GetCommandLinePreview()
     {
         return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
+    }
+
+    public string BuildPreviewText()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"mkvmerge.exe: {MkvMergePath}");
+        builder.AppendLine();
+        builder.AppendLine($"Titel: {Title}");
+        builder.AppendLine($"Video: {PrimaryVideoFilePath}");
+        builder.AppendLine($"AD: {AudioDescriptionFilePath ?? "keine"}");
+        builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => Path.GetFileName(file.FilePath))))}");
+        builder.AppendLine($"Anhang: {AttachmentFilePath ?? "keiner"}");
+        builder.AppendLine();
+        builder.AppendLine("Argumente:");
+        builder.AppendLine(GetCommandLinePreview());
+        return builder.ToString();
     }
 
     private static string EscapeArgument(string argument)

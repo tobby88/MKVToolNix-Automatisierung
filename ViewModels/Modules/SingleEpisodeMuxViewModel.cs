@@ -1,7 +1,5 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -15,7 +13,6 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
-    private readonly SeriesEpisodeMuxPlanner _planner;
 
     private string? _mainVideoPath;
     private string? _audioDescriptionPath;
@@ -34,7 +31,6 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         _services = services;
         _dialogService = dialogService;
-        _planner = new SeriesEpisodeMuxPlanner(_services.Locator, _services.ProbeService);
 
         SelectMainVideoCommand = new RelayCommand(SelectMainVideo, () => !_isBusy);
         SelectAudioDescriptionCommand = new RelayCommand(SelectAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
@@ -207,7 +203,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         try
         {
-            var detected = _planner.DetectFromMainVideo(mainVideoPath);
+            var detected = _services.SeriesEpisodeMux.DetectFromMainVideo(mainVideoPath);
 
             MainVideoPath = detected.MainVideoPath;
             AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
@@ -392,7 +388,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             SetBusy(true);
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await BuildPlanAsync();
-            PreviewText = BuildPreviewText(_currentPlan);
+            PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
         }
         catch (Exception ex)
@@ -412,7 +408,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             _currentPlan ??= await BuildPlanAsync();
-            PreviewText = BuildPreviewText(_currentPlan) + Environment.NewLine + Environment.NewLine + "mkvmerge-Ausgabe:" + Environment.NewLine;
+            PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
+                + Environment.NewLine
+                + Environment.NewLine
+                + "mkvmerge-Ausgabe:"
+                + Environment.NewLine;
 
             if (!_dialogService.ConfirmMuxStart())
             {
@@ -421,25 +421,23 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             }
 
             SetStatus("Muxing laeuft...", 0);
-            var exitCode = await _services.ExecutionService.ExecuteAsync(
-                _currentPlan.MkvMergePath,
-                _currentPlan.BuildArguments(),
-                HandleMuxOutput);
+            var result = await _services.SeriesEpisodeMux.ExecuteAsync(_currentPlan, HandleMuxOutput, HandleMuxUpdate);
 
-            if (exitCode == 0)
+            if (result.ExitCode == 0 && !result.HasWarning)
             {
                 SetStatus("Muxing erfolgreich abgeschlossen", 100);
                 _dialogService.ShowInfo("Erfolg", $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
             }
-            else if (exitCode == 1 && File.Exists(_currentPlan.OutputFilePath))
+            else if ((result.ExitCode == 0 && result.HasWarning)
+                || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
             {
                 SetStatus("Muxing mit Warnungen abgeschlossen", 100);
                 _dialogService.ShowWarning("Warnung", $"Die MKV wurde erstellt, aber mkvmerge hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
             }
             else
             {
-                SetStatus($"Muxing fehlgeschlagen (Exit-Code {exitCode})", 0);
-                _dialogService.ShowWarning("Hinweis", $"mkvmerge wurde mit Exit-Code {exitCode} beendet.");
+                SetStatus($"Muxing fehlgeschlagen (Exit-Code {result.ExitCode})", 0);
+                _dialogService.ShowWarning("Hinweis", $"mkvmerge wurde mit Exit-Code {result.ExitCode} beendet.");
             }
         }
         catch (Exception ex)
@@ -463,41 +461,30 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             RequireValue(_outputPath, "Bitte eine Ausgabedatei waehlen."),
             RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben."));
 
-        return await _planner.CreatePlanAsync(request);
+        return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
     }
 
     private void HandleMuxOutput(string line)
     {
-        Application.Current.Dispatcher.Invoke(() =>
-        {
-            PreviewText += line + Environment.NewLine;
-
-            var progressMatch = Regex.Match(line, @"Fortschritt:\s*(\d+)%");
-            if (progressMatch.Success && int.TryParse(progressMatch.Groups[1].Value, out var progressValue))
-            {
-                SetStatus($"Muxing laeuft... {progressValue}%", progressValue);
-            }
-            else if (line.Contains("Warnung:", StringComparison.OrdinalIgnoreCase))
-            {
-                StatusText = "Muxing laeuft... Warnung erkannt";
-            }
-        });
+        Application.Current.Dispatcher.Invoke(() => PreviewText += line + Environment.NewLine);
     }
 
-    private static string BuildPreviewText(SeriesEpisodeMuxPlan plan)
+    private void HandleMuxUpdate(MuxExecutionUpdate update)
     {
-        var builder = new StringBuilder();
-        builder.AppendLine($"mkvmerge.exe: {plan.MkvMergePath}");
-        builder.AppendLine();
-        builder.AppendLine($"Titel: {plan.Title}");
-        builder.AppendLine($"Video: {plan.PrimaryVideoFilePath}");
-        builder.AppendLine($"AD: {plan.AudioDescriptionFilePath ?? "keine"}");
-        builder.AppendLine($"Untertitel: {(plan.SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", plan.SubtitleFiles.Select(file => Path.GetFileName(file.FilePath))))}");
-        builder.AppendLine($"Anhang: {plan.AttachmentFilePath ?? "keiner"}");
-        builder.AppendLine();
-        builder.AppendLine("Argumente:");
-        builder.AppendLine(plan.GetCommandLinePreview());
-        return builder.ToString();
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            var progressValue = update.ProgressPercent ?? ProgressValue;
+            var statusText = update.ProgressPercent is int progressPercent
+                ? $"Muxing laeuft... {progressPercent}%"
+                : "Muxing laeuft...";
+
+            if (update.HasWarning)
+            {
+                statusText += " - Warnung erkannt";
+            }
+
+            SetStatus(statusText, progressValue);
+        });
     }
 
     private static string RequireValue(string? value, string errorMessage)

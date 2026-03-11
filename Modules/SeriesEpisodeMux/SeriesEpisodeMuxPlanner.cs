@@ -30,7 +30,7 @@ public sealed class SeriesEpisodeMuxPlanner
 
         if (LooksLikeAudioDescription(mainVideoPath))
         {
-            throw new InvalidOperationException("Bitte die normale Episoden-Datei auswählen, nicht die Audiodeskriptions-Datei.");
+            throw new InvalidOperationException("Bitte die normale Episoden-Datei auswaehlen, nicht die Audiodeskriptions-Datei.");
         }
 
         var directory = Path.GetDirectoryName(mainVideoPath)
@@ -86,9 +86,9 @@ public sealed class SeriesEpisodeMuxPlanner
 
         var mkvMergePath = _locator.FindMkvMergePath();
         var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, request.MainVideoPath);
-        int? audioDescriptionTrackId = string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
+        AudioTrackMetadata? audioDescriptionMetadata = string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
             ? null
-            : await _probeService.ReadFirstAudioTrackIdAsync(mkvMergePath, request.AudioDescriptionPath);
+            : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, request.AudioDescriptionPath);
 
         return new SeriesEpisodeMuxPlan(
             mkvMergePath,
@@ -98,10 +98,10 @@ public sealed class SeriesEpisodeMuxPlanner
             metadata.VideoTrackId,
             metadata.AudioTrackId,
             request.AudioDescriptionPath,
-            audioDescriptionTrackId,
+            audioDescriptionMetadata?.TrackId,
             subtitleFiles,
             request.AttachmentPath,
-            BuildTrackMetadata(metadata));
+            BuildTrackMetadata(metadata, audioDescriptionMetadata));
     }
 
     private static void ValidateRequest(SeriesEpisodeMuxRequest request)
@@ -148,31 +148,33 @@ public sealed class SeriesEpisodeMuxPlanner
 
         var seriesName = normalizedName[..splitIndex].Trim();
         var titlePart = normalizedName[(splitIndex + 3)..].Trim();
+        var episodeMatch = FindEpisodePattern(titlePart);
         var seasonNumber = "xx";
         var episodeNumber = "xx";
 
-        var shortPatternMatch = Regex.Match(titlePart, @"\(S(?<season>\d{1,2})_E(?<episode>\d{1,2})\)", RegexOptions.IgnoreCase);
-        if (shortPatternMatch.Success)
+        if (episodeMatch is not null)
         {
-            seasonNumber = shortPatternMatch.Groups["season"].Value.PadLeft(2, '0');
-            episodeNumber = shortPatternMatch.Groups["episode"].Value.PadLeft(2, '0');
-            titlePart = titlePart.Replace(shortPatternMatch.Value, string.Empty).Trim();
-        }
-        else
-        {
-            var longPatternMatch = Regex.Match(titlePart, @"\(Staffel\s*(?<season>\d{1,2})\s*,\s*Folge\s*(?<episode>\d{1,2})\)", RegexOptions.IgnoreCase);
-            if (longPatternMatch.Success)
-            {
-                seasonNumber = longPatternMatch.Groups["season"].Value.PadLeft(2, '0');
-                episodeNumber = longPatternMatch.Groups["episode"].Value.PadLeft(2, '0');
-                titlePart = titlePart.Replace(longPatternMatch.Value, string.Empty).Trim();
-            }
+            seasonNumber = episodeMatch.Groups["season"].Value.PadLeft(2, '0');
+            episodeNumber = episodeMatch.Groups["episode"].Value.PadLeft(2, '0');
+            titlePart = titlePart.Replace(episodeMatch.Value, string.Empty).Trim();
         }
 
         titlePart = Regex.Replace(titlePart, @"\s+", " ").Trim();
         titlePart = string.IsNullOrWhiteSpace(titlePart) ? "Unbekannter Titel" : titlePart;
 
         return new EpisodeNameParts(seriesName, titlePart, seasonNumber, episodeNumber);
+    }
+
+    private static Match? FindEpisodePattern(string titlePart)
+    {
+        var shortPatternMatch = Regex.Match(titlePart, @"\(S(?<season>\d{1,2})_E(?<episode>\d{1,2})\)", RegexOptions.IgnoreCase);
+        if (shortPatternMatch.Success)
+        {
+            return shortPatternMatch;
+        }
+
+        var longPatternMatch = Regex.Match(titlePart, @"\(Staffel\s*(?<season>\d{1,2})\s*,\s*Folge\s*(?<episode>\d{1,2})\)", RegexOptions.IgnoreCase);
+        return longPatternMatch.Success ? longPatternMatch : null;
     }
 
     private static string BuildSuggestedOutputPath(string directory, EpisodeNameParts parsedName)
@@ -198,21 +200,20 @@ public sealed class SeriesEpisodeMuxPlanner
         name = Regex.Replace(name, @"-\d+$", string.Empty);
         name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\bAD\b", string.Empty, RegexOptions.IgnoreCase);
         name = NormalizeSeparators(name);
-        name = Regex.Replace(name, @"\s+", " ").Trim();
-
-        var firstHyphenIndex = name.IndexOf('-', StringComparison.Ordinal);
-        if (firstHyphenIndex >= 0)
-        {
-            name = name[..firstHyphenIndex] + " - " + name[(firstHyphenIndex + 1)..];
-        }
-
         return Regex.Replace(name, @"\s+", " ").Trim();
     }
 
     private static string NormalizeSeparators(string value)
     {
-        var normalized = value.Replace("–", "-").Replace("—", "-");
+        var normalized = value
+            .Replace("\u2013", "-")
+            .Replace("\u2014", "-")
+            .Replace("???", "-")
+            .Replace("???", "-");
+
+        normalized = Regex.Replace(normalized, @"\s+-\s+", " - ");
         normalized = Regex.Replace(normalized, @"\s*-\s*$", string.Empty);
         return normalized;
     }
@@ -230,14 +231,16 @@ public sealed class SeriesEpisodeMuxPlanner
         return string.Concat(fileName.Select(character => invalidCharacters.Contains(character) ? '_' : character));
     }
 
-    private static EpisodeTrackMetadata BuildTrackMetadata(MediaTrackMetadata metadata)
+    private static EpisodeTrackMetadata BuildTrackMetadata(MediaTrackMetadata metadata, AudioTrackMetadata? audioDescriptionMetadata)
     {
         var videoTrackName = $"Deutsch - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
+        var audioTrackName = $"Deutsch - {metadata.AudioCodecLabel}";
+        var audioDescriptionTrackName = $"Deutsch (sehbehindert) - {audioDescriptionMetadata?.CodecLabel ?? metadata.AudioCodecLabel}";
 
         return new EpisodeTrackMetadata(
             VideoTrackName: videoTrackName,
-            AudioTrackName: "Deutsch - AAC",
-            AudioDescriptionTrackName: "Deutsch (sehbehinderte) - AAC");
+            AudioTrackName: audioTrackName,
+            AudioDescriptionTrackName: audioDescriptionTrackName);
     }
 
     private sealed record EpisodeNameParts(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber);

@@ -1,6 +1,5 @@
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+
 namespace MkvToolnixAutomatisierung.Services;
 
-public sealed record AppServices(
-    MkvToolNixLocator Locator,
-    MkvMergeProbeService ProbeService,
-    MuxExecutionService ExecutionService);
+public sealed record AppServices(SeriesEpisodeMuxService SeriesEpisodeMux);

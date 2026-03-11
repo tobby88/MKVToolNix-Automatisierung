@@ -15,7 +15,6 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
-    private readonly SeriesEpisodeMuxPlanner _planner;
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -28,7 +27,6 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     {
         _services = services;
         _dialogService = dialogService;
-        _planner = new SeriesEpisodeMuxPlanner(_services.Locator, _services.ProbeService);
 
         SelectSourceDirectoryCommand = new RelayCommand(SelectSourceDirectory, () => !_isBusy);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
@@ -146,8 +144,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 var file = mainVideoFiles[index];
                 try
                 {
-                    var detected = _planner.DetectFromMainVideo(file);
+                    var detected = _services.SeriesEpisodeMux.DetectFromMainVideo(file);
                     var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
+                    var outputAlreadyExists = File.Exists(outputPath);
+
                     EpisodeItems.Add(new BatchEpisodeItemViewModel(
                         detected.SuggestedTitle,
                         Path.GetFileName(file),
@@ -157,8 +157,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         detected.AttachmentPath,
                         outputPath,
                         detected.SuggestedTitle,
-                        "Bereit"));
-                    AppendLog($"OK: {Path.GetFileName(file)}");
+                        outputAlreadyExists ? "Existiert bereits" : "Bereit",
+                        isSelected: !outputAlreadyExists));
+
+                    AppendLog(outputAlreadyExists
+                        ? $"OK: {Path.GetFileName(file)} -> Ausgabedatei existiert bereits und wurde abgewaehlt."
+                        : $"OK: {Path.GetFileName(file)}");
                 }
                 catch (Exception ex)
                 {
@@ -171,7 +175,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         null,
                         string.Empty,
                         Path.GetFileNameWithoutExtension(file),
-                        "Fehler"));
+                        "Fehler",
+                        isSelected: false));
                     AppendLog($"FEHLER: {Path.GetFileName(file)} -> {ex.Message}");
                 }
 
@@ -190,7 +195,17 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private async Task RunBatchAsync()
     {
-        var readyItems = EpisodeItems.Where(item => item.Status != "Fehler").ToList();
+        var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
+        if (selectedItems.Count == 0)
+        {
+            _dialogService.ShowWarning("Hinweis", "Bitte mindestens eine Episode fuer den Batch auswaehlen.");
+            return;
+        }
+
+        var readyItems = selectedItems
+            .Where(item => item.Status is not "Fehler" and not "Existiert bereits")
+            .ToList();
+
         if (readyItems.Count == 0)
         {
             _dialogService.ShowWarning("Hinweis", "Es gibt keine gueltigen Episoden fuer den Batch.");
@@ -207,6 +222,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             LogText = string.Empty;
+            var successCount = 0;
+            var warningCount = 0;
+            var errorCount = 0;
 
             for (var index = 0; index < readyItems.Count; index++)
             {
@@ -224,32 +242,42 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         item.OutputPath,
                         item.TitleForMux);
 
-                    var plan = await _planner.CreatePlanAsync(request);
-                    var exitCode = await _services.ExecutionService.ExecuteAsync(plan.MkvMergePath, plan.BuildArguments(), line => AppendLog($"  {line}"));
+                    var plan = await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+                    var result = await _services.SeriesEpisodeMux.ExecuteAsync(
+                        plan,
+                        line => AppendLog($"  {line}"),
+                        update => UpdateRuntimeStatus(index + 1, readyItems.Count, update));
 
-                    if (exitCode == 0)
+                    if (result.ExitCode == 0 && !result.HasWarning)
                     {
                         item.Status = "Erfolgreich";
+                        successCount++;
                     }
-                    else if (exitCode == 1 && File.Exists(item.OutputPath))
+                    else if ((result.ExitCode == 0 && result.HasWarning)
+                        || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
                     {
                         item.Status = "Warnung";
+                        warningCount++;
                     }
                     else
                     {
-                        item.Status = $"Fehler ({exitCode})";
+                        item.Status = $"Fehler ({result.ExitCode})";
+                        errorCount++;
                     }
                 }
                 catch (Exception ex)
                 {
                     item.Status = "Fehler";
                     AppendLog($"  FEHLER: {ex.Message}");
+                    errorCount++;
                 }
 
                 SetStatus($"Batch laeuft... {index + 1}/{readyItems.Count}", CalculatePercent(index + 1, readyItems.Count));
             }
 
-            SetStatus("Batch abgeschlossen", 100);
+            SetStatus(
+                $"Batch abgeschlossen: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler",
+                100);
         }
         finally
         {
@@ -267,6 +295,33 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private static int CalculatePercent(int current, int total)
     {
         return total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
+    }
+
+    private void UpdateRuntimeStatus(int currentItem, int totalItems, MuxExecutionUpdate update)
+    {
+        var currentBatchProgress = CalculatePercent(currentItem - 1, totalItems);
+        if (update.ProgressPercent is int itemProgress)
+        {
+            var sliceSize = totalItems <= 0 ? 0d : 100d / totalItems;
+            currentBatchProgress = (int)Math.Round(((currentItem - 1) * sliceSize) + (itemProgress / 100d * sliceSize));
+        }
+
+        var statusText = update.ProgressPercent is int itemProgressPercent
+            ? $"Batch laeuft... {currentItem}/{totalItems} ({itemProgressPercent}% in aktueller Episode)"
+            : $"Batch laeuft... {currentItem}/{totalItems}";
+
+        if (update.HasWarning)
+        {
+            statusText += " - Warnung erkannt";
+        }
+
+        if (Application.Current.Dispatcher.CheckAccess())
+        {
+            SetStatus(statusText, currentBatchProgress);
+            return;
+        }
+
+        Application.Current.Dispatcher.Invoke(() => SetStatus(statusText, currentBatchProgress));
     }
 
     private void AppendLog(string line)
@@ -308,6 +363,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
 public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 {
+    private bool _isSelected;
     private string _status;
 
     public BatchEpisodeItemViewModel(
@@ -319,7 +375,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         string? attachmentPath,
         string outputPath,
         string titleForMux,
-        string status)
+        string status,
+        bool isSelected)
     {
         Title = title;
         MainVideoFileName = mainVideoFileName;
@@ -330,6 +387,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OutputPath = outputPath;
         TitleForMux = titleForMux;
         _status = status;
+        _isSelected = isSelected;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -342,6 +400,21 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public string? AttachmentPath { get; }
     public string OutputPath { get; }
     public string TitleForMux { get; }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value)
+            {
+                return;
+            }
+
+            _isSelected = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+        }
+    }
 
     public string Status
     {
