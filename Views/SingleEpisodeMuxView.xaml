@@ -1,0 +1,93 @@
+<UserControl x:Class="MkvToolnixAutomatisierung.Views.SingleEpisodeMuxView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Margin="0,0,0,12"
+                   FontSize="15"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle nur die normale Episoden-.mp4 aus. Der Rest wird automatisch gesucht und kann bei Bedarf manuell korrigiert werden.</TextBlock>
+
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="190" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hauptvideo (.mp4)" />
+            <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding MainVideoPath, Mode=OneWay}" />
+            <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectMainVideoCommand}" Content="Hauptvideo waehlen" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="AD-Datei (.mp4)" />
+            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
+            <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="AD korrigieren" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
+            <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SubtitleDisplayText, Mode=OneWay}" />
+            <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectSubtitlesCommand}" Content="Untertitel korrigieren" />
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Text-Anhang (.txt)" />
+            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding AttachmentPath, Mode=OneWay}" />
+            <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAttachmentCommand}" Content="Anhang korrigieren" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Ausgabedatei (.mkv)" />
+            <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
+            <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe aendern" />
+
+            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
+            <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Grid.Row="5" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" Content="Auto-Erkennung neu" />
+
+            <TextBlock Grid.Row="6"
+                       Grid.Column="0"
+                       Grid.ColumnSpan="3"
+                       Margin="0,8,0,16"
+                       TextWrapping="Wrap"
+                       Text="Startordner fuer das Hauptvideo ist der MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der gewaehlten Hauptdatei." />
+
+            <GroupBox Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Margin="0,0,0,6" Text="{Binding StatusText, Mode=OneWay}" />
+                    <ProgressBar Grid.Row="1" Margin="0,0,0,8" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
+                    <TextBox Grid.Row="2"
+                             FontFamily="Consolas"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             IsReadOnly="True"
+                             TextWrapping="NoWrap"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding PreviewText, Mode=OneWay}" />
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding CreatePreviewCommand}" Content="Vorschau erzeugen" />
+            <Button Width="170" Padding="10,6" Command="{Binding ExecuteMuxCommand}" Content="Muxen" />
+        </StackPanel>
+    </Grid>
+</UserControl>

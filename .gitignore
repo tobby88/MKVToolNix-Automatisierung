@@ -1,0 +1,9 @@
+bin/
+obj/
+.codex-function-test/
+*.user
+*.suo
+*.tmp
+_function-test-output.mkv
+_probe-output.mkv
+_probe-output-fixed.mkv
