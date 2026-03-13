@@ -1,4 +1,4 @@
-<UserControl x:Class="MkvToolnixAutomatisierung.Views.BatchMuxView"
+﻿<UserControl x:Class="MkvToolnixAutomatisierung.Views.BatchMuxView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid>
@@ -13,7 +13,7 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Batch-Verarbeitung<LineBreak />Suche mehrere Episoden in einem Ordner und muxe sie nacheinander mit denselben Regeln wie im Einzelmodus.</TextBlock>
+                   TextWrapping="Wrap">Batch-Verarbeitung<LineBreak />Ordner waehlen, automatisch scannen und die markierten Episoden nacheinander muxen.</TextBlock>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
@@ -35,7 +35,7 @@
             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputDirectory, Mode=OneWay}" />
             <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputDirectoryCommand}" Content="Ordner aendern" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Der Batch sucht Hauptdateien im Quellordner, ignoriert AD-Dateien als Startpunkte und erstellt fuer jede gefundene Episode einen Plan. Bereits vorhandene Ausgabedateien werden beim Scan zunaechst abgewaehlt." />
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Nach der Quellordner-Auswahl startet der Scan direkt. Bereits vorhandene Ausgabedateien werden beim Scan zunaechst abgewaehlt." />
         </Grid>
 
         <Grid Grid.Row="2">
@@ -57,7 +57,7 @@
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Datei" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Datei" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -80,7 +80,9 @@
         </Grid>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
+            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
+            <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle waehlen" />
+            <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abwaehlen" />
             <Button Width="170" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
         </StackPanel>
     </Grid>

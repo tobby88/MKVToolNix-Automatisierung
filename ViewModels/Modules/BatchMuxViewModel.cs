@@ -1,4 +1,5 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
@@ -28,17 +29,23 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         _services = services;
         _dialogService = dialogService;
 
-        SelectSourceDirectoryCommand = new RelayCommand(SelectSourceDirectory, () => !_isBusy);
+        EpisodeItems.CollectionChanged += EpisodeItems_CollectionChanged;
+
+        SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
         ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
-        RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => !_isBusy && EpisodeItems.Count > 0);
+        SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => !item.IsSelected));
+        DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
+        RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public RelayCommand SelectSourceDirectoryCommand { get; }
+    public AsyncRelayCommand SelectSourceDirectoryCommand { get; }
     public RelayCommand SelectOutputDirectoryCommand { get; }
     public AsyncRelayCommand ScanDirectoryCommand { get; }
+    public RelayCommand SelectAllEpisodesCommand { get; }
+    public RelayCommand DeselectAllEpisodesCommand { get; }
     public AsyncRelayCommand RunBatchCommand { get; }
 
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems { get; } = [];
@@ -93,7 +100,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SelectSourceDirectory()
+    private async Task SelectSourceDirectoryAsync()
     {
         var initialDirectory = Directory.Exists(SourceDirectory) ? SourceDirectory : DefaultSourceDirectory;
         var path = _dialogService.SelectFolder("Quellordner fuer den Batch auswaehlen", initialDirectory);
@@ -109,9 +116,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         LogText = string.Empty;
-        EpisodeItems.Clear();
-        StatusText = "Ordner gewaehlt";
+        ClearEpisodeItems();
+        StatusText = "Ordner gewaehlt - starte Scan...";
         RefreshCommands();
+        await ScanDirectoryAsync();
     }
 
     private void SelectOutputDirectory()
@@ -121,6 +129,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(path))
         {
             OutputDirectory = path;
+            RefreshCommands();
         }
     }
 
@@ -129,13 +138,13 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         try
         {
             SetBusy(true);
-            EpisodeItems.Clear();
+            ClearEpisodeItems();
             LogText = string.Empty;
             SetStatus("Scanne Ordner...", 0);
 
             var mainVideoFiles = Directory.GetFiles(SourceDirectory, "*.mp4")
                 .Where(file => !LooksLikeAudioDescription(file))
-                .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             var total = mainVideoFiles.Count;
@@ -148,7 +157,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
                     var outputAlreadyExists = File.Exists(outputPath);
 
-                    EpisodeItems.Add(new BatchEpisodeItemViewModel(
+                    AddEpisodeItem(new BatchEpisodeItemViewModel(
                         detected.SuggestedTitle,
                         Path.GetFileName(file),
                         file,
@@ -166,7 +175,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 }
                 catch (Exception ex)
                 {
-                    EpisodeItems.Add(new BatchEpisodeItemViewModel(
+                    AddEpisodeItem(new BatchEpisodeItemViewModel(
                         Path.GetFileNameWithoutExtension(file),
                         Path.GetFileName(file),
                         file,
@@ -285,6 +294,26 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
+    private void SelectAllEpisodes()
+    {
+        foreach (var item in EpisodeItems)
+        {
+            item.IsSelected = true;
+        }
+
+        RefreshCommands();
+    }
+
+    private void DeselectAllEpisodes()
+    {
+        foreach (var item in EpisodeItems)
+        {
+            item.IsSelected = false;
+        }
+
+        RefreshCommands();
+    }
+
     private static bool LooksLikeAudioDescription(string filePath)
     {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
@@ -346,7 +375,38 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         SelectSourceDirectoryCommand.RaiseCanExecuteChanged();
         SelectOutputDirectoryCommand.RaiseCanExecuteChanged();
         ScanDirectoryCommand.RaiseCanExecuteChanged();
+        SelectAllEpisodesCommand.RaiseCanExecuteChanged();
+        DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
         RunBatchCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ClearEpisodeItems()
+    {
+        foreach (var item in EpisodeItems)
+        {
+            item.PropertyChanged -= EpisodeItem_PropertyChanged;
+        }
+
+        EpisodeItems.Clear();
+    }
+
+    private void AddEpisodeItem(BatchEpisodeItemViewModel item)
+    {
+        item.PropertyChanged += EpisodeItem_PropertyChanged;
+        EpisodeItems.Add(item);
+    }
+
+    private void EpisodeItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        RefreshCommands();
+    }
+
+    private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BatchEpisodeItemViewModel.IsSelected))
+        {
+            RefreshCommands();
+        }
     }
 
     private void SetStatus(string text, int progress)

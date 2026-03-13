@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -54,11 +54,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         [
             new ModuleNavigationItem(
                 "Einzelepisode",
-                "Muxe eine einzelne Episode mit automatischer Dateisuche und manueller Korrektur.",
+                "Automatisch erkennen,\nmanuell pruefen.",
                 singleEpisode),
             new ModuleNavigationItem(
                 "Batch-Verarbeitung",
-                "Suche mehrere Episoden in einem Ordner und muxe sie nacheinander.",
+                "Ordner scannen,\nmehrere Episoden muxen.",
                 batch)
         ]);
     }
