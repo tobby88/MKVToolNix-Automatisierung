@@ -43,21 +43,25 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
             <GroupBox Grid.Row="0" Header="Gefundene Episoden">
                 <DataGrid ItemsSource="{Binding EpisodeItems}"
+                          SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}"
                           AutoGenerateColumns="False"
                           IsReadOnly="False"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"
+                          MinHeight="220"
                           Margin="8">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
+                        <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Datei" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
+                        <DataGridTextColumn Header="Pruefen" Binding="{Binding ReviewHint}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -66,7 +70,68 @@
             <TextBlock Grid.Row="1" Margin="0,12,0,6" Text="{Binding StatusText, Mode=OneWay}" />
             <ProgressBar Grid.Row="2" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
-            <GroupBox Grid.Row="3" Header="Batch-Protokoll" Margin="0,12,0,0">
+            <Expander Grid.Row="3"
+                      Margin="0,12,0,0"
+                      Header="Ausgewaehlten Eintrag anzeigen und korrigieren"
+                      IsExpanded="False">
+                <Border Padding="8"
+                        BorderBrush="#D0D0D0"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  MaxHeight="340">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="170" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.TitleForMux, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" Content="Video neu erkennen" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Dateien" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.RequestedSourcesDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quellen oeffnen" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Verwendete Hauptquelle" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="48" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videospuren / AD" />
+                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="Untertitel korrigieren" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
+                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.SubtitleDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAttachmentsCommand}" Content="Anhaenge korrigieren" />
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anhaenge / Ausgabe" />
+                    <StackPanel Grid.Row="5" Grid.Column="1">
+                        <TextBox Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.AttachmentDisplayText, Mode=OneWay}" />
+                        <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
+                    </StackPanel>
+                    <Button Grid.Row="5" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe aendern" />
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                    <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
+                </Grid>
+                    </ScrollViewer>
+                </Border>
+            </Expander>
+
+            <GroupBox Grid.Row="4" Header="Batch-Protokoll" Margin="0,12,0,0">
                 <TextBox Margin="8"
                          FontFamily="Consolas"
                          AcceptsReturn="True"
@@ -83,6 +148,7 @@
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle waehlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abwaehlen" />
+            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quellen oeffnen" />
             <Button Width="170" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
         </StackPanel>
     </Grid>

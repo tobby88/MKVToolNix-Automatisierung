@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Windows;
 using Microsoft.Win32;
 
@@ -9,7 +10,7 @@ public sealed class UserDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Normale Episoden-Datei auswaehlen",
+            Title = "Video-Datei auswaehlen",
             Filter = "MP4-Dateien (*.mp4)|*.mp4",
             CheckFileExists = true,
             Multiselect = false,
@@ -46,17 +47,18 @@ public sealed class UserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
     }
 
-    public string? SelectAttachment(string initialDirectory)
+    public string[]? SelectAttachments(string initialDirectory)
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Text-Anhang auswaehlen",
+            Title = "Text-Anhaenge auswaehlen",
             Filter = "Textdateien (*.txt)|*.txt",
             CheckFileExists = true,
+            Multiselect = true,
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
     }
 
     public string? SelectOutput(string initialDirectory, string fileName)
@@ -111,8 +113,8 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Ja = Anhang manuell waehlen, Nein = Anhang leeren, Abbrechen = nichts aendern.",
-            "Anhang korrigieren",
+            "Ja = Anhaenge manuell waehlen, Nein = Anhaenge leeren, Abbrechen = nichts aendern.",
+            "Anhaenge korrigieren",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
     }
@@ -135,6 +137,30 @@ public sealed class UserDialogService
             "Batch starten",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    public void OpenFilesWithDefaultApp(IEnumerable<string> filePaths)
+    {
+        var files = filePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(File.Exists)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            ShowWarning("Hinweis", "Es wurden keine pruefbaren Quelldateien gefunden.");
+            return;
+        }
+
+        foreach (var filePath in files)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = filePath,
+                UseShellExecute = true
+            });
+        }
     }
 
     public void ShowInfo(string title, string message)

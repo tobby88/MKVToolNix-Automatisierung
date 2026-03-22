@@ -23,6 +23,13 @@ public sealed class SeriesEpisodeMuxService
         return _planner.DetectFromMainVideo(mainVideoPath);
     }
 
+    public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
+        string selectedVideoPath,
+        Action<DetectionProgressUpdate>? onProgress = null)
+    {
+        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress));
+    }
+
     public Task<SeriesEpisodeMuxPlan> CreatePlanAsync(SeriesEpisodeMuxRequest request)
     {
         return _planner.CreatePlanAsync(request);
@@ -68,6 +75,29 @@ public sealed class SeriesEpisodeMuxService
             });
 
         return new MuxExecutionResult(exitCode, hadWarning, latestProgressPercent);
+    }
+
+    private static Task<T> RunOnStaThreadAsync<T>(Func<T> action)
+    {
+        var completionSource = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                completionSource.SetResult(action());
+            }
+            catch (Exception ex)
+            {
+                completionSource.SetException(ex);
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+
+        return completionSource.Task;
     }
 }
 

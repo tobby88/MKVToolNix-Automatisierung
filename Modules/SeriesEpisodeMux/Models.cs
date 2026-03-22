@@ -1,27 +1,36 @@
-namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+﻿namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 public sealed record SeriesEpisodeMuxRequest(
     string MainVideoPath,
     string? AudioDescriptionPath,
     IReadOnlyList<string> SubtitlePaths,
-    string? AttachmentPath,
+    IReadOnlyList<string> AttachmentPaths,
     string OutputFilePath,
     string Title);
 
 public sealed record AutoDetectedEpisodeFiles(
     string MainVideoPath,
+    IReadOnlyList<string> AdditionalVideoPaths,
     string? AudioDescriptionPath,
     IReadOnlyList<string> SubtitlePaths,
-    string? AttachmentPath,
+    IReadOnlyList<string> AttachmentPaths,
     string SuggestedOutputFilePath,
     string SuggestedTitle,
     string SeriesName,
     string SeasonNumber,
-    string EpisodeNumber);
+    string EpisodeNumber,
+    bool RequiresManualCheck,
+    IReadOnlyList<string> ManualCheckFilePaths,
+    IReadOnlyList<string> Notes);
+
+public sealed record DetectionProgressUpdate(
+    string StatusText,
+    int ProgressPercent);
 
 public sealed record MediaTrackMetadata(
     int VideoTrackId,
     int AudioTrackId,
+    int VideoWidth,
     ResolutionLabel ResolutionLabel,
     string VideoCodecLabel,
     string AudioCodecLabel,
@@ -33,8 +42,13 @@ public sealed record AudioTrackMetadata(
     string CodecLabel,
     string Language);
 
+public sealed record VideoSourcePlan(
+    string FilePath,
+    int TrackId,
+    string TrackName,
+    bool IsDefaultTrack);
+
 public sealed record EpisodeTrackMetadata(
-    string VideoTrackName,
     string AudioTrackName,
     string AudioDescriptionTrackName);
 

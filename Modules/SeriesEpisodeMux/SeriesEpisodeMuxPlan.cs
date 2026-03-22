@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
@@ -8,69 +8,107 @@ public sealed class SeriesEpisodeMuxPlan
         string mkvMergePath,
         string outputFilePath,
         string title,
-        string primaryVideoFilePath,
-        int primaryVideoTrackId,
+        IReadOnlyList<VideoSourcePlan> videoSources,
+        string primaryAudioFilePath,
         int primaryAudioTrackId,
         string? audioDescriptionFilePath,
         int? audioDescriptionTrackId,
         IReadOnlyList<SubtitleFile> subtitleFiles,
-        string? attachmentFilePath,
-        EpisodeTrackMetadata metadata)
+        IReadOnlyList<string> attachmentFilePaths,
+        EpisodeTrackMetadata metadata,
+        IReadOnlyList<string> notes)
     {
+        if (videoSources.Count == 0)
+        {
+            throw new ArgumentException("Mindestens eine Videospur muss vorhanden sein.", nameof(videoSources));
+        }
+
         MkvMergePath = mkvMergePath;
         OutputFilePath = outputFilePath;
         Title = title;
-        PrimaryVideoFilePath = primaryVideoFilePath;
-        PrimaryVideoTrackId = primaryVideoTrackId;
+        VideoSources = videoSources;
+        PrimaryAudioFilePath = primaryAudioFilePath;
         PrimaryAudioTrackId = primaryAudioTrackId;
         AudioDescriptionFilePath = audioDescriptionFilePath;
         AudioDescriptionTrackId = audioDescriptionTrackId;
         SubtitleFiles = subtitleFiles;
-        AttachmentFilePath = attachmentFilePath;
+        AttachmentFilePaths = attachmentFilePaths;
         Metadata = metadata;
+        Notes = notes;
     }
 
     public string MkvMergePath { get; }
     public string OutputFilePath { get; }
     public string Title { get; }
-    public string PrimaryVideoFilePath { get; }
-    public int PrimaryVideoTrackId { get; }
+    public IReadOnlyList<VideoSourcePlan> VideoSources { get; }
+    public string PrimaryAudioFilePath { get; }
     public int PrimaryAudioTrackId { get; }
     public string? AudioDescriptionFilePath { get; }
     public int? AudioDescriptionTrackId { get; }
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
-    public string? AttachmentFilePath { get; }
+    public IReadOnlyList<string> AttachmentFilePaths { get; }
     public EpisodeTrackMetadata Metadata { get; }
+    public IReadOnlyList<string> Notes { get; }
 
     public IReadOnlyList<string> BuildArguments()
     {
-        var videoTrackId = PrimaryVideoTrackId.ToString();
-        var audioTrackId = PrimaryAudioTrackId.ToString();
         var arguments = new List<string>
         {
             "--output",
             OutputFilePath,
             "--title",
-            Title,
-
-            "--language",
-            $"{videoTrackId}:de",
-            "--track-name",
-            $"{videoTrackId}:{Metadata.VideoTrackName}",
-            "--stereo-mode",
-            $"{videoTrackId}:mono",
-            "--original-flag",
-            $"{videoTrackId}:yes",
-
-            "--language",
-            $"{audioTrackId}:de",
-            "--track-name",
-            $"{audioTrackId}:{Metadata.AudioTrackName}",
-            "--original-flag",
-            $"{audioTrackId}:yes",
-
-            PrimaryVideoFilePath
+            Title
         };
+
+        var primaryVideo = VideoSources[0];
+        var primaryVideoTrackId = primaryVideo.TrackId.ToString();
+        var primaryAudioTrackId = PrimaryAudioTrackId.ToString();
+
+        arguments.AddRange(
+        [
+            "--language",
+            $"{primaryVideoTrackId}:de",
+            "--track-name",
+            $"{primaryVideoTrackId}:{primaryVideo.TrackName}",
+            "--default-track-flag",
+            $"{primaryVideoTrackId}:yes",
+            "--stereo-mode",
+            $"{primaryVideoTrackId}:mono",
+            "--original-flag",
+            $"{primaryVideoTrackId}:yes",
+
+            "--language",
+            $"{primaryAudioTrackId}:de",
+            "--track-name",
+            $"{primaryAudioTrackId}:{Metadata.AudioTrackName}",
+            "--default-track-flag",
+            $"{primaryAudioTrackId}:yes",
+            "--original-flag",
+            $"{primaryAudioTrackId}:yes",
+
+            primaryVideo.FilePath
+        ]);
+
+        foreach (var videoSource in VideoSources.Skip(1))
+        {
+            var trackId = videoSource.TrackId.ToString();
+            arguments.AddRange(
+            [
+                "--no-audio",
+                "--no-subtitles",
+                "--language",
+                $"{trackId}:de",
+                "--track-name",
+                $"{trackId}:{videoSource.TrackName}",
+                "--default-track-flag",
+                $"{trackId}:no",
+                "--stereo-mode",
+                $"{trackId}:mono",
+                "--original-flag",
+                $"{trackId}:yes",
+                videoSource.FilePath
+            ]);
+        }
 
         if (!string.IsNullOrWhiteSpace(AudioDescriptionFilePath) && AudioDescriptionTrackId is not null)
         {
@@ -110,14 +148,14 @@ public sealed class SeriesEpisodeMuxPlan
             ]);
         }
 
-        if (!string.IsNullOrWhiteSpace(AttachmentFilePath))
+        foreach (var attachmentFilePath in AttachmentFilePaths)
         {
             arguments.AddRange(
             [
                 "--attachment-mime-type",
                 "text/plain",
                 "--attach-file",
-                AttachmentFilePath
+                attachmentFilePath
             ]);
         }
 
@@ -135,10 +173,29 @@ public sealed class SeriesEpisodeMuxPlan
         builder.AppendLine($"mkvmerge.exe: {MkvMergePath}");
         builder.AppendLine();
         builder.AppendLine($"Titel: {Title}");
-        builder.AppendLine($"Video: {PrimaryVideoFilePath}");
-        builder.AppendLine($"AD: {AudioDescriptionFilePath ?? "keine"}");
+        builder.AppendLine("Videos:");
+
+        foreach (var videoSource in VideoSources)
+        {
+            var defaultText = videoSource.IsDefaultTrack ? " (Standard)" : string.Empty;
+            builder.AppendLine($"- {Path.GetFileName(videoSource.FilePath)} -> {videoSource.TrackName}{defaultText}");
+        }
+
+        builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
+        builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
         builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => Path.GetFileName(file.FilePath))))}");
-        builder.AppendLine($"Anhang: {AttachmentFilePath ?? "keiner"}");
+        builder.AppendLine($"Anhaenge: {(AttachmentFilePaths.Count == 0 ? "keine" : string.Join(", ", AttachmentFilePaths.Select(Path.GetFileName)))}");
+
+        if (Notes.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Hinweise:");
+            foreach (var note in Notes)
+            {
+                builder.AppendLine($"- {note}");
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("Argumente:");
         builder.AppendLine(GetCommandLinePreview());

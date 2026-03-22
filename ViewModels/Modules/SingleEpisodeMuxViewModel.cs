@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -17,7 +17,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private string? _mainVideoPath;
     private string? _audioDescriptionPath;
     private List<string> _subtitlePaths = [];
-    private string? _attachmentPath;
+    private List<string> _attachmentPaths = [];
     private string? _outputPath;
     private string _title = string.Empty;
     private string _previewText = string.Empty;
@@ -25,6 +25,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private int _progressValue;
     private bool _isBusy;
     private string _lastSuggestedTitle = string.Empty;
+    private bool _requiresManualCheck;
+    private string _manualCheckText = string.Empty;
+    private List<string> _manualCheckFilePaths = [];
     private SeriesEpisodeMuxPlan? _currentPlan;
 
     public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
@@ -32,24 +35,26 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _services = services;
         _dialogService = dialogService;
 
-        SelectMainVideoCommand = new RelayCommand(SelectMainVideo, () => !_isBusy);
-        SelectAudioDescriptionCommand = new RelayCommand(SelectAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
+        SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy);
+        SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy);
         SelectSubtitlesCommand = new RelayCommand(SelectSubtitles, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
-        SelectAttachmentCommand = new RelayCommand(SelectAttachment, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
+        SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
-        RescanCommand = new RelayCommand(RescanFromMainVideo, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
+        RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
+        TestSelectedSourcesCommand = new RelayCommand(TestSelectedSources, () => !_isBusy && _manualCheckFilePaths.Count > 0);
         CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy);
         ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public RelayCommand SelectMainVideoCommand { get; }
-    public RelayCommand SelectAudioDescriptionCommand { get; }
+    public AsyncRelayCommand SelectMainVideoCommand { get; }
+    public AsyncRelayCommand SelectAudioDescriptionCommand { get; }
     public RelayCommand SelectSubtitlesCommand { get; }
     public RelayCommand SelectAttachmentCommand { get; }
     public RelayCommand SelectOutputCommand { get; }
-    public RelayCommand RescanCommand { get; }
+    public AsyncRelayCommand RescanCommand { get; }
+    public RelayCommand TestSelectedSourcesCommand { get; }
     public AsyncRelayCommand CreatePreviewCommand { get; }
     public AsyncRelayCommand ExecuteMuxCommand { get; }
 
@@ -73,15 +78,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    public string AttachmentPath
-    {
-        get => _attachmentPath ?? string.Empty;
-        private set
-        {
-            _attachmentPath = string.IsNullOrWhiteSpace(value) ? null : value;
-            OnPropertyChanged();
-        }
-    }
+    public string AttachmentDisplayText => _attachmentPaths.Count == 0
+        ? string.Empty
+        : string.Join(Environment.NewLine, _attachmentPaths.Select(Path.GetFileName));
 
     public string OutputPath
     {
@@ -143,6 +142,26 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool RequiresManualCheck
+    {
+        get => _requiresManualCheck;
+        private set
+        {
+            _requiresManualCheck = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string ManualCheckText
+    {
+        get => _manualCheckText;
+        private set
+        {
+            _manualCheckText = value;
+            OnPropertyChanged();
+        }
+    }
+
     private string ResolveMainVideoInitialDirectory()
     {
         if (!string.IsNullOrWhiteSpace(_mainVideoPath))
@@ -188,27 +207,22 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         return "Ausgabe.mkv";
     }
 
-    private bool EnsureMainVideoSelected()
-    {
-        if (!string.IsNullOrWhiteSpace(_mainVideoPath))
-        {
-            return true;
-        }
-
-        _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
-        return false;
-    }
-
-    private void ApplyAutoDetectedFiles(string mainVideoPath)
+    private async Task ApplyAutoDetectedFilesAsync(string selectedVideoPath)
     {
         try
         {
-            var detected = _services.SeriesEpisodeMux.DetectFromMainVideo(mainVideoPath);
+            SetBusy(true);
+            SetStatus("Dateien werden erkannt...", 0);
+            PreviewText = "Erkennung laeuft...";
+
+            var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
+                selectedVideoPath,
+                HandleDetectionUpdate);
 
             MainVideoPath = detected.MainVideoPath;
             AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
             _subtitlePaths = detected.SubtitlePaths.ToList();
-            AttachmentPath = detected.AttachmentPath ?? string.Empty;
+            _attachmentPaths = detected.AttachmentPaths.ToList();
             OutputPath = detected.SuggestedOutputFilePath;
             _currentPlan = null;
 
@@ -218,19 +232,72 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             }
 
             _lastSuggestedTitle = detected.SuggestedTitle;
+            ApplyManualCheckState(detected);
             OnPropertyChanged(nameof(SubtitleDisplayText));
+            OnPropertyChanged(nameof(AttachmentDisplayText));
 
-            PreviewText = "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf pruefen.";
-            SetStatus("Dateien erkannt", 0);
+            PreviewText = BuildDetectionPreview(detected);
+            SetStatus("Dateien erkannt", 100);
             RefreshCommands();
         }
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
+            SetStatus("Fehler", 0);
+        }
+        finally
+        {
+            SetBusy(false);
         }
     }
 
-    private void RescanFromMainVideo()
+    private void HandleDetectionUpdate(DetectionProgressUpdate update)
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            SetStatus(update.StatusText, update.ProgressPercent);
+            PreviewText = $"{update.StatusText}{Environment.NewLine}{Environment.NewLine}Bitte warten...";
+        });
+    }
+
+    private static string BuildDetectionPreview(AutoDetectedEpisodeFiles detected)
+    {
+        var lines = new List<string>
+        {
+            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf pruefen.",
+            $"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}"
+        };
+
+        if (detected.AdditionalVideoPaths.Count > 0)
+        {
+            lines.Add("Weitere Videospuren: " + string.Join(", ", detected.AdditionalVideoPaths.Select(Path.GetFileName)));
+        }
+
+        if (detected.AttachmentPaths.Count > 0)
+        {
+            lines.Add("Anhaenge: " + string.Join(", ", detected.AttachmentPaths.Select(Path.GetFileName)));
+        }
+
+        if (detected.Notes.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Hinweise:");
+            lines.AddRange(detected.Notes.Select(note => "- " + note));
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private void ApplyManualCheckState(AutoDetectedEpisodeFiles detected)
+    {
+        _manualCheckFilePaths = detected.ManualCheckFilePaths.ToList();
+        RequiresManualCheck = detected.RequiresManualCheck;
+        ManualCheckText = detected.RequiresManualCheck
+            ? "Mindestens eine ausgewaehlte Quelle sollte vor dem Muxen manuell geprueft werden."
+            : string.Empty;
+    }
+
+    private async Task RescanFromMainVideoAsync()
     {
         if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
@@ -238,7 +305,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        ApplyAutoDetectedFiles(_mainVideoPath);
+        await ApplyAutoDetectedFilesAsync(_mainVideoPath);
     }
 
     private void SetAudioDescription(string path)
@@ -267,16 +334,18 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SubtitleDisplayText));
     }
 
-    private void SetAttachment(string path)
+    private void SetAttachments(IEnumerable<string> paths)
     {
-        AttachmentPath = path;
+        _attachmentPaths = paths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _currentPlan = null;
+        OnPropertyChanged(nameof(AttachmentDisplayText));
     }
 
-    private void ClearAttachment()
+    private void ClearAttachments()
     {
-        AttachmentPath = string.Empty;
+        _attachmentPaths = [];
         _currentPlan = null;
+        OnPropertyChanged(nameof(AttachmentDisplayText));
     }
 
     private void SetOutputPath(string path)
@@ -285,19 +354,25 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _currentPlan = null;
     }
 
-    private void SelectMainVideo()
+    private async Task SelectMainVideoAsync()
     {
         var path = _dialogService.SelectMainVideo(ResolveMainVideoInitialDirectory());
         if (!string.IsNullOrWhiteSpace(path))
         {
-            ApplyAutoDetectedFiles(path);
+            await ApplyAutoDetectedFilesAsync(path);
         }
     }
 
-    private void SelectAudioDescription()
+    private async Task SelectAudioDescriptionAsync()
     {
-        if (!EnsureMainVideoSelected())
+        if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
+            var selectedAudioDescriptionPath = _dialogService.SelectAudioDescription(ResolveMainVideoInitialDirectory());
+            if (!string.IsNullOrWhiteSpace(selectedAudioDescriptionPath))
+            {
+                await ApplyAutoDetectedFilesAsync(selectedAudioDescriptionPath);
+            }
+
             return;
         }
 
@@ -322,8 +397,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void SelectSubtitles()
     {
-        if (!EnsureMainVideoSelected())
+        if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
+            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
             return;
         }
 
@@ -346,17 +422,18 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SelectAttachment()
+    private void SelectAttachments()
     {
-        if (!EnsureMainVideoSelected())
+        if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
+            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
             return;
         }
 
         var choice = _dialogService.AskAttachmentChoice();
         if (choice == MessageBoxResult.No)
         {
-            ClearAttachment();
+            ClearAttachments();
             return;
         }
 
@@ -365,10 +442,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        var path = _dialogService.SelectAttachment(ResolveComponentInitialDirectory());
-        if (!string.IsNullOrWhiteSpace(path))
+        var paths = _dialogService.SelectAttachments(ResolveComponentInitialDirectory());
+        if (paths is not null)
         {
-            SetAttachment(path);
+            SetAttachments(paths);
         }
     }
 
@@ -379,6 +456,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             SetOutputPath(path);
         }
+    }
+
+    private void TestSelectedSources()
+    {
+        _dialogService.OpenFilesWithDefaultApp(_manualCheckFilePaths);
     }
 
     private async Task CreatePreviewAsync()
@@ -413,6 +495,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 + Environment.NewLine
                 + "mkvmerge-Ausgabe:"
                 + Environment.NewLine;
+
+            if (RequiresManualCheck)
+            {
+                _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt mindestens eine SRF-Quelle oder eine auffaellige Quelle. Bitte pruefe sie bei Bedarf vorher mit 'Quelle testen'.");
+            }
 
             if (!_dialogService.ConfirmMuxStart())
             {
@@ -457,7 +544,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswaehlen."),
             _audioDescriptionPath,
             _subtitlePaths,
-            _attachmentPath,
+            _attachmentPaths,
             RequireValue(_outputPath, "Bitte eine Ausgabedatei waehlen."),
             RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben."));
 
@@ -511,6 +598,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         SelectAttachmentCommand.RaiseCanExecuteChanged();
         SelectOutputCommand.RaiseCanExecuteChanged();
         RescanCommand.RaiseCanExecuteChanged();
+        TestSelectedSourcesCommand.RaiseCanExecuteChanged();
         CreatePreviewCommand.RaiseCanExecuteChanged();
         ExecuteMuxCommand.RaiseCanExecuteChanged();
     }

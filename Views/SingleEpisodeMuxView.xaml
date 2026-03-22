@@ -12,10 +12,11 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle nur die normale Episoden-.mp4 aus. Der Rest wird automatisch gesucht und kann bei Bedarf manuell korrigiert werden.</TextBlock>
+                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 aus. Der Rest wird automatisch gesucht und kann bei Bedarf manuell korrigiert werden. Auch eine AD-Datei kann als Startpunkt dienen.</TextBlock>
 
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -43,9 +44,9 @@
             <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SubtitleDisplayText, Mode=OneWay}" />
             <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectSubtitlesCommand}" Content="Untertitel korrigieren" />
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Text-Anhang (.txt)" />
-            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding AttachmentPath, Mode=OneWay}" />
-            <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAttachmentCommand}" Content="Anhang korrigieren" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Text-Anhaenge (.txt)" />
+            <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding AttachmentDisplayText, Mode=OneWay}" />
+            <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAttachmentCommand}" Content="Anhaenge korrigieren" />
 
             <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Ausgabedatei (.mkv)" />
             <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
@@ -58,11 +59,34 @@
             <TextBlock Grid.Row="6"
                        Grid.Column="0"
                        Grid.ColumnSpan="3"
-                       Margin="0,8,0,16"
+                       Margin="0,8,0,8"
                        TextWrapping="Wrap"
                        Text="Startordner fuer das Hauptvideo ist der MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der gewaehlten Hauptdatei." />
 
-            <GroupBox Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <Border Grid.Row="7"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0,0,0,12"
+                    Padding="10"
+                    Background="#FFF4D6"
+                    BorderBrush="#D8B46A"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    >
+                <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding RequiresManualCheck}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><DockPanel>
+                    <TextBlock DockPanel.Dock="Left"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding ManualCheckText, Mode=OneWay}" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="12,0,0,0"
+                            Padding="10,6"
+                            Command="{Binding TestSelectedSourcesCommand}"
+                            Content="Quelle testen" />
+                </DockPanel>
+            </Border>
+
+            <GroupBox Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

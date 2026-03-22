@@ -1,3 +1,4 @@
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -6,8 +7,16 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class MkvMergeProbeService
 {
+    private readonly ConcurrentDictionary<string, MediaTrackMetadata> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, AudioTrackMetadata> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(string mkvMergePath, string inputFilePath)
     {
+        if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        {
+            return cachedMetadata;
+        }
+
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
         var tracks = trackDocument.RootElement.GetProperty("tracks");
 
@@ -55,18 +64,27 @@ public sealed class MkvMergeProbeService
         var videoCodec = NormalizeVideoCodecName(ReadCodec(videoTrack.Value, videoProperties));
         var audioCodec = NormalizeAudioCodecName(ReadCodec(audioTrack.Value, audioProperties));
 
-        return new MediaTrackMetadata(
+        var metadata = new MediaTrackMetadata(
             VideoTrackId: ReadTrackId(videoTrack.Value),
             AudioTrackId: ReadTrackId(audioTrack.Value),
+            VideoWidth: width,
             ResolutionLabel: ResolutionLabel.FromWidth(width),
             VideoCodecLabel: videoCodec,
             AudioCodecLabel: audioCodec,
             VideoLanguage: NormalizeLanguage(videoProperties),
             AudioLanguage: NormalizeLanguage(audioProperties));
+
+        _mediaTrackCache[inputFilePath] = metadata;
+        return metadata;
     }
 
     public async Task<AudioTrackMetadata> ReadFirstAudioTrackMetadataAsync(string mkvMergePath, string inputFilePath)
     {
+        if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        {
+            return cachedMetadata;
+        }
+
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
         var tracks = trackDocument.RootElement.GetProperty("tracks");
 
@@ -78,10 +96,13 @@ public sealed class MkvMergeProbeService
                     ? propertiesElement
                     : default;
 
-                return new AudioTrackMetadata(
+                var metadata = new AudioTrackMetadata(
                     TrackId: ReadTrackId(track),
                     CodecLabel: NormalizeAudioCodecName(ReadCodec(track, properties)),
                     Language: NormalizeLanguage(properties));
+
+                _audioTrackCache[inputFilePath] = metadata;
+                return metadata;
             }
         }
 
