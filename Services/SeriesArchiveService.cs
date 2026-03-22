@@ -148,7 +148,7 @@ public sealed class SeriesArchiveService
                 SkipMux: false,
                 SkipReason: null,
                 WorkingCopy: workingCopyPlan,
-                PrimarySourcePath: workingCopyPlan.DestinationFilePath,
+                PrimarySourcePath: outputPath,
                 PrimaryAudioTrackIds: primaryAudioTrack is null ? null : [primaryAudioTrack.TrackId],
                 PrimarySubtitleTrackIds: finalSubtitlePlans.Count > 0 ? [] : null,
                 IncludePrimaryAttachments: true,
@@ -187,7 +187,7 @@ public sealed class SeriesArchiveService
                 ? request.AudioDescriptionPath
                 : existingAudioDescription is null || !needsExistingCopy
                     ? null
-                    : workingCopyPlan.DestinationFilePath,
+                    : outputPath,
             AudioDescriptionTrackId: !string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
                 ? null
                 : existingAudioDescription?.TrackId,

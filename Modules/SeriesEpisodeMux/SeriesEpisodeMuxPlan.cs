@@ -115,6 +115,7 @@ public sealed class SeriesEpisodeMuxPlan
         var primaryVideo = VideoSources[0];
         var primaryVideoTrackId = primaryVideo.TrackId.ToString();
         var primaryAudioTrackId = PrimaryAudioTrackId.ToString();
+        var primaryVideoFilePath = ResolveRuntimeFilePath(primaryVideo.FilePath);
 
         if (PrimarySourceAudioTrackIds is { Count: > 0 })
         {
@@ -157,12 +158,13 @@ public sealed class SeriesEpisodeMuxPlan
             "--original-flag",
             $"{primaryAudioTrackId}:yes",
 
-            primaryVideo.FilePath
+            primaryVideoFilePath
         ]);
 
         foreach (var videoSource in VideoSources.Skip(1))
         {
             var trackId = videoSource.TrackId.ToString();
+            var runtimeVideoFilePath = ResolveRuntimeFilePath(videoSource.FilePath);
             arguments.AddRange(
             [
                 "--no-audio",
@@ -178,13 +180,14 @@ public sealed class SeriesEpisodeMuxPlan
                 $"{trackId}:mono",
                 "--original-flag",
                 $"{trackId}:yes",
-                videoSource.FilePath
+                runtimeVideoFilePath
             ]);
         }
 
         if (!string.IsNullOrWhiteSpace(AudioDescriptionFilePath) && AudioDescriptionTrackId is not null)
         {
             var adTrackId = AudioDescriptionTrackId.Value.ToString();
+            var runtimeAudioDescriptionFilePath = ResolveRuntimeFilePath(AudioDescriptionFilePath);
             arguments.AddRange(
             [
                 "--no-video",
@@ -202,7 +205,7 @@ public sealed class SeriesEpisodeMuxPlan
                 $"{adTrackId}:yes",
                 "--original-flag",
                 $"{adTrackId}:yes",
-                AudioDescriptionFilePath
+                runtimeAudioDescriptionFilePath
             ]);
         }
 
@@ -210,6 +213,7 @@ public sealed class SeriesEpisodeMuxPlan
         {
             if (subtitle.IsEmbedded && subtitle.EmbeddedTrackId is int embeddedTrackId)
             {
+                var runtimeSubtitleFilePath = ResolveRuntimeFilePath(subtitle.FilePath);
                 arguments.AddRange(
                 [
                     "--no-video",
@@ -217,7 +221,7 @@ public sealed class SeriesEpisodeMuxPlan
                     "--no-attachments",
                     "--subtitle-tracks",
                     embeddedTrackId.ToString(),
-                    subtitle.FilePath
+                    runtimeSubtitleFilePath
                 ]);
                 continue;
             }
@@ -250,6 +254,17 @@ public sealed class SeriesEpisodeMuxPlan
         }
 
         return arguments;
+    }
+
+    private string ResolveRuntimeFilePath(string filePath)
+    {
+        if (WorkingCopy is not null
+            && string.Equals(filePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return WorkingCopy.DestinationFilePath;
+        }
+
+        return filePath;
     }
 
     public string GetCommandLinePreview()
