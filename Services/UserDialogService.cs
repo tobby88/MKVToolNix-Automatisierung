@@ -133,7 +133,7 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            $"Sollen {itemCount} Episoden jetzt nacheinander verarbeitet werden?",
+            $"Sollen {itemCount} Episoden jetzt nacheinander verarbeitet werden?\n\nPflichtpruefungen wurden vorher bereits abgearbeitet.",
             "Batch starten",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
@@ -166,12 +166,12 @@ public sealed class UserDialogService
     public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)
     {
         var noText = canTryAlternative
-            ? "Nein = aktuelle Quelle verwerfen und naechste Alternative pruefen."
-            : "Nein = aktuelle Quelle ist nicht in Ordnung.";
+            ? "Nein = diese Quelle verwerfen und die naechste Alternative pruefen."
+            : "Nein = diese Quelle ist nicht in Ordnung.";
 
         return MessageBox.Show(
             GetOwner(),
-            $"Die Quelle wurde geoeffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung.\n{noText}\nAbbrechen = vorerst nichts aendern.",
+            $"Die Quelle wurde zur Pruefung geoeffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung und wird freigegeben.\n{noText}\nAbbrechen = vorerst nichts aendern.",
             "Quelle pruefen",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);

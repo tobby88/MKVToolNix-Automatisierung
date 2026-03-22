@@ -54,11 +54,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         [
             new ModuleNavigationItem(
                 "Einzelepisode",
-                "Automatisch erkennen,\nmanuell pruefen.",
+                "Auto erkennen,\npruefen, muxen.",
                 singleEpisode),
             new ModuleNavigationItem(
                 "Batch-Verarbeitung",
-                "Ordner scannen,\nmehrere Episoden muxen.",
+                "Ordner scannen,\nalles gesammelt muxen.",
                 batch)
         ]);
     }

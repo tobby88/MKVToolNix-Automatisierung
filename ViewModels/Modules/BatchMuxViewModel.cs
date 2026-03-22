@@ -222,7 +222,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 await Task.Yield();
             }
 
-            SetStatus($"Scan abgeschlossen: {EpisodeItems.Count} Eintraege", 100);
+            var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
+            SetStatus($"Scan abgeschlossen: {EpisodeItems.Count} Eintraege, {preselectedCount} vorausgewaehlt", 100);
             RefreshCommands();
         }
         finally
@@ -528,6 +529,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         while (item.RequiresManualCheck && !string.IsNullOrWhiteSpace(item.CurrentReviewTargetPath))
         {
             var reviewTargetPath = item.CurrentReviewTargetPath!;
+            SetStatus(
+                isBatchPreparation
+                    ? $"Pruefe Quelle fuer '{item.Title}'..."
+                    : "Pruefe Quelle...",
+                ProgressValue);
+
             _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
 
             var result = _dialogService.AskSourceReviewResult(

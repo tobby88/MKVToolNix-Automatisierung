@@ -12,7 +12,7 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 aus. Der Rest wird automatisch gesucht und kann bei Bedarf manuell korrigiert werden. Auch eine AD-Datei kann als Startpunkt dienen.</TextBlock>
+                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 oder AD-.mp4 aus. Passende Begleitdateien werden automatisch gesucht und koennen bei Bedarf korrigiert werden. Pruefpflichtige Quellen muessen vor dem Muxen freigegeben werden.</TextBlock>
 
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
@@ -61,7 +61,7 @@
                        Grid.ColumnSpan="3"
                        Margin="0,8,0,8"
                        TextWrapping="Wrap"
-                       Text="Startordner fuer das Hauptvideo ist der MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der gewaehlten Hauptdatei." />
+                       Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle." />
 
             <Border Grid.Row="7"
                     Grid.Column="0"
@@ -82,7 +82,7 @@
                             Margin="12,0,0,0"
                             Padding="10,6"
                             Command="{Binding TestSelectedSourcesCommand}"
-                            Content="Quelle pruefen" />
+                            Content="Quelle pruefen / freigeben" />
                 </DockPanel>
             </Border>
 

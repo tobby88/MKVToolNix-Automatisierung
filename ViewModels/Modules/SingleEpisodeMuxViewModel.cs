@@ -316,7 +316,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         ManualCheckText = detected.RequiresManualCheck
-            ? "Mindestens eine ausgewaehlte Quelle muss vor dem Muxen manuell geprueft und freigegeben werden."
+            ? "Die aktuell ausgewaehlte Quelle ist pruefpflichtig. Bitte vor dem Muxen kurz pruefen und freigeben."
             : string.Empty;
     }
 
@@ -497,6 +497,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         while (RequiresManualCheck && !string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
         {
             var reviewTargetPath = CurrentReviewTargetPath!;
+            SetStatus("Pruefe Quelle...", ProgressValue);
             _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
 
             var result = _dialogService.AskSourceReviewResult(
