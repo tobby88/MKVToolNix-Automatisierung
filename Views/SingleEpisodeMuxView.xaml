@@ -27,6 +27,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
@@ -78,14 +79,37 @@
             <TextBox Grid.Row="7" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
             <Button Grid.Row="7" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe aendern" />
 
-            <TextBlock Grid.Row="8"
+            <Border Grid.Row="8"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0,0,0,12"
+                    Padding="10"
+                    Background="#EEF6E8"
+                    BorderBrush="#88B06E"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasOutputTargetStatus}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock TextWrapping="Wrap"
+                           Text="{Binding OutputTargetStatusText, Mode=OneWay}" />
+            </Border>
+
+            <TextBlock Grid.Row="9"
                        Grid.Column="0"
                        Grid.ColumnSpan="3"
                        Margin="0,8,0,8"
                        TextWrapping="Wrap"
                        Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle. TVDB wird zuerst frisch abgefragt; gespeicherte Zuordnungen helfen nur noch als schwacher Hinweis oder Fallback." />
 
-            <Border Grid.Row="9"
+            <Border Grid.Row="10"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Margin="0,0,0,12"
@@ -117,7 +141,7 @@
                 </DockPanel>
             </Border>
 
-            <Border Grid.Row="10"
+            <Border Grid.Row="11"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Margin="0,0,0,12"
@@ -149,7 +173,7 @@
                 </DockPanel>
             </Border>
 
-            <GroupBox Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <GroupBox Grid.Row="12" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

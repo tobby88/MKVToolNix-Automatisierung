@@ -36,6 +36,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _requiresMetadataReview;
     private bool _isMetadataReviewApproved = true;
     private bool _isApplyingMetadataState;
+    private string _outputTargetStatusText = string.Empty;
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
     private List<string> _manualCheckFilePaths = [];
@@ -296,6 +297,24 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         ? "TVDB pruefen"
         : "TVDB anpassen";
 
+    public string OutputTargetStatusText
+    {
+        get => _outputTargetStatusText;
+        private set
+        {
+            if (_outputTargetStatusText == value)
+            {
+                return;
+            }
+
+            _outputTargetStatusText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasOutputTargetStatus));
+        }
+    }
+
+    public bool HasOutputTargetStatus => !string.IsNullOrWhiteSpace(OutputTargetStatusText);
+
     private string ResolveMainVideoInitialDirectory()
     {
         if (!string.IsNullOrWhiteSpace(_mainVideoPath))
@@ -550,6 +569,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         OutputPath = path;
         _currentPlan = null;
+        RefreshOutputTargetStatus();
     }
 
     private void SetSuggestedOutputPath(string path)
@@ -566,6 +586,27 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         SetSuggestedOutputPath(BuildSuggestedOutputPath());
+    }
+
+    private void RefreshOutputTargetStatus()
+    {
+        if (string.IsNullOrWhiteSpace(_outputPath))
+        {
+            OutputTargetStatusText = string.Empty;
+            return;
+        }
+
+        if (File.Exists(_outputPath))
+        {
+            OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
+                ? "Am Ziel liegt bereits eine Archiv-MKV. Bei Vorschau oder Mux wird geprueft, ob etwas fehlt oder ersetzt werden muss."
+                : "Die Zieldatei existiert bereits und wuerde beim Mux ueberschrieben.";
+            return;
+        }
+
+        OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
+            ? "Das Archivziel ist noch frei. Die Episode kann direkt dort einsortiert werden."
+            : "Die Zieldatei existiert noch nicht.";
     }
 
     private async Task SelectMainVideoAsync()
@@ -810,6 +851,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         _lastSuggestedTitle = selection.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
+        RefreshOutputTargetStatus();
     }
 
     private void ApplyLocalMetadataGuess()
@@ -829,6 +871,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         _lastSuggestedTitle = _detectedMetadataGuess.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
+        RefreshOutputTargetStatus();
     }
 
     private async Task<AutoDetectedEpisodeFiles> ApplyAutomaticMetadataAsync(AutoDetectedEpisodeFiles detected)
@@ -853,6 +896,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         MetadataStatusText = resolution.StatusText;
         RequiresMetadataReview = resolution.RequiresReview;
         IsMetadataReviewApproved = !resolution.RequiresReview;
+        RefreshOutputTargetStatus();
     }
 
     private void MarkMetadataAsReviewed(string statusText)
@@ -860,6 +904,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         MetadataStatusText = statusText;
         RequiresMetadataReview = false;
         IsMetadataReviewApproved = true;
+        RefreshOutputTargetStatus();
     }
 
     private void HandleManualMetadataOverride()
@@ -895,6 +940,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             SetBusy(true);
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await BuildPlanAsync();
+            RefreshOutputTargetStatusFromPlan(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
         }
@@ -915,6 +961,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             _currentPlan ??= await BuildPlanAsync();
+            RefreshOutputTargetStatusFromPlan(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
                 + Environment.NewLine
                 + Environment.NewLine
@@ -1014,6 +1061,23 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben."));
 
         return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+    }
+
+    private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
+    {
+        if (plan.SkipMux)
+        {
+            OutputTargetStatusText = plan.SkipReason ?? "Die Archivdatei ist bereits vollstaendig.";
+            return;
+        }
+
+        if (plan.WorkingCopy is not null)
+        {
+            OutputTargetStatusText = "Am Ziel liegt bereits eine Archiv-MKV. Vor dem Mux wird eine lokale Arbeitskopie erstellt und die fehlenden oder besseren Spuren werden eingearbeitet.";
+            return;
+        }
+
+        RefreshOutputTargetStatus();
     }
 
     private void HandleMuxOutput(string line)
