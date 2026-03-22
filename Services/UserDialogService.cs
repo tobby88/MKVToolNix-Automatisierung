@@ -163,6 +163,20 @@ public sealed class UserDialogService
         }
     }
 
+    public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)
+    {
+        var noText = canTryAlternative
+            ? "Nein = aktuelle Quelle verwerfen und naechste Alternative pruefen."
+            : "Nein = aktuelle Quelle ist nicht in Ordnung.";
+
+        return MessageBox.Show(
+            GetOwner(),
+            $"Die Quelle wurde geoeffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung.\n{noText}\nAbbrechen = vorerst nichts aendern.",
+            "Quelle pruefen",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+    }
+
     public void ShowInfo(string title, string message)
     {
         MessageBox.Show(GetOwner(), message, title, MessageBoxButton.OK, MessageBoxImage.Information);

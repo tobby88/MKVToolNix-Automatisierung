@@ -25,9 +25,10 @@ public sealed class SeriesEpisodeMuxService
 
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
-        Action<DetectionProgressUpdate>? onProgress = null)
+        Action<DetectionProgressUpdate>? onProgress = null,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
-        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress));
+        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
     }
 
     public Task<SeriesEpisodeMuxPlan> CreatePlanAsync(SeriesEpisodeMuxRequest request)

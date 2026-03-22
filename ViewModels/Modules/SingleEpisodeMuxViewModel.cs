@@ -28,6 +28,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
     private List<string> _manualCheckFilePaths = [];
+    private string? _detectionSeedPath;
+    private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+    private string? _approvedReviewPath;
     private SeriesEpisodeMuxPlan? _currentPlan;
 
     public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
@@ -207,7 +210,14 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         return "Ausgabe.mkv";
     }
 
-    private async Task ApplyAutoDetectedFilesAsync(string selectedVideoPath)
+    private string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault();
+
+    private bool IsManualCheckApproved => !RequiresManualCheck
+        || string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase);
+
+    private async Task<bool> ApplyAutoDetectedFilesAsync(
+        string selectedVideoPath,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
         try
         {
@@ -217,8 +227,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
             var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                 selectedVideoPath,
-                HandleDetectionUpdate);
+                HandleDetectionUpdate,
+                excludedSourcePaths);
 
+            _detectionSeedPath = selectedVideoPath;
             MainVideoPath = detected.MainVideoPath;
             AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
             _subtitlePaths = detected.SubtitlePaths.ToList();
@@ -239,11 +251,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             PreviewText = BuildDetectionPreview(detected);
             SetStatus("Dateien erkannt", 100);
             RefreshCommands();
+            return true;
         }
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
             SetStatus("Fehler", 0);
+            return false;
         }
         finally
         {
@@ -292,8 +306,17 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         _manualCheckFilePaths = detected.ManualCheckFilePaths.ToList();
         RequiresManualCheck = detected.RequiresManualCheck;
+        if (!RequiresManualCheck)
+        {
+            _approvedReviewPath = null;
+        }
+        else if (!string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _approvedReviewPath = null;
+        }
+
         ManualCheckText = detected.RequiresManualCheck
-            ? "Mindestens eine ausgewaehlte Quelle sollte vor dem Muxen manuell geprueft werden."
+            ? "Mindestens eine ausgewaehlte Quelle muss vor dem Muxen manuell geprueft und freigegeben werden."
             : string.Empty;
     }
 
@@ -305,19 +328,21 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        await ApplyAutoDetectedFilesAsync(_mainVideoPath);
+        await ApplyAutoDetectedFilesAsync(_mainVideoPath, _excludedSourcePaths);
     }
 
     private void SetAudioDescription(string path)
     {
         AudioDescriptionPath = path;
         _currentPlan = null;
+        _approvedReviewPath = null;
     }
 
     private void ClearAudioDescription()
     {
         AudioDescriptionPath = string.Empty;
         _currentPlan = null;
+        _approvedReviewPath = null;
     }
 
     private void SetSubtitles(IEnumerable<string> paths)
@@ -359,7 +384,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         var path = _dialogService.SelectMainVideo(ResolveMainVideoInitialDirectory());
         if (!string.IsNullOrWhiteSpace(path))
         {
-            await ApplyAutoDetectedFilesAsync(path);
+            _excludedSourcePaths.Clear();
+            _approvedReviewPath = null;
+            await ApplyAutoDetectedFilesAsync(path, _excludedSourcePaths);
         }
     }
 
@@ -370,7 +397,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             var selectedAudioDescriptionPath = _dialogService.SelectAudioDescription(ResolveMainVideoInitialDirectory());
             if (!string.IsNullOrWhiteSpace(selectedAudioDescriptionPath))
             {
-                await ApplyAutoDetectedFilesAsync(selectedAudioDescriptionPath);
+                _excludedSourcePaths.Clear();
+                _approvedReviewPath = null;
+                await ApplyAutoDetectedFilesAsync(selectedAudioDescriptionPath, _excludedSourcePaths);
             }
 
             return;
@@ -460,7 +489,64 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void TestSelectedSources()
     {
-        _dialogService.OpenFilesWithDefaultApp(_manualCheckFilePaths);
+        _ = ReviewSourcesAsync();
+    }
+
+    private async Task ReviewSourcesAsync()
+    {
+        while (RequiresManualCheck && !string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
+        {
+            var reviewTargetPath = CurrentReviewTargetPath!;
+            _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
+
+            var result = _dialogService.AskSourceReviewResult(
+                Path.GetFileName(reviewTargetPath),
+                canTryAlternative: true);
+
+            if (result == MessageBoxResult.Cancel)
+            {
+                SetStatus("Quellenpruefung abgebrochen", ProgressValue);
+                return;
+            }
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _approvedReviewPath = reviewTargetPath;
+                SetStatus("Quelle freigegeben", 100);
+                return;
+            }
+
+            var detectionSeedPath = _detectionSeedPath ?? _mainVideoPath;
+            if (string.IsNullOrWhiteSpace(detectionSeedPath))
+            {
+                _dialogService.ShowWarning("Hinweis", "Es konnte keine alternative Quelle ermittelt werden.");
+                return;
+            }
+
+            var tentativeExclusions = new HashSet<string>(_excludedSourcePaths, StringComparer.OrdinalIgnoreCase)
+            {
+                reviewTargetPath
+            };
+
+            _approvedReviewPath = null;
+            var updated = await ApplyAutoDetectedFilesAsync(detectionSeedPath, tentativeExclusions);
+            if (!updated)
+            {
+                return;
+            }
+
+            _excludedSourcePaths.Clear();
+            foreach (var excludedPath in tentativeExclusions)
+            {
+                _excludedSourcePaths.Add(excludedPath);
+            }
+
+            if (!RequiresManualCheck)
+            {
+                SetStatus("Auf alternative Quelle umgestellt", 100);
+                return;
+            }
+        }
     }
 
     private async Task CreatePreviewAsync()
@@ -498,7 +584,12 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
             if (RequiresManualCheck)
             {
-                _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt mindestens eine SRF-Quelle oder eine auffaellige Quelle. Bitte pruefe sie bei Bedarf vorher mit 'Quelle testen'.");
+                if (!IsManualCheckApproved)
+                {
+                    _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
+                    SetStatus("Freigabe der Quelle fehlt", 0);
+                    return;
+                }
             }
 
             if (!_dialogService.ConfirmMuxStart())

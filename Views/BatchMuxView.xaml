@@ -103,7 +103,7 @@
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Dateien" />
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.RequestedSourcesDisplayText, Mode=OneWay}" />
-                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quellen oeffnen" />
+                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pruefen" />
 
                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Verwendete Hauptquelle" />
                     <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="48" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
@@ -148,7 +148,7 @@
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle waehlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abwaehlen" />
-            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quellen oeffnen" />
+            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pruefen" />
             <Button Width="170" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
         </StackPanel>
     </Grid>

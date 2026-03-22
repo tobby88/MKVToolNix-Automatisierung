@@ -363,7 +363,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        _dialogService.OpenFilesWithDefaultApp(item.SourceFilePaths);
+        _ = ReviewEpisodeAsync(item, isBatchPreparation: false);
     }
 
     private async Task RunBatchAsync()
@@ -388,11 +388,20 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         var manualCheckItems = readyItems.Where(item => item.RequiresManualCheck).Select(item => item.Title).Distinct().ToList();
         if (manualCheckItems.Count > 0)
         {
-            _dialogService.ShowWarning(
-                "Hinweis",
-                "Fuer folgende Episoden sollte die Quelle vor dem Batch geprueft werden:\n\n"
-                + string.Join(Environment.NewLine, manualCheckItems.Select(title => "- " + title))
-                + "\n\nNutze dazu den Button 'Quellen oeffnen'.");
+            SetStatus("Pflichtpruefungen werden vorbereitet...", 0);
+            foreach (var item in readyItems.Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved))
+            {
+                SelectedEpisodeItem = item;
+                var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
+                if (!approved)
+                {
+                    _dialogService.ShowWarning(
+                        "Hinweis",
+                        "Der Batch wurde abgebrochen, weil nicht alle pruefpflichtigen Quellen freigegeben wurden.");
+                    SetStatus("Batch abgebrochen", 0);
+                    return;
+                }
+            }
         }
 
         if (!_dialogService.ConfirmBatchStart(readyItems.Count))
@@ -470,6 +479,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private async Task ApplyDetectionToItemAsync(BatchEpisodeItemViewModel item, string selectedVideoPath)
     {
+        await ApplyDetectionToItemAsync(item, selectedVideoPath, item.ExcludedSourcePaths);
+    }
+
+    private async Task<bool> ApplyDetectionToItemAsync(
+        BatchEpisodeItemViewModel item,
+        string selectedVideoPath,
+        IReadOnlyCollection<string>? excludedSourcePaths)
+    {
         try
         {
             SetBusy(true);
@@ -477,7 +494,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
             var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                 selectedVideoPath,
-                HandleSelectedItemDetectionProgress);
+                HandleSelectedItemDetectionProgress,
+                excludedSourcePaths);
             var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
             var outputAlreadyExists = File.Exists(outputPath);
 
@@ -486,20 +504,76 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 detected: detected,
                 outputPath: outputPath,
                 status: outputAlreadyExists ? "Existiert bereits" : "Bereit");
+            item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");
             SetStatus("Eintrag aktualisiert", 100);
+            return true;
         }
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
             AppendLog($"FEHLER: {Path.GetFileName(selectedVideoPath)} -> {ex.Message}");
             SetStatus("Fehler", 0);
+            return false;
         }
         finally
         {
             SetBusy(false);
         }
+    }
+
+    private async Task<bool> ReviewEpisodeAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
+    {
+        while (item.RequiresManualCheck && !string.IsNullOrWhiteSpace(item.CurrentReviewTargetPath))
+        {
+            var reviewTargetPath = item.CurrentReviewTargetPath!;
+            _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
+
+            var result = _dialogService.AskSourceReviewResult(
+                Path.GetFileName(reviewTargetPath),
+                canTryAlternative: true);
+
+            if (result == MessageBoxResult.Cancel)
+            {
+                SetStatus("Quellenpruefung abgebrochen", ProgressValue);
+                return false;
+            }
+
+            if (result == MessageBoxResult.Yes)
+            {
+                item.ApproveCurrentReviewTarget();
+                SetStatus(
+                    isBatchPreparation
+                        ? $"Quelle fuer '{item.Title}' freigegeben"
+                        : "Quelle freigegeben",
+                    100);
+                return true;
+            }
+
+            var tentativeExclusions = new HashSet<string>(item.ExcludedSourcePaths, StringComparer.OrdinalIgnoreCase)
+            {
+                reviewTargetPath
+            };
+
+            var updated = await ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions);
+            if (!updated)
+            {
+                return false;
+            }
+
+            if (!item.RequiresManualCheck)
+            {
+                SetStatus(
+                    isBatchPreparation
+                        ? $"Alternative Quelle fuer '{item.Title}' gewaehlt"
+                        : "Auf alternative Quelle umgestellt",
+                    100);
+                return true;
+            }
+        }
+
+        return !item.RequiresManualCheck || item.IsManualCheckApproved;
     }
 
     private static string ResolveSelectedItemDirectory(BatchEpisodeItemViewModel item)
@@ -704,6 +778,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private bool _requiresManualCheck;
     private List<string> _manualCheckFilePaths;
     private List<string> _notes;
+    private string _detectionSeedPath;
+    private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+    private string? _approvedReviewPath;
 
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
@@ -734,6 +811,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _requiresManualCheck = requiresManualCheck;
         _manualCheckFilePaths = manualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _detectionSeedPath = requestedMainVideoPath;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -823,9 +901,20 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public IReadOnlyList<string> ManualCheckFilePaths => _manualCheckFilePaths;
 
-    public string ReviewHint => RequiresManualCheck ? "Quelle pruefen" : string.Empty;
+    public string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault();
+
+    public bool IsManualCheckApproved => !RequiresManualCheck
+        || string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase);
+
+    public string ReviewHint => RequiresManualCheck
+        ? (IsManualCheckApproved ? "Freigegeben" : "Quelle pruefen")
+        : string.Empty;
 
     public IReadOnlyList<string> Notes => _notes;
+
+    public string DetectionSeedPath => _detectionSeedPath;
+
+    public IReadOnlyCollection<string> ExcludedSourcePaths => _excludedSourcePaths;
 
     public bool IsSelected
     {
@@ -964,6 +1053,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         string status)
     {
         _requestedMainVideoPath = requestedMainVideoPath;
+        _detectionSeedPath = requestedMainVideoPath;
         _requestedSourcePaths = [requestedMainVideoPath];
         MainVideoPath = detected.MainVideoPath;
         _additionalVideoPaths = detected.AdditionalVideoPaths.ToList();
@@ -975,6 +1065,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         Status = status;
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (!RequiresManualCheck || !string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _approvedReviewPath = null;
+        }
         _notes = detected.Notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         IsSelected = status != "Existiert bereits";
 
@@ -990,6 +1084,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AttachmentPaths));
         OnPropertyChanged(nameof(AttachmentDisplayText));
         OnPropertyChanged(nameof(ManualCheckFilePaths));
+        OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(Notes));
         OnPropertyChanged(nameof(NotesDisplayText));
         OnPropertyChanged(nameof(SourceFilePaths));
@@ -998,10 +1093,13 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public void SetAudioDescription(string? path)
     {
         _audioDescriptionPath = string.IsNullOrWhiteSpace(path) ? null : path;
+        _approvedReviewPath = null;
         OnPropertyChanged(nameof(AudioDescriptionPath));
         OnPropertyChanged(nameof(AudioDescriptionDisplayText));
         OnPropertyChanged(nameof(VideoAndAudioDescriptionDisplayText));
         OnPropertyChanged(nameof(SourceFilePaths));
+        OnPropertyChanged(nameof(IsManualCheckApproved));
+        OnPropertyChanged(nameof(ReviewHint));
     }
 
     public void SetSubtitles(IEnumerable<string> paths)
@@ -1033,6 +1131,22 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OutputPath = outputPath;
         Status = File.Exists(outputPath) ? "Existiert bereits" : "Bereit";
         IsSelected = Status != "Existiert bereits";
+    }
+
+    public void ReplaceExcludedSourcePaths(IEnumerable<string> excludedSourcePaths)
+    {
+        _excludedSourcePaths.Clear();
+        foreach (var excludedSourcePath in excludedSourcePaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            _excludedSourcePaths.Add(excludedSourcePath);
+        }
+    }
+
+    public void ApproveCurrentReviewTarget()
+    {
+        _approvedReviewPath = CurrentReviewTargetPath;
+        OnPropertyChanged(nameof(IsManualCheckApproved));
+        OnPropertyChanged(nameof(ReviewHint));
     }
 
     private IEnumerable<string> EnumerateSourceFilePaths()

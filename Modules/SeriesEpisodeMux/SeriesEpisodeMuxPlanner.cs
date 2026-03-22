@@ -25,7 +25,8 @@ public sealed class SeriesEpisodeMuxPlanner
 
     public AutoDetectedEpisodeFiles DetectFromMainVideo(
         string mainVideoPath,
-        Action<DetectionProgressUpdate>? onProgress = null)
+        Action<DetectionProgressUpdate>? onProgress = null,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
         if (!File.Exists(mainVideoPath))
         {
@@ -34,14 +35,19 @@ public sealed class SeriesEpisodeMuxPlanner
 
         ReportProgress(onProgress, "Bereite Erkennung vor...", 0);
 
+        var excludedPathSet = excludedSourcePaths is null || excludedSourcePaths.Count == 0
+            ? null
+            : new HashSet<string>(excludedSourcePaths, StringComparer.OrdinalIgnoreCase);
+
         return LooksLikeAudioDescription(mainVideoPath)
-            ? DetectFromAudioDescription(mainVideoPath, onProgress)
-            : DetectFromNormalVideo(mainVideoPath, onProgress);
+            ? DetectFromAudioDescription(mainVideoPath, onProgress, excludedPathSet)
+            : DetectFromNormalVideo(mainVideoPath, onProgress, excludedPathSet);
     }
 
     private AutoDetectedEpisodeFiles DetectFromNormalVideo(
         string mainVideoPath,
-        Action<DetectionProgressUpdate>? onProgress)
+        Action<DetectionProgressUpdate>? onProgress,
+        ISet<string>? excludedSourcePaths)
     {
         var directory = Path.GetDirectoryName(mainVideoPath)
             ?? throw new InvalidOperationException("Der Ordner der Hauptdatei konnte nicht bestimmt werden.");
@@ -59,6 +65,7 @@ public sealed class SeriesEpisodeMuxPlanner
             .Where(path => !LooksLikeAudioDescription(path))
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
         ReportProgress(onProgress, $"Pruefe {normalSeeds.Count} passende Videoquelle(n)...", 12);
@@ -78,6 +85,7 @@ public sealed class SeriesEpisodeMuxPlanner
             .Where(LooksLikeAudioDescription)
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
         ReportProgress(onProgress, $"Pruefe {audioDescriptionSeeds.Count} passende AD-Quelle(n)...", 76);
@@ -102,7 +110,8 @@ public sealed class SeriesEpisodeMuxPlanner
 
     private AutoDetectedEpisodeFiles DetectFromAudioDescription(
         string audioDescriptionPath,
-        Action<DetectionProgressUpdate>? onProgress)
+        Action<DetectionProgressUpdate>? onProgress,
+        ISet<string>? excludedSourcePaths)
     {
         var directory = Path.GetDirectoryName(audioDescriptionPath)
             ?? throw new InvalidOperationException("Der Ordner der AD-Datei konnte nicht bestimmt werden.");
@@ -120,6 +129,7 @@ public sealed class SeriesEpisodeMuxPlanner
             .Where(path => !LooksLikeAudioDescription(path))
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
         ReportProgress(onProgress, $"Pruefe {normalSeeds.Count} passende Videoquelle(n)...", 12);
@@ -139,6 +149,7 @@ public sealed class SeriesEpisodeMuxPlanner
             .Where(LooksLikeAudioDescription)
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
         ReportProgress(onProgress, $"Pruefe {audioDescriptionSeeds.Count} passende AD-Quelle(n)...", 76);
