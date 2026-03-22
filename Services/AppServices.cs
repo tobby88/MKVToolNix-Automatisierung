@@ -6,4 +6,5 @@ namespace MkvToolnixAutomatisierung.Services;
 public sealed record AppServices(
     SeriesEpisodeMuxService SeriesEpisodeMux,
     EpisodeMetadataLookupService EpisodeMetadata,
-    FileCopyService FileCopy);
+    FileCopyService FileCopy,
+    EpisodeCleanupService Cleanup);

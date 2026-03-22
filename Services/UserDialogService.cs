@@ -159,6 +159,55 @@ public sealed class UserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles)
+    {
+        var lines = new List<string>
+        {
+            "Sollen die Quelldateien dieser Episode jetzt in den Papierkorb verschoben werden?"
+        };
+
+        if (usedFiles.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Verwendet:");
+            lines.AddRange(usedFiles.Select(path => "- " + Path.GetFileName(path)));
+        }
+
+        if (unusedFiles.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Nicht verwendet, aber erkannt:");
+            lines.AddRange(unusedFiles.Select(path => "- " + Path.GetFileName(path)));
+        }
+
+        return MessageBox.Show(
+            GetOwner(),
+            string.Join(Environment.NewLine, lines),
+            "Quelldateien aufraeumen",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory)
+    {
+        return MessageBox.Show(
+            GetOwner(),
+            $"{fileCount} Datei(en) dieses Laufs liegen jetzt in:\n{doneDirectory}\n\nSollen sie jetzt gesammelt in den Papierkorb verschoben werden?",
+            "Done-Ordner aufraeumen",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    public bool AskOpenDoneDirectory(string doneDirectory)
+    {
+        return MessageBox.Show(
+            GetOwner(),
+            $"Der Done-Ordner bleibt vorerst erhalten:\n{doneDirectory}\n\nJetzt zur Kontrolle oeffnen?",
+            "Done-Ordner oeffnen",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
     public void OpenFilesWithDefaultApp(IEnumerable<string> filePaths)
     {
         var files = filePaths
@@ -181,6 +230,21 @@ public sealed class UserDialogService
                 UseShellExecute = true
             });
         }
+    }
+
+    public void OpenPathWithDefaultApp(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
+        {
+            ShowWarning("Hinweis", "Der Pfad konnte nicht geoeffnet werden.");
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = path,
+            UseShellExecute = true
+        });
     }
 
     public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)

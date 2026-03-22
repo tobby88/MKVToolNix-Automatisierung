@@ -276,6 +276,32 @@ public sealed class SeriesEpisodeMuxPlan
         return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
     }
 
+    public IReadOnlyList<string> GetReferencedInputFiles()
+    {
+        if (SkipMux)
+        {
+            return [];
+        }
+
+        var filePaths = new List<string>();
+        filePaths.AddRange(VideoSources.Select(video => video.FilePath));
+
+        if (!string.IsNullOrWhiteSpace(AudioDescriptionFilePath))
+        {
+            filePaths.Add(AudioDescriptionFilePath);
+        }
+
+        filePaths.AddRange(SubtitleFiles
+            .Where(subtitle => !subtitle.IsEmbedded)
+            .Select(subtitle => subtitle.FilePath));
+        filePaths.AddRange(AttachmentFilePaths);
+
+        return filePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public string BuildPreviewText()
     {
         var builder = new StringBuilder();

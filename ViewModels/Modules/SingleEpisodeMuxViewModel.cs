@@ -20,6 +20,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private string? _audioDescriptionPath;
     private List<string> _subtitlePaths = [];
     private List<string> _attachmentPaths = [];
+    private List<string> _relatedEpisodeFilePaths = [];
     private string? _outputPath;
     private string _seriesName = string.Empty;
     private string _seasonNumber = "xx";
@@ -425,6 +426,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
             _subtitlePaths = detected.SubtitlePaths.ToList();
             _attachmentPaths = detected.AttachmentPaths.ToList();
+            _relatedEpisodeFilePaths = detected.RelatedFilePaths.ToList();
             _currentPlan = null;
 
             ApplyMetadataFields(() =>
@@ -1031,12 +1033,14 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             {
                 SetStatus("Muxing erfolgreich abgeschlossen", 100);
                 _dialogService.ShowInfo("Erfolg", $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
+                await OfferSingleEpisodeCleanupAsync(_currentPlan);
             }
             else if ((result.ExitCode == 0 && result.HasWarning)
                 || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
             {
                 SetStatus("Muxing mit Warnungen abgeschlossen", 100);
                 _dialogService.ShowWarning("Warnung", $"Die MKV wurde erstellt, aber mkvmerge hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
+                await OfferSingleEpisodeCleanupAsync(_currentPlan);
             }
             else
             {
@@ -1051,6 +1055,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
         finally
         {
+            _services.Cleanup.DeleteTemporaryFile(_currentPlan?.WorkingCopy?.DestinationFilePath);
             SetBusy(false);
         }
     }
@@ -1116,6 +1121,64 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         return value;
+    }
+
+    private async Task OfferSingleEpisodeCleanupAsync(SeriesEpisodeMuxPlan plan)
+    {
+        var usedFiles = BuildCleanupFileList(plan.GetReferencedInputFiles(), plan);
+        var relatedFiles = BuildCleanupFileList(_relatedEpisodeFilePaths, plan);
+        var unusedFiles = relatedFiles
+            .Where(path => !usedFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        if (usedFiles.Count == 0 && unusedFiles.Count == 0)
+        {
+            return;
+        }
+
+        if (!_dialogService.ConfirmSingleEpisodeCleanup(usedFiles, unusedFiles))
+        {
+            return;
+        }
+
+        var cleanupFiles = usedFiles
+            .Concat(unusedFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        SetStatus("Verschiebe Quelldateien in den Papierkorb...", 0);
+        var recycleResult = await _services.Cleanup.RecycleFilesAsync(
+            cleanupFiles,
+            (current, total, _) =>
+            {
+                var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    SetStatus($"Verschiebe Quelldateien in den Papierkorb... {current}/{total}", progress);
+                });
+            });
+
+        if (recycleResult.FailedFiles.Count > 0)
+        {
+            _dialogService.ShowWarning(
+                "Warnung",
+                "Einige Quelldateien konnten nicht in den Papierkorb verschoben werden:\n"
+                + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
+        }
+    }
+
+    private List<string> BuildCleanupFileList(IEnumerable<string> sourceFilePaths, SeriesEpisodeMuxPlan plan)
+    {
+        return sourceFilePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Where(File.Exists)
+            .Where(path => !string.Equals(path, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
+            .Where(path => plan.WorkingCopy is null
+                || !string.Equals(path, plan.WorkingCopy.DestinationFilePath, StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private void SetBusy(bool isBusy)

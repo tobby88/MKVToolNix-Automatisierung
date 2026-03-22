@@ -14,6 +14,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 public sealed class BatchMuxViewModel : INotifyPropertyChanged
 {
     private const string DefaultSourceDirectory = @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads";
+    private const string DoneFolderName = "done";
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
@@ -511,6 +512,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             var successCount = 0;
             var warningCount = 0;
             var errorCount = 0;
+            var movedDoneFiles = new List<string>();
+            var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
 
             for (var index = 0; index < executablePlans.Count; index++)
             {
@@ -529,12 +532,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     {
                         item.Status = "Erfolgreich";
                         successCount++;
+                        movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(item, plan, doneDirectory));
                     }
                     else if ((result.ExitCode == 0 && result.HasWarning)
                         || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
                     {
                         item.Status = "Warnung";
                         warningCount++;
+                        movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(item, plan, doneDirectory));
                     }
                     else
                     {
@@ -548,9 +553,15 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     AppendLog($"  FEHLER: {ex.Message}");
                     errorCount++;
                 }
+                finally
+                {
+                    _services.Cleanup.DeleteTemporaryFile(plan.WorkingCopy?.DestinationFilePath);
+                }
 
                 SetStatus($"Batch laeuft... {index + 1}/{executablePlans.Count}", CalculatePercent(index + 1, executablePlans.Count));
             }
+
+            await OfferBatchDoneCleanupAsync(doneDirectory, movedDoneFiles);
 
             SetStatus(
                 $"Batch abgeschlossen: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler",
@@ -629,6 +640,97 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             item.TitleForMux);
 
         return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+    }
+
+    private async Task<IReadOnlyList<string>> MoveEpisodeFilesToDoneAsync(
+        BatchEpisodeItemViewModel item,
+        SeriesEpisodeMuxPlan plan,
+        string doneDirectory)
+    {
+        var cleanupFiles = BuildBatchCleanupFileList(item, plan);
+        if (cleanupFiles.Count == 0)
+        {
+            return [];
+        }
+
+        var moveResult = await _services.Cleanup.MoveFilesToDirectoryAsync(
+            cleanupFiles,
+            doneDirectory,
+            (current, total, filePath) =>
+            {
+                var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    SetStatus($"Verschiebe Dateien nach 'done'... {current}/{total}", progress);
+                });
+            });
+
+        AppendLog($"DONE: {item.MainVideoFileName} -> {moveResult.MovedFiles.Count} Datei(en) verschoben.");
+
+        if (moveResult.FailedFiles.Count > 0)
+        {
+            AppendLog("  NICHT VERSCHOBEN: " + string.Join(", ", moveResult.FailedFiles.Select(Path.GetFileName)));
+        }
+
+        return moveResult.MovedFiles;
+    }
+
+    private List<string> BuildBatchCleanupFileList(BatchEpisodeItemViewModel item, SeriesEpisodeMuxPlan plan)
+    {
+        return item.RelatedEpisodeFilePaths
+            .Concat(plan.GetReferencedInputFiles())
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Where(File.Exists)
+            .Where(path => path.StartsWith(SourceDirectory, StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+            .Where(path => !string.Equals(path, item.OutputPath, StringComparison.OrdinalIgnoreCase))
+            .Where(path => plan.WorkingCopy is null
+                || !string.Equals(path, plan.WorkingCopy.DestinationFilePath, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private async Task OfferBatchDoneCleanupAsync(string doneDirectory, IReadOnlyList<string> movedDoneFiles)
+    {
+        var doneFiles = movedDoneFiles
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (doneFiles.Count == 0)
+        {
+            return;
+        }
+
+        if (_dialogService.ConfirmBatchRecycleDoneFiles(doneFiles.Count, doneDirectory))
+        {
+            var recycleResult = await _services.Cleanup.RecycleFilesAsync(
+                doneFiles,
+                (current, total, _) =>
+                {
+                    var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        SetStatus($"Verschiebe Done-Dateien in den Papierkorb... {current}/{total}", progress);
+                    });
+                });
+
+            if (recycleResult.FailedFiles.Count > 0)
+            {
+                _dialogService.ShowWarning(
+                    "Warnung",
+                    "Einige Dateien aus dem Done-Ordner konnten nicht in den Papierkorb verschoben werden:\n"
+                    + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
+            }
+
+            return;
+        }
+
+        if (_dialogService.AskOpenDoneDirectory(doneDirectory))
+        {
+            _dialogService.OpenPathWithDefaultApp(doneDirectory);
+        }
     }
 
     private async Task CopyArchiveFilesAsync(IReadOnlyList<FileCopyPlan> copyPlans, long totalCopyBytes)
@@ -1051,6 +1153,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private string? _audioDescriptionPath;
     private List<string> _subtitlePaths;
     private List<string> _attachmentPaths;
+    private List<string> _relatedEpisodeFilePaths;
     private string _outputPath;
     private string _titleForMux;
     private string _metadataStatusText;
@@ -1078,6 +1181,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         string? audioDescriptionPath,
         IReadOnlyList<string> subtitlePaths,
         IReadOnlyList<string> attachmentPaths,
+        IReadOnlyList<string> relatedEpisodeFilePaths,
         string outputPath,
         string titleForMux,
         string metadataStatusText,
@@ -1103,6 +1207,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _audioDescriptionPath = audioDescriptionPath;
         _subtitlePaths = subtitlePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _attachmentPaths = attachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        _relatedEpisodeFilePaths = relatedEpisodeFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPath = outputPath;
         _titleForMux = titleForMux;
         _metadataStatusText = metadataStatusText;
@@ -1207,6 +1312,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public IReadOnlyList<string> SubtitlePaths => _subtitlePaths;
 
     public IReadOnlyList<string> AttachmentPaths => _attachmentPaths;
+
+    public IReadOnlyList<string> RelatedEpisodeFilePaths => _relatedEpisodeFilePaths;
 
     public string OutputPath
     {
@@ -1450,6 +1557,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             detected.AudioDescriptionPath,
             detected.SubtitlePaths,
             detected.AttachmentPaths,
+            detected.RelatedFilePaths,
             outputPath,
             detected.SuggestedTitle,
             metadataResolution.StatusText,
@@ -1476,6 +1584,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             "xx",
             [],
             null,
+            [],
             [],
             [],
             string.Empty,
@@ -1535,6 +1644,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _audioDescriptionPath = detected.AudioDescriptionPath;
         _subtitlePaths = detected.SubtitlePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _attachmentPaths = detected.AttachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        _relatedEpisodeFilePaths = detected.RelatedFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
         TitleForMux = detected.SuggestedTitle;

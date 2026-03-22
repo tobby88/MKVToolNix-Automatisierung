@@ -47,10 +47,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var outputParser = new MkvMergeOutputParser();
         var muxService = new SeriesEpisodeMuxService(planner, executionService, outputParser);
         var fileCopyService = new FileCopyService();
+        var cleanupService = new EpisodeCleanupService();
         var metadataStore = new AppMetadataStore();
         var tvdbClient = new TvdbClient();
         var metadataLookupService = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
-        var appServices = new AppServices(muxService, metadataLookupService, fileCopyService);
+        var appServices = new AppServices(muxService, metadataLookupService, fileCopyService, cleanupService);
 
         var dialogService = new UserDialogService();
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);

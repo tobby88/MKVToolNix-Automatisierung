@@ -14,6 +14,7 @@ public sealed record AutoDetectedEpisodeFiles(
     string? AudioDescriptionPath,
     IReadOnlyList<string> SubtitlePaths,
     IReadOnlyList<string> AttachmentPaths,
+    IReadOnlyList<string> RelatedFilePaths,
     string SuggestedOutputFilePath,
     string SuggestedTitle,
     string SeriesName,
