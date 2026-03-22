@@ -216,14 +216,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                             detected: detected,
                             metadataResolution: metadataResolution,
                             outputPath: outputPath,
-                            status: outputAlreadyExists ? "Existiert bereits" : "Bereit",
-                            isSelected: !outputAlreadyExists);
+                            status: outputAlreadyExists ? "Archiv vorhanden" : "Bereit",
+                            isSelected: true);
 
                         AddEpisodeItem(item);
                         itemsByEpisodeKey[episodeKey] = item;
 
                         AppendLog(outputAlreadyExists
-                            ? $"OK: {Path.GetFileName(file)} -> Ausgabedatei existiert bereits und wurde abgewaehlt."
+                            ? $"OK: {Path.GetFileName(file)} -> Archivdatei vorhanden, wird spaeter genauer verglichen."
                             : $"OK: {Path.GetFileName(file)}");
                     }
                 }
@@ -448,7 +448,57 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        if (!_dialogService.ConfirmBatchStart(readyItems.Count))
+        SetStatus("Erstelle Mux-Plaene...", 0);
+        var executablePlans = new List<(BatchEpisodeItemViewModel Item, SeriesEpisodeMuxPlan Plan)>();
+        foreach (var item in readyItems)
+        {
+            try
+            {
+                var plan = await BuildPlanForItemAsync(item);
+                if (plan.SkipMux)
+                {
+                    item.Status = "Archiv aktuell";
+                    AppendLog($"SKIP: {item.MainVideoFileName} -> {plan.SkipReason}");
+                    continue;
+                }
+
+                executablePlans.Add((item, plan));
+            }
+            catch (Exception ex)
+            {
+                item.Status = "Fehler";
+                AppendLog($"PLAN-FEHLER: {item.MainVideoFileName} -> {ex.Message}");
+            }
+        }
+
+        if (executablePlans.Count == 0)
+        {
+            SetStatus("Keine weiteren Mux-Vorgaenge noetig", 100);
+            _dialogService.ShowInfo("Hinweis", "Alle ausgewaehlten Episoden sind bereits vollstaendig oder wurden wegen Fehlern uebersprungen.");
+            return;
+        }
+
+        var copyPlans = executablePlans
+            .Select(entry => entry.Plan.WorkingCopy)
+            .Where(plan => plan is not null)
+            .Cast<FileCopyPlan>()
+            .GroupBy(plan => plan.SourceFilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+
+        if (copyPlans.Count > 0)
+        {
+            var totalCopyBytes = copyPlans.Sum(plan => plan.FileSizeBytes);
+            if (!_dialogService.ConfirmBatchArchiveCopy(copyPlans.Count, totalCopyBytes))
+            {
+                SetStatus("Abgebrochen", 0);
+                return;
+            }
+
+            await CopyArchiveFilesAsync(copyPlans, totalCopyBytes);
+        }
+
+        if (!_dialogService.ConfirmBatchStart(executablePlans.Count))
         {
             SetStatus("Abgebrochen", 0);
             return;
@@ -462,27 +512,18 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             var warningCount = 0;
             var errorCount = 0;
 
-            for (var index = 0; index < readyItems.Count; index++)
+            for (var index = 0; index < executablePlans.Count; index++)
             {
-                var item = readyItems[index];
+                var (item, plan) = executablePlans[index];
                 item.Status = "Laeuft";
                 AppendLog($"STARTE: {item.MainVideoFileName}");
 
                 try
                 {
-                    var request = new SeriesEpisodeMuxRequest(
-                        item.MainVideoPath,
-                        item.AudioDescriptionPath,
-                        item.SubtitlePaths,
-                        item.AttachmentPaths,
-                        item.OutputPath,
-                        item.TitleForMux);
-
-                    var plan = await _services.SeriesEpisodeMux.CreatePlanAsync(request);
                     var result = await _services.SeriesEpisodeMux.ExecuteAsync(
                         plan,
                         line => AppendLog($"  {line}"),
-                        update => UpdateRuntimeStatus(index + 1, readyItems.Count, update));
+                        update => UpdateRuntimeStatus(index + 1, executablePlans.Count, update));
 
                     if (result.ExitCode == 0 && !result.HasWarning)
                     {
@@ -508,7 +549,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     errorCount++;
                 }
 
-                SetStatus($"Batch laeuft... {index + 1}/{readyItems.Count}", CalculatePercent(index + 1, readyItems.Count));
+                SetStatus($"Batch laeuft... {index + 1}/{executablePlans.Count}", CalculatePercent(index + 1, executablePlans.Count));
             }
 
             SetStatus(
@@ -557,7 +598,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 detected: detected,
                 metadataResolution: metadataResolution,
                 outputPath: outputPath,
-                status: outputAlreadyExists ? "Existiert bereits" : "Bereit");
+                status: outputAlreadyExists ? "Archiv vorhanden" : "Bereit");
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");
@@ -574,6 +615,47 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         finally
         {
             SetBusy(false);
+        }
+    }
+
+    private async Task<SeriesEpisodeMuxPlan> BuildPlanForItemAsync(BatchEpisodeItemViewModel item)
+    {
+        var request = new SeriesEpisodeMuxRequest(
+            item.MainVideoPath,
+            item.AudioDescriptionPath,
+            item.SubtitlePaths,
+            item.AttachmentPaths,
+            item.OutputPath,
+            item.TitleForMux);
+
+        return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+    }
+
+    private async Task CopyArchiveFilesAsync(IReadOnlyList<FileCopyPlan> copyPlans, long totalCopyBytes)
+    {
+        long copiedBeforeCurrentFile = 0;
+
+        for (var index = 0; index < copyPlans.Count; index++)
+        {
+            var copyPlan = copyPlans[index];
+            AppendLog($"KOPIERE: {Path.GetFileName(copyPlan.SourceFilePath)}");
+
+            await _services.FileCopy.CopyAsync(
+                copyPlan,
+                (copiedBytes, _) =>
+                {
+                    var combinedCopiedBytes = copiedBeforeCurrentFile + copiedBytes;
+                    var progress = totalCopyBytes <= 0
+                        ? 0
+                        : (int)Math.Round(combinedCopiedBytes * 100d / totalCopyBytes);
+
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        SetStatus($"Kopiere Archivdateien... {index + 1}/{copyPlans.Count}", progress);
+                    });
+                });
+
+            copiedBeforeCurrentFile += copyPlan.FileSizeBytes;
         }
     }
 

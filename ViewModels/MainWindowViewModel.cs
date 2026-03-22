@@ -41,14 +41,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         var locator = new MkvToolNixLocator();
         var probeService = new MkvMergeProbeService();
-        var planner = new SeriesEpisodeMuxPlanner(locator, probeService);
+        var archiveService = new SeriesArchiveService(probeService);
+        var planner = new SeriesEpisodeMuxPlanner(locator, probeService, archiveService);
         var executionService = new MuxExecutionService();
         var outputParser = new MkvMergeOutputParser();
         var muxService = new SeriesEpisodeMuxService(planner, executionService, outputParser);
+        var fileCopyService = new FileCopyService();
         var metadataStore = new AppMetadataStore();
         var tvdbClient = new TvdbClient();
         var metadataLookupService = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
-        var appServices = new AppServices(muxService, metadataLookupService);
+        var appServices = new AppServices(muxService, metadataLookupService, fileCopyService);
 
         var dialogService = new UserDialogService();
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);

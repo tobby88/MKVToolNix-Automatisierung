@@ -921,6 +921,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 + "mkvmerge-Ausgabe:"
                 + Environment.NewLine;
 
+            if (_currentPlan.SkipMux)
+            {
+                SetStatus("Archiv bereits aktuell", 100);
+                _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Archivdatei ist bereits vollstaendig.");
+                return;
+            }
+
             if (RequiresManualCheck && !IsManualCheckApproved)
             {
                 _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
@@ -939,6 +946,30 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             {
                 SetStatus("Abgebrochen", 0);
                 return;
+            }
+
+            if (_currentPlan.WorkingCopy is not null)
+            {
+                if (!_dialogService.ConfirmArchiveCopy(_currentPlan.WorkingCopy))
+                {
+                    SetStatus("Abgebrochen", 0);
+                    return;
+                }
+
+                SetStatus("Kopiere Archivdatei...", 0);
+                await _services.FileCopy.CopyAsync(
+                    _currentPlan.WorkingCopy,
+                    (copiedBytes, totalBytes) =>
+                    {
+                        var progress = totalBytes <= 0
+                            ? 0
+                            : (int)Math.Round(copiedBytes * 100d / totalBytes);
+
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            SetStatus($"Kopiere Archivdatei... {progress}%", progress);
+                        });
+                    });
             }
 
             SetStatus("Muxing laeuft...", 0);

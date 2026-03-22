@@ -139,6 +139,26 @@ public sealed class UserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan)
+    {
+        return MessageBox.Show(
+            GetOwner(),
+            $"Die vorhandene Archiv-MKV muss zuerst lokal kopiert werden:\n{copyPlan.SourceFilePath}\n\nZiel:\n{copyPlan.DestinationFilePath}\n\nDateigroesse: {FormatFileSize(copyPlan.FileSizeBytes)}\n\nJetzt kopieren?",
+            "Archivdatei kopieren",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    public bool ConfirmBatchArchiveCopy(int fileCount, long totalBytes)
+    {
+        return MessageBox.Show(
+            GetOwner(),
+            $"{fileCount} vorhandene Archivdatei(en) muessen vor dem Batch lokal kopiert werden.\n\nGesamtgroesse: {FormatFileSize(totalBytes)}\n\nJetzt alle benoetigten Dateien kopieren?",
+            "Archivdateien kopieren",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
     public void OpenFilesWithDefaultApp(IEnumerable<string> filePaths)
     {
         var files = filePaths
@@ -196,5 +216,20 @@ public sealed class UserDialogService
     {
         return Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
             ?? Application.Current?.MainWindow;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["Bytes", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return $"{value:0.##} {units[unitIndex]}";
     }
 }

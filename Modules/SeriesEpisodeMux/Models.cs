@@ -27,6 +27,11 @@ public sealed record DetectionProgressUpdate(
     string StatusText,
     int ProgressPercent);
 
+public sealed record FileCopyPlan(
+    string SourceFilePath,
+    string DestinationFilePath,
+    long FileSizeBytes);
+
 public sealed record MediaTrackMetadata(
     int VideoTrackId,
     int AudioTrackId,
@@ -40,7 +45,26 @@ public sealed record MediaTrackMetadata(
 public sealed record AudioTrackMetadata(
     int TrackId,
     string CodecLabel,
-    string Language);
+    string Language,
+    string TrackName,
+    bool IsVisualImpaired);
+
+public sealed record ContainerTrackMetadata(
+    int TrackId,
+    string Type,
+    string CodecLabel,
+    string Language,
+    string TrackName,
+    int VideoWidth,
+    bool IsVisualImpaired,
+    bool IsHearingImpaired,
+    bool IsDefaultTrack);
+
+public sealed record ContainerAttachmentMetadata(string FileName);
+
+public sealed record ContainerMetadata(
+    IReadOnlyList<ContainerTrackMetadata> Tracks,
+    IReadOnlyList<ContainerAttachmentMetadata> Attachments);
 
 public sealed record VideoSourcePlan(
     string FilePath,
@@ -52,19 +76,29 @@ public sealed record EpisodeTrackMetadata(
     string AudioTrackName,
     string AudioDescriptionTrackName);
 
-public sealed record SubtitleFile(string FilePath, SubtitleKind Kind)
+public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null)
 {
+    public bool IsEmbedded => EmbeddedTrackId is not null;
+
     public string TrackName => $"Deutsch (hoergeschaedigte) - {Kind.DisplayName}";
 }
 
-public sealed record SubtitleKind(string DisplayName)
+public sealed record SubtitleKind(string DisplayName, int SortRank)
 {
     public static SubtitleKind FromExtension(string extension) => extension.ToLowerInvariant() switch
     {
-        ".srt" => new SubtitleKind("SRT"),
-        ".ass" => new SubtitleKind("SSA"),
-        ".vtt" => new SubtitleKind("WebVTT"),
-        _ => new SubtitleKind("Unbekannt")
+        ".ass" => new SubtitleKind("SSA", 0),
+        ".srt" => new SubtitleKind("SRT", 1),
+        ".vtt" => new SubtitleKind("WebVTT", 2),
+        _ => new SubtitleKind("Unbekannt", 9)
+    };
+
+    public static SubtitleKind? FromExistingCodec(string codecLabel) => codecLabel.ToUpperInvariant() switch
+    {
+        "SSA" => new SubtitleKind("SSA", 0),
+        "SRT" => new SubtitleKind("SRT", 1),
+        "WEBVTT" => new SubtitleKind("WebVTT", 2),
+        _ => null
     };
 }
 

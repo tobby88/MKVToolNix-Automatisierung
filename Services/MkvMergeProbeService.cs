@@ -9,6 +9,7 @@ public sealed class MkvMergeProbeService
 {
     private readonly ConcurrentDictionary<string, MediaTrackMetadata> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, AudioTrackMetadata> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ContainerMetadata> _containerCache = new(StringComparer.OrdinalIgnoreCase);
 
     public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(string mkvMergePath, string inputFilePath)
     {
@@ -99,7 +100,9 @@ public sealed class MkvMergeProbeService
                 var metadata = new AudioTrackMetadata(
                     TrackId: ReadTrackId(track),
                     CodecLabel: NormalizeAudioCodecName(ReadCodec(track, properties)),
-                    Language: NormalizeLanguage(properties));
+                    Language: NormalizeLanguage(properties),
+                    TrackName: ReadTrackName(properties),
+                    IsVisualImpaired: ReadBooleanProperty(properties, "flag_visual_impaired"));
 
                 _audioTrackCache[inputFilePath] = metadata;
                 return metadata;
@@ -107,6 +110,73 @@ public sealed class MkvMergeProbeService
         }
 
         throw new InvalidOperationException("In der Datei wurde keine Audiospur gefunden.");
+    }
+
+    public async Task<ContainerMetadata> ReadContainerMetadataAsync(string mkvMergePath, string inputFilePath)
+    {
+        if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        {
+            return cachedMetadata;
+        }
+
+        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
+        var tracks = trackDocument.RootElement.GetProperty("tracks");
+        var trackMetadata = new List<ContainerTrackMetadata>();
+
+        foreach (var track in tracks.EnumerateArray())
+        {
+            var type = track.TryGetProperty("type", out var typeElement)
+                ? typeElement.GetString() ?? string.Empty
+                : string.Empty;
+
+            var properties = track.TryGetProperty("properties", out var propertiesElement)
+                ? propertiesElement
+                : default;
+
+            var codecLabel = type switch
+            {
+                "video" => NormalizeVideoCodecName(ReadCodec(track, properties)),
+                "audio" => NormalizeAudioCodecName(ReadCodec(track, properties)),
+                "subtitles" => NormalizeSubtitleCodecName(ReadCodec(track, properties)),
+                _ => ReadCodec(track, properties) ?? "Unbekannt"
+            };
+
+            var width = type == "video" && properties.ValueKind != JsonValueKind.Undefined && properties.TryGetProperty("pixel_dimensions", out var pixelDimensionsElement)
+                ? ParseWidth(pixelDimensionsElement.GetString())
+                : 0;
+
+            trackMetadata.Add(new ContainerTrackMetadata(
+                TrackId: ReadTrackId(track),
+                Type: type,
+                CodecLabel: codecLabel,
+                Language: NormalizeLanguage(properties),
+                TrackName: ReadTrackName(properties),
+                VideoWidth: width,
+                IsVisualImpaired: ReadBooleanProperty(properties, "flag_visual_impaired"),
+                IsHearingImpaired: ReadBooleanProperty(properties, "flag_hearing_impaired"),
+                IsDefaultTrack: ReadBooleanProperty(properties, "default_track")));
+        }
+
+        var attachments = new List<ContainerAttachmentMetadata>();
+        if (trackDocument.RootElement.TryGetProperty("attachments", out var attachmentsElement)
+            && attachmentsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var attachment in attachmentsElement.EnumerateArray())
+            {
+                var fileName = attachment.TryGetProperty("file_name", out var fileNameElement)
+                    ? fileNameElement.GetString()
+                    : null;
+
+                if (!string.IsNullOrWhiteSpace(fileName))
+                {
+                    attachments.Add(new ContainerAttachmentMetadata(fileName.Trim()));
+                }
+            }
+        }
+
+        var metadata = new ContainerMetadata(trackMetadata, attachments);
+        _containerCache[inputFilePath] = metadata;
+        return metadata;
     }
 
     private static int ReadTrackId(JsonElement track)
@@ -140,6 +210,37 @@ public sealed class MkvMergeProbeService
         }
 
         return null;
+    }
+
+    private static string ReadTrackName(JsonElement properties)
+    {
+        if (properties.ValueKind != JsonValueKind.Undefined && properties.TryGetProperty("track_name", out var nameElement))
+        {
+            var value = nameElement.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static bool ReadBooleanProperty(JsonElement properties, string propertyName)
+    {
+        if (properties.ValueKind == JsonValueKind.Undefined || !properties.TryGetProperty(propertyName, out var property))
+        {
+            return false;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Number => property.TryGetInt32(out var number) && number != 0,
+            JsonValueKind.String => bool.TryParse(property.GetString(), out var booleanValue) && booleanValue,
+            _ => false
+        };
     }
 
     private async Task<JsonDocument> IdentifyAsync(string mkvMergePath, string inputFilePath)
@@ -244,6 +345,35 @@ public sealed class MkvMergeProbeService
         if (codecId.Contains("MP2", StringComparison.OrdinalIgnoreCase))
         {
             return "MP2";
+        }
+
+        return codecId;
+    }
+
+    private static string NormalizeSubtitleCodecName(string? codecId)
+    {
+        if (string.IsNullOrWhiteSpace(codecId))
+        {
+            return "Unbekannt";
+        }
+
+        if (codecId.Contains("SubRip", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("SRT", StringComparison.OrdinalIgnoreCase))
+        {
+            return "SRT";
+        }
+
+        if (codecId.Contains("ASS", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("SSA", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("SubStation", StringComparison.OrdinalIgnoreCase))
+        {
+            return "SSA";
+        }
+
+        if (codecId.Contains("WebVTT", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("VTT", StringComparison.OrdinalIgnoreCase))
+        {
+            return "WebVTT";
         }
 
         return codecId;

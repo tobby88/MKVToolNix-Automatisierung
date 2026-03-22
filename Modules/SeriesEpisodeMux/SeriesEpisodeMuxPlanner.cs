@@ -15,12 +15,14 @@ public sealed class SeriesEpisodeMuxPlanner
 
     private readonly MkvToolNixLocator _locator;
     private readonly MkvMergeProbeService _probeService;
+    private readonly SeriesArchiveService _archiveService;
     private readonly WindowsMediaDurationProbe _durationProbe = new();
 
-    public SeriesEpisodeMuxPlanner(MkvToolNixLocator locator, MkvMergeProbeService probeService)
+    public SeriesEpisodeMuxPlanner(MkvToolNixLocator locator, MkvMergeProbeService probeService, SeriesArchiveService archiveService)
     {
         _locator = locator;
         _probeService = probeService;
+        _archiveService = archiveService;
     }
 
     public AutoDetectedEpisodeFiles DetectFromMainVideo(
@@ -192,7 +194,7 @@ public sealed class SeriesEpisodeMuxPlanner
         return detectedFiles;
     }
 
-    private static AutoDetectedEpisodeFiles BuildDetectedFiles(
+    private AutoDetectedEpisodeFiles BuildDetectedFiles(
         string directory,
         EpisodeIdentity episodeIdentity,
         NormalVideoCandidate primaryVideoCandidate,
@@ -213,7 +215,12 @@ public sealed class SeriesEpisodeMuxPlanner
                 .Cast<string>()
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
-            SuggestedOutputFilePath: BuildSuggestedOutputPath(directory, episodeIdentity),
+            SuggestedOutputFilePath: _archiveService.BuildSuggestedOutputPath(
+                directory,
+                episodeIdentity.SeriesName,
+                episodeIdentity.SeasonNumber,
+                episodeIdentity.EpisodeNumber,
+                episodeIdentity.Title),
             SuggestedTitle: episodeIdentity.Title,
             SeriesName: episodeIdentity.SeriesName,
             SeasonNumber: episodeIdentity.SeasonNumber,
@@ -298,24 +305,56 @@ public sealed class SeriesEpisodeMuxPlanner
 
         var detected = DetectFromMainVideo(request.MainVideoPath);
         var subtitleFiles = request.SubtitlePaths
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .ToList();
 
         var mkvMergePath = _locator.FindMkvMergePath();
-        var videoPaths = new[] { detected.MainVideoPath }
+        var plannedVideoPaths = new[] { detected.MainVideoPath }
             .Concat(detected.AdditionalVideoPaths)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        var archiveDecision = await _archiveService.PrepareAsync(
+            mkvMergePath,
+            request,
+            detected,
+            plannedVideoPaths);
+
+        if (archiveDecision.SkipMux)
+        {
+            return SeriesEpisodeMuxPlan.CreateSkip(
+                mkvMergePath,
+                archiveDecision.OutputFilePath,
+                request.Title,
+                archiveDecision.SkipReason ?? "Archiv bereits aktuell.",
+                archiveDecision.Notes);
+        }
+
+        var effectiveOutputPath = archiveDecision.OutputFilePath;
+        var effectivePrimarySourcePath = string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath)
+            ? request.MainVideoPath
+            : archiveDecision.PrimarySourcePath;
+        var additionalVideoPaths = archiveDecision.AdditionalVideoPaths.Count > 0
+            ? archiveDecision.AdditionalVideoPaths
+            : plannedVideoPaths
+                .Where(path => !string.Equals(path, request.MainVideoPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
         var videoSources = new List<VideoSourcePlan>();
         string? primaryAudioFilePath = null;
         var primaryAudioTrackId = 0;
         var primaryAudioCodecLabel = "Audio";
 
-        for (var index = 0; index < videoPaths.Count; index++)
+        var effectiveVideoPaths = new[] { effectivePrimarySourcePath }
+            .Concat(additionalVideoPaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        for (var index = 0; index < effectiveVideoPaths.Count; index++)
         {
-            var videoPath = videoPaths[index];
+            var videoPath = effectiveVideoPaths[index];
             var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath);
             var trackName = BuildVideoTrackName(metadata);
             videoSources.Add(new VideoSourcePlan(videoPath, metadata.VideoTrackId, trackName, IsDefaultTrack: index == 0));
@@ -333,12 +372,27 @@ public sealed class SeriesEpisodeMuxPlanner
             throw new InvalidOperationException("Es wurde keine primaere Videoquelle fuer die Tonspur gefunden.");
         }
 
-        var audioDescriptionPath = string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
+        var audioDescriptionPath = !string.IsNullOrWhiteSpace(archiveDecision.AudioDescriptionFilePath)
+            ? archiveDecision.AudioDescriptionFilePath
+            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
         AudioTrackMetadata? audioDescriptionMetadata = audioDescriptionPath is null
             ? null
-            : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath);
+            : archiveDecision.AudioDescriptionTrackId is int trackId
+                ? new AudioTrackMetadata(trackId, "Audio", "de", string.Empty, IsVisualImpaired: true)
+                : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath);
 
-        var notes = detected.Notes.ToList();
+        var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
+            ? archiveDecision.SubtitleFiles
+            : subtitleFiles;
+
+        var attachmentFilePaths = archiveDecision.AttachmentFilePaths.Count > 0
+            ? archiveDecision.AttachmentFilePaths
+            : request.AttachmentPaths;
+
+        var notes = detected.Notes
+            .Concat(archiveDecision.Notes)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         if (audioDescriptionPath is not null && IsSrfSender(ReadTextMetadata(Path.ChangeExtension(audioDescriptionPath, ".txt")).Sender))
         {
             notes.Add("Die ausgewaehlte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen pruefen.");
@@ -346,15 +400,19 @@ public sealed class SeriesEpisodeMuxPlanner
 
         return new SeriesEpisodeMuxPlan(
             mkvMergePath,
-            request.OutputFilePath,
+            effectiveOutputPath,
             request.Title,
             videoSources,
             primaryAudioFilePath,
             primaryAudioTrackId,
+            archiveDecision.PrimaryAudioTrackIds,
+            archiveDecision.PrimarySubtitleTrackIds,
+            archiveDecision.IncludePrimaryAttachments,
             audioDescriptionPath,
             audioDescriptionMetadata?.TrackId,
-            subtitleFiles,
-            request.AttachmentPaths,
+            subtitleFilesForPlan,
+            attachmentFilePaths,
+            archiveDecision.WorkingCopy,
             BuildTrackMetadata(primaryAudioCodecLabel, audioDescriptionMetadata),
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
@@ -388,10 +446,12 @@ public sealed class SeriesEpisodeMuxPlanner
         }
 
         var outputDirectory = Path.GetDirectoryName(request.OutputFilePath);
-        if (string.IsNullOrWhiteSpace(outputDirectory) || !Directory.Exists(outputDirectory))
+        if (string.IsNullOrWhiteSpace(outputDirectory))
         {
             throw new DirectoryNotFoundException($"Ausgabeordner nicht gefunden: {outputDirectory}");
         }
+
+        Directory.CreateDirectory(outputDirectory);
     }
 
     private NormalVideoCandidate BuildNormalVideoCandidate(CandidateSeed seed, string mkvMergePath)
@@ -694,12 +754,6 @@ public sealed class SeriesEpisodeMuxPlanner
         }
 
         return null;
-    }
-
-    private static string BuildSuggestedOutputPath(string directory, EpisodeIdentity identity)
-    {
-        var fileName = $"{identity.SeriesName} - S{identity.SeasonNumber}E{identity.EpisodeNumber} - {identity.Title}.mkv";
-        return Path.Combine(directory, SanitizeFileName(fileName));
     }
 
     private static string BuildIdentityKey(string seriesName, string title)
