@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
@@ -169,7 +170,7 @@ public sealed class MkvMergeProbeService
 
                 if (!string.IsNullOrWhiteSpace(fileName))
                 {
-                    attachments.Add(new ContainerAttachmentMetadata(fileName.Trim()));
+                    attachments.Add(new ContainerAttachmentMetadata(NormalizeDisplayText(fileName.Trim())));
                 }
             }
         }
@@ -235,11 +236,34 @@ public sealed class MkvMergeProbeService
             var value = nameElement.GetString();
             if (!string.IsNullOrWhiteSpace(value))
             {
-                return value.Trim();
+                return NormalizeDisplayText(value.Trim());
             }
         }
 
         return string.Empty;
+    }
+
+    private static string NormalizeDisplayText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        if (!value.Contains('Ã') && !value.Contains('â'))
+        {
+            return value;
+        }
+
+        try
+        {
+            var repaired = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
+            return string.IsNullOrWhiteSpace(repaired) ? value : repaired;
+        }
+        catch
+        {
+            return value;
+        }
     }
 
     private static bool ReadBooleanProperty(JsonElement properties, string propertyName)

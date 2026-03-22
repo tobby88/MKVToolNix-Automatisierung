@@ -647,7 +647,7 @@ public sealed class SeriesEpisodeMuxPlanner
     {
         return new EpisodeTrackMetadata(
             AudioTrackName: $"Deutsch - {primaryAudioCodecLabel}",
-            AudioDescriptionTrackName: $"Deutsch (sehbehindert) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}");
+            AudioDescriptionTrackName: $"Deutsch (sehbehinderte) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}");
     }
 
     private static List<string> FindExactSubtitleFiles(string videoFilePath)

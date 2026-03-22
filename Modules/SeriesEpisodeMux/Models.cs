@@ -80,7 +80,7 @@ public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? Embed
 {
     public bool IsEmbedded => EmbeddedTrackId is not null;
 
-    public string TrackName => $"Deutsch (hoergeschaedigte) - {Kind.DisplayName}";
+    public string TrackName => $"Deutsch (hörgeschädigte) - {Kind.DisplayName}";
 
     public string PreviewLabel => IsEmbedded
         ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, Archiv)"
