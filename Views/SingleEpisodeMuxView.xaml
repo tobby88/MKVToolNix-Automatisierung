@@ -12,10 +12,12 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 oder AD-.mp4 aus. Passende Begleitdateien werden automatisch gesucht und koennen bei Bedarf korrigiert werden. Pruefpflichtige Quellen muessen vor dem Muxen freigegeben werden.</TextBlock>
+                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 oder AD-.mp4 aus. Passende Begleitdateien werden automatisch gesucht und koennen bei Bedarf korrigiert werden. Serienname, Staffel, Folge und Titel lassen sich zusaetzlich ueber TVDB absichern.</TextBlock>
 
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -48,22 +50,41 @@
             <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding AttachmentDisplayText, Mode=OneWay}" />
             <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAttachmentCommand}" Content="Anhaenge korrigieren" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Ausgabedatei (.mkv)" />
-            <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
-            <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe aendern" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Serienname" />
+            <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=PropertyChanged}" />
+            <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" Content="TVDB-Zuordnung" />
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
-            <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
+            <Grid Grid.Row="5" Grid.Column="1" Margin="0,4,12,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="70" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="70" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Staffel" />
+                <TextBox Grid.Column="1" Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
+                <TextBox Grid.Column="4" Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
             <Button Grid.Row="5" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" Content="Auto-Erkennung neu" />
 
-            <TextBlock Grid.Row="6"
+            <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
+            <TextBox Grid.Row="6" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+
+            <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Ausgabedatei (.mkv)" />
+            <TextBox Grid.Row="7" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
+            <Button Grid.Row="7" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe aendern" />
+
+            <TextBlock Grid.Row="8"
                        Grid.Column="0"
                        Grid.ColumnSpan="3"
                        Margin="0,8,0,8"
                        TextWrapping="Wrap"
-                       Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle." />
+                       Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle. Sobald eine TVDB-Serie einmal sauber zugeordnet wurde, kann die App diese Zuordnung spaeter wiederverwenden." />
 
-            <Border Grid.Row="7"
+            <Border Grid.Row="9"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Margin="0,0,0,12"
@@ -71,9 +92,18 @@
                     Background="#FFF4D6"
                     BorderBrush="#D8B46A"
                     BorderThickness="1"
-                    CornerRadius="6"
-                    >
-                <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding RequiresManualCheck}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><DockPanel>
+                    CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding RequiresManualCheck}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <DockPanel>
                     <TextBlock DockPanel.Dock="Left"
                                VerticalAlignment="Center"
                                TextWrapping="Wrap"
@@ -86,7 +116,7 @@
                 </DockPanel>
             </Border>
 
-            <GroupBox Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <GroupBox Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

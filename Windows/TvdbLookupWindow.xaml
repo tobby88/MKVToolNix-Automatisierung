@@ -1,0 +1,118 @@
+<Window x:Class="MkvToolnixAutomatisierung.Windows.TvdbLookupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TVDB-Zuordnung"
+        Width="980"
+        Height="760"
+        MinWidth="860"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   Margin="0,0,0,12"
+                   FontSize="15"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Suche zuerst die Serie, lade danach die Episodenliste und uebernimm die passende Episode.</TextBlock>
+
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="150" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
+            <TextBox x:Name="ApiKeyTextBox" Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" />
+            <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Click="SaveSettingsButton_Click" Content="Speichern" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
+            <TextBox x:Name="PinTextBox" Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" />
+            <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,8" TextWrapping="Wrap" Foreground="#555555" Text="Nur falls TVDB ihn verlangt." />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555555" Text="Die Zuordnung der lokalen Serie zur TVDB-Series-ID wird lokal gespeichert und spaeter wiederverwendet." />
+        </Grid>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <GroupBox Grid.Column="0" Header="Serie">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="140" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="SeriesSearchTextBox" Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" />
+                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="SearchSeriesButton_Click" Content="Serie suchen" />
+
+                    <ListBox x:Name="SeriesResultsListBox" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" SelectionChanged="SeriesResultsListBox_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Column="2" Header="Episode">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="140" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox x:Name="EpisodeSearchTextBox" Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" />
+                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="FilterEpisodesButton_Click" Content="Episode suchen" />
+
+                    <Button x:Name="LoadEpisodesButton" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8" Padding="10,6" Click="LoadEpisodesButton_Click" Content="Episodenliste laden" />
+
+                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+            <TextBlock x:Name="StatusTextBlock"
+                       DockPanel.Dock="Left"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       Text="Bereit" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
+                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="Uebernehmen" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -188,6 +189,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                         file,
                         update => HandleBatchDetectionProgress(index + 1, total, file, update));
+                    detected = await TryApplyStoredMetadataAsync(detected);
                     var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
                     var episodeKey = Path.GetFileName(outputPath);
 
@@ -516,6 +518,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleSelectedItemDetectionProgress,
                 excludedSourcePaths);
+            detected = await TryApplyStoredMetadataAsync(detected);
             var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
             var outputAlreadyExists = File.Exists(outputPath);
 
@@ -600,6 +603,26 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         return !item.RequiresManualCheck || item.IsManualCheckApproved;
+    }
+
+    private async Task<AutoDetectedEpisodeFiles> TryApplyStoredMetadataAsync(AutoDetectedEpisodeFiles detected)
+    {
+        try
+        {
+            var selection = await _services.EpisodeMetadata.ResolveWithStoredMappingAsync(new EpisodeMetadataGuess(
+                detected.SeriesName,
+                detected.SuggestedTitle,
+                detected.SeasonNumber,
+                detected.EpisodeNumber));
+
+            return selection is null
+                ? detected
+                : EpisodeMetadataMergeHelper.ApplySelection(detected, selection);
+        }
+        catch
+        {
+            return detected;
+        }
     }
 
     private bool CanReviewPendingSources()

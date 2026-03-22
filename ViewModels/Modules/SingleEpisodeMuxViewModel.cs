@@ -1,9 +1,11 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
+using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -19,11 +21,15 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private List<string> _subtitlePaths = [];
     private List<string> _attachmentPaths = [];
     private string? _outputPath;
+    private string _seriesName = string.Empty;
+    private string _seasonNumber = "xx";
+    private string _episodeNumber = "xx";
     private string _title = string.Empty;
     private string _previewText = string.Empty;
     private string _statusText = "Bereit";
     private int _progressValue;
     private bool _isBusy;
+    private bool _outputPathWasManuallyChanged;
     private string _lastSuggestedTitle = string.Empty;
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
@@ -44,6 +50,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
+        OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(_mainVideoPath));
         TestSelectedSourcesCommand = new RelayCommand(TestSelectedSources, () => !_isBusy && _manualCheckFilePaths.Count > 0);
         CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy);
         ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy);
@@ -57,6 +64,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     public RelayCommand SelectAttachmentCommand { get; }
     public RelayCommand SelectOutputCommand { get; }
     public AsyncRelayCommand RescanCommand { get; }
+    public AsyncRelayCommand OpenTvdbLookupCommand { get; }
     public RelayCommand TestSelectedSourcesCommand { get; }
     public AsyncRelayCommand CreatePreviewCommand { get; }
     public AsyncRelayCommand ExecuteMuxCommand { get; }
@@ -99,19 +107,75 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         ? string.Empty
         : string.Join(Environment.NewLine, _subtitlePaths.Select(Path.GetFileName));
 
+    public string SeriesName
+    {
+        get => _seriesName;
+        set
+        {
+            var normalized = value.Trim();
+            if (_seriesName == normalized)
+            {
+                return;
+            }
+
+            _seriesName = normalized;
+            _currentPlan = null;
+            OnPropertyChanged();
+            UpdateSuggestedOutputPathIfAutomatic();
+        }
+    }
+
+    public string SeasonNumber
+    {
+        get => _seasonNumber;
+        set
+        {
+            var normalized = EpisodeMetadataMergeHelper.NormalizeEpisodeNumber(value);
+            if (_seasonNumber == normalized)
+            {
+                return;
+            }
+
+            _seasonNumber = normalized;
+            _currentPlan = null;
+            OnPropertyChanged();
+            UpdateSuggestedOutputPathIfAutomatic();
+        }
+    }
+
+    public string EpisodeNumber
+    {
+        get => _episodeNumber;
+        set
+        {
+            var normalized = EpisodeMetadataMergeHelper.NormalizeEpisodeNumber(value);
+            if (_episodeNumber == normalized)
+            {
+                return;
+            }
+
+            _episodeNumber = normalized;
+            _currentPlan = null;
+            OnPropertyChanged();
+            UpdateSuggestedOutputPathIfAutomatic();
+        }
+    }
+
     public string Title
     {
         get => _title;
         set
         {
-            if (_title == value)
+            var normalized = value.Trim();
+            if (_title == normalized)
             {
                 return;
             }
 
-            _title = value;
+            _title = normalized;
             _currentPlan = null;
             OnPropertyChanged();
+            UpdateSuggestedOutputPathIfAutomatic();
         }
     }
 
@@ -199,6 +263,39 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         return ResolveMainVideoInitialDirectory();
     }
 
+    private string ResolveOutputDirectory()
+    {
+        if (!string.IsNullOrWhiteSpace(_outputPath))
+        {
+            var outputDirectory = Path.GetDirectoryName(_outputPath);
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                return outputDirectory;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_mainVideoPath))
+        {
+            var sourceDirectory = Path.GetDirectoryName(_mainVideoPath);
+            if (!string.IsNullOrWhiteSpace(sourceDirectory))
+            {
+                return sourceDirectory;
+            }
+        }
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+    }
+
+    private string BuildSuggestedOutputPath()
+    {
+        return EpisodeMetadataMergeHelper.BuildSuggestedOutputFilePath(
+            ResolveOutputDirectory(),
+            SeriesName,
+            SeasonNumber,
+            EpisodeNumber,
+            Title);
+    }
+
     private string BuildFallbackOutputName()
     {
         if (!string.IsNullOrWhiteSpace(_outputPath))
@@ -206,12 +303,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             return Path.GetFileName(_outputPath);
         }
 
-        if (!string.IsNullOrWhiteSpace(_title))
-        {
-            return _title.Trim() + ".mkv";
-        }
-
-        return "Ausgabe.mkv";
+        return Path.GetFileName(BuildSuggestedOutputPath());
     }
 
     private string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault();
@@ -233,14 +325,18 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleDetectionUpdate,
                 excludedSourcePaths);
+            detected = await TryApplyStoredMetadataAsync(detected);
 
             _detectionSeedPath = selectedVideoPath;
             MainVideoPath = detected.MainVideoPath;
             AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
             _subtitlePaths = detected.SubtitlePaths.ToList();
             _attachmentPaths = detected.AttachmentPaths.ToList();
-            OutputPath = detected.SuggestedOutputFilePath;
             _currentPlan = null;
+
+            SeriesName = detected.SeriesName;
+            SeasonNumber = detected.SeasonNumber;
+            EpisodeNumber = detected.EpisodeNumber;
 
             if (string.IsNullOrWhiteSpace(Title) || Title == _lastSuggestedTitle)
             {
@@ -248,6 +344,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             }
 
             _lastSuggestedTitle = detected.SuggestedTitle;
+            SetSuggestedOutputPath(detected.SuggestedOutputFilePath);
             ApplyManualCheckState(detected);
             OnPropertyChanged(nameof(SubtitleDisplayText));
             OnPropertyChanged(nameof(AttachmentDisplayText));
@@ -283,7 +380,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         var lines = new List<string>
         {
             "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf pruefen.",
-            $"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}"
+            $"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}",
+            $"Erkannte Episode: {detected.SeriesName} - S{detected.SeasonNumber}E{detected.EpisodeNumber} - {detected.SuggestedTitle}"
         };
 
         if (detected.AdditionalVideoPaths.Count > 0)
@@ -380,6 +478,22 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         OutputPath = path;
         _currentPlan = null;
+    }
+
+    private void SetSuggestedOutputPath(string path)
+    {
+        _outputPathWasManuallyChanged = false;
+        SetOutputPath(path);
+    }
+
+    private void UpdateSuggestedOutputPathIfAutomatic()
+    {
+        if (_outputPathWasManuallyChanged)
+        {
+            return;
+        }
+
+        SetSuggestedOutputPath(BuildSuggestedOutputPath());
     }
 
     private async Task SelectMainVideoAsync()
@@ -486,8 +600,35 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         var path = _dialogService.SelectOutput(ResolveComponentInitialDirectory(), BuildFallbackOutputName());
         if (!string.IsNullOrWhiteSpace(path))
         {
+            _outputPathWasManuallyChanged = true;
             SetOutputPath(path);
         }
+    }
+
+    private async Task OpenTvdbLookupAsync()
+    {
+        var guess = new EpisodeMetadataGuess(
+            string.IsNullOrWhiteSpace(SeriesName) ? "Unbekannte Serie" : SeriesName,
+            string.IsNullOrWhiteSpace(Title) ? "Unbekannter Titel" : Title,
+            SeasonNumber,
+            EpisodeNumber);
+
+        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess)
+        {
+            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+                ?? Application.Current?.MainWindow
+        };
+
+        if (dialog.ShowDialog() != true || dialog.SelectedEpisodeSelection is null)
+        {
+            return;
+        }
+
+        ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
+        SetStatus("TVDB-Zuordnung uebernommen", 100);
+        PreviewText = "TVDB-Metadaten uebernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausfuehren.";
+        RefreshCommands();
+        await Task.CompletedTask;
     }
 
     private void TestSelectedSources()
@@ -568,6 +709,36 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             : "Die aktuell ausgewaehlte Quelle ist pruefpflichtig. Bitte vor dem Muxen kurz pruefen und freigeben.";
     }
 
+    private void ApplyTvdbSelection(TvdbEpisodeSelection selection)
+    {
+        SeriesName = selection.TvdbSeriesName;
+        SeasonNumber = selection.SeasonNumber;
+        EpisodeNumber = selection.EpisodeNumber;
+        Title = selection.EpisodeTitle;
+        _lastSuggestedTitle = selection.EpisodeTitle;
+        UpdateSuggestedOutputPathIfAutomatic();
+    }
+
+    private async Task<AutoDetectedEpisodeFiles> TryApplyStoredMetadataAsync(AutoDetectedEpisodeFiles detected)
+    {
+        try
+        {
+            var selection = await _services.EpisodeMetadata.ResolveWithStoredMappingAsync(new EpisodeMetadataGuess(
+                detected.SeriesName,
+                detected.SuggestedTitle,
+                detected.SeasonNumber,
+                detected.EpisodeNumber));
+
+            return selection is null
+                ? detected
+                : EpisodeMetadataMergeHelper.ApplySelection(detected, selection);
+        }
+        catch
+        {
+            return detected;
+        }
+    }
+
     private async Task CreatePreviewAsync()
     {
         try
@@ -601,14 +772,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 + "mkvmerge-Ausgabe:"
                 + Environment.NewLine;
 
-            if (RequiresManualCheck)
+            if (RequiresManualCheck && !IsManualCheckApproved)
             {
-                if (!IsManualCheckApproved)
-                {
-                    _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
-                    SetStatus("Freigabe der Quelle fehlt", 0);
-                    return;
-                }
+                _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
+                SetStatus("Freigabe der Quelle fehlt", 0);
+                return;
             }
 
             if (!_dialogService.ConfirmMuxStart())
@@ -708,6 +876,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         SelectAttachmentCommand.RaiseCanExecuteChanged();
         SelectOutputCommand.RaiseCanExecuteChanged();
         RescanCommand.RaiseCanExecuteChanged();
+        OpenTvdbLookupCommand.RaiseCanExecuteChanged();
         TestSelectedSourcesCommand.RaiseCanExecuteChanged();
         CreatePreviewCommand.RaiseCanExecuteChanged();
         ExecuteMuxCommand.RaiseCanExecuteChanged();
