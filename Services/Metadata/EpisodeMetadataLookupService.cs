@@ -306,6 +306,9 @@ public sealed class EpisodeMetadataLookupService
         }
 
         var bestTitleSimilarity = scoredEpisodes.Max(entry => entry.TitleSimilarity);
+        var bestTitleSimilarityCount = scoredEpisodes.Count(entry => entry.TitleSimilarity == bestTitleSimilarity);
+        var exactTitleMatchCount = scoredEpisodes.Count(entry => entry.TitleSimilarity >= 30);
+        var strongTitleMatchCount = scoredEpisodes.Count(entry => entry.TitleSimilarity >= 22);
         var prioritizedEpisodes = scoredEpisodes.AsEnumerable();
 
         if (bestTitleSimilarity >= 30)
@@ -348,6 +351,9 @@ public sealed class EpisodeMetadataLookupService
             bestEpisode.EpisodeScore,
             combinedScore,
             bestEpisode.TitleSimilarity,
+            bestTitleSimilarityCount,
+            exactTitleMatchCount,
+            strongTitleMatchCount,
             SeasonMatched: int.TryParse(guess.SeasonNumber, out var seasonNumber) && bestEpisode.Episode.SeasonNumber == seasonNumber,
             EpisodeMatched: int.TryParse(guess.EpisodeNumber, out var episodeNumber) && bestEpisode.Episode.EpisodeNumber == episodeNumber);
     }
@@ -359,9 +365,19 @@ public sealed class EpisodeMetadataLookupService
             return true;
         }
 
+        if (match.TitleSimilarity >= 30 && match.ExactTitleMatchCount == 1)
+        {
+            return false;
+        }
+
         if (match.TitleSimilarity >= 30)
         {
             return !match.EpisodeMatched && match.ScoreGap < 4;
+        }
+
+        if (match.TitleSimilarity >= 22 && match.StrongTitleMatchCount == 1)
+        {
+            return !(match.SeasonMatched && match.EpisodeMatched) && match.ScoreGap < 6;
         }
 
         if (match.TitleSimilarity >= 22 && match.SeasonMatched && match.EpisodeMatched)
@@ -404,6 +420,15 @@ public sealed class EpisodeMetadataLookupService
             }
 
             parts.Add(string.Join(", ", differences) + ".");
+        }
+
+        if (match.ExactTitleMatchCount > 1)
+        {
+            parts.Add("Mehrere exakte Titeltreffer gefunden.");
+        }
+        else if (match.StrongTitleMatchCount > 1)
+        {
+            parts.Add("Mehrere aehnliche Titeltreffer gefunden.");
         }
 
         return string.Join(" ", parts);
@@ -528,6 +553,9 @@ public sealed class EpisodeMetadataLookupService
         int EpisodeScore,
         int CombinedScore,
         int TitleSimilarity,
+        int BestTitleSimilarityCount,
+        int ExactTitleMatchCount,
+        int StrongTitleMatchCount,
         bool SeasonMatched,
         bool EpisodeMatched);
 
@@ -539,6 +567,9 @@ public sealed class EpisodeMetadataLookupService
         bool UsedStoredFallback)
     {
         public int TitleSimilarity => SelectionMatch.TitleSimilarity;
+        public int BestTitleSimilarityCount => SelectionMatch.BestTitleSimilarityCount;
+        public int ExactTitleMatchCount => SelectionMatch.ExactTitleMatchCount;
+        public int StrongTitleMatchCount => SelectionMatch.StrongTitleMatchCount;
         public bool SeasonMatched => SelectionMatch.SeasonMatched;
         public bool EpisodeMatched => SelectionMatch.EpisodeMatched;
 
