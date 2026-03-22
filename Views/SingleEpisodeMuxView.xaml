@@ -6,7 +6,6 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -17,215 +16,227 @@
                    FontWeight="SemiBold"
                    TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Datei waehlen, automatische Erkennung pruefen, bei Bedarf korrigieren und muxen.</TextBlock>
 
-        <GroupBox Grid.Row="1" Header="Quelle" Margin="0,0,0,12">
-            <Grid Margin="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="170" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="190" />
-                </Grid.ColumnDefinitions>
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Hauptvideo (.mp4)" />
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding MainVideoPath, Mode=OneWay}" />
-                <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectMainVideoCommand}" Content="Hauptvideo waehlen" />
-
-                <Border Grid.Row="1"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Margin="0,4,0,8"
-                        Padding="10"
-                        Background="#F6F4EA"
-                        BorderBrush="#B8AA72"
-                        BorderThickness="1"
-                        CornerRadius="6">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel>
-                        <TextBlock FontWeight="SemiBold"
-                                   Margin="0,0,0,6"
-                                   Text="Wird voraussichtlich verwendet" />
-
-                        <Border Padding="10"
-                                Margin="0,0,0,8"
-                                Background="#FFF9EA"
-                                BorderBrush="#D8B46A"
-                                BorderThickness="1"
-                                CornerRadius="5">
-                            <StackPanel>
-                                <TextBlock FontSize="12"
-                                           FontWeight="SemiBold"
-                                           Opacity="0.75"
-                                           Text="Archiv" />
-                                <TextBlock Margin="0,2,0,0"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           Text="{Binding UsageSummary.ArchiveAction, Mode=OneWay}" />
-                                <TextBlock Margin="0,4,0,0"
-                                           TextWrapping="Wrap"
-                                           Text="{Binding UsageSummary.ArchiveDetails, Mode=OneWay}" />
-                            </StackPanel>
-                        </Border>
-
-                        <UniformGrid Columns="2">
-                            <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Hauptvideo" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.MainVideo, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Weitere Videos" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.AdditionalVideos, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audio" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.Audio, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audiodeskription" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.AudioDescription, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,0,8,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Untertitel" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.Subtitles, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,0,0,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Anhaenge" />
-                                    <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding UsageSummary.Attachments, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-                    </StackPanel>
-            </Border>
-
-                <Border Grid.Row="2"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Margin="0,0,0,4"
-                        Padding="10"
-                        Background="#FFF4D6"
-                        BorderBrush="#D8B46A"
-                        BorderThickness="1"
-                        CornerRadius="6">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding RequiresManualCheck}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Left"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding ManualCheckText, Mode=OneWay}" />
-                        <Button DockPanel.Dock="Right"
-                                Margin="12,0,0,0"
-                                Padding="10,6"
-                                Command="{Binding TestSelectedSourcesCommand}"
-                                Content="{Binding ManualCheckButtonText, Mode=OneWay}" />
-                    </DockPanel>
-                </Border>
-            </Grid>
-        </GroupBox>
-
-        <GroupBox Grid.Row="2" Header="Metadaten" Margin="0,0,0,12">
-            <Grid Margin="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="170" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="190" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serienname" />
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=PropertyChanged}" />
-                <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
-
-                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
-                <Grid Grid.Row="1" Grid.Column="1" Margin="0,4,12,4">
+            <GroupBox Grid.Row="0" Header="Quelle" Margin="0,0,0,12">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="70" />
-                        <ColumnDefinition Width="20" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="170" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="190" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Staffel" />
-                    <TextBox Grid.Column="1" Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
-                    <TextBox Grid.Column="4" Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Hauptvideo (.mp4)" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding MainVideoPath, Mode=OneWay}" />
+                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectMainVideoCommand}" Content="Hauptvideo waehlen" />
+
+                    <Border Grid.Row="1"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,4,0,8"
+                            Padding="8"
+                            Background="#F6F4EA"
+                            BorderBrush="#B8AA72"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold"
+                                       Margin="0,0,0,6"
+                                       Text="Wird voraussichtlich verwendet" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="95" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Archiv" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                    <TextBlock.ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding UsageSummary.ArchiveDetails, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </TextBlock.ToolTip>
+                                    <Run Text="{Binding UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                    <Run Text=": " />
+                                    <Run Text="{Binding UsageSummary.ArchiveDetails, Mode=OneWay}" />
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Video" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                    <TextBlock.ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding UsageSummary.MainVideo, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </TextBlock.ToolTip>
+                                    <Run Text="{Binding UsageSummary.MainVideo, Mode=OneWay}" />
+                                    <Run Text=" | weitere: " />
+                                    <Run Text="{Binding UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                    <TextBlock.ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding UsageSummary.Audio, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding UsageSummary.AudioDescription, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </TextBlock.ToolTip>
+                                    <Run Text="{Binding UsageSummary.Audio, Mode=OneWay}" />
+                                    <Run Text=" | AD: " />
+                                    <Run Text="{Binding UsageSummary.AudioDescription, Mode=OneWay}" />
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Texte" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                    <TextBlock.ToolTip>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding UsageSummary.Subtitles, Mode=OneWay}" />
+                                            <TextBlock Text="{Binding UsageSummary.Attachments, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </TextBlock.ToolTip>
+                                    <Run Text="UT: " />
+                                    <Run Text="{Binding UsageSummary.Subtitles, Mode=OneWay}" />
+                                    <Run Text=" | TXT: " />
+                                    <Run Text="{Binding UsageSummary.Attachments, Mode=OneWay}" />
+                                </TextBlock>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,0,0,4"
+                            Padding="10"
+                            Background="#FFF4D6"
+                            BorderBrush="#D8B46A"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RequiresManualCheck}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding ManualCheckText, Mode=OneWay}" />
+                            <Button DockPanel.Dock="Right"
+                                    Margin="12,0,0,0"
+                                    Padding="10,6"
+                                    Command="{Binding TestSelectedSourcesCommand}"
+                                    Content="{Binding ManualCheckButtonText, Mode=OneWay}" />
+                        </DockPanel>
+                    </Border>
                 </Grid>
-                <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" Content="Auto-Erkennung neu" />
+            </GroupBox>
 
-                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
-                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+            <GroupBox Grid.Row="1" Header="Metadaten">
+                <Grid Margin="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="170" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="190" />
+                    </Grid.ColumnDefinitions>
 
-                <Border Grid.Row="3"
-                        Grid.Column="0"
-                        Grid.ColumnSpan="3"
-                        Margin="0,4,0,4"
-                        Padding="10"
-                        Background="#E8F3FF"
-                        BorderBrush="#79A8D8"
-                        BorderThickness="1"
-                        CornerRadius="6">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasMetadataStatus}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Left"
-                                   VerticalAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding MetadataStatusText, Mode=OneWay}" />
-                        <Button DockPanel.Dock="Right"
-                                Margin="12,0,0,0"
-                                Padding="10,6"
-                                Command="{Binding OpenTvdbLookupCommand}"
-                                Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
-                    </DockPanel>
-                </Border>
-            </Grid>
-        </GroupBox>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serienname" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
 
-        <Expander Grid.Row="3"
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
+                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,4,12,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="60" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="60" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Staffel" />
+                        <TextBox Grid.Column="1" Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
+                        <TextBox Grid.Column="4" Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" Content="Auto-Erkennung neu" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Dateititel" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Border Grid.Row="3"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,4,0,4"
+                            Padding="10"
+                            Background="#E8F3FF"
+                            BorderBrush="#79A8D8"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasMetadataStatus}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding MetadataStatusText, Mode=OneWay}" />
+                            <Button DockPanel.Dock="Right"
+                                    Margin="12,0,0,0"
+                                    Padding="10,6"
+                                    Command="{Binding OpenTvdbLookupCommand}"
+                                    Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <Expander Grid.Row="2"
                   Header="Korrekturen und Ausgabe"
                   Margin="0,0,0,12"
                   IsExpanded="False">
@@ -284,7 +295,7 @@
             </Grid>
         </Expander>
 
-        <GroupBox Grid.Row="4" Header="Vorschau und mkvmerge-Ausgabe" MinHeight="240">
+        <GroupBox Grid.Row="3" Header="Vorschau und mkvmerge-Ausgabe" MinHeight="240">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -307,7 +318,7 @@
             </Grid>
         </GroupBox>
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" Margin="0,12,0,0">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
             <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding CreatePreviewCommand}" Content="Vorschau erzeugen" />
             <Button Width="170" Padding="10,6" Command="{Binding ExecuteMuxCommand}" Content="Muxen" />
         </StackPanel>
