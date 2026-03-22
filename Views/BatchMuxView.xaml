@@ -13,7 +13,7 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Batch-Verarbeitung<LineBreak />Ordner waehlen, automatisch scannen und passende Episoden gesammelt verarbeiten. Pflichtpruefungen werden komplett vor dem ersten Mux erledigt.</TextBlock>
+                   TextWrapping="Wrap">Batch-Verarbeitung<LineBreak />Ordner waehlen, automatisch scannen und passende Episoden gesammelt verarbeiten. Quellen- und TVDB-Pruefungen werden komplett vor dem ersten Mux erledigt.</TextBlock>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.ColumnDefinitions>
@@ -61,6 +61,7 @@
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
                         <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Pruefung" Binding="{Binding ReviewHint}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
@@ -90,6 +91,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
@@ -102,31 +104,38 @@
                     <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.TitleForMux, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" Content="Video neu erkennen" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Quellen" />
-                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.RequestedSourcesDisplayText, Mode=OneWay}" />
-                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pruefen" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="TVDB-Status" />
+                    <StackPanel Grid.Row="1" Grid.Column="1">
+                        <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay}" />
+                        <TextBox Margin="0,4,12,4" Height="52" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MetadataStatusText, Mode=OneWay}" />
+                    </StackPanel>
+                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding ReviewSelectedMetadataCommand}" Content="TVDB pruefen" />
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
-                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="48" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
-                    <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Quellen" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.RequestedSourcesDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pruefen" />
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videos und AD" />
-                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
-                    <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="Untertitel korrigieren" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
+                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="48" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
-                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.SubtitleDisplayText, Mode=OneWay}" />
-                    <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAttachmentsCommand}" Content="Anhaenge korrigieren" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videos und AD" />
+                    <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="Untertitel korrigieren" />
 
-                    <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anhaenge / Ausgabe" />
-                    <StackPanel Grid.Row="5" Grid.Column="1">
+                    <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
+                    <TextBox Grid.Row="5" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.SubtitleDisplayText, Mode=OneWay}" />
+                    <Button Grid.Row="5" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAttachmentsCommand}" Content="Anhaenge korrigieren" />
+
+                    <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anhaenge / Ausgabe" />
+                    <StackPanel Grid.Row="6" Grid.Column="1">
                         <TextBox Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.AttachmentDisplayText, Mode=OneWay}" />
                         <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
                     </StackPanel>
-                    <Button Grid.Row="5" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe aendern" />
+                    <Button Grid.Row="6" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe aendern" />
 
-                    <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
-                    <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
+                    <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
                 </Grid>
                     </ScrollViewer>
                 </Border>

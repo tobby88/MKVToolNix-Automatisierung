@@ -12,10 +12,11 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 oder AD-.mp4 aus. Passende Begleitdateien werden automatisch gesucht und koennen bei Bedarf korrigiert werden. Serienname, Staffel, Folge und Titel lassen sich zusaetzlich ueber TVDB absichern.</TextBlock>
+                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Waehle eine Episoden-.mp4 oder AD-.mp4 aus. Passende Begleitdateien werden automatisch gesucht. TVDB wird danach direkt abgefragt; nur unsichere Treffer muessen noch bestaetigt werden.</TextBlock>
 
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -52,7 +53,7 @@
 
             <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Serienname" />
             <TextBox Grid.Row="4" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=PropertyChanged}" />
-            <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" Content="TVDB-Zuordnung" />
+            <Button Grid.Row="4" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
 
             <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
             <Grid Grid.Row="5" Grid.Column="1" Margin="0,4,12,4">
@@ -82,9 +83,41 @@
                        Grid.ColumnSpan="3"
                        Margin="0,8,0,8"
                        TextWrapping="Wrap"
-                       Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle. Sobald eine TVDB-Serie einmal sauber zugeordnet wurde, kann die App diese Zuordnung spaeter wiederverwenden." />
+                       Text="Die Videoauswahl startet im MediathekView-Downloadordner. Korrektur-Dialoge starten im Ordner der aktuell verwendeten Hauptquelle. TVDB wird zuerst frisch abgefragt; gespeicherte Zuordnungen helfen nur noch als schwacher Hinweis oder Fallback." />
 
             <Border Grid.Row="9"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0,0,0,12"
+                    Padding="10"
+                    Background="#E8F3FF"
+                    BorderBrush="#79A8D8"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasMetadataStatus}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding MetadataStatusText, Mode=OneWay}" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="12,0,0,0"
+                            Padding="10,6"
+                            Command="{Binding OpenTvdbLookupCommand}"
+                            Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="10"
                     Grid.Column="0"
                     Grid.ColumnSpan="3"
                     Margin="0,0,0,12"
@@ -116,7 +149,7 @@
                 </DockPanel>
             </Border>
 
-            <GroupBox Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <GroupBox Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

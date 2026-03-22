@@ -31,6 +31,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private bool _outputPathWasManuallyChanged;
     private string _lastSuggestedTitle = string.Empty;
+    private string _metadataStatusText = string.Empty;
+    private bool _requiresMetadataReview;
+    private bool _isMetadataReviewApproved = true;
+    private bool _isApplyingMetadataState;
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
     private List<string> _manualCheckFilePaths = [];
@@ -121,6 +125,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _seriesName = normalized;
             _currentPlan = null;
             OnPropertyChanged();
+            HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
         }
     }
@@ -139,6 +144,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _seasonNumber = normalized;
             _currentPlan = null;
             OnPropertyChanged();
+            HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
         }
     }
@@ -157,6 +163,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _episodeNumber = normalized;
             _currentPlan = null;
             OnPropertyChanged();
+            HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
         }
     }
@@ -175,6 +182,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _title = normalized;
             _currentPlan = null;
             OnPropertyChanged();
+            HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
         }
     }
@@ -232,6 +240,60 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     public string ManualCheckButtonText => IsManualCheckApproved
         ? "Quelle erneut pruefen"
         : "Quelle pruefen / freigeben";
+
+    public string MetadataStatusText
+    {
+        get => _metadataStatusText;
+        private set
+        {
+            if (_metadataStatusText == value)
+            {
+                return;
+            }
+
+            _metadataStatusText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasMetadataStatus));
+        }
+    }
+
+    public bool HasMetadataStatus => !string.IsNullOrWhiteSpace(MetadataStatusText);
+
+    public bool RequiresMetadataReview
+    {
+        get => _requiresMetadataReview;
+        private set
+        {
+            if (_requiresMetadataReview == value)
+            {
+                return;
+            }
+
+            _requiresMetadataReview = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MetadataActionButtonText));
+        }
+    }
+
+    public bool IsMetadataReviewApproved
+    {
+        get => _isMetadataReviewApproved;
+        private set
+        {
+            if (_isMetadataReviewApproved == value)
+            {
+                return;
+            }
+
+            _isMetadataReviewApproved = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MetadataActionButtonText));
+        }
+    }
+
+    public string MetadataActionButtonText => RequiresMetadataReview && !IsMetadataReviewApproved
+        ? "TVDB pruefen"
+        : "TVDB anpassen";
 
     private string ResolveMainVideoInitialDirectory()
     {
@@ -325,7 +387,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleDetectionUpdate,
                 excludedSourcePaths);
-            detected = await TryApplyStoredMetadataAsync(detected);
+            SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
+            detected = await ApplyAutomaticMetadataAsync(detected);
 
             _detectionSeedPath = selectedVideoPath;
             MainVideoPath = detected.MainVideoPath;
@@ -334,14 +397,17 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _attachmentPaths = detected.AttachmentPaths.ToList();
             _currentPlan = null;
 
-            SeriesName = detected.SeriesName;
-            SeasonNumber = detected.SeasonNumber;
-            EpisodeNumber = detected.EpisodeNumber;
-
-            if (string.IsNullOrWhiteSpace(Title) || Title == _lastSuggestedTitle)
+            ApplyMetadataFields(() =>
             {
-                Title = detected.SuggestedTitle;
-            }
+                SeriesName = detected.SeriesName;
+                SeasonNumber = detected.SeasonNumber;
+                EpisodeNumber = detected.EpisodeNumber;
+
+                if (string.IsNullOrWhiteSpace(Title) || Title == _lastSuggestedTitle)
+                {
+                    Title = detected.SuggestedTitle;
+                }
+            });
 
             _lastSuggestedTitle = detected.SuggestedTitle;
             SetSuggestedOutputPath(detected.SuggestedOutputFilePath);
@@ -625,6 +691,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
+        MarkMetadataAsReviewed(
+            $"TVDB manuell uebernommen: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
         SetStatus("TVDB-Zuordnung uebernommen", 100);
         PreviewText = "TVDB-Metadaten uebernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausfuehren.";
         RefreshCommands();
@@ -711,31 +779,72 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void ApplyTvdbSelection(TvdbEpisodeSelection selection)
     {
-        SeriesName = selection.TvdbSeriesName;
-        SeasonNumber = selection.SeasonNumber;
-        EpisodeNumber = selection.EpisodeNumber;
-        Title = selection.EpisodeTitle;
+        ApplyMetadataFields(() =>
+        {
+            SeriesName = selection.TvdbSeriesName;
+            SeasonNumber = selection.SeasonNumber;
+            EpisodeNumber = selection.EpisodeNumber;
+            Title = selection.EpisodeTitle;
+        });
+
         _lastSuggestedTitle = selection.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
     }
 
-    private async Task<AutoDetectedEpisodeFiles> TryApplyStoredMetadataAsync(AutoDetectedEpisodeFiles detected)
+    private async Task<AutoDetectedEpisodeFiles> ApplyAutomaticMetadataAsync(AutoDetectedEpisodeFiles detected)
     {
+        var resolution = await _services.EpisodeMetadata.ResolveAutomaticallyAsync(new EpisodeMetadataGuess(
+            detected.SeriesName,
+            detected.SuggestedTitle,
+            detected.SeasonNumber,
+            detected.EpisodeNumber));
+
+        if (resolution.Selection is not null)
+        {
+            detected = EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
+        }
+
+        ApplyMetadataResolutionState(resolution);
+        return detected;
+    }
+
+    private void ApplyMetadataResolutionState(EpisodeMetadataResolutionResult resolution)
+    {
+        MetadataStatusText = resolution.StatusText;
+        RequiresMetadataReview = resolution.RequiresReview;
+        IsMetadataReviewApproved = !resolution.RequiresReview;
+    }
+
+    private void MarkMetadataAsReviewed(string statusText)
+    {
+        MetadataStatusText = statusText;
+        RequiresMetadataReview = false;
+        IsMetadataReviewApproved = true;
+    }
+
+    private void HandleManualMetadataOverride()
+    {
+        if (_isApplyingMetadataState)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(MetadataStatusText) || RequiresMetadataReview)
+        {
+            MarkMetadataAsReviewed("Metadaten manuell angepasst.");
+        }
+    }
+
+    private void ApplyMetadataFields(Action applyAction)
+    {
+        _isApplyingMetadataState = true;
         try
         {
-            var selection = await _services.EpisodeMetadata.ResolveWithStoredMappingAsync(new EpisodeMetadataGuess(
-                detected.SeriesName,
-                detected.SuggestedTitle,
-                detected.SeasonNumber,
-                detected.EpisodeNumber));
-
-            return selection is null
-                ? detected
-                : EpisodeMetadataMergeHelper.ApplySelection(detected, selection);
+            applyAction();
         }
-        catch
+        finally
         {
-            return detected;
+            _isApplyingMetadataState = false;
         }
     }
 
@@ -776,6 +885,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             {
                 _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
                 SetStatus("Freigabe der Quelle fehlt", 0);
+                return;
+            }
+
+            if (RequiresMetadataReview && !IsMetadataReviewApproved)
+            {
+                _dialogService.ShowWarning("Hinweis", "Die TVDB-Zuordnung ist noch nicht freigegeben. Bitte zuerst 'TVDB pruefen' ausfuehren oder die Metadaten manuell korrigieren.");
+                SetStatus("Freigabe der TVDB-Metadaten fehlt", 0);
                 return;
             }
 

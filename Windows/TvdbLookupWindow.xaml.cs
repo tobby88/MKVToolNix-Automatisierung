@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Windows;
@@ -10,6 +11,9 @@ public partial class TvdbLookupWindow : Window
 
     private List<TvdbSeriesSearchResult> _seriesResults = [];
     private List<TvdbEpisodeRecord> _episodes = [];
+    private bool _isBusy;
+    private bool _suppressSeriesSelectionChanged;
+    private bool _loadedOnce;
 
     public TvdbLookupWindow(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
     {
@@ -23,83 +27,25 @@ public partial class TvdbLookupWindow : Window
         SeriesSearchTextBox.Text = guess.SeriesName;
         EpisodeSearchTextBox.Text = guess.EpisodeTitle;
 
-        var mapping = _lookupService.FindSeriesMapping(guess.SeriesName);
-        if (mapping is not null)
-        {
-            StatusTextBlock.Text = $"Gespeicherte TVDB-Serie gefunden: {mapping.TvdbSeriesName} ({mapping.TvdbSeriesId})";
-        }
+        Loaded += TvdbLookupWindow_Loaded;
     }
 
     public TvdbEpisodeSelection? SelectedEpisodeSelection { get; private set; }
 
-    private async void SearchSeriesButton_Click(object sender, RoutedEventArgs e)
+    private async void TvdbLookupWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        try
+        if (_loadedOnce)
         {
-            SetBusy(true, "Suche Serie bei TVDB...");
-            SaveSettingsCore();
-
-            _seriesResults = (await _lookupService.SearchSeriesAsync(SeriesSearchTextBox.Text.Trim())).ToList();
-            SeriesResultsListBox.ItemsSource = _seriesResults.Select(result => new SelectableSeriesItem(result)).ToList();
-
-            var storedMapping = _lookupService.FindSeriesMapping(_guess.SeriesName);
-            if (storedMapping is not null)
-            {
-                var storedIndex = _seriesResults.FindIndex(result => result.Id == storedMapping.TvdbSeriesId);
-                if (storedIndex >= 0)
-                {
-                    SeriesResultsListBox.SelectedIndex = storedIndex;
-                }
-            }
-
-            StatusTextBlock.Text = _seriesResults.Count == 0
-                ? "Keine passende Serie gefunden."
-                : $"{_seriesResults.Count} Serie(n) gefunden.";
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "TVDB-Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
-            StatusTextBlock.Text = "TVDB-Suche fehlgeschlagen";
-        }
-        finally
-        {
-            SetBusy(false, StatusTextBlock.Text);
-        }
-    }
-
-    private async void LoadEpisodesButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (SeriesResultsListBox.SelectedIndex < 0 || SeriesResultsListBox.SelectedIndex >= _seriesResults.Count)
-        {
-            MessageBox.Show(this, "Bitte zuerst eine Serie auswaehlen.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        try
-        {
-            SetBusy(true, "Lade Episodenliste...");
-            SaveSettingsCore();
-
-            var selectedSeries = _seriesResults[SeriesResultsListBox.SelectedIndex];
-            _episodes = (await _lookupService.LoadEpisodesAsync(selectedSeries.Id)).ToList();
-            ApplyEpisodeFilter(autoSelectBest: true);
-
-            StatusTextBlock.Text = $"{_episodes.Count} Episode(n) geladen.";
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "TVDB-Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
-            StatusTextBlock.Text = "Episodenliste konnte nicht geladen werden";
-        }
-        finally
-        {
-            SetBusy(false, StatusTextBlock.Text);
-        }
+        _loadedOnce = true;
+        await SearchSeriesAsync(autoLoadEpisodes: true);
     }
 
-    private void FilterEpisodesButton_Click(object sender, RoutedEventArgs e)
+    private async void SearchSeriesButton_Click(object sender, RoutedEventArgs e)
     {
-        ApplyEpisodeFilter(autoSelectBest: false);
+        await SearchSeriesAsync(autoLoadEpisodes: true);
     }
 
     private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
@@ -149,10 +95,91 @@ public partial class TvdbLookupWindow : Window
         DialogResult = false;
     }
 
-    private void SeriesResultsListBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _episodes = [];
-        EpisodeResultsListBox.ItemsSource = null;
+        if (_suppressSeriesSelectionChanged || _isBusy)
+        {
+            return;
+        }
+
+        await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
+    }
+
+    private void EpisodeSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        ApplyEpisodeFilter(autoSelectBest: false);
+    }
+
+    private async Task SearchSeriesAsync(bool autoLoadEpisodes)
+    {
+        try
+        {
+            SetBusy(true, "Suche Serie bei TVDB...");
+            SaveSettingsCore();
+
+            _seriesResults = (await _lookupService.SearchSeriesAsync(SeriesSearchTextBox.Text.Trim())).ToList();
+            SeriesResultsListBox.ItemsSource = _seriesResults.Select(result => new SelectableSeriesItem(result)).ToList();
+            EpisodeResultsListBox.ItemsSource = null;
+            _episodes = [];
+
+            if (_seriesResults.Count == 0)
+            {
+                StatusTextBlock.Text = "Keine passende Serie gefunden.";
+                return;
+            }
+
+            var preferredSeries = _lookupService.FindPreferredSeriesResult(_guess, _seriesResults) ?? _seriesResults[0];
+            var preferredIndex = _seriesResults.FindIndex(result => result.Id == preferredSeries.Id);
+
+            _suppressSeriesSelectionChanged = true;
+            SeriesResultsListBox.SelectedIndex = preferredIndex < 0 ? 0 : preferredIndex;
+            _suppressSeriesSelectionChanged = false;
+
+            StatusTextBlock.Text = $"{_seriesResults.Count} Serie(n) gefunden.";
+
+            if (autoLoadEpisodes)
+            {
+                await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "TVDB-Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusTextBlock.Text = "TVDB-Suche fehlgeschlagen";
+        }
+        finally
+        {
+            SetBusy(false, StatusTextBlock.Text);
+        }
+    }
+
+    private async Task LoadEpisodesForSelectedSeriesAsync(bool autoSelectBest)
+    {
+        if (SeriesResultsListBox.SelectedIndex < 0 || SeriesResultsListBox.SelectedIndex >= _seriesResults.Count)
+        {
+            return;
+        }
+
+        try
+        {
+            SetBusy(true, "Lade Episodenliste...");
+            SaveSettingsCore();
+
+            var selectedSeries = _seriesResults[SeriesResultsListBox.SelectedIndex];
+            _episodes = (await _lookupService.LoadEpisodesAsync(selectedSeries.Id)).ToList();
+            ApplyEpisodeFilter(autoSelectBest);
+
+            StatusTextBlock.Text = $"{_episodes.Count} Episode(n) geladen.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "TVDB-Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusTextBlock.Text = "Episodenliste konnte nicht geladen werden";
+        }
+        finally
+        {
+            SetBusy(false, StatusTextBlock.Text);
+        }
     }
 
     private void ApplyEpisodeFilter(bool autoSelectBest)
@@ -184,6 +211,7 @@ public partial class TvdbLookupWindow : Window
         var match = _lookupService.FindBestEpisodeMatch(_guess, selectedSeries, _episodes);
         if (match is null)
         {
+            StatusTextBlock.Text = "Keine Episode automatisch sicher vorgewaehlt.";
             return;
         }
 
@@ -207,6 +235,7 @@ public partial class TvdbLookupWindow : Window
 
     private void SetBusy(bool isBusy, string statusText)
     {
+        _isBusy = isBusy;
         IsEnabled = !isBusy;
         StatusTextBlock.Text = statusText;
     }

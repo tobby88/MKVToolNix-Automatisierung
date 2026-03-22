@@ -40,6 +40,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources);
         OpenSelectedSourcesCommand = new RelayCommand(OpenSelectedSources, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0);
+        ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null);
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedAudioDescriptionCommand = new RelayCommand(EditSelectedAudioDescription, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedSubtitlesCommand = new RelayCommand(EditSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem is not null);
@@ -57,6 +58,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     public RelayCommand DeselectAllEpisodesCommand { get; }
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public RelayCommand OpenSelectedSourcesCommand { get; }
+    public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }
     public RelayCommand EditSelectedAudioDescriptionCommand { get; }
     public RelayCommand EditSelectedSubtitlesCommand { get; }
@@ -189,7 +191,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                         file,
                         update => HandleBatchDetectionProgress(index + 1, total, file, update));
-                    detected = await TryApplyStoredMetadataAsync(detected);
+                    SetStatus($"Scanne Ordner... {index + 1}/{total} - {Path.GetFileName(file)} - TVDB-Abgleich", CalculatePercent(index, total));
+                    var metadataResolution = await ResolveMetadataAsync(detected);
+                    detected = ApplyMetadataSelection(detected, metadataResolution);
                     var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
                     var episodeKey = Path.GetFileName(outputPath);
 
@@ -204,6 +208,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         var item = BatchEpisodeItemViewModel.CreateFromDetection(
                             requestedMainVideoPath: file,
                             detected: detected,
+                            metadataResolution: metadataResolution,
                             outputPath: outputPath,
                             status: outputAlreadyExists ? "Existiert bereits" : "Bereit",
                             isSelected: !outputAlreadyExists);
@@ -371,6 +376,17 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         _ = ReviewEpisodeAsync(item, isBatchPreparation: false);
     }
 
+    private async Task ReviewSelectedMetadataAsync()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        await ReviewEpisodeMetadataAsync(item, isBatchPreparation: false);
+    }
+
     private async Task ReviewPendingSourcesAsync()
     {
         var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
@@ -393,7 +409,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         var approved = await EnsurePendingChecksApprovedAsync(readyItems);
         if (approved)
         {
-            _dialogService.ShowInfo("Hinweis", "Alle offenen Pflichtpruefungen wurden abgeschlossen.");
+            _dialogService.ShowInfo("Hinweis", "Alle offenen Quellen- und TVDB-Pruefungen wurden abgeschlossen.");
         }
     }
 
@@ -518,13 +534,16 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleSelectedItemDetectionProgress,
                 excludedSourcePaths);
-            detected = await TryApplyStoredMetadataAsync(detected);
+            SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
+            var metadataResolution = await ResolveMetadataAsync(detected);
+            detected = ApplyMetadataSelection(detected, metadataResolution);
             var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
             var outputAlreadyExists = File.Exists(outputPath);
 
             item.ApplyDetection(
                 requestedMainVideoPath: selectedVideoPath,
                 detected: detected,
+                metadataResolution: metadataResolution,
                 outputPath: outputPath,
                 status: outputAlreadyExists ? "Existiert bereits" : "Bereit");
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
@@ -605,38 +624,85 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         return !item.RequiresManualCheck || item.IsManualCheckApproved;
     }
 
-    private async Task<AutoDetectedEpisodeFiles> TryApplyStoredMetadataAsync(AutoDetectedEpisodeFiles detected)
+    private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
     {
-        try
+        if (!item.RequiresMetadataReview || item.IsMetadataReviewApproved)
         {
-            var selection = await _services.EpisodeMetadata.ResolveWithStoredMappingAsync(new EpisodeMetadataGuess(
-                detected.SeriesName,
-                detected.SuggestedTitle,
-                detected.SeasonNumber,
-                detected.EpisodeNumber));
+            return true;
+        }
 
-            return selection is null
-                ? detected
-                : EpisodeMetadataMergeHelper.ApplySelection(detected, selection);
-        }
-        catch
+        SetStatus(
+            isBatchPreparation
+                ? $"Pruefe TVDB-Zuordnung fuer '{item.Title}'..."
+                : "Pruefe TVDB-Zuordnung...",
+            ProgressValue);
+
+        var guess = new EpisodeMetadataGuess(
+            item.SeriesName,
+            item.TitleForMux,
+            item.SeasonNumber,
+            item.EpisodeNumber);
+
+        var dialog = new Windows.TvdbLookupWindow(_services.EpisodeMetadata, guess)
         {
-            return detected;
+            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+                ?? Application.Current?.MainWindow
+        };
+
+        if (dialog.ShowDialog() != true || dialog.SelectedEpisodeSelection is null)
+        {
+            SetStatus("TVDB-Pruefung abgebrochen", ProgressValue);
+            return false;
         }
+
+        item.ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
+        item.ApproveMetadataReview(
+            $"TVDB manuell bestaetigt: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
+
+        SetStatus(
+            isBatchPreparation
+                ? $"TVDB-Zuordnung fuer '{item.Title}' freigegeben"
+                : "TVDB-Zuordnung freigegeben",
+            100);
+
+        await Task.CompletedTask;
+        return true;
+    }
+
+    private async Task<EpisodeMetadataResolutionResult> ResolveMetadataAsync(AutoDetectedEpisodeFiles detected)
+    {
+        return await _services.EpisodeMetadata.ResolveAutomaticallyAsync(new EpisodeMetadataGuess(
+            detected.SeriesName,
+            detected.SuggestedTitle,
+            detected.SeasonNumber,
+            detected.EpisodeNumber));
+    }
+
+    private static AutoDetectedEpisodeFiles ApplyMetadataSelection(
+        AutoDetectedEpisodeFiles detected,
+        EpisodeMetadataResolutionResult resolution)
+    {
+        return resolution.Selection is null
+            ? detected
+            : EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
     }
 
     private bool CanReviewPendingSources()
     {
-        return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.RequiresManualCheck && !item.IsManualCheckApproved);
+        return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.HasPendingChecks);
     }
 
     private async Task<bool> EnsurePendingChecksApprovedAsync(IReadOnlyList<BatchEpisodeItemViewModel> readyItems)
     {
-        var pendingItems = readyItems
+        var pendingSourceItems = readyItems
             .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
             .ToList();
 
-        if (pendingItems.Count == 0)
+        var pendingMetadataItems = readyItems
+            .Where(item => item.RequiresMetadataReview && !item.IsMetadataReviewApproved)
+            .ToList();
+
+        if (pendingSourceItems.Count == 0 && pendingMetadataItems.Count == 0)
         {
             SetStatus("Keine offenen Pflichtpruefungen", ProgressValue);
             return true;
@@ -644,10 +710,20 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
         SetStatus("Pflichtpruefungen werden vorbereitet...", 0);
 
-        foreach (var item in pendingItems)
+        foreach (var item in pendingSourceItems)
         {
             SelectedEpisodeItem = item;
             var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
+            if (!approved)
+            {
+                return false;
+            }
+        }
+
+        foreach (var item in pendingMetadataItems)
+        {
+            SelectedEpisodeItem = item;
+            var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true);
             if (!approved)
             {
                 return false;
@@ -797,6 +873,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
+        ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RedetectSelectedEpisodeCommand.RaiseCanExecuteChanged();
         EditSelectedAudioDescriptionCommand.RaiseCanExecuteChanged();
         EditSelectedSubtitlesCommand.RaiseCanExecuteChanged();
@@ -848,6 +925,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 {
     private bool _isSelected;
     private string _status;
+    private string _seriesName;
+    private string _seasonNumber;
+    private string _episodeNumber;
     private string _requestedMainVideoPath;
     private string _mainVideoPath;
     private List<string> _requestedSourcePaths;
@@ -857,6 +937,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private List<string> _attachmentPaths;
     private string _outputPath;
     private string _titleForMux;
+    private string _metadataStatusText;
+    private bool _requiresMetadataReview;
+    private bool _isMetadataReviewApproved;
+    private bool _outputPathWasManuallyChanged;
     private bool _requiresManualCheck;
     private List<string> _manualCheckFilePaths;
     private List<string> _notes;
@@ -867,12 +951,18 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
         string mainVideoPath,
+        string seriesName,
+        string seasonNumber,
+        string episodeNumber,
         IReadOnlyList<string> additionalVideoPaths,
         string? audioDescriptionPath,
         IReadOnlyList<string> subtitlePaths,
         IReadOnlyList<string> attachmentPaths,
         string outputPath,
         string titleForMux,
+        string metadataStatusText,
+        bool requiresMetadataReview,
+        bool isMetadataReviewApproved,
         string status,
         bool isSelected,
         bool requiresManualCheck,
@@ -881,6 +971,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     {
         _requestedMainVideoPath = requestedMainVideoPath;
         _mainVideoPath = mainVideoPath;
+        _seriesName = seriesName;
+        _seasonNumber = seasonNumber;
+        _episodeNumber = episodeNumber;
         _requestedSourcePaths = [requestedMainVideoPath];
         _additionalVideoPaths = additionalVideoPaths.ToList();
         _audioDescriptionPath = audioDescriptionPath;
@@ -888,6 +981,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _attachmentPaths = attachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPath = outputPath;
         _titleForMux = titleForMux;
+        _metadataStatusText = metadataStatusText;
+        _requiresMetadataReview = requiresMetadataReview;
+        _isMetadataReviewApproved = isMetadataReviewApproved;
         _status = status;
         _isSelected = isSelected;
         _requiresManualCheck = requiresManualCheck;
@@ -899,6 +995,56 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Title => TitleForMux;
+
+    public string SeriesName
+    {
+        get => _seriesName;
+        private set
+        {
+            if (_seriesName == value)
+            {
+                return;
+            }
+
+            _seriesName = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MetadataDisplayText));
+        }
+    }
+
+    public string SeasonNumber
+    {
+        get => _seasonNumber;
+        private set
+        {
+            if (_seasonNumber == value)
+            {
+                return;
+            }
+
+            _seasonNumber = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EpisodeCodeDisplayText));
+            OnPropertyChanged(nameof(MetadataDisplayText));
+        }
+    }
+
+    public string EpisodeNumber
+    {
+        get => _episodeNumber;
+        private set
+        {
+            if (_episodeNumber == value)
+            {
+                return;
+            }
+
+            _episodeNumber = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(EpisodeCodeDisplayText));
+            OnPropertyChanged(nameof(MetadataDisplayText));
+        }
+    }
 
     public string MainVideoFileName => Path.GetFileName(MainVideoPath);
 
@@ -948,6 +1094,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public string OutputFileName => Path.GetFileName(OutputPath);
 
+    public string EpisodeCodeDisplayText => $"S{SeasonNumber}E{EpisodeNumber}";
+
     public string TitleForMux
     {
         get => _titleForMux;
@@ -962,6 +1110,57 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             _titleForMux = normalized;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(MetadataDisplayText));
+            UpdateSuggestedOutputPathIfAutomatic();
+        }
+    }
+
+    public string MetadataStatusText
+    {
+        get => _metadataStatusText;
+        private set
+        {
+            if (_metadataStatusText == value)
+            {
+                return;
+            }
+
+            _metadataStatusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool RequiresMetadataReview
+    {
+        get => _requiresMetadataReview;
+        private set
+        {
+            if (_requiresMetadataReview == value)
+            {
+                return;
+            }
+
+            _requiresMetadataReview = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(HasPendingChecks));
+        }
+    }
+
+    public bool IsMetadataReviewApproved
+    {
+        get => _isMetadataReviewApproved;
+        private set
+        {
+            if (_isMetadataReviewApproved == value)
+            {
+                return;
+            }
+
+            _isMetadataReviewApproved = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(HasPendingChecks));
         }
     }
 
@@ -978,6 +1177,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             _requiresManualCheck = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(HasPendingChecks));
         }
     }
 
@@ -988,9 +1188,37 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public bool IsManualCheckApproved => !RequiresManualCheck
         || string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase);
 
-    public string ReviewHint => RequiresManualCheck
-        ? (IsManualCheckApproved ? "Freigegeben" : "Quelle pruefen")
-        : string.Empty;
+    public bool HasPendingChecks => (RequiresManualCheck && !IsManualCheckApproved)
+        || (RequiresMetadataReview && !IsMetadataReviewApproved);
+
+    public string ReviewHint
+    {
+        get
+        {
+            var pendingChecks = new List<string>();
+            if (RequiresManualCheck && !IsManualCheckApproved)
+            {
+                pendingChecks.Add("Quelle");
+            }
+
+            if (RequiresMetadataReview && !IsMetadataReviewApproved)
+            {
+                pendingChecks.Add("TVDB");
+            }
+
+            if (pendingChecks.Count > 0)
+            {
+                return string.Join(" + ", pendingChecks) + " pruefen";
+            }
+
+            if (RequiresManualCheck || RequiresMetadataReview)
+            {
+                return "Freigegeben";
+            }
+
+            return string.Empty;
+        }
+    }
 
     public IReadOnlyList<string> Notes => _notes;
 
@@ -1032,6 +1260,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public string MainVideoDisplayText => MainVideoPath;
 
+    public string MetadataDisplayText => $"{SeriesName} - {EpisodeCodeDisplayText} - {TitleForMux}";
+
     public string AdditionalVideosDisplayText => FormatPaths(_additionalVideoPaths);
 
     public string AudioDescriptionDisplayText => string.IsNullOrWhiteSpace(AudioDescriptionPath) ? "(keine)" : AudioDescriptionPath;
@@ -1068,6 +1298,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public static BatchEpisodeItemViewModel CreateFromDetection(
         string requestedMainVideoPath,
         AutoDetectedEpisodeFiles detected,
+        EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
         string status,
         bool isSelected)
@@ -1075,12 +1306,18 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             detected.MainVideoPath,
+            detected.SeriesName,
+            detected.SeasonNumber,
+            detected.EpisodeNumber,
             detected.AdditionalVideoPaths,
             detected.AudioDescriptionPath,
             detected.SubtitlePaths,
             detected.AttachmentPaths,
             outputPath,
             detected.SuggestedTitle,
+            metadataResolution.StatusText,
+            metadataResolution.RequiresReview,
+            !metadataResolution.RequiresReview,
             status,
             isSelected,
             detected.RequiresManualCheck,
@@ -1093,12 +1330,18 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             requestedMainVideoPath,
+            Path.GetFileNameWithoutExtension(requestedMainVideoPath),
+            "xx",
+            "xx",
             [],
             null,
             [],
             [],
             string.Empty,
             Path.GetFileNameWithoutExtension(requestedMainVideoPath),
+            "Keine TVDB-Daten vorhanden.",
+            false,
+            true,
             "Fehler",
             isSelected: false,
             requiresManualCheck: false,
@@ -1131,6 +1374,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public void ApplyDetection(
         string requestedMainVideoPath,
         AutoDetectedEpisodeFiles detected,
+        EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
         string status)
     {
@@ -1138,12 +1382,19 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _detectionSeedPath = requestedMainVideoPath;
         _requestedSourcePaths = [requestedMainVideoPath];
         MainVideoPath = detected.MainVideoPath;
+        SeriesName = detected.SeriesName;
+        SeasonNumber = detected.SeasonNumber;
+        EpisodeNumber = detected.EpisodeNumber;
         _additionalVideoPaths = detected.AdditionalVideoPaths.ToList();
         _audioDescriptionPath = detected.AudioDescriptionPath;
         _subtitlePaths = detected.SubtitlePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _attachmentPaths = detected.AttachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
         TitleForMux = detected.SuggestedTitle;
+        MetadataStatusText = metadataResolution.StatusText;
+        RequiresMetadataReview = metadataResolution.RequiresReview;
+        IsMetadataReviewApproved = !metadataResolution.RequiresReview;
         Status = status;
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1156,6 +1407,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(RequestedMainVideoPath));
         OnPropertyChanged(nameof(RequestedSourcesDisplayText));
+        OnPropertyChanged(nameof(SeriesName));
+        OnPropertyChanged(nameof(SeasonNumber));
+        OnPropertyChanged(nameof(EpisodeNumber));
+        OnPropertyChanged(nameof(EpisodeCodeDisplayText));
         OnPropertyChanged(nameof(AdditionalVideoPaths));
         OnPropertyChanged(nameof(AdditionalVideosDisplayText));
         OnPropertyChanged(nameof(AudioDescriptionPath));
@@ -1165,6 +1420,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SubtitleDisplayText));
         OnPropertyChanged(nameof(AttachmentPaths));
         OnPropertyChanged(nameof(AttachmentDisplayText));
+        OnPropertyChanged(nameof(MetadataStatusText));
+        OnPropertyChanged(nameof(MetadataDisplayText));
+        OnPropertyChanged(nameof(IsMetadataReviewApproved));
         OnPropertyChanged(nameof(ManualCheckFilePaths));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(Notes));
@@ -1210,6 +1468,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public void SetOutputPath(string outputPath)
     {
+        _outputPathWasManuallyChanged = true;
         OutputPath = outputPath;
         Status = File.Exists(outputPath) ? "Existiert bereits" : "Bereit";
         IsSelected = Status != "Existiert bereits";
@@ -1229,6 +1488,24 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _approvedReviewPath = CurrentReviewTargetPath;
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(HasPendingChecks));
+    }
+
+    public void ApplyTvdbSelection(TvdbEpisodeSelection selection)
+    {
+        SeriesName = selection.TvdbSeriesName;
+        SeasonNumber = selection.SeasonNumber;
+        EpisodeNumber = selection.EpisodeNumber;
+        TitleForMux = selection.EpisodeTitle;
+        UpdateSuggestedOutputPathIfAutomatic();
+        OnPropertyChanged(nameof(MetadataDisplayText));
+    }
+
+    public void ApproveMetadataReview(string statusText)
+    {
+        MetadataStatusText = statusText;
+        RequiresMetadataReview = false;
+        IsMetadataReviewApproved = true;
     }
 
     private IEnumerable<string> EnumerateSourceFilePaths()
@@ -1259,6 +1536,29 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         return list.Count == 0
             ? "(keine)"
             : string.Join(Environment.NewLine, list);
+    }
+
+    private void UpdateSuggestedOutputPathIfAutomatic()
+    {
+        if (_outputPathWasManuallyChanged || string.IsNullOrWhiteSpace(OutputPath))
+        {
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(OutputPath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        OutputPath = EpisodeMetadataMergeHelper.BuildSuggestedOutputFilePath(
+            directory,
+            SeriesName,
+            SeasonNumber,
+            EpisodeNumber,
+            TitleForMux);
+        Status = File.Exists(OutputPath) ? "Existiert bereits" : "Bereit";
+        IsSelected = Status != "Existiert bereits";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

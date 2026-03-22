@@ -19,7 +19,7 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Suche zuerst die Serie, lade danach die Episodenliste und uebernimm die passende Episode.</TextBlock>
+                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Beim Oeffnen startet direkt eine automatische Suche. Nur wenn der Vorschlag nicht passt, musst du noch Serie oder Episode manuell anpassen.</TextBlock>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.RowDefinitions>
@@ -63,7 +63,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBox x:Name="SeriesSearchTextBox" Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" />
-                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="SearchSeriesButton_Click" Content="Serie suchen" />
+                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="SearchSeriesButton_Click" Content="Neu suchen" />
 
                     <ListBox x:Name="SeriesResultsListBox" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" SelectionChanged="SeriesResultsListBox_SelectionChanged">
                         <ListBox.ItemTemplate>
@@ -79,20 +79,19 @@
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="140" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBox x:Name="EpisodeSearchTextBox" Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" />
-                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="FilterEpisodesButton_Click" Content="Episode suchen" />
+                    <TextBox x:Name="EpisodeSearchTextBox"
+                             Grid.Row="0"
+                             Grid.Column="0"
+                             Margin="0,0,0,8"
+                             TextChanged="EpisodeSearchTextBox_TextChanged" />
 
-                    <Button x:Name="LoadEpisodesButton" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8" Padding="10,6" Click="LoadEpisodesButton_Click" Content="Episodenliste laden" />
-
-                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2">
+                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="1" Grid.Column="0">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />

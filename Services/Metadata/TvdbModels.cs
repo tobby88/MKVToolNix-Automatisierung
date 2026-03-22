@@ -26,3 +26,15 @@ public sealed record TvdbEpisodeSelection(
     string EpisodeTitle,
     string SeasonNumber,
     string EpisodeNumber);
+
+public sealed record EpisodeMetadataResolutionResult(
+    EpisodeMetadataGuess Guess,
+    TvdbEpisodeSelection? Selection,
+    string StatusText,
+    int ConfidenceScore,
+    bool RequiresReview,
+    bool QueryWasAttempted,
+    bool QuerySucceeded)
+{
+    public bool HasSelection => Selection is not null;
+}
