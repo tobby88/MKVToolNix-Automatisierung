@@ -19,7 +19,7 @@ public sealed class MkvMergeProbeService
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
-        var tracks = trackDocument.RootElement.GetProperty("tracks");
+        var tracks = GetTracksElement(trackDocument, inputFilePath);
 
         JsonElement? videoTrack = null;
         JsonElement? audioTrack = null;
@@ -87,7 +87,7 @@ public sealed class MkvMergeProbeService
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
-        var tracks = trackDocument.RootElement.GetProperty("tracks");
+        var tracks = GetTracksElement(trackDocument, inputFilePath);
 
         foreach (var track in tracks.EnumerateArray())
         {
@@ -120,7 +120,7 @@ public sealed class MkvMergeProbeService
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
-        var tracks = trackDocument.RootElement.GetProperty("tracks");
+        var tracks = GetTracksElement(trackDocument, inputFilePath);
         var trackMetadata = new List<ContainerTrackMetadata>();
 
         foreach (var track in tracks.EnumerateArray())
@@ -177,6 +177,22 @@ public sealed class MkvMergeProbeService
         var metadata = new ContainerMetadata(trackMetadata, attachments);
         _containerCache[inputFilePath] = metadata;
         return metadata;
+    }
+
+    private static JsonElement GetTracksElement(JsonDocument trackDocument, string inputFilePath)
+    {
+        if (trackDocument.RootElement.TryGetProperty("tracks", out var tracks)
+            && tracks.ValueKind == JsonValueKind.Array)
+        {
+            return tracks;
+        }
+
+        var rootKeys = trackDocument.RootElement.ValueKind == JsonValueKind.Object
+            ? string.Join(", ", trackDocument.RootElement.EnumerateObject().Select(property => property.Name))
+            : trackDocument.RootElement.ValueKind.ToString();
+
+        throw new InvalidOperationException(
+            $"mkvmerge --identify lieferte fuer {Path.GetFileName(inputFilePath)} keine gueltige Trackliste. Root-Felder: {rootKeys}");
     }
 
     private static int ReadTrackId(JsonElement track)
