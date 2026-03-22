@@ -40,14 +40,42 @@
 
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="180" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <GroupBox Grid.Row="0" Header="Gefundene Episoden" MinHeight="280">
+            <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,12">
+                <Border Margin="0,0,8,0" Padding="10" Background="#F4F1E6" BorderBrush="#C9BE93" BorderThickness="1" CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock FontSize="12" Opacity="0.75" Text="Gefunden" />
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding EpisodeCount, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,0,8,0" Padding="10" Background="#E8F3FF" BorderBrush="#8CB4D8" BorderThickness="1" CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock FontSize="12" Opacity="0.75" Text="Ausgewaehlt" />
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding SelectedEpisodeCount, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,0,8,0" Padding="10" Background="#EEF6E8" BorderBrush="#88B06E" BorderThickness="1" CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock FontSize="12" Opacity="0.75" Text="Archiv vorhanden" />
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding ExistingArchiveCount, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+                <Border Padding="10" Background="#FFF4D6" BorderBrush="#D8B46A" BorderThickness="1" CornerRadius="6">
+                    <StackPanel>
+                        <TextBlock FontSize="12" Opacity="0.75" Text="Offene Pruefungen" />
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding PendingCheckCount, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <GroupBox Grid.Row="1" Header="Gefundene Episoden" MinHeight="280">
                 <DataGrid ItemsSource="{Binding EpisodeItems}"
                           SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}"
                           AutoGenerateColumns="False"
@@ -59,23 +87,23 @@
                           Margin="8">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
-                        <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
                         <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Archiv" Binding="{Binding ArchiveStateText}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Pruefung" Binding="{Binding ReviewHint}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
 
-            <TextBlock Grid.Row="1" Margin="0,12,0,6" Text="{Binding StatusText, Mode=OneWay}" />
-            <ProgressBar Grid.Row="2" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
+            <TextBlock Grid.Row="2" Margin="0,12,0,6" Text="{Binding StatusText, Mode=OneWay}" />
+            <ProgressBar Grid.Row="3" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
-            <Expander Grid.Row="3"
+            <Expander Grid.Row="4"
                       Margin="0,12,0,0"
                       Header="Ausgewaehlten Eintrag pruefen und anpassen"
-                      MaxHeight="220"
+                      MaxHeight="320"
                       IsExpanded="False">
                 <Border Padding="8"
                         BorderBrush="#D0D0D0"
@@ -83,7 +111,7 @@
                         CornerRadius="4">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
-                                  MaxHeight="200">
+                                  MaxHeight="300">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -94,7 +122,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="180" />
@@ -137,7 +165,69 @@
                     <Button Grid.Row="6" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe aendern" />
 
                     <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Geplante Verwendung" />
-                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" Height="96" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.PlanSummaryText, Mode=OneWay}" />
+                    <Border Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" Padding="10" Background="#F6F4EA" BorderBrush="#B8AA72" BorderThickness="1" CornerRadius="6">
+                        <StackPanel>
+                            <Border Padding="10"
+                                    Margin="0,0,0,8"
+                                    Background="#FFF9EA"
+                                    BorderBrush="#D8B46A"
+                                    BorderThickness="1"
+                                    CornerRadius="5">
+                                <StackPanel>
+                                    <TextBlock FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Opacity="0.75"
+                                               Text="Archiv" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
+                                </StackPanel>
+                            </Border>
+
+                            <UniformGrid Columns="2">
+                                <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Hauptvideo" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Weitere Videos" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audio" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audiodeskription" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,8,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Untertitel" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Margin="0,0,0,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Anhaenge" />
+                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Border>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
 
                     <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
                     <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
@@ -146,7 +236,7 @@
                 </Border>
             </Expander>
 
-            <GroupBox Grid.Row="4" Header="Batch-Protokoll" Margin="0,12,0,0">
+            <Expander Grid.Row="5" Header="Batch-Protokoll" Margin="0,12,0,0" IsExpanded="False">
                 <TextBox Margin="8"
                          FontFamily="Consolas"
                          AcceptsReturn="True"
@@ -155,8 +245,9 @@
                          TextWrapping="NoWrap"
                          HorizontalScrollBarVisibility="Auto"
                          VerticalScrollBarVisibility="Auto"
+                         MinHeight="140"
                          Text="{Binding LogText, Mode=OneWay}" />
-            </GroupBox>
+            </Expander>
         </Grid>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">

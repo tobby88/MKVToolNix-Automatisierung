@@ -120,6 +120,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
+    public int EpisodeCount => EpisodeItems.Count;
+
+    public int SelectedEpisodeCount => EpisodeItems.Count(item => item.IsSelected);
+
+    public int ExistingArchiveCount => EpisodeItems.Count(item => item.ArchiveStateText == "vorhanden");
+
+    public int PendingCheckCount => EpisodeItems.Count(item => item.IsSelected && item.HasPendingChecks);
+
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;
@@ -498,22 +506,25 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             .Select(group => group.First())
             .ToList();
 
-        if (copyPlans.Count > 0)
-        {
-            var totalCopyBytes = copyPlans.Sum(plan => plan.FileSizeBytes);
-            if (!_dialogService.ConfirmBatchArchiveCopy(copyPlans.Count, totalCopyBytes))
-            {
-                SetStatus("Abgebrochen", 0);
-                return;
-            }
+        var copyPlansToExecute = copyPlans
+            .Where(_services.FileCopy.NeedsCopy)
+            .ToList();
 
-            await CopyArchiveFilesAsync(copyPlans, totalCopyBytes);
-        }
+        var totalCopyBytes = copyPlansToExecute.Sum(plan => plan.FileSizeBytes);
 
-        if (!_dialogService.ConfirmBatchStart(executablePlans.Count))
+        if (!_dialogService.ConfirmBatchExecution(executablePlans.Count, copyPlansToExecute.Count, totalCopyBytes))
         {
             SetStatus("Abgebrochen", 0);
             return;
+        }
+
+        if (copyPlansToExecute.Count > 0)
+        {
+            await CopyArchiveFilesAsync(copyPlansToExecute, totalCopyBytes);
+        }
+        else if (copyPlans.Count > 0)
+        {
+            AppendLog("ARBEITSKOPIEN: Bereits vorhandene aktuelle Arbeitskopien werden wiederverwendet.");
         }
 
         try
@@ -524,11 +535,13 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             var warningCount = 0;
             var errorCount = 0;
             var movedDoneFiles = new List<string>();
+            var newArchiveFiles = new List<string>();
             var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
 
             for (var index = 0; index < executablePlans.Count; index++)
             {
                 var (item, plan) = executablePlans[index];
+                var outputExistedBeforeRun = File.Exists(item.OutputPath);
                 item.Status = "Laeuft";
                 AppendLog($"STARTE: {item.MainVideoFileName}");
 
@@ -543,6 +556,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     {
                         item.Status = "Erfolgreich";
                         successCount++;
+                        if (!outputExistedBeforeRun && File.Exists(item.OutputPath))
+                        {
+                            newArchiveFiles.Add(item.OutputPath);
+                        }
                         movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(item, plan, doneDirectory));
                     }
                     else if ((result.ExitCode == 0 && result.HasWarning)
@@ -550,6 +567,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     {
                         item.Status = "Warnung";
                         warningCount++;
+                        if (!outputExistedBeforeRun && File.Exists(item.OutputPath))
+                        {
+                            newArchiveFiles.Add(item.OutputPath);
+                        }
                         movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(item, plan, doneDirectory));
                     }
                     else
@@ -573,6 +594,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             }
 
             await OfferBatchDoneCleanupAsync(doneDirectory, movedDoneFiles);
+            WriteNewArchiveFileReport(newArchiveFiles);
 
             SetStatus(
                 $"Batch abgeschlossen: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler",
@@ -698,6 +720,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         item.SetPlanSummary(File.Exists(item.OutputPath)
             ? "Archivvergleich wird berechnet..."
             : "Verwendungsplan wird berechnet...");
+        item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
+            File.Exists(item.OutputPath) ? "Archivvergleich wird berechnet" : "Verwendungsplan wird berechnet",
+            File.Exists(item.OutputPath) ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
 
         try
         {
@@ -708,6 +733,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             }
 
             item.SetPlanSummary(plan.BuildCompactSummaryText());
+            item.SetUsageSummary(plan.BuildUsageSummary());
         }
         catch (Exception ex)
         {
@@ -717,6 +743,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             }
 
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
+            item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
         }
     }
 
@@ -809,6 +836,41 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             _dialogService.OpenPathWithDefaultApp(doneDirectory);
         }
+    }
+
+    private void WriteNewArchiveFileReport(IReadOnlyList<string> newArchiveFiles)
+    {
+        var files = newArchiveFiles
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        AppendLog(string.Empty);
+        AppendLog("NEU INS ARCHIV EINGEFUEGT:");
+        foreach (var file in files)
+        {
+            AppendLog("  " + file);
+        }
+
+        var timeStamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss");
+        var reportPath = Path.Combine(SourceDirectory, $"Neu im Archiv - {timeStamp}.txt");
+        File.WriteAllLines(reportPath,
+        [
+            "Neu ins Archiv eingefuegte Dateien",
+            $"Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss}",
+            string.Empty,
+            .. files
+        ]);
+
+        _dialogService.ShowInfo(
+            "Neue Archivdateien",
+            $"{files.Count} neue Datei(en) wurden ins Archiv eingefuegt.\n\nListe im Protokoll und in:\n{reportPath}");
     }
 
     private async Task CopyArchiveFilesAsync(IReadOnlyList<FileCopyPlan> copyPlans, long totalCopyBytes)
@@ -1194,17 +1256,27 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private void EpisodeItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshCommands();
+        RefreshOverview();
     }
 
     private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         RefreshCommands();
+        RefreshOverview();
     }
 
     private void SetStatus(string text, int progress)
     {
         StatusText = text;
         ProgressValue = Math.Clamp(progress, 0, 100);
+    }
+
+    private void RefreshOverview()
+    {
+        OnPropertyChanged(nameof(EpisodeCount));
+        OnPropertyChanged(nameof(SelectedEpisodeCount));
+        OnPropertyChanged(nameof(ExistingArchiveCount));
+        OnPropertyChanged(nameof(PendingCheckCount));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -1236,6 +1308,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private string _titleForMux;
     private string _metadataStatusText;
     private string _planSummaryText;
+    private EpisodeUsageSummary? _usageSummary;
     private bool _requiresMetadataReview;
     private bool _isMetadataReviewApproved;
     private bool _outputPathWasManuallyChanged;
@@ -1268,6 +1341,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         bool isMetadataReviewApproved,
         string status,
         string planSummaryText,
+        EpisodeUsageSummary? usageSummary,
         bool isSelected,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
@@ -1292,6 +1366,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _titleForMux = titleForMux;
         _metadataStatusText = metadataStatusText;
         _planSummaryText = planSummaryText;
+        _usageSummary = usageSummary;
         _requiresMetadataReview = requiresMetadataReview;
         _isMetadataReviewApproved = isMetadataReviewApproved;
         _status = status;
@@ -1461,6 +1536,21 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             }
 
             _planSummaryText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public EpisodeUsageSummary? UsageSummary
+    {
+        get => _usageSummary;
+        private set
+        {
+            if (_usageSummary == value)
+            {
+                return;
+            }
+
+            _usageSummary = value;
             OnPropertyChanged();
         }
     }
@@ -1665,6 +1755,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             File.Exists(outputPath)
                 ? "Archiv-MKV vorhanden. Detail auswaehlen fuer den genauen Vergleich."
                 : "Zieldatei noch nicht vorhanden. Neue MKV wird erstellt.",
+            EpisodeUsageSummary.CreatePending(
+                File.Exists(outputPath) ? "Archiv-MKV vorhanden" : "Zieldatei noch nicht vorhanden",
+                File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"),
             isSelected,
             detected.RequiresManualCheck,
             detected.ManualCheckFilePaths,
@@ -1695,6 +1788,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             true,
             "Fehler",
             "Keine Plan-Zusammenfassung verfuegbar.",
+            EpisodeUsageSummary.CreatePending("Fehler", "Keine Plan-Zusammenfassung verfuegbar."),
             isSelected: false,
             requiresManualCheck: false,
             manualCheckFilePaths: [],
@@ -1757,6 +1851,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         PlanSummaryText = File.Exists(outputPath)
             ? "Archiv-MKV vorhanden. Detail auswaehlen fuer den genauen Vergleich."
             : "Zieldatei noch nicht vorhanden. Neue MKV wird erstellt.";
+        UsageSummary = EpisodeUsageSummary.CreatePending(
+            File.Exists(outputPath) ? "Archiv-MKV vorhanden" : "Zieldatei noch nicht vorhanden",
+            File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (!RequiresManualCheck || !string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase))
@@ -1783,6 +1880,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(AttachmentDisplayText));
         OnPropertyChanged(nameof(MetadataStatusText));
         OnPropertyChanged(nameof(PlanSummaryText));
+        OnPropertyChanged(nameof(UsageSummary));
         OnPropertyChanged(nameof(MetadataDisplayText));
         OnPropertyChanged(nameof(ArchiveStateText));
         OnPropertyChanged(nameof(IsMetadataReviewApproved));
@@ -1837,6 +1935,9 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         PlanSummaryText = File.Exists(outputPath)
             ? "Archiv-MKV vorhanden. Detail auswaehlen fuer den genauen Vergleich."
             : "Zieldatei noch nicht vorhanden. Neue MKV wird erstellt.";
+        UsageSummary = EpisodeUsageSummary.CreatePending(
+            File.Exists(outputPath) ? "Archiv-MKV vorhanden" : "Zieldatei noch nicht vorhanden",
+            File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
         OnPropertyChanged(nameof(ArchiveStateText));
         IsSelected = Status != "Existiert bereits";
     }
@@ -1844,6 +1945,11 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public void SetPlanSummary(string summaryText)
     {
         PlanSummaryText = summaryText;
+    }
+
+    public void SetUsageSummary(EpisodeUsageSummary? usageSummary)
+    {
+        UsageSummary = usageSummary;
     }
 
     public void ReplaceExcludedSourcePaths(IEnumerable<string> excludedSourcePaths)

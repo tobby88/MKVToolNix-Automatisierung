@@ -31,7 +31,24 @@ public sealed record DetectionProgressUpdate(
 public sealed record FileCopyPlan(
     string SourceFilePath,
     string DestinationFilePath,
-    long FileSizeBytes);
+    long FileSizeBytes,
+    DateTime SourceLastWriteUtc)
+{
+    public bool IsReusable
+    {
+        get
+        {
+            if (!File.Exists(DestinationFilePath))
+            {
+                return false;
+            }
+
+            var destinationInfo = new FileInfo(DestinationFilePath);
+            return destinationInfo.Length == FileSizeBytes
+                && destinationInfo.LastWriteTimeUtc >= SourceLastWriteUtc;
+        }
+    }
+}
 
 public sealed record MediaTrackMetadata(
     int VideoTrackId,

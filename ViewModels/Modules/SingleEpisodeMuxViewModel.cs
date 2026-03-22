@@ -39,6 +39,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _isApplyingMetadataState;
     private string _outputTargetStatusText = string.Empty;
     private string _planSummaryText = string.Empty;
+    private EpisodeUsageSummary? _usageSummary;
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
     private List<string> _manualCheckFilePaths = [];
@@ -344,6 +345,21 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     }
 
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
+
+    public EpisodeUsageSummary? UsageSummary
+    {
+        get => _usageSummary;
+        private set
+        {
+            if (_usageSummary == value)
+            {
+                return;
+            }
+
+            _usageSummary = value;
+            OnPropertyChanged();
+        }
+    }
 
     private string ResolveMainVideoInitialDirectory()
     {
@@ -985,6 +1001,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _currentPlan = await BuildPlanAsync();
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
+            UsageSummary = _currentPlan.BuildUsageSummary();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
         }
@@ -1007,6 +1024,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _currentPlan ??= await BuildPlanAsync();
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
+            UsageSummary = _currentPlan.BuildUsageSummary();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
                 + Environment.NewLine
                 + Environment.NewLine
@@ -1042,26 +1060,33 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
             if (_currentPlan.WorkingCopy is not null)
             {
-                if (!_dialogService.ConfirmArchiveCopy(_currentPlan.WorkingCopy))
+                if (_services.FileCopy.NeedsCopy(_currentPlan.WorkingCopy))
                 {
-                    SetStatus("Abgebrochen", 0);
-                    return;
-                }
-
-                SetStatus("Kopiere Archivdatei...", 0);
-                await _services.FileCopy.CopyAsync(
-                    _currentPlan.WorkingCopy,
-                    (copiedBytes, totalBytes) =>
+                    if (!_dialogService.ConfirmArchiveCopy(_currentPlan.WorkingCopy))
                     {
-                        var progress = totalBytes <= 0
-                            ? 0
-                            : (int)Math.Round(copiedBytes * 100d / totalBytes);
+                        SetStatus("Abgebrochen", 0);
+                        return;
+                    }
 
-                        Application.Current.Dispatcher.Invoke(() =>
+                    SetStatus("Kopiere Archivdatei...", 0);
+                    await _services.FileCopy.CopyAsync(
+                        _currentPlan.WorkingCopy,
+                        (copiedBytes, totalBytes) =>
                         {
-                            SetStatus($"Kopiere Archivdatei... {progress}%", progress);
+                            var progress = totalBytes <= 0
+                                ? 0
+                                : (int)Math.Round(copiedBytes * 100d / totalBytes);
+
+                            Application.Current.Dispatcher.Invoke(() =>
+                            {
+                                SetStatus($"Kopiere Archivdatei... {progress}%", progress);
+                            });
                         });
-                    });
+                }
+                else
+                {
+                    SetStatus("Arbeitskopie bereits aktuell - uebernehme vorhandene Kopie...", 100);
+                }
             }
 
             SetStatus("Muxing laeuft...", 0);
@@ -1121,7 +1146,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         if (plan.WorkingCopy is not null)
         {
-            OutputTargetStatusText = "Am Ziel liegt bereits eine Archiv-MKV. Vor dem Mux wird eine lokale Arbeitskopie erstellt und die fehlenden oder besseren Spuren werden eingearbeitet.";
+            OutputTargetStatusText = plan.WorkingCopy.IsReusable
+                ? "Am Ziel liegt bereits eine Archiv-MKV. Eine aktuelle Arbeitskopie ist schon vorhanden und wird direkt weiterverwendet."
+                : "Am Ziel liegt bereits eine Archiv-MKV. Vor dem Mux wird eine lokale Arbeitskopie erstellt und die fehlenden oder besseren Spuren werden eingearbeitet.";
             return;
         }
 
@@ -1228,6 +1255,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             || string.IsNullOrWhiteSpace(_title))
         {
             PlanSummaryText = string.Empty;
+            UsageSummary = null;
             return;
         }
 
@@ -1242,6 +1270,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _currentPlan = plan;
             RefreshOutputTargetStatusFromPlan(plan);
             PlanSummaryText = plan.BuildCompactSummaryText();
+            UsageSummary = plan.BuildUsageSummary();
         }
         catch
         {
@@ -1251,6 +1280,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             }
 
             PlanSummaryText = string.Empty;
+            UsageSummary = null;
         }
     }
 

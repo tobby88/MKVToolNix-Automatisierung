@@ -276,50 +276,59 @@ public sealed class SeriesEpisodeMuxPlan
         return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
     }
 
-    public string BuildCompactSummaryText()
+    public EpisodeUsageSummary BuildUsageSummary()
     {
         if (SkipMux)
         {
-            return SkipReason ?? "Die Archivdatei ist bereits vollstaendig.";
+            return EpisodeUsageSummary.CreatePending(
+                SkipReason ?? "Die Archivdatei ist bereits vollstaendig.",
+                "keine weiteren Aktionen");
         }
 
-        var lines = new List<string>();
+        var archiveAction = WorkingCopy is not null
+            ? string.Equals(VideoSources[0].FilePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase)
+                ? "Archiv-MKV vorhanden, bleibt Basis"
+                : "Archiv-MKV vorhanden, neue Hauptquelle ersetzt Basis"
+            : File.Exists(OutputFilePath)
+                ? "Zieldatei vorhanden, wird aktualisiert"
+                : "Zieldatei noch nicht vorhanden";
 
-        if (WorkingCopy is not null)
-        {
-            if (string.Equals(VideoSources[0].FilePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase))
-            {
-                lines.Add("Archiv-MKV vorhanden: Sie bleibt Basis; vor dem Mux wird eine Arbeitskopie erstellt.");
-            }
-            else
-            {
-                lines.Add("Archiv-MKV vorhanden: Neue Hauptquelle wird verwendet; fehlende Spuren werden aus dem Archiv ergaenzt.");
-            }
-        }
-        else if (File.Exists(OutputFilePath))
-        {
-            lines.Add("Zieldatei vorhanden: Sie wird beim Mux aktualisiert oder ersetzt.");
-        }
-        else
-        {
-            lines.Add("Zieldatei noch nicht vorhanden: Die Episode wird direkt neu erstellt.");
-        }
+        var archiveDetails = WorkingCopy is not null
+            ? WorkingCopy.IsReusable
+                ? $"Arbeitskopie aktuell vorhanden: {Path.GetFileName(WorkingCopy.DestinationFilePath)}"
+                : $"Arbeitskopie wird erstellt: {Path.GetFileName(WorkingCopy.DestinationFilePath)}"
+            : File.Exists(OutputFilePath)
+                ? Path.GetFileName(OutputFilePath)
+                : "Neue MKV wird direkt erstellt";
 
-        lines.Add($"Hauptvideo: {Path.GetFileName(VideoSources[0].FilePath)}");
+        return new EpisodeUsageSummary(
+            archiveAction,
+            archiveDetails,
+            Path.GetFileName(VideoSources[0].FilePath),
+            VideoSources.Count > 1
+                ? string.Join(Environment.NewLine, VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath)))
+                : "(keine)",
+            Path.GetFileName(PrimaryAudioFilePath),
+            string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "(keine)" : Path.GetFileName(AudioDescriptionFilePath),
+            SubtitleFiles.Count == 0
+                ? "(keine)"
+                : string.Join(Environment.NewLine, SubtitleFiles.Select(file => file.PreviewLabel)),
+            BuildAttachmentPreview());
+    }
 
-        if (VideoSources.Count > 1)
-        {
-            lines.Add("Weitere Videos: " + string.Join(", ", VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath))));
-        }
-
-        lines.Add($"Audio: {Path.GetFileName(PrimaryAudioFilePath)}");
-        lines.Add($"AD: {(string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
-        lines.Add("Untertitel: " + (SubtitleFiles.Count == 0
-            ? "keine"
-            : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel))));
-        lines.Add("Anhaenge: " + BuildAttachmentPreview());
-
-        return string.Join(Environment.NewLine, lines);
+    public string BuildCompactSummaryText()
+    {
+        var summary = BuildUsageSummary();
+        return string.Join(Environment.NewLine,
+        [
+            $"{summary.ArchiveAction}: {summary.ArchiveDetails}",
+            $"Hauptvideo: {summary.MainVideo}",
+            $"Weitere Videos: {summary.AdditionalVideos}",
+            $"Audio: {summary.Audio}",
+            $"AD: {summary.AudioDescription}",
+            $"Untertitel: {summary.Subtitles}",
+            $"Anhaenge: {summary.Attachments}"
+        ]);
     }
 
     public IReadOnlyList<string> GetReferencedInputFiles()
@@ -419,5 +428,29 @@ public sealed class SeriesEpisodeMuxPlan
             .Cast<string>());
 
         return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+}
+
+public sealed record EpisodeUsageSummary(
+    string ArchiveAction,
+    string ArchiveDetails,
+    string MainVideo,
+    string AdditionalVideos,
+    string Audio,
+    string AudioDescription,
+    string Subtitles,
+    string Attachments)
+{
+    public static EpisodeUsageSummary CreatePending(string archiveAction, string archiveDetails)
+    {
+        return new EpisodeUsageSummary(
+            archiveAction,
+            archiveDetails,
+            "(wird berechnet)",
+            "(wird berechnet)",
+            "(wird berechnet)",
+            "(wird berechnet)",
+            "(wird berechnet)",
+            "(wird berechnet)");
     }
 }

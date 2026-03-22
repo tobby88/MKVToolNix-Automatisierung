@@ -251,11 +251,15 @@ public sealed class SeriesArchiveService
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)
     {
+        var archiveInfo = new FileInfo(archiveFilePath);
         var fileName = Path.GetFileNameWithoutExtension(archiveFilePath);
         var extension = Path.GetExtension(archiveFilePath);
         var destinationPath = Path.Combine(workingDirectory, $"{fileName} - Arbeitskopie{extension}");
-        var fileSizeBytes = new FileInfo(archiveFilePath).Length;
-        return new FileCopyPlan(archiveFilePath, destinationPath, fileSizeBytes);
+        return new FileCopyPlan(
+            archiveFilePath,
+            destinationPath,
+            archiveInfo.Length,
+            archiveInfo.LastWriteTimeUtc);
     }
 
     private static string EpisodeMetadataPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)

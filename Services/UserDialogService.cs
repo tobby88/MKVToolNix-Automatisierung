@@ -139,6 +139,33 @@ public sealed class UserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes)
+    {
+        var lines = new List<string>
+        {
+            $"{itemCount} Episode(n) werden jetzt nacheinander verarbeitet.",
+            string.Empty,
+            "Pflichtpruefungen wurden vorher bereits abgearbeitet."
+        };
+
+        if (archiveFileCount > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"{archiveFileCount} Archivdatei(en) werden vorher lokal kopiert.");
+            lines.Add($"Gesamtgroesse: {FormatFileSize(archiveTotalBytes)}");
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("Jetzt komplett starten?");
+
+        return MessageBox.Show(
+            GetOwner(),
+            string.Join(Environment.NewLine, lines),
+            "Batch starten",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
     public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan)
     {
         return MessageBox.Show(
