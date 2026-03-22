@@ -75,6 +75,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     public AsyncRelayCommand CreatePreviewCommand { get; }
     public AsyncRelayCommand ExecuteMuxCommand { get; }
 
+    public string AudioDescriptionButtonText => string.IsNullOrWhiteSpace(_mainVideoPath)
+        ? "AD-Datei waehlen"
+        : "AD korrigieren";
+
     public string MainVideoPath
     {
         get => _mainVideoPath ?? string.Empty;
@@ -82,6 +86,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             _mainVideoPath = string.IsNullOrWhiteSpace(value) ? null : value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(AudioDescriptionButtonText));
         }
     }
 

@@ -262,12 +262,26 @@ public sealed class MkvMergeProbeService
         var standardError = await process.StandardError.ReadToEndAsync();
         await process.WaitForExitAsync();
 
-        if (process.ExitCode != 0)
+        if (!string.IsNullOrWhiteSpace(standardOutput))
         {
-            throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {standardError}");
+            try
+            {
+                return JsonDocument.Parse(standardOutput);
+            }
+            catch (JsonException)
+            {
+                if (process.ExitCode == 0)
+                {
+                    throw;
+                }
+            }
         }
 
-        return JsonDocument.Parse(standardOutput);
+        var details = string.IsNullOrWhiteSpace(standardError)
+            ? "Es wurde keine gueltige JSON-Antwort geliefert."
+            : standardError.Trim();
+
+        throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {details}");
     }
 
     private static int ParseWidth(string? pixelDimensions)

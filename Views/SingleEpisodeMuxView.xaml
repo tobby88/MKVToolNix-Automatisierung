@@ -42,7 +42,7 @@
 
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="AD-Datei (.mp4)" />
             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
-            <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="AD korrigieren" />
+            <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="{Binding AudioDescriptionButtonText, Mode=OneWay}" />
 
             <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
             <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SubtitleDisplayText, Mode=OneWay}" />
