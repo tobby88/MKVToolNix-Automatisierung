@@ -290,12 +290,35 @@ public sealed class EpisodeMetadataLookupService
         IReadOnlyList<TvdbEpisodeRecord> episodes,
         int seriesScore)
     {
-        var bestEpisode = episodes
+        var scoredEpisodes = episodes
             .Select(episode => new
             {
                 Episode = episode,
+                TitleSimilarity = CalculateTitleSimilarity(guess.EpisodeTitle, episode.Name),
                 EpisodeScore = CalculateEpisodeScore(guess, episode)
             })
+            .ToList();
+
+        if (scoredEpisodes.Count == 0)
+        {
+            return null;
+        }
+
+        var bestTitleSimilarity = scoredEpisodes.Max(entry => entry.TitleSimilarity);
+        var prioritizedEpisodes = scoredEpisodes.AsEnumerable();
+
+        if (bestTitleSimilarity >= 30)
+        {
+            // Exakter Titeltreffer soll lokale, oft unzuverlaessige Staffelangaben aus dem Dateinamen ueberstimmen.
+            prioritizedEpisodes = scoredEpisodes.Where(entry => entry.TitleSimilarity == bestTitleSimilarity);
+        }
+        else if (bestTitleSimilarity >= 22)
+        {
+            // Bei stark aehnlichem Titel werden nur die titelnaechsten Treffer weiter betrachtet.
+            prioritizedEpisodes = scoredEpisodes.Where(entry => entry.TitleSimilarity >= bestTitleSimilarity - 2);
+        }
+
+        var bestEpisode = prioritizedEpisodes
             .OrderByDescending(entry => entry.EpisodeScore)
             .ThenBy(entry => entry.Episode.SeasonNumber ?? int.MaxValue)
             .ThenBy(entry => entry.Episode.EpisodeNumber ?? int.MaxValue)
