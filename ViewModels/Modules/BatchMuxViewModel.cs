@@ -191,6 +191,11 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                         file,
                         update => HandleBatchDetectionProgress(index + 1, total, file, update));
+                    var localGuess = new EpisodeMetadataGuess(
+                        detected.SeriesName,
+                        detected.SuggestedTitle,
+                        detected.SeasonNumber,
+                        detected.EpisodeNumber);
                     SetStatus($"Scanne Ordner... {index + 1}/{total} - {Path.GetFileName(file)} - TVDB-Abgleich", CalculatePercent(index, total));
                     var metadataResolution = await ResolveMetadataAsync(detected);
                     detected = ApplyMetadataSelection(detected, metadataResolution);
@@ -207,6 +212,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         var outputAlreadyExists = File.Exists(outputPath);
                         var item = BatchEpisodeItemViewModel.CreateFromDetection(
                             requestedMainVideoPath: file,
+                            localGuess: localGuess,
                             detected: detected,
                             metadataResolution: metadataResolution,
                             outputPath: outputPath,
@@ -534,6 +540,11 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleSelectedItemDetectionProgress,
                 excludedSourcePaths);
+            var localGuess = new EpisodeMetadataGuess(
+                detected.SeriesName,
+                detected.SuggestedTitle,
+                detected.SeasonNumber,
+                detected.EpisodeNumber);
             SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
             var metadataResolution = await ResolveMetadataAsync(detected);
             detected = ApplyMetadataSelection(detected, metadataResolution);
@@ -542,6 +553,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
             item.ApplyDetection(
                 requestedMainVideoPath: selectedVideoPath,
+                localGuess: localGuess,
                 detected: detected,
                 metadataResolution: metadataResolution,
                 outputPath: outputPath,
@@ -638,10 +650,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             ProgressValue);
 
         var guess = new EpisodeMetadataGuess(
-            item.SeriesName,
-            item.TitleForMux,
-            item.SeasonNumber,
-            item.EpisodeNumber);
+            item.LocalSeriesName,
+            item.LocalTitle,
+            item.LocalSeasonNumber,
+            item.LocalEpisodeNumber);
 
         var dialog = new Windows.TvdbLookupWindow(_services.EpisodeMetadata, guess)
         {
@@ -649,7 +661,25 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 ?? Application.Current?.MainWindow
         };
 
-        if (dialog.ShowDialog() != true || dialog.SelectedEpisodeSelection is null)
+        if (dialog.ShowDialog() != true)
+        {
+            SetStatus("TVDB-Pruefung abgebrochen", ProgressValue);
+            return false;
+        }
+
+        if (dialog.KeepLocalDetection)
+        {
+            item.ApplyLocalMetadataGuess();
+            item.ApproveMetadataReview("Lokale Erkennung wurde bewusst beibehalten.");
+            SetStatus(
+                isBatchPreparation
+                    ? $"Lokale Erkennung fuer '{item.Title}' freigegeben"
+                    : "Lokale Erkennung freigegeben",
+                100);
+            return true;
+        }
+
+        if (dialog.SelectedEpisodeSelection is null)
         {
             SetStatus("TVDB-Pruefung abgebrochen", ProgressValue);
             return false;
@@ -925,6 +955,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 {
     private bool _isSelected;
     private string _status;
+    private string _localSeriesName;
+    private string _localSeasonNumber;
+    private string _localEpisodeNumber;
+    private string _localTitle;
     private string _seriesName;
     private string _seasonNumber;
     private string _episodeNumber;
@@ -951,6 +985,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
         string mainVideoPath,
+        string localSeriesName,
+        string localSeasonNumber,
+        string localEpisodeNumber,
+        string localTitle,
         string seriesName,
         string seasonNumber,
         string episodeNumber,
@@ -971,6 +1009,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     {
         _requestedMainVideoPath = requestedMainVideoPath;
         _mainVideoPath = mainVideoPath;
+        _localSeriesName = localSeriesName;
+        _localSeasonNumber = localSeasonNumber;
+        _localEpisodeNumber = localEpisodeNumber;
+        _localTitle = localTitle;
         _seriesName = seriesName;
         _seasonNumber = seasonNumber;
         _episodeNumber = episodeNumber;
@@ -995,6 +1037,14 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Title => TitleForMux;
+
+    public string LocalSeriesName => _localSeriesName;
+
+    public string LocalSeasonNumber => _localSeasonNumber;
+
+    public string LocalEpisodeNumber => _localEpisodeNumber;
+
+    public string LocalTitle => _localTitle;
 
     public string SeriesName
     {
@@ -1297,6 +1347,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public static BatchEpisodeItemViewModel CreateFromDetection(
         string requestedMainVideoPath,
+        EpisodeMetadataGuess localGuess,
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
@@ -1306,6 +1357,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             detected.MainVideoPath,
+            localGuess.SeriesName,
+            localGuess.SeasonNumber,
+            localGuess.EpisodeNumber,
+            localGuess.EpisodeTitle,
             detected.SeriesName,
             detected.SeasonNumber,
             detected.EpisodeNumber,
@@ -1330,6 +1385,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             requestedMainVideoPath,
+            Path.GetFileNameWithoutExtension(requestedMainVideoPath),
+            "xx",
+            "xx",
+            Path.GetFileNameWithoutExtension(requestedMainVideoPath),
             Path.GetFileNameWithoutExtension(requestedMainVideoPath),
             "xx",
             "xx",
@@ -1373,6 +1432,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public void ApplyDetection(
         string requestedMainVideoPath,
+        EpisodeMetadataGuess localGuess,
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
@@ -1381,6 +1441,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         _requestedMainVideoPath = requestedMainVideoPath;
         _detectionSeedPath = requestedMainVideoPath;
         _requestedSourcePaths = [requestedMainVideoPath];
+        _localSeriesName = localGuess.SeriesName;
+        _localSeasonNumber = localGuess.SeasonNumber;
+        _localEpisodeNumber = localGuess.EpisodeNumber;
+        _localTitle = localGuess.EpisodeTitle;
         MainVideoPath = detected.MainVideoPath;
         SeriesName = detected.SeriesName;
         SeasonNumber = detected.SeasonNumber;
@@ -1497,6 +1561,16 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         SeasonNumber = selection.SeasonNumber;
         EpisodeNumber = selection.EpisodeNumber;
         TitleForMux = selection.EpisodeTitle;
+        UpdateSuggestedOutputPathIfAutomatic();
+        OnPropertyChanged(nameof(MetadataDisplayText));
+    }
+
+    public void ApplyLocalMetadataGuess()
+    {
+        SeriesName = _localSeriesName;
+        SeasonNumber = _localSeasonNumber;
+        EpisodeNumber = _localEpisodeNumber;
+        TitleForMux = _localTitle;
         UpdateSuggestedOutputPathIfAutomatic();
         OnPropertyChanged(nameof(MetadataDisplayText));
     }

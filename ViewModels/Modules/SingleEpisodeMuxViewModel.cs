@@ -31,6 +31,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private bool _outputPathWasManuallyChanged;
     private string _lastSuggestedTitle = string.Empty;
+    private EpisodeMetadataGuess? _detectedMetadataGuess;
     private string _metadataStatusText = string.Empty;
     private bool _requiresMetadataReview;
     private bool _isMetadataReviewApproved = true;
@@ -387,6 +388,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 selectedVideoPath,
                 HandleDetectionUpdate,
                 excludedSourcePaths);
+            _detectedMetadataGuess = new EpisodeMetadataGuess(
+                detected.SeriesName,
+                detected.SuggestedTitle,
+                detected.SeasonNumber,
+                detected.EpisodeNumber);
             SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
             detected = await ApplyAutomaticMetadataAsync(detected);
 
@@ -673,7 +679,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private async Task OpenTvdbLookupAsync()
     {
-        var guess = new EpisodeMetadataGuess(
+        var guess = _detectedMetadataGuess ?? new EpisodeMetadataGuess(
             string.IsNullOrWhiteSpace(SeriesName) ? "Unbekannte Serie" : SeriesName,
             string.IsNullOrWhiteSpace(Title) ? "Unbekannter Titel" : Title,
             SeasonNumber,
@@ -685,7 +691,22 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 ?? Application.Current?.MainWindow
         };
 
-        if (dialog.ShowDialog() != true || dialog.SelectedEpisodeSelection is null)
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (dialog.KeepLocalDetection)
+        {
+            ApplyLocalMetadataGuess();
+            MarkMetadataAsReviewed("Lokale Erkennung wurde bewusst beibehalten.");
+            SetStatus("Lokale Erkennung beibehalten", 100);
+            PreviewText = "Lokale Metadaten beibehalten. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausfuehren.";
+            RefreshCommands();
+            return;
+        }
+
+        if (dialog.SelectedEpisodeSelection is null)
         {
             return;
         }
@@ -788,6 +809,25 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         });
 
         _lastSuggestedTitle = selection.EpisodeTitle;
+        UpdateSuggestedOutputPathIfAutomatic();
+    }
+
+    private void ApplyLocalMetadataGuess()
+    {
+        if (_detectedMetadataGuess is null)
+        {
+            return;
+        }
+
+        ApplyMetadataFields(() =>
+        {
+            SeriesName = _detectedMetadataGuess.SeriesName;
+            SeasonNumber = _detectedMetadataGuess.SeasonNumber;
+            EpisodeNumber = _detectedMetadataGuess.EpisodeNumber;
+            Title = _detectedMetadataGuess.EpisodeTitle;
+        });
+
+        _lastSuggestedTitle = _detectedMetadataGuess.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
     }
 

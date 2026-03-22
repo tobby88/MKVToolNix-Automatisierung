@@ -34,6 +34,8 @@ public partial class TvdbLookupWindow : Window
 
     public TvdbEpisodeSelection? SelectedEpisodeSelection { get; private set; }
 
+    public bool KeepLocalDetection { get; private set; }
+
     private async void TvdbLookupWindow_Loaded(object sender, RoutedEventArgs e)
     {
         if (_loadedOnce)
@@ -95,6 +97,14 @@ public partial class TvdbLookupWindow : Window
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = false;
+    }
+
+    private void KeepLocalButton_Click(object sender, RoutedEventArgs e)
+    {
+        SaveSettingsCore();
+        SelectedEpisodeSelection = null;
+        KeepLocalDetection = true;
+        DialogResult = true;
     }
 
     private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
