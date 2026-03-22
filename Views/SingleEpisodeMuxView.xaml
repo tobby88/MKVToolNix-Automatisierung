@@ -201,13 +201,13 @@
                              IsReadOnly="True"
                              TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto"
-                             MinHeight="96"
-                             MaxHeight="160"
+                             MinHeight="72"
+                             MaxHeight="110"
                              Text="{Binding PlanSummaryText, Mode=OneWay}" />
                 </StackPanel>
             </Border>
 
-            <GroupBox Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <GroupBox Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe" MinHeight="220">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -222,6 +222,7 @@
                              AcceptsReturn="True"
                              AcceptsTab="True"
                              IsReadOnly="True"
+                             MinHeight="180"
                              TextWrapping="NoWrap"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"

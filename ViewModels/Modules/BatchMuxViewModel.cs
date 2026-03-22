@@ -149,7 +149,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         SourceDirectory = path;
         if (string.IsNullOrWhiteSpace(OutputDirectory))
         {
-            OutputDirectory = path;
+            OutputDirectory = Directory.Exists(SeriesArchiveService.ArchiveRootDirectory)
+                ? SeriesArchiveService.ArchiveRootDirectory
+                : path;
         }
 
         LogText = string.Empty;
@@ -202,7 +204,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     SetStatus($"Scanne Ordner... {index + 1}/{total} - {Path.GetFileName(file)} - TVDB-Abgleich", CalculatePercent(index, total));
                     var metadataResolution = await ResolveMetadataAsync(detected);
                     detected = ApplyMetadataSelection(detected, metadataResolution);
-                    var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
+                    var outputPath = BuildOutputPath(detected);
                     var episodeKey = Path.GetFileName(outputPath);
 
                     if (itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItem))
@@ -609,7 +611,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
             var metadataResolution = await ResolveMetadataAsync(detected);
             detected = ApplyMetadataSelection(detected, metadataResolution);
-            var outputPath = Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
+            var outputPath = BuildOutputPath(detected);
             var outputAlreadyExists = File.Exists(outputPath);
 
             item.ApplyDetection(
@@ -653,6 +655,27 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             item.TitleForMux);
 
         return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+    }
+
+    private string BuildOutputPath(AutoDetectedEpisodeFiles detected)
+    {
+        if (string.IsNullOrWhiteSpace(OutputDirectory))
+        {
+            return detected.SuggestedOutputFilePath;
+        }
+
+        if (detected.SuggestedOutputFilePath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(OutputDirectory, SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                return detected.SuggestedOutputFilePath;
+            }
+
+            var relativePath = Path.GetRelativePath(SeriesArchiveService.ArchiveRootDirectory, detected.SuggestedOutputFilePath);
+            return Path.Combine(OutputDirectory, relativePath);
+        }
+
+        return Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
     }
 
     private async Task RefreshSelectedItemPlanSummaryAsync()
