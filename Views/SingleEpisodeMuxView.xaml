@@ -82,7 +82,7 @@
                             Margin="12,0,0,0"
                             Padding="10,6"
                             Command="{Binding TestSelectedSourcesCommand}"
-                            Content="Quelle pruefen / freigeben" />
+                            Content="{Binding ManualCheckButtonText, Mode=OneWay}" />
                 </DockPanel>
             </Border>
 

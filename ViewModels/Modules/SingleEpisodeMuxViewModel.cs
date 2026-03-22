@@ -165,6 +165,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
     }
 
+    public string ManualCheckButtonText => IsManualCheckApproved
+        ? "Quelle erneut pruefen"
+        : "Quelle pruefen / freigeben";
+
     private string ResolveMainVideoInitialDirectory()
     {
         if (!string.IsNullOrWhiteSpace(_mainVideoPath))
@@ -315,9 +319,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _approvedReviewPath = null;
         }
 
-        ManualCheckText = detected.RequiresManualCheck
-            ? "Die aktuell ausgewaehlte Quelle ist pruefpflichtig. Bitte vor dem Muxen kurz pruefen und freigeben."
-            : string.Empty;
+        UpdateManualCheckText();
+        OnPropertyChanged(nameof(ManualCheckButtonText));
     }
 
     private async Task RescanFromMainVideoAsync()
@@ -513,6 +516,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             if (result == MessageBoxResult.Yes)
             {
                 _approvedReviewPath = reviewTargetPath;
+                UpdateManualCheckText();
+                OnPropertyChanged(nameof(ManualCheckButtonText));
                 SetStatus("Quelle freigegeben", 100);
                 return;
             }
@@ -548,6 +553,19 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 return;
             }
         }
+    }
+
+    private void UpdateManualCheckText()
+    {
+        if (!RequiresManualCheck)
+        {
+            ManualCheckText = string.Empty;
+            return;
+        }
+
+        ManualCheckText = IsManualCheckApproved
+            ? "Die aktuell ausgewaehlte Quelle wurde bereits geprueft und freigegeben."
+            : "Die aktuell ausgewaehlte Quelle ist pruefpflichtig. Bitte vor dem Muxen kurz pruefen und freigeben.";
     }
 
     private async Task CreatePreviewAsync()

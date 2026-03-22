@@ -37,6 +37,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
         SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => !item.IsSelected));
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
+        ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources);
         OpenSelectedSourcesCommand = new RelayCommand(OpenSelectedSources, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0);
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedAudioDescriptionCommand = new RelayCommand(EditSelectedAudioDescription, () => !_isBusy && SelectedEpisodeItem is not null);
@@ -53,6 +54,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ScanDirectoryCommand { get; }
     public RelayCommand SelectAllEpisodesCommand { get; }
     public RelayCommand DeselectAllEpisodesCommand { get; }
+    public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public RelayCommand OpenSelectedSourcesCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }
     public RelayCommand EditSelectedAudioDescriptionCommand { get; }
@@ -367,6 +369,32 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         _ = ReviewEpisodeAsync(item, isBatchPreparation: false);
     }
 
+    private async Task ReviewPendingSourcesAsync()
+    {
+        var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
+        if (selectedItems.Count == 0)
+        {
+            _dialogService.ShowWarning("Hinweis", "Bitte zuerst mindestens eine Episode fuer den Batch auswaehlen.");
+            return;
+        }
+
+        var readyItems = selectedItems
+            .Where(item => item.Status is not "Fehler" and not "Existiert bereits")
+            .ToList();
+
+        if (readyItems.Count == 0)
+        {
+            _dialogService.ShowWarning("Hinweis", "Es gibt keine gueltigen Episoden fuer den Batch.");
+            return;
+        }
+
+        var approved = await EnsurePendingChecksApprovedAsync(readyItems);
+        if (approved)
+        {
+            _dialogService.ShowInfo("Hinweis", "Alle offenen Pflichtpruefungen wurden abgeschlossen.");
+        }
+    }
+
     private async Task RunBatchAsync()
     {
         var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
@@ -386,23 +414,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        var manualCheckItems = readyItems.Where(item => item.RequiresManualCheck).Select(item => item.Title).Distinct().ToList();
-        if (manualCheckItems.Count > 0)
+        var approved = await EnsurePendingChecksApprovedAsync(readyItems);
+        if (!approved)
         {
-            SetStatus("Pflichtpruefungen werden vorbereitet...", 0);
-            foreach (var item in readyItems.Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved))
-            {
-                SelectedEpisodeItem = item;
-                var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
-                if (!approved)
-                {
-                    _dialogService.ShowWarning(
-                        "Hinweis",
-                        "Der Batch wurde abgebrochen, weil nicht alle pruefpflichtigen Quellen freigegeben wurden.");
-                    SetStatus("Batch abgebrochen", 0);
-                    return;
-                }
-            }
+            _dialogService.ShowWarning(
+                "Hinweis",
+                "Der Batch wurde abgebrochen, weil nicht alle pruefpflichtigen Quellen freigegeben wurden.");
+            SetStatus("Batch abgebrochen", 0);
+            return;
         }
 
         if (!_dialogService.ConfirmBatchStart(readyItems.Count))
@@ -583,6 +602,38 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         return !item.RequiresManualCheck || item.IsManualCheckApproved;
     }
 
+    private bool CanReviewPendingSources()
+    {
+        return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.RequiresManualCheck && !item.IsManualCheckApproved);
+    }
+
+    private async Task<bool> EnsurePendingChecksApprovedAsync(IReadOnlyList<BatchEpisodeItemViewModel> readyItems)
+    {
+        var pendingItems = readyItems
+            .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
+            .ToList();
+
+        if (pendingItems.Count == 0)
+        {
+            SetStatus("Keine offenen Pflichtpruefungen", ProgressValue);
+            return true;
+        }
+
+        SetStatus("Pflichtpruefungen werden vorbereitet...", 0);
+
+        foreach (var item in pendingItems)
+        {
+            SelectedEpisodeItem = item;
+            var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
+            if (!approved)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static string ResolveSelectedItemDirectory(BatchEpisodeItemViewModel item)
     {
         var paths = item.SourceFilePaths
@@ -721,6 +772,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         ScanDirectoryCommand.RaiseCanExecuteChanged();
         SelectAllEpisodesCommand.RaiseCanExecuteChanged();
         DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
+        ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
         RedetectSelectedEpisodeCommand.RaiseCanExecuteChanged();
         EditSelectedAudioDescriptionCommand.RaiseCanExecuteChanged();

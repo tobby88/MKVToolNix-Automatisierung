@@ -44,10 +44,10 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="180" />
             </Grid.RowDefinitions>
 
-            <GroupBox Grid.Row="0" Header="Gefundene Episoden">
+            <GroupBox Grid.Row="0" Header="Gefundene Episoden" MinHeight="280">
                 <DataGrid ItemsSource="{Binding EpisodeItems}"
                           SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}"
                           AutoGenerateColumns="False"
@@ -55,7 +55,7 @@
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"
-                          MinHeight="220"
+                          MinHeight="260"
                           Margin="8">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
@@ -73,6 +73,7 @@
             <Expander Grid.Row="3"
                       Margin="0,12,0,0"
                       Header="Ausgewaehlten Eintrag pruefen und anpassen"
+                      MaxHeight="220"
                       IsExpanded="False">
                 <Border Padding="8"
                         BorderBrush="#D0D0D0"
@@ -80,7 +81,7 @@
                         CornerRadius="4">
                     <ScrollViewer VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
-                                  MaxHeight="340">
+                                  MaxHeight="200">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -148,7 +149,7 @@
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle waehlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abwaehlen" />
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pruefen" />
+            <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" Content="Pflichtchecks starten" />
             <Button Width="170" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
         </StackPanel>
     </Grid>

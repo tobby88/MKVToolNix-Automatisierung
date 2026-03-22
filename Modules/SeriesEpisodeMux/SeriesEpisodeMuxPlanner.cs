@@ -60,16 +60,22 @@ public sealed class SeriesEpisodeMuxPlanner
         var selectedSeed = BuildCandidateSeed(mainVideoPath);
         var selectedIdentity = selectedSeed.Identity;
 
-        var normalSeeds = allFiles
+        var allNormalSeeds = allFiles
             .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
             .Where(path => !LooksLikeAudioDescription(path))
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .ToList();
+
+        var normalSeeds = allNormalSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
-        ReportProgress(onProgress, $"Pruefe {normalSeeds.Count} passende Videoquelle(n)...", 12);
-        var normalCandidates = BuildNormalVideoCandidates(normalSeeds, mkvMergePath, onProgress, 12, 72);
+        ReportProgress(onProgress, $"Pruefe {allNormalSeeds.Count} passende Videoquelle(n)...", 12);
+        var allNormalCandidates = BuildNormalVideoCandidates(allNormalSeeds, mkvMergePath, onProgress, 12, 72);
+        var normalCandidates = allNormalCandidates
+            .Where(candidate => excludedSourcePaths is null || !excludedSourcePaths.Contains(candidate.FilePath))
+            .ToList();
 
         if (normalCandidates.Count == 0)
         {
@@ -79,6 +85,7 @@ public sealed class SeriesEpisodeMuxPlanner
         var episodeIdentity = SelectPreferredEpisodeIdentity(normalCandidates, selectedIdentity);
         var primaryVideoCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, primaryVideoCandidate);
+        var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
 
         var audioDescriptionSeeds = allFiles
             .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
@@ -101,6 +108,7 @@ public sealed class SeriesEpisodeMuxPlanner
             episodeIdentity,
             primaryVideoCandidate,
             selectedVideoCandidates,
+            subtitlePaths,
             selectedAudioDescription,
             manualCheckFilePaths,
             notes);
@@ -124,16 +132,22 @@ public sealed class SeriesEpisodeMuxPlanner
         var selectedSeed = BuildCandidateSeed(audioDescriptionPath);
         var selectedIdentity = selectedSeed.Identity;
 
-        var normalSeeds = allFiles
+        var allNormalSeeds = allFiles
             .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
             .Where(path => !LooksLikeAudioDescription(path))
             .Select(BuildCandidateSeed)
             .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+            .ToList();
+
+        var normalSeeds = allNormalSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
-        ReportProgress(onProgress, $"Pruefe {normalSeeds.Count} passende Videoquelle(n)...", 12);
-        var normalCandidates = BuildNormalVideoCandidates(normalSeeds, mkvMergePath, onProgress, 12, 72);
+        ReportProgress(onProgress, $"Pruefe {allNormalSeeds.Count} passende Videoquelle(n)...", 12);
+        var allNormalCandidates = BuildNormalVideoCandidates(allNormalSeeds, mkvMergePath, onProgress, 12, 72);
+        var normalCandidates = allNormalCandidates
+            .Where(candidate => excludedSourcePaths is null || !excludedSourcePaths.Contains(candidate.FilePath))
+            .ToList();
 
         if (normalCandidates.Count == 0)
         {
@@ -143,6 +157,7 @@ public sealed class SeriesEpisodeMuxPlanner
         var episodeIdentity = SelectPreferredEpisodeIdentity(normalCandidates, selectedIdentity);
         var primaryVideoCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, primaryVideoCandidate);
+        var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
 
         var audioDescriptionSeeds = allFiles
             .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
@@ -169,6 +184,7 @@ public sealed class SeriesEpisodeMuxPlanner
             episodeIdentity,
             primaryVideoCandidate,
             selectedVideoCandidates,
+            subtitlePaths,
             selectedAudioDescription,
             manualCheckFilePaths,
             notes);
@@ -181,6 +197,7 @@ public sealed class SeriesEpisodeMuxPlanner
         EpisodeIdentity episodeIdentity,
         NormalVideoCandidate primaryVideoCandidate,
         IReadOnlyList<NormalVideoCandidate> selectedVideoCandidates,
+        IReadOnlyList<string> subtitlePaths,
         AudioDescriptionCandidate? selectedAudioDescription,
         IReadOnlyList<string> manualCheckFilePaths,
         IReadOnlyList<string> notes)
@@ -189,7 +206,7 @@ public sealed class SeriesEpisodeMuxPlanner
             MainVideoPath: primaryVideoCandidate.FilePath,
             AdditionalVideoPaths: selectedVideoCandidates.Skip(1).Select(candidate => candidate.FilePath).ToList(),
             AudioDescriptionPath: selectedAudioDescription?.FilePath,
-            SubtitlePaths: primaryVideoCandidate.SubtitlePaths,
+            SubtitlePaths: subtitlePaths,
             AttachmentPaths: selectedVideoCandidates
                 .Select(candidate => candidate.AttachmentPath)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -547,6 +564,17 @@ public sealed class SeriesEpisodeMuxPlanner
         return files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    private static List<string> CollectSubtitlePaths(
+        IReadOnlyList<NormalVideoCandidate> allCandidates,
+        NormalVideoCandidate primaryVideoCandidate)
+    {
+        return FilterByDuration(allCandidates, primaryVideoCandidate.DurationSeconds)
+            .SelectMany(candidate => candidate.SubtitlePaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static string BuildVideoTrackName(MediaTrackMetadata metadata)
     {
         return $"Deutsch - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
@@ -706,6 +734,7 @@ public sealed class SeriesEpisodeMuxPlanner
         }
 
         var normalized = NormalizeSeparators(value);
+        normalized = Regex.Replace(normalized, @"\s*-\s*Neue Folgen?\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(S\d{1,2}\s*[_/]\s*E\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,2}\s*,\s*Folge\s*\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
