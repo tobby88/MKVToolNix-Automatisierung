@@ -28,6 +28,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
@@ -173,7 +174,40 @@
                 </DockPanel>
             </Border>
 
-            <GroupBox Grid.Row="12" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
+            <Border Grid.Row="12"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0,0,0,12"
+                    Padding="10"
+                    Background="#F6F4EA"
+                    BorderBrush="#B8AA72"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Margin="0,0,0,6"
+                               Text="Wird voraussichtlich verwendet" />
+                    <TextBox AcceptsReturn="True"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             MinHeight="96"
+                             MaxHeight="160"
+                             Text="{Binding PlanSummaryText, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
+
+            <GroupBox Grid.Row="13" Grid.Column="0" Grid.ColumnSpan="3" Header="Vorschau und mkvmerge-Ausgabe">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

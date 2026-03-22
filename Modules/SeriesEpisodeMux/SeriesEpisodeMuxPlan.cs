@@ -276,6 +276,52 @@ public sealed class SeriesEpisodeMuxPlan
         return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
     }
 
+    public string BuildCompactSummaryText()
+    {
+        if (SkipMux)
+        {
+            return SkipReason ?? "Die Archivdatei ist bereits vollstaendig.";
+        }
+
+        var lines = new List<string>();
+
+        if (WorkingCopy is not null)
+        {
+            if (string.Equals(VideoSources[0].FilePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                lines.Add("Archiv-MKV vorhanden: Sie bleibt Basis; vor dem Mux wird eine Arbeitskopie erstellt.");
+            }
+            else
+            {
+                lines.Add("Archiv-MKV vorhanden: Neue Hauptquelle wird verwendet; fehlende Spuren werden aus dem Archiv ergaenzt.");
+            }
+        }
+        else if (File.Exists(OutputFilePath))
+        {
+            lines.Add("Zieldatei vorhanden: Sie wird beim Mux aktualisiert oder ersetzt.");
+        }
+        else
+        {
+            lines.Add("Zieldatei noch nicht vorhanden: Die Episode wird direkt neu erstellt.");
+        }
+
+        lines.Add($"Hauptvideo: {Path.GetFileName(VideoSources[0].FilePath)}");
+
+        if (VideoSources.Count > 1)
+        {
+            lines.Add("Weitere Videos: " + string.Join(", ", VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath))));
+        }
+
+        lines.Add($"Audio: {Path.GetFileName(PrimaryAudioFilePath)}");
+        lines.Add($"AD: {(string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
+        lines.Add("Untertitel: " + (SubtitleFiles.Count == 0
+            ? "keine"
+            : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel))));
+        lines.Add("Anhaenge: " + BuildAttachmentPreview());
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
     public IReadOnlyList<string> GetReferencedInputFiles()
     {
         if (SkipMux)

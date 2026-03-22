@@ -38,6 +38,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private bool _isMetadataReviewApproved = true;
     private bool _isApplyingMetadataState;
     private string _outputTargetStatusText = string.Empty;
+    private string _planSummaryText = string.Empty;
     private bool _requiresManualCheck;
     private string _manualCheckText = string.Empty;
     private List<string> _manualCheckFilePaths = [];
@@ -45,6 +46,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private string? _approvedReviewPath;
     private SeriesEpisodeMuxPlan? _currentPlan;
+    private int _planSummaryVersion;
 
     public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
     {
@@ -135,6 +137,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
+            _ = RefreshPlanSummaryAsync();
         }
     }
 
@@ -154,6 +157,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
+            _ = RefreshPlanSummaryAsync();
         }
     }
 
@@ -173,6 +177,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
+            _ = RefreshPlanSummaryAsync();
         }
     }
 
@@ -192,6 +197,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
+            _ = RefreshPlanSummaryAsync();
         }
     }
 
@@ -320,6 +326,24 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     }
 
     public bool HasOutputTargetStatus => !string.IsNullOrWhiteSpace(OutputTargetStatusText);
+
+    public string PlanSummaryText
+    {
+        get => _planSummaryText;
+        private set
+        {
+            if (_planSummaryText == value)
+            {
+                return;
+            }
+
+            _planSummaryText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPlanSummary));
+        }
+    }
+
+    public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
 
     private string ResolveMainVideoInitialDirectory()
     {
@@ -450,6 +474,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             PreviewText = BuildDetectionPreview(detected);
             SetStatus("Dateien erkannt", 100);
             RefreshCommands();
+            _ = RefreshPlanSummaryAsync();
             return true;
         }
         catch (Exception ex)
@@ -535,6 +560,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         AudioDescriptionPath = path;
         _currentPlan = null;
         _approvedReviewPath = null;
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void ClearAudioDescription()
@@ -542,6 +568,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         AudioDescriptionPath = string.Empty;
         _currentPlan = null;
         _approvedReviewPath = null;
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void SetSubtitles(IEnumerable<string> paths)
@@ -549,6 +576,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _subtitlePaths = paths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _currentPlan = null;
         OnPropertyChanged(nameof(SubtitleDisplayText));
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void ClearSubtitles()
@@ -556,6 +584,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _subtitlePaths = [];
         _currentPlan = null;
         OnPropertyChanged(nameof(SubtitleDisplayText));
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void SetAttachments(IEnumerable<string> paths)
@@ -563,6 +592,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _attachmentPaths = paths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _currentPlan = null;
         OnPropertyChanged(nameof(AttachmentDisplayText));
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void ClearAttachments()
@@ -570,6 +600,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _attachmentPaths = [];
         _currentPlan = null;
         OnPropertyChanged(nameof(AttachmentDisplayText));
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void SetOutputPath(string path)
@@ -577,6 +608,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         OutputPath = path;
         _currentPlan = null;
         RefreshOutputTargetStatus();
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void SetSuggestedOutputPath(string path)
@@ -859,6 +891,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _lastSuggestedTitle = selection.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
         RefreshOutputTargetStatus();
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void ApplyLocalMetadataGuess()
@@ -879,6 +912,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         _lastSuggestedTitle = _detectedMetadataGuess.EpisodeTitle;
         UpdateSuggestedOutputPathIfAutomatic();
         RefreshOutputTargetStatus();
+        _ = RefreshPlanSummaryAsync();
     }
 
     private async Task<AutoDetectedEpisodeFiles> ApplyAutomaticMetadataAsync(AutoDetectedEpisodeFiles detected)
@@ -904,6 +938,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         RequiresMetadataReview = resolution.RequiresReview;
         IsMetadataReviewApproved = !resolution.RequiresReview;
         RefreshOutputTargetStatus();
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void MarkMetadataAsReviewed(string statusText)
@@ -912,6 +947,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         RequiresMetadataReview = false;
         IsMetadataReviewApproved = true;
         RefreshOutputTargetStatus();
+        _ = RefreshPlanSummaryAsync();
     }
 
     private void HandleManualMetadataOverride()
@@ -948,6 +984,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await BuildPlanAsync();
             RefreshOutputTargetStatusFromPlan(_currentPlan);
+            PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
         }
@@ -969,6 +1006,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             SetBusy(true);
             _currentPlan ??= await BuildPlanAsync();
             RefreshOutputTargetStatusFromPlan(_currentPlan);
+            PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
                 + Environment.NewLine
                 + Environment.NewLine
@@ -1179,6 +1217,41 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task RefreshPlanSummaryAsync()
+    {
+        var version = Interlocked.Increment(ref _planSummaryVersion);
+
+        if (string.IsNullOrWhiteSpace(_mainVideoPath)
+            || string.IsNullOrWhiteSpace(_outputPath)
+            || string.IsNullOrWhiteSpace(_title))
+        {
+            PlanSummaryText = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var plan = await BuildPlanAsync();
+            if (version != _planSummaryVersion)
+            {
+                return;
+            }
+
+            _currentPlan = plan;
+            RefreshOutputTargetStatusFromPlan(plan);
+            PlanSummaryText = plan.BuildCompactSummaryText();
+        }
+        catch
+        {
+            if (version != _planSummaryVersion)
+            {
+                return;
+            }
+
+            PlanSummaryText = string.Empty;
+        }
     }
 
     private void SetBusy(bool isBusy)

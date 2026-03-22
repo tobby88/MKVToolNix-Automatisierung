@@ -35,7 +35,7 @@
             <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputDirectory, Mode=OneWay}" />
             <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputDirectoryCommand}" Content="Ordner aendern" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Nach der Quellordner-Auswahl startet der Scan direkt. Vorhandene Ausgabedateien werden dabei zunaechst abgewaehlt." />
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Text="Nach der Quellordner-Auswahl startet der Scan direkt. Vorhandene Archivziele werden markiert; der genaue Vergleich wird im Detailbereich fuer den ausgewaehlten Eintrag angezeigt." />
         </Grid>
 
         <Grid Grid.Row="2">
@@ -62,6 +62,7 @@
                         <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
                         <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="*" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Archiv" Binding="{Binding ArchiveStateText}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Pruefung" Binding="{Binding ReviewHint}" Width="*" IsReadOnly="True" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
                     </DataGrid.Columns>
@@ -85,6 +86,7 @@
                                   MaxHeight="200">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -134,8 +136,11 @@
                     </StackPanel>
                     <Button Grid.Row="6" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe aendern" />
 
-                    <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
-                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
+                    <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Geplante Verwendung" />
+                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" Height="96" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.PlanSummaryText, Mode=OneWay}" />
+
+                    <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                    <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
                 </Grid>
                     </ScrollViewer>
                 </Border>
