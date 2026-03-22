@@ -387,7 +387,9 @@ public sealed class SeriesEpisodeMuxPlanner
 
         var attachmentFilePaths = archiveDecision.AttachmentFilePaths.Count > 0
             ? archiveDecision.AttachmentFilePaths
-            : request.AttachmentPaths;
+            : archiveDecision.FallbackToRequestAttachments
+                ? request.AttachmentPaths
+                : [];
 
         var notes = detected.Notes
             .Concat(archiveDecision.Notes)
@@ -412,6 +414,7 @@ public sealed class SeriesEpisodeMuxPlanner
             audioDescriptionMetadata?.TrackId,
             subtitleFilesForPlan,
             attachmentFilePaths,
+            archiveDecision.PreservedAttachmentNames,
             archiveDecision.WorkingCopy,
             BuildTrackMetadata(primaryAudioCodecLabel, audioDescriptionMetadata),
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());

@@ -76,11 +76,15 @@ public sealed record EpisodeTrackMetadata(
     string AudioTrackName,
     string AudioDescriptionTrackName);
 
-public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null)
+public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null, string? SourceLabel = null)
 {
     public bool IsEmbedded => EmbeddedTrackId is not null;
 
     public string TrackName => $"Deutsch (hoergeschaedigte) - {Kind.DisplayName}";
+
+    public string PreviewLabel => IsEmbedded
+        ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, Archiv)"
+        : Path.GetFileName(FilePath);
 }
 
 public sealed record SubtitleKind(string DisplayName, int SortRank)

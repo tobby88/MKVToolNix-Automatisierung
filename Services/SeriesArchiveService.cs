@@ -114,7 +114,11 @@ public sealed class SeriesArchiveService
             .Where(entry => externalSubtitlePlans.All(plan => !string.Equals(plan.Kind.DisplayName, entry.Kind!.DisplayName, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(entry => entry.Kind!.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
-            .Select(entry => new SubtitleFile(outputPath, entry.Kind!, entry.Track.TrackId))
+            .Select(entry => new SubtitleFile(
+                outputPath,
+                entry.Kind!,
+                entry.Track.TrackId,
+                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!)))
             .ToList();
 
         var finalSubtitlePlans = externalSubtitlePlans
@@ -157,6 +161,8 @@ public sealed class SeriesArchiveService
                 AudioDescriptionTrackId: null,
                 SubtitleFiles: finalSubtitlePlans,
                 AttachmentFilePaths: BuildAttachmentPathsForUsedVideos(newAdditionalVideoPaths),
+                FallbackToRequestAttachments: false,
+                PreservedAttachmentNames: existingContainer.Attachments.Select(attachment => attachment.FileName).ToList(),
                 Notes:
                 [
                     "Archiv-MKV bereits vorhanden. Vor dem Muxen wird eine lokale Arbeitskopie verwendet.",
@@ -193,6 +199,8 @@ public sealed class SeriesArchiveService
                 : existingAudioDescription?.TrackId,
             SubtitleFiles: fallbackSubtitlePlans,
             AttachmentFilePaths: request.AttachmentPaths,
+            FallbackToRequestAttachments: true,
+            PreservedAttachmentNames: [],
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",
@@ -229,6 +237,16 @@ public sealed class SeriesArchiveService
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static string BuildEmbeddedSubtitleLabel(ContainerTrackMetadata track, SubtitleKind kind)
+    {
+        if (!string.IsNullOrWhiteSpace(track.TrackName))
+        {
+            return track.TrackName;
+        }
+
+        return $"Archiv-Untertitel {kind.DisplayName}";
     }
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)
@@ -279,6 +297,8 @@ public sealed record ArchiveIntegrationDecision(
     int? AudioDescriptionTrackId,
     IReadOnlyList<SubtitleFile> SubtitleFiles,
     IReadOnlyList<string> AttachmentFilePaths,
+    bool FallbackToRequestAttachments,
+    IReadOnlyList<string> PreservedAttachmentNames,
     IReadOnlyList<string> Notes)
 {
     public static ArchiveIntegrationDecision CreateForFreshTarget(string outputPath)
@@ -297,6 +317,8 @@ public sealed record ArchiveIntegrationDecision(
             AudioDescriptionTrackId: null,
             SubtitleFiles: [],
             AttachmentFilePaths: [],
+            FallbackToRequestAttachments: true,
+            PreservedAttachmentNames: [],
             Notes: []);
     }
 
@@ -316,6 +338,8 @@ public sealed record ArchiveIntegrationDecision(
             AudioDescriptionTrackId: null,
             SubtitleFiles: [],
             AttachmentFilePaths: [],
+            FallbackToRequestAttachments: false,
+            PreservedAttachmentNames: [],
             Notes: notes);
     }
 }

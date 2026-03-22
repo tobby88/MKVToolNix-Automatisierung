@@ -18,6 +18,7 @@ public sealed class SeriesEpisodeMuxPlan
         int? audioDescriptionTrackId,
         IReadOnlyList<SubtitleFile> subtitleFiles,
         IReadOnlyList<string> attachmentFilePaths,
+        IReadOnlyList<string> preservedAttachmentNames,
         FileCopyPlan? workingCopy,
         EpisodeTrackMetadata metadata,
         IReadOnlyList<string> notes)
@@ -40,6 +41,7 @@ public sealed class SeriesEpisodeMuxPlan
         AudioDescriptionTrackId = audioDescriptionTrackId;
         SubtitleFiles = subtitleFiles;
         AttachmentFilePaths = attachmentFilePaths;
+        PreservedAttachmentNames = preservedAttachmentNames;
         WorkingCopy = workingCopy;
         Metadata = metadata;
         Notes = notes;
@@ -64,6 +66,7 @@ public sealed class SeriesEpisodeMuxPlan
         IncludePrimarySourceAttachments = false;
         SubtitleFiles = [];
         AttachmentFilePaths = [];
+        PreservedAttachmentNames = [];
         Metadata = new EpisodeTrackMetadata("Deutsch - Audio", "Deutsch (sehbehinderte) - Audio");
         Notes = notes;
     }
@@ -83,6 +86,7 @@ public sealed class SeriesEpisodeMuxPlan
     public int? AudioDescriptionTrackId { get; }
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
     public IReadOnlyList<string> AttachmentFilePaths { get; }
+    public IReadOnlyList<string> PreservedAttachmentNames { get; }
     public FileCopyPlan? WorkingCopy { get; }
     public EpisodeTrackMetadata Metadata { get; }
     public IReadOnlyList<string> Notes { get; }
@@ -297,8 +301,8 @@ public sealed class SeriesEpisodeMuxPlan
 
             builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
             builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
-            builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => Path.GetFileName(file.FilePath) + (file.IsEmbedded ? " (Archiv)" : string.Empty))))}");
-            builder.AppendLine($"Anhaenge: {(AttachmentFilePaths.Count == 0 ? "keine" : string.Join(", ", AttachmentFilePaths.Select(Path.GetFileName)))}");
+            builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel)))}");
+            builder.AppendLine($"Anhaenge: {BuildAttachmentPreview()}");
 
             if (WorkingCopy is not null)
             {
@@ -326,5 +330,22 @@ public sealed class SeriesEpisodeMuxPlan
     private static string EscapeArgument(string argument)
     {
         return argument.Contains(' ') ? $"\"{argument}\"" : argument;
+    }
+
+    private string BuildAttachmentPreview()
+    {
+        var parts = new List<string>();
+
+        if (IncludePrimarySourceAttachments && PreservedAttachmentNames.Count > 0)
+        {
+            parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (Archiv)"));
+        }
+
+        parts.AddRange(AttachmentFilePaths
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Cast<string>());
+
+        return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
     }
 }
