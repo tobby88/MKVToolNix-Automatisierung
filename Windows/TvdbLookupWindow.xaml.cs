@@ -26,6 +26,8 @@ public partial class TvdbLookupWindow : Window
         PinTextBox.Text = settings.TvdbPin;
         SeriesSearchTextBox.Text = guess.SeriesName;
         EpisodeSearchTextBox.Text = guess.EpisodeTitle;
+        GuessSummaryTextBlock.Text = BuildGuessSummaryText();
+        ComparisonSummaryTextBlock.Text = "Noch kein TVDB-Treffer ausgewaehlt.";
 
         Loaded += TvdbLookupWindow_Loaded;
     }
@@ -105,6 +107,11 @@ public partial class TvdbLookupWindow : Window
         await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
     }
 
+    private void EpisodeResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateComparisonSummary();
+    }
+
     private void EpisodeSearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         ApplyEpisodeFilter(autoSelectBest: false);
@@ -170,6 +177,7 @@ public partial class TvdbLookupWindow : Window
             ApplyEpisodeFilter(autoSelectBest);
 
             StatusTextBlock.Text = $"{_episodes.Count} Episode(n) geladen.";
+            UpdateComparisonSummary();
         }
         catch (Exception ex)
         {
@@ -212,6 +220,7 @@ public partial class TvdbLookupWindow : Window
         if (match is null)
         {
             StatusTextBlock.Text = "Keine Episode automatisch sicher vorgewaehlt.";
+            UpdateComparisonSummary();
             return;
         }
 
@@ -221,6 +230,8 @@ public partial class TvdbLookupWindow : Window
             EpisodeResultsListBox.SelectedItem = selectedItem;
             StatusTextBlock.Text = $"TVDB-Vorschlag: S{match.SeasonNumber}E{match.EpisodeNumber} - {match.EpisodeTitle}";
         }
+
+        UpdateComparisonSummary();
     }
 
     private void SaveSettingsCore()
@@ -238,6 +249,64 @@ public partial class TvdbLookupWindow : Window
         _isBusy = isBusy;
         IsEnabled = !isBusy;
         StatusTextBlock.Text = statusText;
+    }
+
+    private string BuildGuessSummaryText()
+    {
+        return $"Lokal erkannt: {_guess.SeriesName} - S{NormalizeNumber(_guess.SeasonNumber)}E{NormalizeNumber(_guess.EpisodeNumber)} - {_guess.EpisodeTitle}";
+    }
+
+    private void UpdateComparisonSummary()
+    {
+        if (SeriesResultsListBox.SelectedIndex < 0 || SeriesResultsListBox.SelectedIndex >= _seriesResults.Count)
+        {
+            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Serie ausgewaehlt.";
+            return;
+        }
+
+        if (EpisodeResultsListBox.SelectedItem is not SelectableEpisodeItem selectedEpisode)
+        {
+            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Episode ausgewaehlt.";
+            return;
+        }
+
+        var selectedSeries = _seriesResults[SeriesResultsListBox.SelectedIndex];
+        var selectedSeason = FormatNumber(selectedEpisode.Episode.SeasonNumber);
+        var selectedEpisodeNumber = FormatNumber(selectedEpisode.Episode.EpisodeNumber);
+        var differences = new List<string>();
+
+        if (!string.Equals(_guess.SeriesName.Trim(), selectedSeries.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add($"Serie: lokal '{_guess.SeriesName}' -> TVDB '{selectedSeries.Name}'");
+        }
+
+        if (!string.Equals(NormalizeNumber(_guess.SeasonNumber), selectedSeason, StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add($"Staffel: lokal '{NormalizeNumber(_guess.SeasonNumber)}' -> TVDB '{selectedSeason}'");
+        }
+
+        if (!string.Equals(NormalizeNumber(_guess.EpisodeNumber), selectedEpisodeNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add($"Folge: lokal '{NormalizeNumber(_guess.EpisodeNumber)}' -> TVDB '{selectedEpisodeNumber}'");
+        }
+
+        if (!string.Equals(_guess.EpisodeTitle.Trim(), selectedEpisode.Episode.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add($"Titel: lokal '{_guess.EpisodeTitle}' -> TVDB '{selectedEpisode.Episode.Name}'");
+        }
+
+        if (differences.Count == 0)
+        {
+            ComparisonSummaryTextBlock.Text = "TVDB stimmt mit der lokalen Erkennung ueberein.";
+            return;
+        }
+
+        ComparisonSummaryTextBlock.Text = "Abweichungen: " + string.Join(" | ", differences);
+    }
+
+    private static string NormalizeNumber(string value)
+    {
+        return int.TryParse(value, out var number) && number >= 0 ? number.ToString("00") : "xx";
     }
 
     private static string FormatNumber(int? value)

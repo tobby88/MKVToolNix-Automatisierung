@@ -138,10 +138,8 @@ public sealed class EpisodeMetadataLookupService
                     QuerySucceeded: true);
             }
 
-            var requiresReview = bestMatch.UsedStoredFallback || bestMatch.CombinedScore < 90 || bestMatch.ScoreGap < 8;
-            var statusText = requiresReview
-                ? $"TVDB-Vorschlag pruefen: S{bestMatch.Selection.SeasonNumber}E{bestMatch.Selection.EpisodeNumber} - {bestMatch.Selection.EpisodeTitle}"
-                : $"TVDB automatisch erkannt: S{bestMatch.Selection.SeasonNumber}E{bestMatch.Selection.EpisodeNumber} - {bestMatch.Selection.EpisodeTitle}";
+            var requiresReview = ShouldRequireReview(bestMatch);
+            var statusText = BuildStatusText(bestMatch, requiresReview);
 
             if (!requiresReview)
             {
@@ -238,7 +236,10 @@ public sealed class EpisodeMetadataLookupService
                     match.Selection,
                     match.CombinedScore,
                     0,
-                    candidate.IsStoredFallback);
+                    candidate.IsStoredFallback)
+                {
+                    SelectionMatch = match
+                };
             }
             else
             {
@@ -345,7 +346,67 @@ public sealed class EpisodeMetadataLookupService
                 FormatNumber(bestEpisode.Episode.SeasonNumber),
                 FormatNumber(bestEpisode.Episode.EpisodeNumber)),
             bestEpisode.EpisodeScore,
-            combinedScore);
+            combinedScore,
+            bestEpisode.TitleSimilarity,
+            SeasonMatched: int.TryParse(guess.SeasonNumber, out var seasonNumber) && bestEpisode.Episode.SeasonNumber == seasonNumber,
+            EpisodeMatched: int.TryParse(guess.EpisodeNumber, out var episodeNumber) && bestEpisode.Episode.EpisodeNumber == episodeNumber);
+    }
+
+    private static bool ShouldRequireReview(ScoredAutomaticMatch match)
+    {
+        if (match.UsedStoredFallback)
+        {
+            return true;
+        }
+
+        if (match.TitleSimilarity >= 30)
+        {
+            return !match.EpisodeMatched && match.ScoreGap < 4;
+        }
+
+        if (match.TitleSimilarity >= 22 && match.SeasonMatched && match.EpisodeMatched)
+        {
+            return match.ScoreGap < 4 && match.CombinedScore < 80;
+        }
+
+        return match.CombinedScore < 90 || match.ScoreGap < 8;
+    }
+
+    private static string BuildStatusText(ScoredAutomaticMatch match, bool requiresReview)
+    {
+        var parts = new List<string>
+        {
+            requiresReview
+                ? $"TVDB-Vorschlag pruefen: S{match.Selection.SeasonNumber}E{match.Selection.EpisodeNumber} - {match.Selection.EpisodeTitle}"
+                : $"TVDB automatisch erkannt: S{match.Selection.SeasonNumber}E{match.Selection.EpisodeNumber} - {match.Selection.EpisodeTitle}"
+        };
+
+        if (match.TitleSimilarity >= 30)
+        {
+            parts.Add("Exakter Titeltreffer.");
+        }
+        else if (match.TitleSimilarity >= 22)
+        {
+            parts.Add("Starker Titeltreffer.");
+        }
+
+        if (!match.SeasonMatched || !match.EpisodeMatched)
+        {
+            var differences = new List<string>();
+            if (!match.SeasonMatched)
+            {
+                differences.Add("Staffel weicht von der lokalen Erkennung ab");
+            }
+
+            if (!match.EpisodeMatched)
+            {
+                differences.Add("Folge weicht von der lokalen Erkennung ab");
+            }
+
+            parts.Add(string.Join(", ", differences) + ".");
+        }
+
+        return string.Join(" ", parts);
     }
 
     private static void EnsureApiKeyConfigured(AppMetadataSettings settings)
@@ -465,12 +526,22 @@ public sealed class EpisodeMetadataLookupService
         TvdbSeriesSearchResult Series,
         TvdbEpisodeSelection Selection,
         int EpisodeScore,
-        int CombinedScore);
+        int CombinedScore,
+        int TitleSimilarity,
+        bool SeasonMatched,
+        bool EpisodeMatched);
 
     private sealed record ScoredAutomaticMatch(
         TvdbSeriesSearchResult Series,
         TvdbEpisodeSelection Selection,
         int CombinedScore,
         int ScoreGap,
-        bool UsedStoredFallback);
+        bool UsedStoredFallback)
+    {
+        public int TitleSimilarity => SelectionMatch.TitleSimilarity;
+        public bool SeasonMatched => SelectionMatch.SeasonMatched;
+        public bool EpisodeMatched => SelectionMatch.EpisodeMatched;
+
+        public ScoredEpisodeMatch SelectionMatch { get; init; } = null!;
+    }
 }

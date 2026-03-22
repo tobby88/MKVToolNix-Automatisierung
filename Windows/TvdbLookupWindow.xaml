@@ -45,13 +45,42 @@
         </Grid>
 
         <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="12" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <GroupBox Grid.Column="0" Header="Serie">
+            <Border Grid.Row="0"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="3"
+                    Margin="0,0,0,12"
+                    Padding="10"
+                    Background="#F3F6FA"
+                    BorderBrush="#C7D1DC"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="GuessSummaryTextBlock"
+                               Grid.Row="0"
+                               Margin="0,0,0,8"
+                               TextWrapping="Wrap" />
+                    <TextBlock x:Name="ComparisonSummaryTextBlock"
+                               Grid.Row="1"
+                               TextWrapping="Wrap"
+                               Foreground="#334A62" />
+                </Grid>
+            </Border>
+
+            <GroupBox Grid.Row="1" Grid.Column="0" Header="Serie">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -75,7 +104,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Grid.Column="2" Header="Episode">
+            <GroupBox Grid.Row="1" Grid.Column="2" Header="Episode">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -91,7 +120,7 @@
                              Margin="0,0,0,8"
                              TextChanged="EpisodeSearchTextBox_TextChanged" />
 
-                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="1" Grid.Column="0">
+                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="1" Grid.Column="0" SelectionChanged="EpisodeResultsListBox_SelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
