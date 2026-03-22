@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -18,6 +19,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
+    private readonly StringBuilder _logBuilder = new();
+    private readonly object _logSync = new();
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -27,6 +30,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
     private int _selectedPlanSummaryVersion;
+    private bool _logFlushScheduled;
 
     public BatchMuxViewModel(AppServices services, UserDialogService dialogService)
     {
@@ -162,7 +166,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 : path;
         }
 
-        LogText = string.Empty;
+        ResetLog();
         ClearEpisodeItems();
         StatusText = "Ordner gewaehlt - starte Scan...";
         RefreshCommands();
@@ -186,7 +190,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             ClearEpisodeItems();
-            LogText = string.Empty;
+            ResetLog();
             SetStatus("Scanne Ordner...", 0);
 
             var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
@@ -196,58 +200,72 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 .ToList();
 
             var total = mainVideoFiles.Count;
-            for (var index = 0; index < total; index++)
+            if (total == 0)
             {
-                var file = mainVideoFiles[index];
-                try
+                SetStatus("Keine passenden Hauptvideos gefunden", 100);
+                RefreshCommands();
+                return;
+            }
+
+            var completedCount = 0;
+            var parallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
+            using var throttler = new SemaphoreSlim(parallelism);
+            var scanResults = new BatchScanResult[total];
+
+            var scanTasks = mainVideoFiles.Select((file, index) => ProcessBatchScanItemAsync(
+                file,
+                index,
+                total,
+                throttler,
+                scanResults,
+                () => Volatile.Read(ref completedCount),
+                () =>
                 {
-                    var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
-                        file,
-                        update => HandleBatchDetectionProgress(index + 1, total, file, update));
-                    var localGuess = new EpisodeMetadataGuess(
-                        detected.SeriesName,
-                        detected.SuggestedTitle,
-                        detected.SeasonNumber,
-                        detected.EpisodeNumber);
-                    SetStatus($"Scanne Ordner... {index + 1}/{total} - {Path.GetFileName(file)} - TVDB-Abgleich", CalculatePercent(index, total));
-                    var metadataResolution = await ResolveMetadataAsync(detected);
-                    detected = ApplyMetadataSelection(detected, metadataResolution);
-                    var outputPath = BuildOutputPath(detected);
-                    var episodeKey = Path.GetFileName(outputPath);
+                    var processed = Interlocked.Increment(ref completedCount);
+                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                        SetStatus($"Scanne Ordner... {processed}/{total} abgeschlossen", CalculatePercent(processed, total)));
+                }));
 
-                    if (itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItem))
-                    {
-                        existingItem.AddRequestedSource(file);
-                        AppendLog($"DUBLETTE: {Path.GetFileName(file)} -> wird bereits ueber {Path.GetFileName(existingItem.MainVideoPath)} verarbeitet.");
-                    }
-                    else
-                    {
-                        var outputAlreadyExists = File.Exists(outputPath);
-                        var item = BatchEpisodeItemViewModel.CreateFromDetection(
-                            requestedMainVideoPath: file,
-                            localGuess: localGuess,
-                            detected: detected,
-                            metadataResolution: metadataResolution,
-                            outputPath: outputPath,
-                            status: outputAlreadyExists ? "Archiv vorhanden" : "Bereit",
-                            isSelected: true);
+            await Task.WhenAll(scanTasks);
 
-                        AddEpisodeItem(item);
-                        itemsByEpisodeKey[episodeKey] = item;
-
-                        AppendLog(outputAlreadyExists
-                            ? $"OK: {Path.GetFileName(file)} -> Archivdatei vorhanden, wird spaeter genauer verglichen."
-                            : $"OK: {Path.GetFileName(file)}");
-                    }
-                }
-                catch (Exception ex)
+            foreach (var result in scanResults.OrderBy(result => result.Index))
+            {
+                if (result.ErrorMessage is not null)
                 {
-                    AddEpisodeItem(BatchEpisodeItemViewModel.CreateErrorItem(file, ex.Message));
-                    AppendLog($"FEHLER: {Path.GetFileName(file)} -> {ex.Message}");
+                    AddEpisodeItem(BatchEpisodeItemViewModel.CreateErrorItem(result.SourcePath, result.ErrorMessage));
+                    AppendLog($"FEHLER: {Path.GetFileName(result.SourcePath)} -> {result.ErrorMessage}");
+                    continue;
                 }
 
-                SetStatus($"Scanne Ordner... {index + 1}/{total}", CalculatePercent(index + 1, total));
-                await Task.Yield();
+                var detected = result.Detected!;
+                var localGuess = result.LocalGuess!;
+                var metadataResolution = result.MetadataResolution!;
+                var outputPath = result.OutputPath!;
+                var episodeKey = Path.GetFileName(outputPath);
+
+                if (itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItem))
+                {
+                    existingItem.AddRequestedSource(result.SourcePath);
+                    AppendLog($"DUBLETTE: {Path.GetFileName(result.SourcePath)} -> wird bereits ueber {Path.GetFileName(existingItem.MainVideoPath)} verarbeitet.");
+                    continue;
+                }
+
+                var outputAlreadyExists = File.Exists(outputPath);
+                var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                    requestedMainVideoPath: result.SourcePath,
+                    localGuess: localGuess,
+                    detected: detected,
+                    metadataResolution: metadataResolution,
+                    outputPath: outputPath,
+                    status: outputAlreadyExists ? "Archiv vorhanden" : "Bereit",
+                    isSelected: true);
+
+                AddEpisodeItem(item);
+                itemsByEpisodeKey[episodeKey] = item;
+
+                AppendLog(outputAlreadyExists
+                    ? $"OK: {Path.GetFileName(result.SourcePath)} -> Archivdatei vorhanden, wird spaeter genauer verglichen."
+                    : $"OK: {Path.GetFileName(result.SourcePath)}");
             }
 
             var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
@@ -530,7 +548,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         try
         {
             SetBusy(true);
-            LogText = string.Empty;
+            ResetLog();
             var successCount = 0;
             var warningCount = 0;
             var errorCount = 0;
@@ -761,14 +779,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         var moveResult = await _services.Cleanup.MoveFilesToDirectoryAsync(
             cleanupFiles,
             doneDirectory,
-            (current, total, filePath) =>
-            {
-                var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
-                Application.Current.Dispatcher.Invoke(() =>
+                (current, total, filePath) =>
                 {
-                    SetStatus($"Verschiebe Dateien nach 'done'... {current}/{total}", progress);
+                    var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
+                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    {
+                        SetStatus($"Verschiebe Dateien nach 'done'... {current}/{total}", progress);
+                    });
                 });
-            });
 
         AppendLog($"DONE: {item.MainVideoFileName} -> {moveResult.MovedFiles.Count} Datei(en) verschoben.");
 
@@ -815,7 +833,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 (current, total, _) =>
                 {
                     var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
-                    Application.Current.Dispatcher.Invoke(() =>
+                    Application.Current.Dispatcher.BeginInvoke(() =>
                     {
                         SetStatus($"Verschiebe Done-Dateien in den Papierkorb... {current}/{total}", progress);
                     });
@@ -891,7 +909,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                         ? 0
                         : (int)Math.Round(combinedCopiedBytes * 100d / totalCopyBytes);
 
-                    Application.Current.Dispatcher.Invoke(() =>
+                    Application.Current.Dispatcher.BeginInvoke(() =>
                     {
                         SetStatus($"Kopiere Archivdateien... {index + 1}/{copyPlans.Count}", progress);
                     });
@@ -1137,6 +1155,63 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         return total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
     }
 
+    private async Task ProcessBatchScanItemAsync(
+        string file,
+        int index,
+        int total,
+        SemaphoreSlim throttler,
+        BatchScanResult[] target,
+        Func<int> getCompletedCount,
+        Action onCompleted)
+    {
+        await throttler.WaitAsync();
+        try
+        {
+            var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
+                file,
+                update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update));
+
+            var localGuess = new EpisodeMetadataGuess(
+                detected.SeriesName,
+                detected.SuggestedTitle,
+                detected.SeasonNumber,
+                detected.EpisodeNumber);
+
+            HandleSelectedItemDetectionProgress(new DetectionProgressUpdate(
+                $"TVDB-Abgleich fuer {Path.GetFileName(file)}...",
+                CalculatePercent(getCompletedCount(), total)));
+
+            var metadataResolution = await ResolveMetadataAsync(detected);
+            detected = ApplyMetadataSelection(detected, metadataResolution);
+            var outputPath = BuildOutputPath(detected);
+
+            target[index] = new BatchScanResult(
+                index,
+                file,
+                detected,
+                localGuess,
+                metadataResolution,
+                outputPath,
+                null);
+        }
+        catch (Exception ex)
+        {
+            target[index] = new BatchScanResult(
+                index,
+                file,
+                null,
+                null,
+                null,
+                null,
+                ex.Message);
+        }
+        finally
+        {
+            onCompleted();
+            throttler.Release();
+        }
+    }
+
     private void UpdateRuntimeStatus(int currentItem, int totalItems, MuxExecutionUpdate update)
     {
         var currentBatchProgress = CalculatePercent(currentItem - 1, totalItems);
@@ -1161,18 +1236,46 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        Application.Current.Dispatcher.Invoke(() => SetStatus(statusText, currentBatchProgress));
+        _ = Application.Current.Dispatcher.BeginInvoke(() => SetStatus(statusText, currentBatchProgress));
     }
 
     private void AppendLog(string line)
     {
-        if (Application.Current.Dispatcher.CheckAccess())
+        lock (_logSync)
         {
-            LogText += line + Environment.NewLine;
-            return;
+            _logBuilder.AppendLine(line);
+            if (_logFlushScheduled)
+            {
+                return;
+            }
+
+            _logFlushScheduled = true;
         }
 
-        Application.Current.Dispatcher.Invoke(() => LogText += line + Environment.NewLine);
+        _ = Application.Current.Dispatcher.BeginInvoke(FlushLogBuffer);
+    }
+
+    private void ResetLog()
+    {
+        lock (_logSync)
+        {
+            _logBuilder.Clear();
+            _logFlushScheduled = false;
+        }
+
+        LogText = string.Empty;
+    }
+
+    private void FlushLogBuffer()
+    {
+        string text;
+        lock (_logSync)
+        {
+            text = _logBuilder.ToString();
+            _logFlushScheduled = false;
+        }
+
+        LogText = text;
     }
 
     private void HandleBatchDetectionProgress(
@@ -1198,7 +1301,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        Application.Current.Dispatcher.Invoke(ApplyUpdate);
+        _ = Application.Current.Dispatcher.BeginInvoke(ApplyUpdate);
     }
 
     private void HandleSelectedItemDetectionProgress(DetectionProgressUpdate update)
@@ -1209,7 +1312,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        Application.Current.Dispatcher.Invoke(() => SetStatus(update.StatusText, update.ProgressPercent));
+        _ = Application.Current.Dispatcher.BeginInvoke(() => SetStatus(update.StatusText, update.ProgressPercent));
     }
 
     private void SetBusy(bool isBusy)
@@ -1284,6 +1387,15 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+internal sealed record BatchScanResult(
+    int Index,
+    string SourcePath,
+    AutoDetectedEpisodeFiles? Detected,
+    EpisodeMetadataGuess? LocalGuess,
+    EpisodeMetadataResolutionResult? MetadataResolution,
+    string? OutputPath,
+    string? ErrorMessage);
 
 public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 {

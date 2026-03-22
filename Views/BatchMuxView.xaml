@@ -166,67 +166,71 @@
 
                     <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Geplante Verwendung" />
                     <Border Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" Padding="10" Background="#F6F4EA" BorderBrush="#B8AA72" BorderThickness="1" CornerRadius="6">
-                        <StackPanel>
-                            <Border Padding="10"
-                                    Margin="0,0,0,8"
-                                    Background="#FFF9EA"
-                                    BorderBrush="#D8B46A"
-                                    BorderThickness="1"
-                                    CornerRadius="5">
-                                <StackPanel>
-                                    <TextBlock FontSize="12"
-                                               FontWeight="SemiBold"
-                                               Opacity="0.75"
-                                               Text="Archiv" />
-                                    <TextBlock Margin="0,2,0,0"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
-                                    <TextBlock Margin="0,4,0,0"
-                                               TextWrapping="Wrap"
-                                               Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
-                                </StackPanel>
-                            </Border>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="95" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                            <UniformGrid Columns="2">
-                                <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Archiv" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <TextBlock.ToolTip>
                                     <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Hauptvideo" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                </TextBlock.ToolTip>
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                <Run Text=": " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Video" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <TextBlock.ToolTip>
                                     <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Weitere Videos" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Margin="0,0,8,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                </TextBlock.ToolTip>
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
+                                <Run Text=" | weitere: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <TextBlock.ToolTip>
                                     <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audio" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Margin="0,0,0,8" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
+                                </TextBlock.ToolTip>
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
+                                <Run Text=" | AD: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Texte" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <TextBlock.ToolTip>
                                     <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Audiodeskription" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
+                                        <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Margin="0,0,8,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                    <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Untertitel" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Margin="0,0,0,0" Padding="10" Background="#FFFFFF" BorderBrush="#D8D1B3" BorderThickness="1" CornerRadius="5">
-                                    <StackPanel>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.75" Text="Anhaenge" />
-                                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
-                                    </StackPanel>
-                                </Border>
-                            </UniformGrid>
-                        </StackPanel>
+                                </TextBlock.ToolTip>
+                                <Run Text="UT: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
+                                <Run Text=" | TXT: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
+                            </TextBlock>
+                        </Grid>
                     </Border>
 
                     <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
@@ -250,12 +254,12 @@
             </Expander>
         </Grid>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
+        <WrapPanel Grid.Row="3" Margin="0,12,0,0">
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle waehlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abwaehlen" />
             <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" Content="Pflichtchecks starten" />
-            <Button Width="170" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
-        </StackPanel>
+            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
+        </WrapPanel>
     </Grid>
 </UserControl>

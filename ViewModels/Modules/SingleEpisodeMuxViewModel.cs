@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using System.Text;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -17,6 +18,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
     private CancellationTokenSource? _planSummaryRefreshCts;
+    private readonly StringBuilder _previewOutputBuilder = new();
+    private readonly object _previewOutputSync = new();
 
     private string? _mainVideoPath;
     private string? _audioDescriptionPath;
@@ -50,6 +53,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private string? _approvedReviewPath;
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _planSummaryVersion;
+    private bool _previewOutputFlushScheduled;
 
     public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
     {
@@ -509,7 +513,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void HandleDetectionUpdate(DetectionProgressUpdate update)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
             SetStatus(update.StatusText, update.ProgressPercent);
             PreviewText = $"{update.StatusText}{Environment.NewLine}{Environment.NewLine}Bitte warten...";
@@ -1032,6 +1036,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 + Environment.NewLine
                 + "mkvmerge-Ausgabe:"
                 + Environment.NewLine;
+            ResetPreviewOutputBuffer(PreviewText);
 
             if (_currentPlan.SkipMux)
             {
@@ -1079,7 +1084,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                                 ? 0
                                 : (int)Math.Round(copiedBytes * 100d / totalBytes);
 
-                            Application.Current.Dispatcher.Invoke(() =>
+                            _ = Application.Current.Dispatcher.BeginInvoke(() =>
                             {
                                 SetStatus($"Kopiere Archivdatei... {progress}%", progress);
                             });
@@ -1159,12 +1164,23 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void HandleMuxOutput(string line)
     {
-        Application.Current.Dispatcher.Invoke(() => PreviewText += line + Environment.NewLine);
+        lock (_previewOutputSync)
+        {
+            _previewOutputBuilder.AppendLine(line);
+            if (_previewOutputFlushScheduled)
+            {
+                return;
+            }
+
+            _previewOutputFlushScheduled = true;
+        }
+
+        _ = Application.Current.Dispatcher.BeginInvoke(FlushPreviewOutputBuffer);
     }
 
     private void HandleMuxUpdate(MuxExecutionUpdate update)
     {
-        Application.Current.Dispatcher.Invoke(() =>
+        _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
             var progressValue = update.ProgressPercent ?? ProgressValue;
             var statusText = update.ProgressPercent is int progressPercent
@@ -1219,7 +1235,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             (current, total, _) =>
             {
                 var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     SetStatus($"Verschiebe Quelldateien in den Papierkorb... {current}/{total}", progress);
                 });
@@ -1333,6 +1349,28 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         StatusText = text;
         ProgressValue = Math.Clamp(progressValue, 0, 100);
+    }
+
+    private void ResetPreviewOutputBuffer(string initialText)
+    {
+        lock (_previewOutputSync)
+        {
+            _previewOutputBuilder.Clear();
+            _previewOutputBuilder.Append(initialText);
+            _previewOutputFlushScheduled = false;
+        }
+    }
+
+    private void FlushPreviewOutputBuffer()
+    {
+        string text;
+        lock (_previewOutputSync)
+        {
+            text = _previewOutputBuilder.ToString();
+            _previewOutputFlushScheduled = false;
+        }
+
+        PreviewText = text;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
