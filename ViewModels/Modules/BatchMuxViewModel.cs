@@ -18,6 +18,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 {
     private const string DefaultSourceDirectory = @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads";
     private const string DoneFolderName = "done";
+    private const int AutomaticCompareProgressStart = 80;
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
@@ -286,7 +287,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 {
                     var processed = Interlocked.Increment(ref completedCount);
                     _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                        SetStatus($"Scanne Ordner... {processed}/{total} abgeschlossen", CalculatePercent(processed, total)));
+                        SetStatus(
+                            $"Scanne Ordner... {processed}/{total} abgeschlossen",
+                            ScaleProgress(CalculatePercent(processed, total), 0, AutomaticCompareProgressStart)));
                 }));
 
             await Task.WhenAll(scanTasks);
@@ -332,7 +335,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             }
 
             var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
-            SetStatus($"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt", 100);
+            SetStatus(
+                $"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt",
+                AutomaticCompareProgressStart);
             await RefreshComparisonPlansAsync(
                 EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
                 automatic: true);
@@ -530,7 +535,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     automatic
                         ? $"Vergleiche vorhandene Bibliotheksdateien... {index + 1}/{items.Count}"
                         : $"Aktualisiere Vergleiche... {index + 1}/{items.Count}",
-                    CalculatePercent(index + 1, items.Count));
+                    automatic
+                        ? ScaleProgress(CalculatePercent(index + 1, items.Count), AutomaticCompareProgressStart, 100)
+                        : CalculatePercent(index + 1, items.Count));
 
                 await RefreshComparisonForItemAsync(item);
             }
@@ -1368,6 +1375,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         return total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
     }
 
+    private static int ScaleProgress(int value, int start, int end)
+    {
+        value = Math.Clamp(value, 0, 100);
+        return start + (int)Math.Round((end - start) * (value / 100d));
+    }
+
     private async Task ProcessBatchScanItemAsync(
         string file,
         int index,
@@ -1505,7 +1518,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
             SetStatus(
                 $"Scanne Ordner... {currentItem}/{totalItems} - {Path.GetFileName(currentFilePath)} - {update.StatusText}",
-                (int)Math.Round(baseProgress));
+                ScaleProgress((int)Math.Round(baseProgress), 0, AutomaticCompareProgressStart));
         }
 
         if (Application.Current.Dispatcher.CheckAccess())
