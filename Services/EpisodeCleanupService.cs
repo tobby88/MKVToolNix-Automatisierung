@@ -93,6 +93,27 @@ public sealed class EpisodeCleanupService
         }
     }
 
+    public void DeleteDirectoryIfEmpty(string? directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.EnumerateFileSystemEntries(directoryPath).Any())
+            {
+                return;
+            }
+
+            Directory.Delete(directoryPath, recursive: false);
+        }
+        catch
+        {
+        }
+    }
+
     private static string BuildUniqueTargetPath(string targetDirectory, string fileName)
     {
         var destinationPath = Path.Combine(targetDirectory, fileName);

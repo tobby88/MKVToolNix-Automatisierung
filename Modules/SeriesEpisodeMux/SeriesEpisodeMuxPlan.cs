@@ -327,7 +327,7 @@ public sealed class SeriesEpisodeMuxPlan
             $"Audio: {summary.Audio}",
             $"AD: {summary.AudioDescription}",
             $"Untertitel: {summary.Subtitles}",
-            $"AnhÃ¤nge: {summary.Attachments}"
+            $"Anhänge: {summary.Attachments}"
         ]);
     }
 
@@ -383,7 +383,7 @@ public sealed class SeriesEpisodeMuxPlan
             builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
             builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
             builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel)))}");
-            builder.AppendLine($"AnhÃ¤nge: {BuildAttachmentPreview()}");
+            builder.AppendLine($"Anhänge: {BuildAttachmentPreview()}");
 
             if (WorkingCopy is not null)
             {

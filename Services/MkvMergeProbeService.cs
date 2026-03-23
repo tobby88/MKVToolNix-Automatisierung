@@ -12,6 +12,26 @@ public sealed class MkvMergeProbeService
     private readonly ConcurrentDictionary<string, AudioTrackMetadata> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, ContainerMetadata> _containerCache = new(StringComparer.OrdinalIgnoreCase);
 
+    public void Invalidate(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return;
+        }
+
+        _mediaTrackCache.TryRemove(filePath, out _);
+        _audioTrackCache.TryRemove(filePath, out _);
+        _containerCache.TryRemove(filePath, out _);
+    }
+
+    public void Invalidate(IEnumerable<string?> filePaths)
+    {
+        foreach (var filePath in filePaths)
+        {
+            Invalidate(filePath);
+        }
+    }
+
     public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(string mkvMergePath, string inputFilePath)
     {
         if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata))
@@ -193,14 +213,14 @@ public sealed class MkvMergeProbeService
             : trackDocument.RootElement.ValueKind.ToString();
 
         throw new InvalidOperationException(
-            $"mkvmerge --identify lieferte fuer {Path.GetFileName(inputFilePath)} keine gueltige Trackliste. Root-Felder: {rootKeys}");
+            $"mkvmerge --identify lieferte für {Path.GetFileName(inputFilePath)} keine gültige Trackliste. Root-Felder: {rootKeys}");
     }
 
     private static int ReadTrackId(JsonElement track)
     {
         if (!track.TryGetProperty("id", out var idElement) || !idElement.TryGetInt32(out var trackId))
         {
-            throw new InvalidOperationException("mkvmerge hat keine gueltige Track-ID geliefert.");
+            throw new InvalidOperationException("mkvmerge hat keine gültige Track-ID geliefert.");
         }
 
         return trackId;
@@ -318,7 +338,7 @@ public sealed class MkvMergeProbeService
         }
 
         var details = string.IsNullOrWhiteSpace(standardError)
-            ? "Es wurde keine gueltige JSON-Antwort geliefert."
+            ? "Es wurde keine gültige JSON-Antwort geliefert."
             : standardError.Trim();
 
         throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {details}");

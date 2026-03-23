@@ -1,7 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Text;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -13,13 +12,12 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 {
-    private const string DefaultMainVideoDirectory = @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads";
+    private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
+    private readonly BufferedTextStore _previewOutputBuffer;
     private CancellationTokenSource? _planSummaryRefreshCts;
-    private readonly StringBuilder _previewOutputBuilder = new();
-    private readonly object _previewOutputSync = new();
 
     private string? _mainVideoPath;
     private string? _audioDescriptionPath;
@@ -53,12 +51,14 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private string? _approvedReviewPath;
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _planSummaryVersion;
-    private bool _previewOutputFlushScheduled;
 
     public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
     {
         _services = services;
         _dialogService = dialogService;
+        _previewOutputBuffer = new BufferedTextStore(
+            flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
+            text => PreviewText = text);
 
         SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy);
         SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy);
@@ -397,9 +397,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             }
         }
 
-        return Directory.Exists(DefaultMainVideoDirectory)
-            ? DefaultMainVideoDirectory
-            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return GetPreferredVideoDirectory();
     }
 
     private string ResolveComponentInitialDirectory()
@@ -441,7 +439,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private string BuildSuggestedOutputPath()
     {
-        return EpisodeMetadataMergeHelper.BuildSuggestedOutputFilePath(
+        return _services.OutputPaths.BuildOutputPath(
             ResolveOutputDirectory(),
             SeriesName,
             SeasonNumber,
@@ -472,7 +470,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             SetStatus("Dateien werden erkannt...", 0);
-            PreviewText = "Erkennung laeuft...";
+            PreviewText = "Erkennung läuft...";
 
             var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                 selectedVideoPath,
@@ -679,13 +677,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         if (File.Exists(_outputPath))
         {
-            OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
+            OutputTargetStatusText = _services.OutputPaths.IsArchivePath(_outputPath)
                 ? "Am Ziel liegt bereits eine MKV. Bei Vorschau oder Mux wird geprüft, ob etwas fehlt oder ersetzt werden muss."
                 : "Die Zieldatei existiert bereits und würde beim Mux überschrieben.";
             return;
         }
 
-        OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
+        OutputTargetStatusText = _services.OutputPaths.IsArchivePath(_outputPath)
             ? "Das Ziel in der Serienbibliothek ist noch frei. Die Episode kann direkt dort einsortiert werden."
             : "Die Zieldatei existiert noch nicht.";
     }
@@ -1086,39 +1084,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 return;
             }
 
-            if (_currentPlan.WorkingCopy is not null)
+            if (!await PrepareWorkingCopyAsync(_currentPlan))
             {
-                if (_services.FileCopy.NeedsCopy(_currentPlan.WorkingCopy))
-                {
-                    if (!_dialogService.ConfirmArchiveCopy(_currentPlan.WorkingCopy))
-                    {
-                        SetStatus("Abgebrochen", 0);
-                        return;
-                    }
-
-                    SetStatus("Kopiere Zieldatei...", 0);
-                    await _services.FileCopy.CopyAsync(
-                        _currentPlan.WorkingCopy,
-                        (copiedBytes, totalBytes) =>
-                        {
-                            var progress = totalBytes <= 0
-                                ? 0
-                                : (int)Math.Round(copiedBytes * 100d / totalBytes);
-
-                            _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                            {
-                                SetStatus($"Kopiere Zieldatei... {progress}%", progress);
-                            });
-                        });
-                }
-                else
-                {
-                    SetStatus("Arbeitskopie bereits aktuell - übernehme vorhandene Kopie...", 100);
-                }
+                return;
             }
 
-            SetStatus("Muxing laeuft...", 0);
-            var result = await _services.SeriesEpisodeMux.ExecuteAsync(_currentPlan, HandleMuxOutput, HandleMuxUpdate);
+            SetStatus("Muxing läuft...", 0);
+            var result = await _services.MuxWorkflow.ExecuteMuxAsync(_currentPlan, HandleMuxOutput, HandleMuxUpdate);
 
             if (result.ExitCode == 0 && !result.HasWarning)
             {
@@ -1146,7 +1118,6 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
         finally
         {
-            _services.Cleanup.DeleteTemporaryFile(_currentPlan?.WorkingCopy?.DestinationFilePath);
             SetBusy(false);
         }
     }
@@ -1183,20 +1154,41 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         RefreshOutputTargetStatus();
     }
 
-    private void HandleMuxOutput(string line)
+    private async Task<bool> PrepareWorkingCopyAsync(SeriesEpisodeMuxPlan plan)
     {
-        lock (_previewOutputSync)
+        if (plan.WorkingCopy is null)
         {
-            _previewOutputBuilder.AppendLine(line);
-            if (_previewOutputFlushScheduled)
+            return true;
+        }
+
+        if (_services.MuxWorkflow.NeedsWorkingCopyPreparation(plan)
+            && !_dialogService.ConfirmArchiveCopy(plan.WorkingCopy))
+        {
+            SetStatus("Abgebrochen", 0);
+            return false;
+        }
+
+        await _services.MuxWorkflow.PrepareWorkingCopyAsync(plan, HandleWorkingCopyPreparationUpdate);
+        return true;
+    }
+
+    private void HandleWorkingCopyPreparationUpdate(WorkingCopyPreparationUpdate update)
+    {
+        _ = Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            if (update.ReusesExistingCopy)
             {
+                SetStatus("Arbeitskopie bereits aktuell - übernehme vorhandene Kopie...", 100);
                 return;
             }
 
-            _previewOutputFlushScheduled = true;
-        }
+            SetStatus($"Kopiere Zieldatei... {update.ProgressPercent}%", update.ProgressPercent);
+        });
+    }
 
-        _ = Application.Current.Dispatcher.BeginInvoke(FlushPreviewOutputBuffer);
+    private void HandleMuxOutput(string line)
+    {
+        _previewOutputBuffer.AppendLine(line);
     }
 
     private void HandleMuxUpdate(MuxExecutionUpdate update)
@@ -1205,8 +1197,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             var progressValue = update.ProgressPercent ?? ProgressValue;
             var statusText = update.ProgressPercent is int progressPercent
-                ? $"Muxing laeuft... {progressPercent}%"
-                : "Muxing laeuft...";
+                ? $"Muxing läuft... {progressPercent}%"
+                : "Muxing läuft...";
 
             if (update.HasWarning)
             {
@@ -1273,16 +1265,22 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private List<string> BuildCleanupFileList(IEnumerable<string> sourceFilePaths, SeriesEpisodeMuxPlan plan)
     {
-        return sourceFilePaths
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Where(File.Exists)
-            .Where(path => !string.Equals(path, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            .Where(path => plan.WorkingCopy is null
-                || !string.Equals(path, plan.WorkingCopy.DestinationFilePath, StringComparison.OrdinalIgnoreCase))
-            .Where(path => !path.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        return _services.CleanupFiles.BuildCleanupFileList(
+            sourceFilePaths,
+            plan.OutputFilePath,
+            plan.WorkingCopy?.DestinationFilePath);
+    }
+
+    private static string GetPreferredVideoDirectory()
+    {
+        var downloadsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Downloads");
+        var preferredDirectory = PreferredDownloadsSubPath.Aggregate(downloadsDirectory, Path.Combine);
+
+        return Directory.Exists(preferredDirectory)
+            ? preferredDirectory
+            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     private void SchedulePlanSummaryRefresh()
@@ -1374,24 +1372,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private void ResetPreviewOutputBuffer(string initialText)
     {
-        lock (_previewOutputSync)
-        {
-            _previewOutputBuilder.Clear();
-            _previewOutputBuilder.Append(initialText);
-            _previewOutputFlushScheduled = false;
-        }
-    }
-
-    private void FlushPreviewOutputBuffer()
-    {
-        string text;
-        lock (_previewOutputSync)
-        {
-            text = _previewOutputBuilder.ToString();
-            _previewOutputFlushScheduled = false;
-        }
-
-        PreviewText = text;
+        _previewOutputBuffer.Reset(initialText);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

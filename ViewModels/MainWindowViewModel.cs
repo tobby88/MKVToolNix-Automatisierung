@@ -12,6 +12,7 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
+    private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
     private readonly AppToolPathStore _toolPathStore;
     private readonly FfprobeLocator _ffprobeLocator;
@@ -23,11 +24,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public MainWindowViewModel(
         IReadOnlyList<ModuleNavigationItem> modules,
+        AppServices services,
         UserDialogService dialogService,
         AppToolPathStore toolPathStore,
         FfprobeLocator ffprobeLocator,
         MkvToolNixLocator mkvToolNixLocator)
     {
+        _services = services;
         _dialogService = dialogService;
         _toolPathStore = toolPathStore;
         _ffprobeLocator = ffprobeLocator;
@@ -147,11 +150,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public static MainWindowViewModel CreateDefault()
     {
         var dialogService = new UserDialogService();
+        var settingsLoadResult = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
         var toolPathStore = new AppToolPathStore();
         var locator = new MkvToolNixLocator(toolPathStore);
         var ffprobeLocator = new FfprobeLocator(toolPathStore);
         var probeService = new MkvMergeProbeService();
         var archiveService = new SeriesArchiveService(probeService);
+        var outputPathService = new EpisodeOutputPathService(archiveService);
+        var cleanupFilePlanner = new EpisodeCleanupFilePlanner(outputPathService);
         var ffprobeDurationProbe = new FfprobeDurationProbe(ffprobeLocator);
         var durationProbe = new PreferredMediaDurationProbe(
             ffprobeDurationProbe,
@@ -162,15 +168,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var muxService = new SeriesEpisodeMuxService(planner, executionService, outputParser);
         var fileCopyService = new FileCopyService();
         var cleanupService = new EpisodeCleanupService();
+        var muxWorkflow = new MuxWorkflowCoordinator(muxService, fileCopyService, cleanupService);
         var metadataStore = new AppMetadataStore();
         var tvdbClient = new TvdbClient();
         var metadataLookupService = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
-        var appServices = new AppServices(muxService, metadataLookupService, fileCopyService, cleanupService);
+        var appServices = new AppServices(muxService, archiveService, outputPathService, cleanupFilePlanner, metadataLookupService, fileCopyService, cleanupService, muxWorkflow);
 
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);
         var batch = new BatchMuxViewModel(appServices, dialogService);
 
-        return new MainWindowViewModel(
+        var viewModel = new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
                     "Einzelepisode",
@@ -181,10 +188,18 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     "Ordner scannen und gesammelt muxen",
                     batch)
             ],
+            appServices,
             dialogService,
             toolPathStore,
             ffprobeLocator,
             locator);
+
+        if (settingsLoadResult.HasWarning)
+        {
+            dialogService.ShowWarning("Einstellungen", settingsLoadResult.WarningMessage!);
+        }
+
+        return viewModel;
     }
 
     private void SelectFfprobePath()
@@ -203,6 +218,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var settings = _toolPathStore.Load();
         settings.FfprobePath = selectedPath;
         _toolPathStore.Save(settings);
+        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
         RefreshToolStatus();
     }
 
@@ -221,6 +237,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var settings = _toolPathStore.Load();
         settings.MkvToolNixDirectoryPath = selectedDirectory;
         _toolPathStore.Save(settings);
+        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
         RefreshToolStatus();
     }
 

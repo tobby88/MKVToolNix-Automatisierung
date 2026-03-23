@@ -59,11 +59,6 @@ public partial class BatchMuxView : UserControl
         DetailsExpander.BringIntoView();
     }
 
-    private void EpisodeItemsGrid_OnLoadingRow(object sender, DataGridRowEventArgs e)
-    {
-        ScheduleColumnLayout();
-    }
-
     private void ScheduleColumnLayout()
     {
         if (_columnLayoutPending)

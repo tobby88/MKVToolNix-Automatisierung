@@ -8,10 +8,6 @@ public sealed class MkvMergeOutputParser
         @"\b(?:Fortschritt|Progress)\b\s*:\s*(?<percent>\d{1,3})%",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly Regex GenericPercentRegex = new(
-        @"\b(?<percent>\d{1,3})%",
-        RegexOptions.Compiled);
-
     public MkvMergeOutputEvent Parse(string line)
     {
         var progressPercent = TryReadProgressPercent(line);
@@ -24,10 +20,6 @@ public sealed class MkvMergeOutputParser
     private static int? TryReadProgressPercent(string line)
     {
         var match = NamedProgressRegex.Match(line);
-        if (!match.Success)
-        {
-            match = GenericPercentRegex.Match(line);
-        }
 
         if (!match.Success)
         {

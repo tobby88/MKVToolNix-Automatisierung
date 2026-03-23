@@ -7,32 +7,56 @@ namespace MkvToolnixAutomatisierung.Services;
 public sealed class FfprobeDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, TimeSpan?> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly string? _ffprobePath;
+    private readonly object _pathSync = new();
+    private readonly FfprobeLocator _locator;
+    private string? _ffprobePath;
 
     public FfprobeDurationProbe(FfprobeLocator locator)
     {
-        _ffprobePath = locator.TryFindFfprobePath();
+        _locator = locator;
     }
 
-    public bool IsAvailable => !string.IsNullOrWhiteSpace(_ffprobePath);
+    public bool IsAvailable => !string.IsNullOrWhiteSpace(GetCurrentFfprobePath());
 
-    public string? ExecutablePath => _ffprobePath;
+    public string? ExecutablePath => GetCurrentFfprobePath();
 
     public TimeSpan? TryReadDuration(string filePath)
     {
-        return _cache.GetOrAdd(filePath, ReadDurationCore);
+        var ffprobePath = GetCurrentFfprobePath();
+        if (string.IsNullOrWhiteSpace(ffprobePath) || !File.Exists(filePath))
+        {
+            return null;
+        }
+
+        return _cache.GetOrAdd(filePath, path => ReadDurationCore(path, ffprobePath));
     }
 
-    private TimeSpan? ReadDurationCore(string filePath)
+    private string? GetCurrentFfprobePath()
     {
-        if (string.IsNullOrWhiteSpace(_ffprobePath) || !File.Exists(filePath))
+        var resolvedPath = _locator.TryFindFfprobePath();
+
+        lock (_pathSync)
+        {
+            if (!string.Equals(_ffprobePath, resolvedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _ffprobePath = resolvedPath;
+                _cache.Clear();
+            }
+
+            return _ffprobePath;
+        }
+    }
+
+    private static TimeSpan? ReadDurationCore(string filePath, string ffprobePath)
+    {
+        if (!File.Exists(filePath))
         {
             return null;
         }
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = _ffprobePath,
+            FileName = ffprobePath,
             Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,

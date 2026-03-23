@@ -19,7 +19,7 @@ public sealed class FileCopyService
         var destinationDirectory = Path.GetDirectoryName(copyPlan.DestinationFilePath);
         if (string.IsNullOrWhiteSpace(destinationDirectory))
         {
-            throw new InvalidOperationException("Der Zielordner fuer die Arbeitskopie konnte nicht bestimmt werden.");
+            throw new InvalidOperationException("Der Zielordner für die Arbeitskopie konnte nicht bestimmt werden.");
         }
 
         Directory.CreateDirectory(destinationDirectory);

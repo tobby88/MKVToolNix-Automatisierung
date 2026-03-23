@@ -9,12 +9,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
-    <Compile Remove="MkvToolnixAutomatisierung.Tests\**\*.cs" />
-    <EmbeddedResource Remove="MkvToolnixAutomatisierung.Tests\**\*" />
-    <None Remove="MkvToolnixAutomatisierung.Tests\**\*" />
-    <Page Remove="MkvToolnixAutomatisierung.Tests\**\*" />
   </ItemGroup>
 </Project>

@@ -41,6 +41,25 @@ public sealed class SeriesEpisodeMuxService
         return plan.BuildPreviewText();
     }
 
+    public void InvalidatePlanningCaches()
+    {
+        _planner.InvalidatePlanningCaches();
+    }
+
+    public void InvalidatePlanOutputs(SeriesEpisodeMuxPlan? plan)
+    {
+        if (plan is null)
+        {
+            return;
+        }
+
+        _planner.InvalidateProbeCaches(
+        [
+            plan.OutputFilePath,
+            plan.WorkingCopy?.DestinationFilePath
+        ]);
+    }
+
     public async Task<MuxExecutionResult> ExecuteAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
@@ -48,6 +67,8 @@ public sealed class SeriesEpisodeMuxService
     {
         var hadWarning = false;
         int? latestProgressPercent = null;
+
+        onUpdate?.Invoke(new MuxExecutionUpdate(0, false));
 
         var exitCode = await _executionService.ExecuteAsync(
             plan.MkvMergePath,
