@@ -1,0 +1,188 @@
+using System.Threading;
+using System.Windows;
+using System.Windows.Threading;
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
+
+namespace MkvToolnixAutomatisierung.ViewModels.Modules;
+
+public sealed partial class BatchMuxViewModel
+{
+    private async Task SelectSourceDirectoryAsync()
+    {
+        var initialDirectory = Directory.Exists(SourceDirectory) ? SourceDirectory : GetPreferredSourceDirectory();
+        var path = _dialogService.SelectFolder("Quellordner für den Batch auswählen", initialDirectory);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        SourceDirectory = path;
+        if (string.IsNullOrWhiteSpace(OutputDirectory))
+        {
+            OutputDirectory = Directory.Exists(SeriesArchiveService.ArchiveRootDirectory)
+                ? SeriesArchiveService.ArchiveRootDirectory
+                : path;
+        }
+
+        ResetLog();
+        ClearEpisodeItems();
+        StatusText = "Ordner gewählt - starte Scan...";
+        RefreshCommands();
+        await ScanDirectoryAsync();
+    }
+
+    private void SelectOutputDirectory()
+    {
+        var initialDirectory = Directory.Exists(OutputDirectory) ? OutputDirectory : SourceDirectory;
+        var path = _dialogService.SelectFolder("Serienbibliothek für den Batch auswählen", initialDirectory);
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            OutputDirectory = path;
+            RefreshAutomaticOutputPaths();
+            if (SelectedEpisodeItem is not null)
+            {
+                ScheduleSelectedItemPlanSummaryRefresh();
+            }
+            RefreshCommands();
+        }
+    }
+
+    private async Task ScanDirectoryAsync()
+    {
+        try
+        {
+            SetBusy(true);
+            ClearEpisodeItems();
+            ResetLog();
+            SetStatus("Scanne Ordner...", 0);
+
+            var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
+            var mainVideoFiles = _services.BatchScan.FindMainVideoFiles(SourceDirectory);
+
+            var total = mainVideoFiles.Count;
+            if (total == 0)
+            {
+                SetStatus("Keine passenden Hauptvideos gefunden", 100);
+                RefreshCommands();
+                return;
+            }
+
+            var completedCount = 0;
+            var parallelism = Math.Clamp(Environment.ProcessorCount / 2, 2, 4);
+            using var throttler = new SemaphoreSlim(parallelism);
+            var scanResults = new BatchScanResult[total];
+
+            var scanTasks = mainVideoFiles.Select((file, index) => ProcessBatchScanItemAsync(
+                file,
+                index,
+                total,
+                throttler,
+                scanResults,
+                () => Volatile.Read(ref completedCount),
+                () =>
+                {
+                    var processed = Interlocked.Increment(ref completedCount);
+                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                        SetStatus(
+                            $"Scanne Ordner... {processed}/{total} abgeschlossen",
+                            ScaleProgress(CalculatePercent(processed, total), 0, AutomaticCompareProgressStart)));
+                }));
+
+            await Task.WhenAll(scanTasks);
+            await FlushPendingScanUiUpdatesAsync();
+            SetStatus("Verarbeite Scanergebnisse...", AutomaticCompareProgressStart);
+
+            var scannedItems = new List<BatchEpisodeItemViewModel>();
+
+            foreach (var result in scanResults.OrderBy(result => result.Index))
+            {
+                if (result.ErrorMessage is not null)
+                {
+                    scannedItems.Add(BatchEpisodeItemViewModel.CreateErrorItem(result.SourcePath, result.ErrorMessage));
+                    AppendLog($"FEHLER: {Path.GetFileName(result.SourcePath)} -> {result.ErrorMessage}");
+                    continue;
+                }
+
+                var detected = result.Detected!;
+                var localGuess = result.LocalGuess!;
+                var metadataResolution = result.MetadataResolution!;
+                var outputPath = result.OutputPath!;
+                var episodeKey = Path.GetFileName(outputPath);
+
+                if (itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItem))
+                {
+                    existingItem.AddRequestedSource(result.SourcePath);
+                    AppendLog($"DUBLETTE: {Path.GetFileName(result.SourcePath)} -> wird bereits über {Path.GetFileName(existingItem.MainVideoPath)} verarbeitet.");
+                    continue;
+                }
+
+                var outputAlreadyExists = File.Exists(outputPath);
+                var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                    requestedMainVideoPath: result.SourcePath,
+                    localGuess: localGuess,
+                    detected: detected,
+                    metadataResolution: metadataResolution,
+                    outputPath: outputPath,
+                    status: outputAlreadyExists ? "Vergleich offen" : "Bereit",
+                    isSelected: true);
+
+                scannedItems.Add(item);
+                itemsByEpisodeKey[episodeKey] = item;
+
+                AppendLog(outputAlreadyExists
+                    ? $"OK: {Path.GetFileName(result.SourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
+                    : $"OK: {Path.GetFileName(result.SourcePath)}");
+            }
+
+            _episodeCollection.Reset(scannedItems);
+
+            var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
+            SetStatus(
+                $"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt",
+                AutomaticCompareProgressStart);
+            await RefreshComparisonPlansAsync(
+                EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
+                automatic: true);
+            SetStatus(StatusText, 100);
+            RefreshCommands();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task RedetectSelectedEpisodeAsync()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var initialDirectory = ResolveSelectedItemDirectory(item);
+        var path = _dialogService.SelectMainVideo(initialDirectory);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        await ApplyDetectionToItemAsync(item, path);
+    }
+
+    private static async Task FlushPendingScanUiUpdatesAsync()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        await dispatcher.InvokeAsync(
+            static () => { },
+            DispatcherPriority.ApplicationIdle);
+    }
+
+}
