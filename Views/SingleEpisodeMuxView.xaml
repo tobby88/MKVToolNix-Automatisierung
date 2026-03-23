@@ -5,19 +5,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Margin="0,0,0,12"
-                   FontSize="15"
-                   FontWeight="SemiBold"
-                   TextWrapping="Wrap">Einzelepisode muxen<LineBreak />Datei wählen, automatische Erkennung prüfen, bei Bedarf korrigieren und dann muxen.</TextBlock>
-
-        <StackPanel Grid.Row="1" Margin="0,0,0,12">
-            <GroupBox Header="Quelle" Margin="0,0,0,12">
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <GroupBox Header="Quelle"
+                      Margin="0,0,0,12"
+                      ToolTip="Hauptvideo w&#228;hlen. Passende AD-Dateien, Untertitel und Anh&#228;nge werden danach automatisch erkannt.">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -294,9 +289,10 @@
             </GroupBox>
         </StackPanel>
 
-        <Expander Grid.Row="2"
+        <Expander Grid.Row="1"
                   Header="Korrekturen und Ausgabe"
                   Margin="0,0,0,12"
+                  ToolTip="Nur bei Bedarf &#246;ffnen, um automatische Zuordnungen oder die Ausgabedatei manuell anzupassen."
                   IsExpanded="False">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
@@ -352,7 +348,7 @@
             </Grid>
         </Expander>
 
-        <GroupBox Grid.Row="3" Header="Status und Details">
+        <GroupBox Grid.Row="2" Header="Status und Details">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -378,7 +374,7 @@
             </Grid>
         </GroupBox>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,12,0,0">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
             <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding CreatePreviewCommand}" Content="Vorschau erzeugen" />
             <Button Width="170" Padding="10,6" Command="{Binding ExecuteMuxCommand}" Content="Muxen" />
         </StackPanel>

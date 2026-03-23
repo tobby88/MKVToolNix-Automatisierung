@@ -10,20 +10,12 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Margin="0,0,0,12"
-                   FontSize="15"
-                   FontWeight="SemiBold"
-                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Beim Öffnen startet direkt eine automatische Suche. Nur wenn der Vorschlag nicht passt, musst du noch Serie oder Episode manuell anpassen.</TextBlock>
-
-        <Grid Grid.Row="1" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,12">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
@@ -34,17 +26,22 @@
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
-            <TextBox x:Name="ApiKeyTextBox" Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" />
+            <TextBox x:Name="ApiKeyTextBox"
+                     Grid.Row="0"
+                     Grid.Column="1"
+                     Margin="0,4,12,4"
+                     ToolTip="TVDB-API-Schl&#252;ssel f&#252;r die automatische Serien- und Episodensuche." />
             <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Click="SaveSettingsButton_Click" Content="Speichern" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
-            <TextBox x:Name="PinTextBox" Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" />
-            <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,8" TextWrapping="Wrap" Foreground="#555555" Text="Nur falls TVDB ihn verlangt." />
-
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555555" Text="Die Zuordnung der lokalen Serie zur TVDB-Series-ID wird lokal gespeichert und später wiederverwendet." />
+            <TextBox x:Name="PinTextBox"
+                     Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,4,12,4"
+                     ToolTip="Nur eintragen, wenn TVDB zus&#228;tzlich eine PIN verlangt." />
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -91,7 +88,11 @@
                         <ColumnDefinition Width="140" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBox x:Name="SeriesSearchTextBox" Grid.Row="0" Grid.Column="0" Margin="0,0,12,8" />
+                    <TextBox x:Name="SeriesSearchTextBox"
+                             Grid.Row="0"
+                             Grid.Column="0"
+                             Margin="0,0,12,8"
+                             ToolTip="Seriennamen suchen oder anpassen. Beim &#214;ffnen wird bereits automatisch gesucht." />
                     <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="SearchSeriesButton_Click" Content="Neu suchen" />
 
                     <ListBox x:Name="SeriesResultsListBox" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" SelectionChanged="SeriesResultsListBox_SelectionChanged">
@@ -118,6 +119,7 @@
                              Grid.Row="0"
                              Grid.Column="0"
                              Margin="0,0,0,8"
+                             ToolTip="Episodenliste der gew&#228;hlten Serie filtern."
                              TextChanged="EpisodeSearchTextBox_TextChanged" />
 
                     <ListBox x:Name="EpisodeResultsListBox" Grid.Row="1" Grid.Column="0" SelectionChanged="EpisodeResultsListBox_SelectionChanged">
@@ -131,7 +133,7 @@
             </GroupBox>
         </Grid>
 
-        <DockPanel Grid.Row="3" Margin="0,12,0,0">
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
             <TextBlock x:Name="StatusTextBlock"
                        DockPanel.Dock="Left"
                        VerticalAlignment="Center"

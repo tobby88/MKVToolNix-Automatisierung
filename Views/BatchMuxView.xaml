@@ -4,18 +4,11 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Margin="0,0,0,8"
-                   FontSize="14"
-                   FontWeight="SemiBold"
-                   TextWrapping="Wrap">Batch-Verarbeitung<LineBreak />Ordner w&#228;hlen, automatisch scannen, gesammelt verarbeiten.</TextBlock>
-
-        <Grid Grid.Row="1" Margin="0,0,0,8">
+        <Grid Grid.Row="0" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="*" />
@@ -27,20 +20,30 @@
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Quellordner" />
-            <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SourceDirectory, Mode=OneWay}" />
+            <TextBox Grid.Row="0"
+                     Grid.Column="1"
+                     Margin="0,4,12,4"
+                     IsReadOnly="True"
+                     ToolTip="Quellordner mit den heruntergeladenen Episoden ausw&#228;hlen. Der Scan startet danach direkt."
+                     Text="{Binding SourceDirectory, Mode=OneWay}" />
             <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectSourceDirectoryCommand}" Content="Ordner w&#228;hlen" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serienbibliothek" />
-            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputDirectory, Mode=OneWay}" />
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Margin="0,4,12,4"
+                     IsReadOnly="True"
+                     ToolTip="Oberordner der Serienbibliothek auf dem Server."
+                     Text="{Binding OutputDirectory, Mode=OneWay}" />
             <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputDirectoryCommand}" Content="Bibliothek &#228;ndern" />
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="1.1*" />
-                <RowDefinition Height="6" />
                 <RowDefinition Height="1.45*" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="0.9*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -206,13 +209,18 @@
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext" />
 
-            <GroupBox Grid.Row="3" Header="Geplante Verwendung des ausgew&#228;hlten Eintrags" Margin="0,6,0,0" MinHeight="160">
+            <GroupBox Grid.Row="3"
+                      Header="Geplante Verwendung des ausgew&#228;hlten Eintrags"
+                      Margin="0,6,0,0"
+                      MinHeight="120"
+                      MaxHeight="300">
                 <Grid Margin="8">
                     <Border Padding="18"
                             Background="#F8F8F8"
                             BorderBrush="#D5D5D5"
                             BorderThickness="1"
-                            CornerRadius="6">
+                            CornerRadius="6"
+                            ToolTip="Einen Batch-Eintrag ausw&#228;hlen. Dann erscheint hier die geplante Verwendung in der Serienbibliothek. Doppelklick startet n&#246;tige Pr&#252;fungen oder &#246;ffnet die Details.">
                         <Border.Style>
                             <Style TargetType="Border">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -226,15 +234,7 @@
                         <StackPanel>
                             <TextBlock FontSize="15"
                                        FontWeight="SemiBold"
-                                       Text="Noch kein Eintrag ausgewählt" />
-                            <TextBlock Margin="0,6,0,0"
-                                       TextWrapping="Wrap"
-                                       Foreground="#555555"
-                                       Text="Nach dem Scan einen Batch-Eintrag anklicken. Dann erscheint hier sofort die geplante Verwendung in der Serienbibliothek." />
-                            <TextBlock Margin="0,6,0,0"
-                                       FontSize="11"
-                                       Opacity="0.7"
-                                       Text="Doppelklick auf einen Listeneintrag: startet Prüfungen direkt oder öffnet die Details." />
+                                       Text="Noch kein Eintrag ausgew&#228;hlt" />
                         </StackPanel>
                     </Border>
 
@@ -253,10 +253,6 @@
                         <StackPanel>
                             <TextBlock FontSize="15" FontWeight="SemiBold" Text="{Binding SelectedEpisodeItem.Title, Mode=OneWay}" />
                             <TextBlock Margin="0,2,0,0" Opacity="0.75" Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay}" />
-                            <TextBlock Margin="0,4,0,8"
-                                       FontSize="11"
-                                       Opacity="0.7"
-                                       Text="Doppelklick auf einen Listeneintrag: startet Pr&#252;fungen direkt oder &#246;ffnet die Details." />
 
                             <Border Padding="10" Background="#F6F4EA" BorderBrush="#B8AA72" BorderThickness="1" CornerRadius="6">
                                 <Grid>
@@ -403,7 +399,7 @@
             </Expander>
         </Grid>
 
-        <WrapPanel Grid.Row="3" Margin="0,12,0,0">
+        <WrapPanel Grid.Row="2" Margin="0,12,0,0">
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />

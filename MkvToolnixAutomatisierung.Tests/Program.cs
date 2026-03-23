@@ -87,8 +87,11 @@ static void MkvMergeOutputParser_ParsesGermanAndEnglishOutput()
 
 static SeriesEpisodeMuxPlanner CreatePlanner()
 {
+    var durationProbe = new PreferredMediaDurationProbe(
+        new FfprobeDurationProbe(new FfprobeLocator()),
+        new WindowsMediaDurationProbe());
     var probeService = new MkvMergeProbeService();
-    return new SeriesEpisodeMuxPlanner(new MkvToolNixLocator(), probeService, new SeriesArchiveService(probeService));
+    return new SeriesEpisodeMuxPlanner(new MkvToolNixLocator(), probeService, new SeriesArchiveService(probeService), durationProbe);
 }
 
 static string CreateTestDirectory()

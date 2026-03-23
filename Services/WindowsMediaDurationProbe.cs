@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace MkvToolnixAutomatisierung.Services;
 
-public sealed class WindowsMediaDurationProbe
+public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, TimeSpan?> _cache = new(StringComparer.OrdinalIgnoreCase);
 

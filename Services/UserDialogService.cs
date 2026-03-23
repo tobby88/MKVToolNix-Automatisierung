@@ -89,6 +89,20 @@ public sealed class UserDialogService
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
+    public string? SelectExecutable(string title, string filter, string initialDirectory)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false,
+            InitialDirectory = initialDirectory
+        };
+
+        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+    }
+
     public MessageBoxResult AskAudioDescriptionChoice()
     {
         return MessageBox.Show(

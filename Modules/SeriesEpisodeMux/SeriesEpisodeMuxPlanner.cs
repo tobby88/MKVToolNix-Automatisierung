@@ -16,13 +16,18 @@ public sealed class SeriesEpisodeMuxPlanner
     private readonly MkvToolNixLocator _locator;
     private readonly MkvMergeProbeService _probeService;
     private readonly SeriesArchiveService _archiveService;
-    private readonly WindowsMediaDurationProbe _durationProbe = new();
+    private readonly IMediaDurationProbe _durationProbe;
 
-    public SeriesEpisodeMuxPlanner(MkvToolNixLocator locator, MkvMergeProbeService probeService, SeriesArchiveService archiveService)
+    public SeriesEpisodeMuxPlanner(
+        MkvToolNixLocator locator,
+        MkvMergeProbeService probeService,
+        SeriesArchiveService archiveService,
+        IMediaDurationProbe durationProbe)
     {
         _locator = locator;
         _probeService = probeService;
         _archiveService = archiveService;
+        _durationProbe = durationProbe;
     }
 
     public AutoDetectedEpisodeFiles DetectFromMainVideo(
