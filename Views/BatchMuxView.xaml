@@ -52,6 +52,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,12">
@@ -227,20 +228,87 @@
                 </DataGrid>
             </GroupBox>
 
-            <TextBlock Grid.Row="3" Margin="0,12,0,6" Text="{Binding StatusText, Mode=OneWay}" />
-            <ProgressBar Grid.Row="4" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
+            <GroupBox Grid.Row="3" Header="Geplante Verwendung des ausgew&#228;hlten Eintrags" Margin="0,12,0,0">
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="190" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-            <Expander Grid.Row="5"
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,12,8">
+                        <TextBlock FontSize="15" FontWeight="SemiBold" Text="{Binding SelectedEpisodeItem.Title, Mode=OneWay, TargetNullValue=Bitte Eintrag ausw&#228;hlen}" />
+                        <TextBlock Margin="0,2,0,0" Opacity="0.75" Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay, TargetNullValue=Nach der Auswahl erscheint hier die geplante Verwendung.}" />
+                    </StackPanel>
+
+                    <WrapPanel Grid.Row="0" Grid.Column="1" HorizontalAlignment="Right">
+                        <Button Width="170" Margin="0,0,0,8" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pr&#252;fen" />
+                        <Button Width="170" Margin="0,0,0,8" Padding="10,6" Command="{Binding ReviewSelectedMetadataCommand}" Content="TVDB pr&#252;fen" />
+                    </WrapPanel>
+
+                    <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Padding="10" Background="#F6F4EA" BorderBrush="#B8AA72" BorderThickness="1" CornerRadius="6">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Serienbibliothek" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
+                                <Run Text=": " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Video" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
+                                <Run Text=" | weitere: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio / AD" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
+                                <Run Text=" | AD: " />
+                                <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Untertitel" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Anh&#228;nge" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.PlanSummaryText, Mode=OneWay, TargetNullValue=Vorhandene Bibliotheksdateien werden nach dem Scan automatisch verglichen.}" />
+                </Grid>
+            </GroupBox>
+
+            <TextBlock Grid.Row="4" Margin="0,12,0,6" Text="{Binding StatusText, Mode=OneWay}" />
+            <ProgressBar Grid.Row="5" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
+
+            <Expander Grid.Row="6"
                       Margin="0,12,0,0"
-                      Header="Ausgew&#228;hlten Eintrag pr&#252;fen und anpassen"
+                      Header="Korrekturen und Details"
                       MaxHeight="320"
                       IsExpanded="False">
                 <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
                         <Grid Margin="8">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -289,53 +357,8 @@
                                 <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
                             </StackPanel>
                             <Button Grid.Row="6" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe &#228;ndern" />
-
-                            <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Geplante Verwendung" />
-                            <Border Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,4,0,4" Padding="10" Background="#F6F4EA" BorderBrush="#B8AA72" BorderThickness="1" CornerRadius="6">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="130" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Serienbibliothek" />
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
-                                        <Run Text=": " />
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveDetails, Mode=OneWay}" />
-                                    </TextBlock>
-
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Video" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
-                                        <Run Text=" | weitere: " />
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AdditionalVideos, Mode=OneWay}" />
-                                    </TextBlock>
-
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio / AD" />
-                                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
-                                        <Run Text=" | AD: " />
-                                        <Run Text="{Binding SelectedEpisodeItem.UsageSummary.AudioDescription, Mode=OneWay}" />
-                                    </TextBlock>
-
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Untertitel" />
-                                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
-
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Anh&#228;nge" />
-                                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap" Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
-                                </Grid>
-                            </Border>
-
-                            <TextBlock Grid.Row="9" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
-                            <TextBox Grid.Row="9"
+                            <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                            <TextBox Grid.Row="7"
                                      Grid.Column="1"
                                      Grid.ColumnSpan="2"
                                      Margin="0,4,0,4"
@@ -350,7 +373,7 @@
                 </Border>
             </Expander>
 
-            <Expander Grid.Row="6" Header="Batch-Protokoll" Margin="0,12,0,0" IsExpanded="False">
+            <Expander Grid.Row="7" Header="Batch-Protokoll" Margin="0,12,0,0" IsExpanded="False">
                 <TextBox Margin="8"
                          FontFamily="Consolas"
                          AcceptsReturn="True"
