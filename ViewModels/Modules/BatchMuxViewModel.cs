@@ -2,7 +2,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
 using System.Windows.Data;
@@ -22,6 +21,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
     private readonly BufferedTextStore _logBuffer;
+    private readonly EpisodeReviewWorkflow _reviewWorkflow;
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -39,6 +39,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     {
         _services = services;
         _dialogService = dialogService;
+        _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _logBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => LogText = text);
@@ -263,10 +264,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             SetStatus("Scanne Ordner...", 0);
 
             var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
-            var mainVideoFiles = Directory.GetFiles(SourceDirectory, "*.mp4")
-                .Where(file => !LooksLikeAudioDescription(file))
-                .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var mainVideoFiles = _services.BatchScan.FindMainVideoFiles(SourceDirectory);
 
             var total = mainVideoFiles.Count;
             if (total == 0)
@@ -795,26 +793,19 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             SetBusy(true);
             SetStatus("Eintrag wird neu erkannt...", 0);
 
-            var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
+            var result = await _services.BatchScan.ScanAsync(
                 selectedVideoPath,
+                OutputDirectory,
                 HandleSelectedItemDetectionProgress,
                 excludedSourcePaths);
-            var localGuess = new EpisodeMetadataGuess(
-                detected.SeriesName,
-                detected.SuggestedTitle,
-                detected.SeasonNumber,
-                detected.EpisodeNumber);
-            SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
-            var metadataResolution = await ResolveMetadataAsync(detected);
-            detected = ApplyMetadataSelection(detected, metadataResolution);
-            var outputPath = BuildOutputPath(detected);
+            var outputPath = result.OutputPath;
             var outputAlreadyExists = File.Exists(outputPath);
 
             item.ApplyDetection(
                 requestedMainVideoPath: selectedVideoPath,
-                localGuess: localGuess,
-                detected: detected,
-                metadataResolution: metadataResolution,
+                localGuess: result.LocalGuess,
+                detected: result.Detected,
+                metadataResolution: result.MetadataResolution,
                 outputPath: outputPath,
                 status: outputAlreadyExists ? "Vergleich offen" : "Bereit");
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
@@ -842,15 +833,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private async Task<SeriesEpisodeMuxPlan> BuildPlanForItemAsync(BatchEpisodeItemViewModel item)
     {
-        var request = new SeriesEpisodeMuxRequest(
-            item.MainVideoPath,
-            item.AudioDescriptionPath,
-            item.SubtitlePaths,
-            item.AttachmentPaths,
-            item.OutputPath,
-            item.TitleForMux);
-
-        return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+        return await _services.EpisodePlans.BuildPlanAsync(item);
     }
 
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(
@@ -1171,61 +1154,21 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private async Task<bool> ReviewEpisodeAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
     {
-        while (item.RequiresManualCheck && !string.IsNullOrWhiteSpace(item.CurrentReviewTargetPath))
-        {
-            var reviewTargetPath = item.CurrentReviewTargetPath!;
-            SetStatus(
-                isBatchPreparation
-                    ? $"Prüfe Quelle für '{item.Title}'..."
-                    : "Prüfe Quelle...",
-                ProgressValue);
-
-            _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
-
-            var result = _dialogService.AskSourceReviewResult(
-                Path.GetFileName(reviewTargetPath),
-                canTryAlternative: true);
-
-            if (result == MessageBoxResult.Cancel)
-            {
-                SetStatus("Quellenprüfung abgebrochen", ProgressValue);
-                return false;
-            }
-
-            if (result == MessageBoxResult.Yes)
-            {
-                item.ApproveCurrentReviewTarget();
-                SetStatus(
-                    isBatchPreparation
-                        ? $"Quelle für '{item.Title}' freigegeben"
-                        : "Quelle freigegeben",
-                    100);
-                return true;
-            }
-
-            var tentativeExclusions = new HashSet<string>(item.ExcludedSourcePaths, StringComparer.OrdinalIgnoreCase)
-            {
-                reviewTargetPath
-            };
-
-            var updated = await ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions);
-            if (!updated)
-            {
-                return false;
-            }
-
-            if (!item.RequiresManualCheck)
-            {
-                SetStatus(
-                    isBatchPreparation
-                        ? $"Alternative Quelle für '{item.Title}' gewählt"
-                        : "Auf alternative Quelle umgestellt",
-                    100);
-                return true;
-            }
-        }
-
-        return !item.RequiresManualCheck || item.IsManualCheckApproved;
+        return await _reviewWorkflow.ReviewManualSourceAsync(
+            item,
+            SetStatus,
+            ProgressValue,
+            isBatchPreparation
+                ? $"Prüfe Quelle für '{item.Title}'..."
+                : "Prüfe Quelle...",
+            "Quellenprüfung abgebrochen",
+            isBatchPreparation
+                ? $"Quelle für '{item.Title}' freigegeben"
+                : "Quelle freigegeben",
+            isBatchPreparation
+                ? $"Alternative Quelle für '{item.Title}' gewählt"
+                : "Auf alternative Quelle umgestellt",
+            tentativeExclusions => ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions));
     }
 
     private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
@@ -1235,88 +1178,30 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return true;
         }
 
-        SetStatus(
+        var outcome = await _reviewWorkflow.ReviewMetadataAsync(
+            item,
+            SetStatus,
+            ProgressValue,
             isBatchPreparation
                 ? $"Prüfe TVDB-Zuordnung für '{item.Title}'..."
                 : "Prüfe TVDB-Zuordnung...",
-            ProgressValue);
-
-        var guess = new EpisodeMetadataGuess(
-            item.LocalSeriesName,
-            item.LocalTitle,
-            item.LocalSeasonNumber,
-            item.LocalEpisodeNumber);
-
-        var dialog = new Windows.TvdbLookupWindow(_services.EpisodeMetadata, guess)
-        {
-            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
-                ?? Application.Current?.MainWindow
-        };
-
-        if (dialog.ShowDialog() != true)
-        {
-            SetStatus("TVDB-Prüfung abgebrochen", ProgressValue);
-            return false;
-        }
-
-        if (dialog.KeepLocalDetection)
-        {
-            item.ApplyLocalMetadataGuess();
-            RefreshAutomaticOutputPath(item);
-            item.ApproveMetadataReview("Lokale Erkennung wurde bewusst beibehalten.");
-            SetStatus(
-                isBatchPreparation
-                    ? $"Lokale Erkennung für '{item.Title}' freigegeben"
-                    : "Lokale Erkennung freigegeben",
-                100);
-            if (ReferenceEquals(SelectedEpisodeItem, item))
-            {
-                ScheduleSelectedItemPlanSummaryRefresh();
-            }
-            return true;
-        }
-
-        if (dialog.SelectedEpisodeSelection is null)
-        {
-            SetStatus("TVDB-Prüfung abgebrochen", ProgressValue);
-            return false;
-        }
-
-        item.ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
-        RefreshAutomaticOutputPath(item);
-        item.ApproveMetadataReview(
-            $"TVDB manuell bestätigt: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
-
-        SetStatus(
+            "TVDB-Prüfung abgebrochen",
+            isBatchPreparation
+                ? $"Lokale Erkennung für '{item.Title}' freigegeben"
+                : "Lokale Erkennung freigegeben",
             isBatchPreparation
                 ? $"TVDB-Zuordnung für '{item.Title}' freigegeben"
                 : "TVDB-Zuordnung freigegeben",
-            100);
-        if (ReferenceEquals(SelectedEpisodeItem, item))
-        {
-            ScheduleSelectedItemPlanSummaryRefresh();
-        }
+            () =>
+            {
+                RefreshAutomaticOutputPath(item);
+                if (ReferenceEquals(SelectedEpisodeItem, item))
+                {
+                    ScheduleSelectedItemPlanSummaryRefresh();
+                }
+            });
 
-        await Task.CompletedTask;
-        return true;
-    }
-
-    private async Task<EpisodeMetadataResolutionResult> ResolveMetadataAsync(AutoDetectedEpisodeFiles detected)
-    {
-        return await _services.EpisodeMetadata.ResolveAutomaticallyAsync(new EpisodeMetadataGuess(
-            detected.SeriesName,
-            detected.SuggestedTitle,
-            detected.SeasonNumber,
-            detected.EpisodeNumber));
-    }
-
-    private static AutoDetectedEpisodeFiles ApplyMetadataSelection(
-        AutoDetectedEpisodeFiles detected,
-        EpisodeMetadataResolutionResult resolution)
-    {
-        return resolution.Selection is null
-            ? detected
-            : EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
+        return outcome != EpisodeMetadataReviewOutcome.Cancelled;
     }
 
     private bool CanReviewPendingSources()
@@ -1447,13 +1332,6 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    private static bool LooksLikeAudioDescription(string filePath)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        return fileName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
-    }
-
     private static int CalculatePercent(int current, int total)
     {
         return total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
@@ -1477,31 +1355,22 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         await throttler.WaitAsync();
         try
         {
-            var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
+            var result = await _services.BatchScan.ScanAsync(
                 file,
+                OutputDirectory,
                 update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update));
-
-            var localGuess = new EpisodeMetadataGuess(
-                detected.SeriesName,
-                detected.SuggestedTitle,
-                detected.SeasonNumber,
-                detected.EpisodeNumber);
 
             HandleSelectedItemDetectionProgress(new DetectionProgressUpdate(
                 $"TVDB-Abgleich für {Path.GetFileName(file)}...",
                 CalculatePercent(getCompletedCount(), total)));
 
-            var metadataResolution = await ResolveMetadataAsync(detected);
-            detected = ApplyMetadataSelection(detected, metadataResolution);
-            var outputPath = BuildOutputPath(detected);
-
             target[index] = new BatchScanResult(
                 index,
                 file,
-                detected,
-                localGuess,
-                metadataResolution,
-                outputPath,
+                result.Detected,
+                result.LocalGuess,
+                result.MetadataResolution,
+                result.OutputPath,
                 null);
         }
         catch (Exception ex)

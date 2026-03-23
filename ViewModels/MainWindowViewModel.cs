@@ -166,13 +166,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var executionService = new MuxExecutionService();
         var outputParser = new MkvMergeOutputParser();
         var muxService = new SeriesEpisodeMuxService(planner, executionService, outputParser);
+        var episodePlanCoordinator = new EpisodePlanCoordinator(muxService);
         var fileCopyService = new FileCopyService();
         var cleanupService = new EpisodeCleanupService();
         var muxWorkflow = new MuxWorkflowCoordinator(muxService, fileCopyService, cleanupService);
         var metadataStore = new AppMetadataStore();
         var tvdbClient = new TvdbClient();
         var metadataLookupService = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
-        var appServices = new AppServices(muxService, archiveService, outputPathService, cleanupFilePlanner, metadataLookupService, fileCopyService, cleanupService, muxWorkflow);
+        var batchScanCoordinator = new BatchScanCoordinator(muxService, metadataLookupService, outputPathService);
+        var appServices = new AppServices(muxService, episodePlanCoordinator, batchScanCoordinator, archiveService, outputPathService, cleanupFilePlanner, metadataLookupService, fileCopyService, cleanupService, muxWorkflow);
 
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);
         var batch = new BatchMuxViewModel(appServices, dialogService);

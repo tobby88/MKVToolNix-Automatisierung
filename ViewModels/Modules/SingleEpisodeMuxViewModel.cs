@@ -10,13 +10,14 @@ using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
-public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
+public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged, IEpisodePlanInput, IEpisodeReviewItem
 {
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
     private readonly BufferedTextStore _previewOutputBuffer;
+    private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private CancellationTokenSource? _planSummaryRefreshCts;
 
     private string? _mainVideoPath;
@@ -56,6 +57,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         _services = services;
         _dialogService = dialogService;
+        _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _previewOutputBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => PreviewText = text);
@@ -799,45 +801,34 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private async Task OpenTvdbLookupAsync()
     {
-        var guess = _detectedMetadataGuess ?? new EpisodeMetadataGuess(
-            string.IsNullOrWhiteSpace(SeriesName) ? "Unbekannte Serie" : SeriesName,
-            string.IsNullOrWhiteSpace(Title) ? "Unbekannter Titel" : Title,
-            SeasonNumber,
-            EpisodeNumber);
+        var outcome = await _reviewWorkflow.ReviewMetadataAsync(
+            this,
+            SetStatus,
+            ProgressValue,
+            "Prüfe TVDB-Zuordnung...",
+            "TVDB-Prüfung abgebrochen",
+            "Lokale Erkennung freigegeben",
+            "TVDB-Zuordnung freigegeben",
+            () =>
+            {
+                UpdateSuggestedOutputPathIfAutomatic();
+                RefreshOutputTargetStatus();
+                SchedulePlanSummaryRefresh();
+            });
 
-        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess)
+        switch (outcome)
         {
-            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
-                ?? Application.Current?.MainWindow
-        };
-
-        if (dialog.ShowDialog() != true)
-        {
-            return;
+            case EpisodeMetadataReviewOutcome.KeptLocalDetection:
+                PreviewText = "Lokale Metadaten beibehalten. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
+                break;
+            case EpisodeMetadataReviewOutcome.AppliedTvdbSelection:
+                PreviewText = "TVDB-Metadaten übernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
+                break;
+            default:
+                return;
         }
 
-        if (dialog.KeepLocalDetection)
-        {
-            ApplyLocalMetadataGuess();
-            MarkMetadataAsReviewed("Lokale Erkennung wurde bewusst beibehalten.");
-            SetStatus("Lokale Erkennung beibehalten", 100);
-            PreviewText = "Lokale Metadaten beibehalten. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
-            RefreshCommands();
-            return;
-        }
-
-        if (dialog.SelectedEpisodeSelection is null)
-        {
-            return;
-        }
-
-        ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
-        MarkMetadataAsReviewed(
-            $"TVDB manuell übernommen: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
-        SetStatus("TVDB-Zuordnung übernommen", 100);
-        PreviewText = "TVDB-Metadaten übernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
         RefreshCommands();
-        await Task.CompletedTask;
     }
 
     private void TestSelectedSources()
@@ -847,63 +838,38 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private async Task ReviewSourcesAsync()
     {
-        while (RequiresManualCheck && !string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
-        {
-            var reviewTargetPath = CurrentReviewTargetPath!;
-            SetStatus("Prüfe Quelle...", ProgressValue);
-            _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
-
-            var result = _dialogService.AskSourceReviewResult(
-                Path.GetFileName(reviewTargetPath),
-                canTryAlternative: true);
-
-            if (result == MessageBoxResult.Cancel)
+        await _reviewWorkflow.ReviewManualSourceAsync(
+            this,
+            SetStatus,
+            ProgressValue,
+            "Prüfe Quelle...",
+            "Quellenprüfung abgebrochen",
+            "Quelle freigegeben",
+            "Auf alternative Quelle umgestellt",
+            async tentativeExclusions =>
             {
-                SetStatus("Quellenprüfung abgebrochen", ProgressValue);
-                return;
-            }
+                var detectionSeedPath = _detectionSeedPath ?? _mainVideoPath;
+                if (string.IsNullOrWhiteSpace(detectionSeedPath))
+                {
+                    _dialogService.ShowWarning("Hinweis", "Es konnte keine alternative Quelle ermittelt werden.");
+                    return false;
+                }
 
-            if (result == MessageBoxResult.Yes)
-            {
-                _approvedReviewPath = reviewTargetPath;
-                UpdateManualCheckText();
-                OnPropertyChanged(nameof(ManualCheckButtonText));
-                OnPropertyChanged(nameof(ManualCheckBadgeText));
-                SetStatus("Quelle freigegeben", 100);
-                return;
-            }
+                _approvedReviewPath = null;
+                var updated = await ApplyAutoDetectedFilesAsync(detectionSeedPath, tentativeExclusions);
+                if (!updated)
+                {
+                    return false;
+                }
 
-            var detectionSeedPath = _detectionSeedPath ?? _mainVideoPath;
-            if (string.IsNullOrWhiteSpace(detectionSeedPath))
-            {
-                _dialogService.ShowWarning("Hinweis", "Es konnte keine alternative Quelle ermittelt werden.");
-                return;
-            }
+                _excludedSourcePaths.Clear();
+                foreach (var excludedPath in tentativeExclusions)
+                {
+                    _excludedSourcePaths.Add(excludedPath);
+                }
 
-            var tentativeExclusions = new HashSet<string>(_excludedSourcePaths, StringComparer.OrdinalIgnoreCase)
-            {
-                reviewTargetPath
-            };
-
-            _approvedReviewPath = null;
-            var updated = await ApplyAutoDetectedFilesAsync(detectionSeedPath, tentativeExclusions);
-            if (!updated)
-            {
-                return;
-            }
-
-            _excludedSourcePaths.Clear();
-            foreach (var excludedPath in tentativeExclusions)
-            {
-                _excludedSourcePaths.Add(excludedPath);
-            }
-
-            if (!RequiresManualCheck)
-            {
-                SetStatus("Auf alternative Quelle umgestellt", 100);
-                return;
-            }
-        }
+                return true;
+            });
     }
 
     private void UpdateManualCheckText()
@@ -1124,15 +1090,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
     private async Task<SeriesEpisodeMuxPlan> BuildPlanAsync()
     {
-        var request = new SeriesEpisodeMuxRequest(
-            RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswählen."),
-            _audioDescriptionPath,
-            _subtitlePaths,
-            _attachmentPaths,
-            RequireValue(_outputPath, "Bitte eine Ausgabedatei wählen."),
-            RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben."));
-
-        return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
+        RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswählen.");
+        RequireValue(_outputPath, "Bitte eine Ausgabedatei wählen.");
+        RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben.");
+        return await _services.EpisodePlans.BuildPlanAsync(this);
     }
 
     private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
@@ -1373,6 +1334,59 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private void ResetPreviewOutputBuffer(string initialText)
     {
         _previewOutputBuffer.Reset(initialText);
+    }
+
+    string IEpisodePlanInput.MainVideoPath => RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswählen.");
+
+    string? IEpisodePlanInput.AudioDescriptionPath => _audioDescriptionPath;
+
+    IReadOnlyList<string> IEpisodePlanInput.SubtitlePaths => _subtitlePaths;
+
+    IReadOnlyList<string> IEpisodePlanInput.AttachmentPaths => _attachmentPaths;
+
+    string IEpisodePlanInput.OutputPath => RequireValue(_outputPath, "Bitte eine Ausgabedatei wählen.");
+
+    string IEpisodePlanInput.TitleForMux => RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben.");
+
+    string IEpisodeReviewItem.ReviewTitle => Title;
+
+    bool IEpisodeReviewItem.IsManualCheckApproved => IsManualCheckApproved;
+
+    string? IEpisodeReviewItem.CurrentReviewTargetPath => CurrentReviewTargetPath;
+
+    string IEpisodeReviewItem.DetectionSeedPath => _detectionSeedPath ?? _mainVideoPath ?? string.Empty;
+
+    IReadOnlyCollection<string> IEpisodeReviewItem.ExcludedSourcePaths => _excludedSourcePaths;
+
+    string IEpisodeReviewItem.LocalSeriesName => _detectedMetadataGuess?.SeriesName ?? SeriesName;
+
+    string IEpisodeReviewItem.LocalSeasonNumber => _detectedMetadataGuess?.SeasonNumber ?? SeasonNumber;
+
+    string IEpisodeReviewItem.LocalEpisodeNumber => _detectedMetadataGuess?.EpisodeNumber ?? EpisodeNumber;
+
+    string IEpisodeReviewItem.LocalTitle => _detectedMetadataGuess?.EpisodeTitle ?? Title;
+
+    void IEpisodeReviewItem.ApproveCurrentReviewTarget()
+    {
+        _approvedReviewPath = CurrentReviewTargetPath;
+        UpdateManualCheckText();
+        OnPropertyChanged(nameof(ManualCheckButtonText));
+        OnPropertyChanged(nameof(ManualCheckBadgeText));
+    }
+
+    void IEpisodeReviewItem.ApplyLocalMetadataGuess()
+    {
+        ApplyLocalMetadataGuess();
+    }
+
+    void IEpisodeReviewItem.ApplyTvdbSelection(TvdbEpisodeSelection selection)
+    {
+        ApplyTvdbSelection(selection);
+    }
+
+    void IEpisodeReviewItem.ApproveMetadataReview(string statusText)
+    {
+        MarkMetadataAsReviewed(statusText);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

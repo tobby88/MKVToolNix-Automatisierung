@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -14,7 +15,7 @@ internal sealed record BatchScanResult(
     string? OutputPath,
     string? ErrorMessage);
 
-public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
+public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged, IEpisodePlanInput, IEpisodeReviewItem
 {
     private bool _isSelected;
     private string _status;
@@ -109,6 +110,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Title => TitleForMux;
+
+    public string ReviewTitle => Title;
 
     public string LocalSeriesName => _localSeriesName;
 
