@@ -86,8 +86,8 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems => _episodeCollection.Items;
     public ICollectionView EpisodeItemsView => _episodeCollection.View;
-    public IReadOnlyList<string> FilterModes => _episodeCollection.FilterModes;
-    public IReadOnlyList<string> SortModes => _episodeCollection.SortModes;
+    public IReadOnlyList<BatchEpisodeFilterOption> FilterModes => _episodeCollection.FilterModes;
+    public IReadOnlyList<BatchEpisodeSortOption> SortModes => _episodeCollection.SortModes;
 
     public string SourceDirectory
     {
@@ -109,7 +109,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    public string SelectedFilterMode
+    public BatchEpisodeFilterOption SelectedFilterMode
     {
         get => _episodeCollection.SelectedFilterMode;
         set
@@ -123,7 +123,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    public string SelectedSortMode
+    public BatchEpisodeSortOption SelectedSortMode
     {
         get => _episodeCollection.SelectedSortMode;
         set

@@ -143,7 +143,7 @@ public sealed partial class BatchMuxViewModel
                 $"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt",
                 AutomaticCompareProgressStart);
             await RefreshComparisonPlansAsync(
-                EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
+                EpisodeItems.Where(item => item.ArchiveState == EpisodeArchiveState.Existing).ToList(),
                 automatic: true);
             SetStatus(StatusText, 100);
             RefreshCommands();

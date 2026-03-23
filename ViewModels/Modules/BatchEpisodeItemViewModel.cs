@@ -109,7 +109,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         var value when value.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase) => 0,
         "Warnung" => 1,
-        "L�uft" => 2,
+        "L\u00e4uft" => 2,
         "Vergleich offen" => 3,
         "Bereit" => 4,
         "Ziel aktuell" => 5,
@@ -205,7 +205,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             detected,
             metadataResolution,
             outputPath);
-        ApplyArchiveState(outputPath, status);
+        ApplyArchiveState(status);
         IsSelected = true;
     }
 
@@ -230,7 +230,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     public override void SetOutputPath(string outputPath)
     {
         base.SetOutputPath(outputPath);
-        ApplyArchiveState(OutputPath);
+        ApplyArchiveState();
         IsSelected = true;
     }
 
@@ -240,7 +240,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         base.SetAutomaticOutputPath(outputPath);
         if (!string.Equals(previousOutputPath, OutputPath, StringComparison.OrdinalIgnoreCase))
         {
-            ApplyArchiveState(OutputPath);
+            ApplyArchiveState();
         }
     }
 
@@ -268,9 +268,15 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         IsSelected = true;
     }
 
-    private void ApplyArchiveState(string outputPath, string? statusOverride = null)
+    public void RefreshArchivePresence()
     {
-        var outputExists = !string.IsNullOrWhiteSpace(outputPath) && File.Exists(outputPath);
+        ApplyArchiveState();
+    }
+
+    private void ApplyArchiveState(string? statusOverride = null)
+    {
+        RefreshArchiveState();
+        var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         Status = statusOverride ?? (outputExists ? "Vergleich offen" : "Bereit");
         SetPlanSummary(outputExists
             ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."

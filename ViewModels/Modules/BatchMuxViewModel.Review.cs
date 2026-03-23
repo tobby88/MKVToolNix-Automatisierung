@@ -146,7 +146,7 @@ public sealed partial class BatchMuxViewModel
     private async Task RefreshAllComparisonsAsync()
     {
         await RefreshComparisonPlansAsync(
-            EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
+            EpisodeItems.Where(item => item.ArchiveState == EpisodeArchiveState.Existing).ToList(),
             automatic: false);
     }
 

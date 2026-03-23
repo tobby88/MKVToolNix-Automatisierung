@@ -1,6 +1,19 @@
 <UserControl x:Class="MkvToolnixAutomatisierung.Views.SingleEpisodeMuxView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="DisplaySurfaceBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="#F7F7F7" />
+            <Setter Property="BorderBrush" Value="#D8D8D8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+        <Style x:Key="DisplaySurfaceTextStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -26,7 +39,10 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Hauptvideo (.mp4)" />
-                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding MainVideoPath, Mode=OneWay}" />
+                    <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                        <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                   Text="{Binding MainVideoPath, Mode=OneWay}" />
+                    </Border>
                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectMainVideoCommand}" Content="Hauptvideo wählen" />
 
                     <Border Grid.Row="1"
@@ -309,19 +325,49 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="AD-Datei (.mp4)" />
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
+                <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                    <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                               Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
+                </Border>
                 <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="{Binding AudioDescriptionButtonText, Mode=OneWay}" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
-                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="56" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SubtitleDisplayText, Mode=OneWay}" />
+                <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="56" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding SubtitlePaths, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="0,0,0,4"
+                                               Style="{StaticResource DisplaySurfaceTextStyle}"
+                                               Text="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
                 <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectSubtitlesCommand}" Content="Untertitel korrigieren" />
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Metadaten-Anhänge (.txt)" />
-                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="56" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding AttachmentDisplayText, Mode=OneWay}" />
+                <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="56" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding AttachmentPaths, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Margin="0,0,0,4"
+                                               Style="{StaticResource DisplaySurfaceTextStyle}"
+                                               Text="{Binding}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
                 <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAttachmentCommand}" Content="Anhänge korrigieren" />
 
                 <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Ausgabedatei (.mkv)" />
-                <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" IsReadOnly="True" Text="{Binding OutputPath, Mode=OneWay}" />
+                <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                    <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                               Text="{Binding OutputPath, Mode=OneWay}" />
+                </Border>
                 <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe ändern" />
 
                 <Border Grid.Row="4"

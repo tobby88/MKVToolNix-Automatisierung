@@ -1,6 +1,19 @@
 <UserControl x:Class="MkvToolnixAutomatisierung.Views.BatchMuxView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="DisplaySurfaceBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="#F7F7F7" />
+            <Setter Property="BorderBrush" Value="#D8D8D8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+        <Style x:Key="DisplaySurfaceTextStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -54,10 +67,12 @@
                     <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Text="Filter" />
                     <ComboBox Width="150"
                               Margin="0,0,16,0"
+                              DisplayMemberPath="DisplayName"
                               ItemsSource="{Binding FilterModes, Mode=OneWay}"
                               SelectedItem="{Binding SelectedFilterMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Text="Sortierung" />
                     <ComboBox Width="160"
+                              DisplayMemberPath="DisplayName"
                               ItemsSource="{Binding SortModes, Mode=OneWay}"
                               SelectedItem="{Binding SelectedSortMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                 </StackPanel>
@@ -335,8 +350,16 @@
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="TVDB-Status" />
                                     <StackPanel Grid.Row="1" Grid.Column="1">
-                                        <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay}" />
-                                        <TextBox Margin="0,4,12,4" Height="52" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MetadataStatusText, Mode=OneWay}" />
+                                        <Border Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                            <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                       Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay}" />
+                                        </Border>
+                                        <Border Margin="0,4,12,4" Height="52" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                           Text="{Binding SelectedEpisodeItem.MetadataStatusText, Mode=OneWay}" />
+                                            </ScrollViewer>
+                                        </Border>
                                     </StackPanel>
                                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding ReviewSelectedMetadataCommand}" Content="TVDB pr&#252;fen" />
                                 </Grid>
@@ -357,19 +380,53 @@
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Quellen" />
-                                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.RequestedSourcesDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Height="64" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.RequestedSourcePaths, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="0,0,0,4"
+                                                                   Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                                   Text="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
                                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pr&#252;fen" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
-                                    <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="48" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="48" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                       Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
+                                        </ScrollViewer>
+                                    </Border>
                                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" Content="Video neu erkennen" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videos und AD" />
-                                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                       Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
+                                        </ScrollViewer>
+                                    </Border>
                                     <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
-                                    <TextBox Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.SubtitleDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.SubtitlePaths, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="0,0,0,4"
+                                                                   Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                                   Text="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
                                     <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="Untertitel korrigieren" />
                                 </Grid>
                             </GroupBox>
@@ -388,14 +445,23 @@
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anh&#228;nge" />
-                                    <TextBox Grid.Row="0"
-                                             Grid.Column="1"
-                                             Margin="0,4,12,4"
-                                             Height="64"
-                                             AcceptsReturn="True"
-                                             VerticalScrollBarVisibility="Auto"
-                                             IsReadOnly="True"
-                                             Text="{Binding SelectedEpisodeItem.AttachmentDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="0"
+                                            Grid.Column="1"
+                                            Margin="0,4,12,4"
+                                            Height="64"
+                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.AttachmentPaths, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="0,0,0,4"
+                                                                   Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                                   Text="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
                                     <Button Grid.Row="0"
                                             Grid.Column="2"
                                             Margin="0,2,0,2"
@@ -405,11 +471,13 @@
                                             Content="Anh&#228;nge korrigieren" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Ausgabe" />
-                                    <TextBox Grid.Row="1"
-                                             Grid.Column="1"
-                                             Margin="0,4,12,4"
-                                             IsReadOnly="True"
-                                             Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
+                                    <Border Grid.Row="1"
+                                            Grid.Column="1"
+                                            Margin="0,4,12,4"
+                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                   Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
+                                    </Border>
                                     <Button Grid.Row="1"
                                             Grid.Column="2"
                                             Margin="0,2,0,2"
@@ -418,16 +486,24 @@
                                             Content="Ausgabe &#228;ndern" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
-                                    <TextBox Grid.Row="2"
-                                             Grid.Column="1"
-                                             Grid.ColumnSpan="2"
-                                             Margin="0,4,0,4"
-                                             Height="64"
-                                             AcceptsReturn="True"
-                                             VerticalScrollBarVisibility="Auto"
-                                             IsReadOnly="True"
-                                             TextWrapping="Wrap"
-                                             Text="{Binding SelectedEpisodeItem.NotesDisplayText, Mode=OneWay}" />
+                                    <Border Grid.Row="2"
+                                            Grid.Column="1"
+                                            Grid.ColumnSpan="2"
+                                            Margin="0,4,0,4"
+                                            Height="64"
+                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.Notes, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Margin="0,0,0,4"
+                                                                   Style="{StaticResource DisplaySurfaceTextStyle}"
+                                                                   Text="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
                                 </Grid>
                             </GroupBox>
                         </StackPanel>

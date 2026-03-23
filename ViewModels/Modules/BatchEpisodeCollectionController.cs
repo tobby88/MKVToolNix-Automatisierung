@@ -7,20 +7,61 @@ using System.Windows.Threading;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+public enum BatchEpisodeFilterMode
+{
+    All,
+    PendingChecks,
+    NewOnly,
+    ExistingOnly,
+    ErrorsOnly
+}
+
+public enum BatchEpisodeSortMode
+{
+    FileName,
+    PendingChecksFirst,
+    StatusFirst,
+    NewFirst
+}
+
+public sealed record BatchEpisodeFilterOption(BatchEpisodeFilterMode Key, string DisplayName);
+
+public sealed record BatchEpisodeSortOption(BatchEpisodeSortMode Key, string DisplayName);
+
 internal sealed class BatchEpisodeCollectionController : IDisposable
 {
     private readonly ObservableCollection<BatchEpisodeItemViewModel> _items = [];
     private readonly ICollectionView _view;
     private bool _suppressCollectionChanged;
     private bool _viewRefreshPending;
-    private string _selectedFilterMode = "Alle";
-    private string _selectedSortMode = "Dateiname";
+    private BatchEpisodeFilterOption _selectedFilterMode;
+    private BatchEpisodeSortOption _selectedSortMode;
 
     public BatchEpisodeCollectionController()
     {
         _items.CollectionChanged += Items_CollectionChanged;
         _view = CollectionViewSource.GetDefaultView(_items);
         _view.Filter = FilterEpisodeItem;
+
+        FilterModes =
+        [
+            new(BatchEpisodeFilterMode.All, "Alle"),
+            new(BatchEpisodeFilterMode.PendingChecks, "Nur offen"),
+            new(BatchEpisodeFilterMode.NewOnly, "Nur neu"),
+            new(BatchEpisodeFilterMode.ExistingOnly, "Nur vorhanden"),
+            new(BatchEpisodeFilterMode.ErrorsOnly, "Nur Fehler")
+        ];
+
+        SortModes =
+        [
+            new(BatchEpisodeSortMode.FileName, "Dateiname"),
+            new(BatchEpisodeSortMode.PendingChecksFirst, "Pr\u00fcfung zuerst"),
+            new(BatchEpisodeSortMode.StatusFirst, "Status zuerst"),
+            new(BatchEpisodeSortMode.NewFirst, "Neu zuerst")
+        ];
+
+        _selectedFilterMode = FilterModes[0];
+        _selectedSortMode = SortModes[0];
         ApplyViewConfiguration();
     }
 
@@ -33,26 +74,13 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public ICollectionView View => _view;
 
-    public IReadOnlyList<string> FilterModes { get; } =
-    [
-        "Alle",
-        "Nur offen",
-        "Nur neu",
-        "Nur vorhanden",
-        "Nur Fehler"
-    ];
+    public IReadOnlyList<BatchEpisodeFilterOption> FilterModes { get; }
 
-    public IReadOnlyList<string> SortModes { get; } =
-    [
-        "Dateiname",
-        "Prüfung zuerst",
-        "Status zuerst",
-        "Neu zuerst"
-    ];
+    public IReadOnlyList<BatchEpisodeSortOption> SortModes { get; }
 
-    public string SelectedFilterMode => _selectedFilterMode;
+    public BatchEpisodeFilterOption SelectedFilterMode => _selectedFilterMode;
 
-    public string SelectedSortMode => _selectedSortMode;
+    public BatchEpisodeSortOption SelectedSortMode => _selectedSortMode;
 
     public BatchEpisodeItemViewModel? SelectedItem { get; set; }
 
@@ -60,13 +88,13 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public int SelectedEpisodeCount => _items.Count(item => item.IsSelected);
 
-    public int ExistingArchiveCount => _items.Count(item => item.ArchiveStateText == "vorhanden");
+    public int ExistingArchiveCount => _items.Count(item => item.ArchiveState == EpisodeArchiveState.Existing);
 
     public int PendingCheckCount => _items.Count(item => item.IsSelected && item.HasPendingChecks);
 
-    public bool SetFilterMode(string value)
+    public bool SetFilterMode(BatchEpisodeFilterOption? value)
     {
-        if (_selectedFilterMode == value)
+        if (value is null || EqualityComparer<BatchEpisodeFilterOption>.Default.Equals(_selectedFilterMode, value))
         {
             return false;
         }
@@ -76,9 +104,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return true;
     }
 
-    public bool SetSortMode(string value)
+    public bool SetSortMode(BatchEpisodeSortOption? value)
     {
-        if (_selectedSortMode == value)
+        if (value is null || EqualityComparer<BatchEpisodeSortOption>.Default.Equals(_selectedSortMode, value))
         {
             return false;
         }
@@ -153,12 +181,12 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             return false;
         }
 
-        return _selectedFilterMode switch
+        return _selectedFilterMode.Key switch
         {
-            "Nur offen" => episode.HasPendingChecks,
-            "Nur neu" => episode.ArchiveStateText == "neu",
-            "Nur vorhanden" => episode.ArchiveStateText == "vorhanden",
-            "Nur Fehler" => episode.Status.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase),
+            BatchEpisodeFilterMode.PendingChecks => episode.HasPendingChecks,
+            BatchEpisodeFilterMode.NewOnly => episode.ArchiveState == EpisodeArchiveState.New,
+            BatchEpisodeFilterMode.ExistingOnly => episode.ArchiveState == EpisodeArchiveState.Existing,
+            BatchEpisodeFilterMode.ErrorsOnly => episode.Status.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase),
             _ => true
         };
     }
@@ -169,17 +197,17 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         {
             _view.SortDescriptions.Clear();
 
-            switch (_selectedSortMode)
+            switch (_selectedSortMode.Key)
             {
-                case "Prüfung zuerst":
+                case BatchEpisodeSortMode.PendingChecksFirst:
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.HasPendingChecks), ListSortDirection.Descending));
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
                     break;
-                case "Status zuerst":
+                case BatchEpisodeSortMode.StatusFirst:
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.StatusSortKey), ListSortDirection.Ascending));
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
                     break;
-                case "Neu zuerst":
+                case BatchEpisodeSortMode.NewFirst:
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.ArchiveSortKey), ListSortDirection.Ascending));
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
                     break;
@@ -238,14 +266,15 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
         return propertyName switch
         {
-            nameof(BatchEpisodeItemViewModel.HasPendingChecks) => _selectedFilterMode == "Nur offen" || _selectedSortMode == "Prüfung zuerst",
+            nameof(BatchEpisodeItemViewModel.HasPendingChecks) => _selectedFilterMode.Key == BatchEpisodeFilterMode.PendingChecks || _selectedSortMode.Key == BatchEpisodeSortMode.PendingChecksFirst,
             nameof(BatchEpisodeItemViewModel.Status)
-                or nameof(BatchEpisodeItemViewModel.StatusSortKey) => _selectedFilterMode == "Nur Fehler" || _selectedSortMode == "Status zuerst",
+                or nameof(BatchEpisodeItemViewModel.StatusSortKey) => _selectedFilterMode.Key == BatchEpisodeFilterMode.ErrorsOnly || _selectedSortMode.Key == BatchEpisodeSortMode.StatusFirst,
             nameof(BatchEpisodeItemViewModel.OutputPath)
+                or nameof(BatchEpisodeItemViewModel.ArchiveState)
                 or nameof(BatchEpisodeItemViewModel.ArchiveStateText)
-                or nameof(BatchEpisodeItemViewModel.ArchiveSortKey) => _selectedFilterMode is "Nur neu" or "Nur vorhanden" || _selectedSortMode == "Neu zuerst",
+                or nameof(BatchEpisodeItemViewModel.ArchiveSortKey) => _selectedFilterMode.Key is BatchEpisodeFilterMode.NewOnly or BatchEpisodeFilterMode.ExistingOnly || _selectedSortMode.Key == BatchEpisodeSortMode.NewFirst,
             nameof(BatchEpisodeItemViewModel.MainVideoPath)
-                or nameof(BatchEpisodeItemViewModel.MainVideoFileName) => _selectedSortMode is "Dateiname" or "Prüfung zuerst" or "Status zuerst" or "Neu zuerst",
+                or nameof(BatchEpisodeItemViewModel.MainVideoFileName) => _selectedSortMode.Key is BatchEpisodeSortMode.FileName or BatchEpisodeSortMode.PendingChecksFirst or BatchEpisodeSortMode.StatusFirst or BatchEpisodeSortMode.NewFirst,
             _ => false
         };
     }
@@ -258,6 +287,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.RequiresManualCheck)
             or nameof(BatchEpisodeItemViewModel.IsMetadataReviewApproved)
             or nameof(BatchEpisodeItemViewModel.RequiresMetadataReview)
+            or nameof(BatchEpisodeItemViewModel.ArchiveState)
             or nameof(BatchEpisodeItemViewModel.OutputPath);
     }
 
