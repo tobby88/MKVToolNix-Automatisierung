@@ -379,6 +379,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="180" />
@@ -386,18 +387,38 @@
                                         <ColumnDefinition Width="170" />
                                     </Grid.ColumnDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anh&#228;nge / Ausgabe" />
-                                    <StackPanel Grid.Row="0" Grid.Column="1">
-                                        <TextBox Margin="0,4,12,4" Height="64" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.AttachmentDisplayText, Mode=OneWay}" />
-                                        <TextBox Margin="0,4,12,4" IsReadOnly="True" Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="2">
-                                        <Button Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAttachmentsCommand}" Content="Anh&#228;nge korrigieren" />
-                                        <Button Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedOutputCommand}" Content="Ausgabe &#228;ndern" />
-                                    </StackPanel>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Anh&#228;nge" />
+                                    <TextBox Grid.Row="0"
+                                             Grid.Column="1"
+                                             Margin="0,4,12,4"
+                                             Height="64"
+                                             AcceptsReturn="True"
+                                             VerticalScrollBarVisibility="Auto"
+                                             IsReadOnly="True"
+                                             Text="{Binding SelectedEpisodeItem.AttachmentDisplayText, Mode=OneWay}" />
+                                    <Button Grid.Row="0"
+                                            Grid.Column="2"
+                                            Margin="0,2,0,2"
+                                            Padding="10,6"
+                                            VerticalAlignment="Top"
+                                            Command="{Binding EditSelectedAttachmentsCommand}"
+                                            Content="Anh&#228;nge korrigieren" />
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Ausgabe" />
                                     <TextBox Grid.Row="1"
+                                             Grid.Column="1"
+                                             Margin="0,4,12,4"
+                                             IsReadOnly="True"
+                                             Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
+                                    <Button Grid.Row="1"
+                                            Grid.Column="2"
+                                            Margin="0,2,0,2"
+                                            Padding="10,6"
+                                            Command="{Binding EditSelectedOutputCommand}"
+                                            Content="Ausgabe &#228;ndern" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                                    <TextBox Grid.Row="2"
                                              Grid.Column="1"
                                              Grid.ColumnSpan="2"
                                              Margin="0,4,0,4"

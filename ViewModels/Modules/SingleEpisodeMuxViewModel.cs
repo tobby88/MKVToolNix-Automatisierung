@@ -66,11 +66,11 @@ public sealed class SingleEpisodeMuxViewModel : EpisodeEditModel
         ? "AD-Datei wählen"
         : "AD korrigieren";
 
-    public new string SubtitleDisplayText => SubtitlePaths.Count == 0
+    public override string SubtitleDisplayText => SubtitlePaths.Count == 0
         ? string.Empty
         : string.Join(Environment.NewLine, SubtitlePaths.Select(Path.GetFileName));
 
-    public new string AttachmentDisplayText => AttachmentPaths.Count == 0
+    public override string AttachmentDisplayText => AttachmentPaths.Count == 0
         ? string.Empty
         : string.Join(Environment.NewLine, AttachmentPaths.Select(Path.GetFileName));
 
@@ -342,7 +342,6 @@ public sealed class SingleEpisodeMuxViewModel : EpisodeEditModel
     {
         base.SetSubtitles(paths);
         _currentPlan = null;
-        OnPropertyChanged(nameof(SubtitleDisplayText));
         SchedulePlanSummaryRefresh();
     }
 
@@ -355,7 +354,6 @@ public sealed class SingleEpisodeMuxViewModel : EpisodeEditModel
     {
         base.SetAttachments(paths);
         _currentPlan = null;
-        OnPropertyChanged(nameof(AttachmentDisplayText));
         SchedulePlanSummaryRefresh();
     }
 

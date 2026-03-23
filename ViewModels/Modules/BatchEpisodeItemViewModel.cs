@@ -109,7 +109,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         var value when value.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase) => 0,
         "Warnung" => 1,
-        "LÃ¤uft" => 2,
+        "Läuft" => 2,
         "Vergleich offen" => 3,
         "Bereit" => 4,
         "Ziel aktuell" => 5,
@@ -280,3 +280,4 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
     }
 }
+

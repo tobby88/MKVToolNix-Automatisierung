@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -361,11 +361,7 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
 
     public IReadOnlyList<string> ManualCheckFilePaths => _manualCheckFilePaths;
 
-    public string ManualCheckText => !RequiresManualCheck
-        ? string.Empty
-        : IsManualCheckApproved
-            ? "Die aktuell ausgewählte Quelle wurde bereits geprüft und freigegeben."
-            : "Die aktuell ausgewählte Quelle ist prüfpflichtig. Bitte vor dem Muxen kurz prüfen und freigeben.";
+    public string ManualCheckText => EpisodeEditTextBuilder.BuildManualCheckText(RequiresManualCheck, IsManualCheckApproved);
 
     public string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault();
 
@@ -381,28 +377,11 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
     {
         get
         {
-            var pendingChecks = new List<string>();
-            if (RequiresManualCheck && !IsManualCheckApproved)
-            {
-                pendingChecks.Add("Quelle");
-            }
-
-            if (RequiresMetadataReview && !IsMetadataReviewApproved)
-            {
-                pendingChecks.Add("TVDB");
-            }
-
-            if (pendingChecks.Count > 0)
-            {
-                return string.Join(" + ", pendingChecks) + " prüfen";
-            }
-
-            if (RequiresManualCheck || RequiresMetadataReview)
-            {
-                return "Freigegeben";
-            }
-
-            return "Keine nötig";
+            return EpisodeEditTextBuilder.BuildReviewHint(
+                RequiresManualCheck,
+                IsManualCheckApproved,
+                RequiresMetadataReview,
+                IsMetadataReviewApproved);
         }
     }
 
@@ -412,13 +391,13 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
 
     public IReadOnlyCollection<string> ExcludedSourcePaths => _excludedSourcePaths;
 
-    public string RequestedSourcesDisplayText => FormatPaths(_requestedSourcePaths);
+    public string RequestedSourcesDisplayText => EpisodeEditTextBuilder.FormatPaths(_requestedSourcePaths);
 
     public string MainVideoDisplayText => MainVideoPath;
 
     public string MetadataDisplayText => $"{SeriesName} - {EpisodeCodeDisplayText} - {Title}";
 
-    public string AdditionalVideosDisplayText => FormatPaths(_additionalVideoPaths);
+    public string AdditionalVideosDisplayText => EpisodeEditTextBuilder.FormatPaths(_additionalVideoPaths);
 
     public string AudioDescriptionDisplayText => string.IsNullOrWhiteSpace(AudioDescriptionPath) ? "(keine)" : AudioDescriptionPath;
 
@@ -441,13 +420,11 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
         }
     }
 
-    public string SubtitleDisplayText => FormatPaths(_subtitlePaths);
+    public virtual string SubtitleDisplayText => EpisodeEditTextBuilder.FormatPaths(_subtitlePaths);
 
-    public string AttachmentDisplayText => FormatPaths(_attachmentPaths);
+    public virtual string AttachmentDisplayText => EpisodeEditTextBuilder.FormatPaths(_attachmentPaths);
 
-    public string NotesDisplayText => _notes.Count == 0
-        ? string.Empty
-        : string.Join(Environment.NewLine, _notes.Select(note => "- " + note));
+    public string NotesDisplayText => EpisodeEditTextBuilder.BuildNotesDisplayText(_notes);
 
     public IReadOnlyList<string> SourceFilePaths => EnumerateSourceFilePaths().ToList();
 
@@ -752,15 +729,6 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
         }
     }
 
-    private static string FormatPaths(IEnumerable<string> paths)
-    {
-        var list = paths
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
 
-        return list.Count == 0
-            ? "(keine)"
-            : string.Join(Environment.NewLine, list);
-    }
 }
+

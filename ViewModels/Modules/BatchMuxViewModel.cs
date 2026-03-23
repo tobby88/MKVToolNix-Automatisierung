@@ -22,6 +22,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private readonly UserDialogService _dialogService;
     private readonly BufferedTextStore _logBuffer;
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
+    private readonly BatchEpisodeCollectionController _episodeCollection;
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -32,40 +33,21 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
     private int _selectedPlanSummaryVersion;
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
-    private string _selectedFilterMode = "Alle";
-    private string _selectedSortMode = "Dateiname";
 
     public BatchMuxViewModel(AppServices services, UserDialogService dialogService)
     {
         _services = services;
         _dialogService = dialogService;
         _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
+        _episodeCollection = new BatchEpisodeCollectionController();
         _logBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => LogText = text);
 
-        EpisodeItems.CollectionChanged += EpisodeItems_CollectionChanged;
-        EpisodeItemsView = CollectionViewSource.GetDefaultView(EpisodeItems);
-        EpisodeItemsView.Filter = FilterEpisodeItem;
-
-        FilterModes =
-        [
-            "Alle",
-            "Nur offen",
-            "Nur neu",
-            "Nur vorhanden",
-            "Nur Fehler"
-        ];
-
-        SortModes =
-        [
-            "Dateiname",
-            "Prüfung zuerst",
-            "Status zuerst",
-            "Neu zuerst"
-        ];
-
-        ApplyEpisodeItemsViewConfiguration();
+        _episodeCollection.CommandsChanged += RefreshCommands;
+        _episodeCollection.OverviewChanged += RefreshOverview;
+        _episodeCollection.TitleForMuxChanged += RefreshAutomaticOutputPath;
+        _episodeCollection.SelectedItemPlanInputsChanged += ScheduleSelectedItemPlanSummaryRefresh;
 
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
@@ -102,10 +84,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     public RelayCommand EditSelectedOutputCommand { get; }
     public AsyncRelayCommand RunBatchCommand { get; }
 
-    public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems { get; } = [];
-    public ICollectionView EpisodeItemsView { get; }
-    public IReadOnlyList<string> FilterModes { get; }
-    public IReadOnlyList<string> SortModes { get; }
+    public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems => _episodeCollection.Items;
+    public ICollectionView EpisodeItemsView => _episodeCollection.View;
+    public IReadOnlyList<string> FilterModes => _episodeCollection.FilterModes;
+    public IReadOnlyList<string> SortModes => _episodeCollection.SortModes;
 
     public string SourceDirectory
     {
@@ -129,33 +111,29 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     public string SelectedFilterMode
     {
-        get => _selectedFilterMode;
+        get => _episodeCollection.SelectedFilterMode;
         set
         {
-            if (_selectedFilterMode == value)
+            if (!_episodeCollection.SetFilterMode(value))
             {
                 return;
             }
 
-            _selectedFilterMode = value;
             OnPropertyChanged();
-            EpisodeItemsView.Refresh();
         }
     }
 
     public string SelectedSortMode
     {
-        get => _selectedSortMode;
+        get => _episodeCollection.SelectedSortMode;
         set
         {
-            if (_selectedSortMode == value)
+            if (!_episodeCollection.SetSortMode(value))
             {
                 return;
             }
 
-            _selectedSortMode = value;
             OnPropertyChanged();
-            ApplyEpisodeItemsViewConfiguration();
         }
     }
 
@@ -189,13 +167,13 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
     }
 
-    public int EpisodeCount => EpisodeItems.Count;
+    public int EpisodeCount => _episodeCollection.EpisodeCount;
 
-    public int SelectedEpisodeCount => EpisodeItems.Count(item => item.IsSelected);
+    public int SelectedEpisodeCount => _episodeCollection.SelectedEpisodeCount;
 
-    public int ExistingArchiveCount => EpisodeItems.Count(item => item.ArchiveStateText == "vorhanden");
+    public int ExistingArchiveCount => _episodeCollection.ExistingArchiveCount;
 
-    public int PendingCheckCount => EpisodeItems.Count(item => item.IsSelected && item.HasPendingChecks);
+    public int PendingCheckCount => _episodeCollection.PendingCheckCount;
 
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
@@ -208,6 +186,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             }
 
             _selectedEpisodeItem = value;
+            _episodeCollection.SelectedItem = value;
             OnPropertyChanged();
             RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
@@ -297,11 +276,13 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
             await Task.WhenAll(scanTasks);
 
+            var scannedItems = new List<BatchEpisodeItemViewModel>();
+
             foreach (var result in scanResults.OrderBy(result => result.Index))
             {
                 if (result.ErrorMessage is not null)
                 {
-                    AddEpisodeItem(BatchEpisodeItemViewModel.CreateErrorItem(result.SourcePath, result.ErrorMessage));
+                    scannedItems.Add(BatchEpisodeItemViewModel.CreateErrorItem(result.SourcePath, result.ErrorMessage));
                     AppendLog($"FEHLER: {Path.GetFileName(result.SourcePath)} -> {result.ErrorMessage}");
                     continue;
                 }
@@ -329,13 +310,15 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     status: outputAlreadyExists ? "Vergleich offen" : "Bereit",
                     isSelected: true);
 
-                AddEpisodeItem(item);
+                scannedItems.Add(item);
                 itemsByEpisodeKey[episodeKey] = item;
 
                 AppendLog(outputAlreadyExists
                     ? $"OK: {Path.GetFileName(result.SourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
                     : $"OK: {Path.GetFileName(result.SourcePath)}");
             }
+
+            _episodeCollection.Reset(scannedItems);
 
             var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
             SetStatus(
@@ -344,6 +327,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             await RefreshComparisonPlansAsync(
                 EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
                 automatic: true);
+            SetStatus(StatusText, 100);
             RefreshCommands();
         }
         finally
@@ -1270,66 +1254,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private void SelectAllEpisodes()
     {
-        foreach (var item in EpisodeItems)
-        {
-            item.IsSelected = true;
-        }
-
-        RefreshCommands();
+        _episodeCollection.SelectAll();
     }
 
     private void DeselectAllEpisodes()
     {
-        foreach (var item in EpisodeItems)
-        {
-            item.IsSelected = false;
-        }
-
-        RefreshCommands();
-    }
-
-    private bool FilterEpisodeItem(object item)
-    {
-        if (item is not BatchEpisodeItemViewModel episode)
-        {
-            return false;
-        }
-
-        return SelectedFilterMode switch
-        {
-            "Nur offen" => episode.HasPendingChecks,
-            "Nur neu" => episode.ArchiveStateText == "neu",
-            "Nur vorhanden" => episode.ArchiveStateText == "vorhanden",
-            "Nur Fehler" => episode.Status.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase),
-            _ => true
-        };
-    }
-
-    private void ApplyEpisodeItemsViewConfiguration()
-    {
-        using (EpisodeItemsView.DeferRefresh())
-        {
-            EpisodeItemsView.SortDescriptions.Clear();
-
-            switch (SelectedSortMode)
-            {
-                case "Prüfung zuerst":
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.HasPendingChecks), ListSortDirection.Descending));
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
-                    break;
-                case "Status zuerst":
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.StatusSortKey), ListSortDirection.Ascending));
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
-                    break;
-                case "Neu zuerst":
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.ArchiveSortKey), ListSortDirection.Ascending));
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
-                    break;
-                default:
-                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
-                    break;
-            }
-        }
+        _episodeCollection.DeselectAll();
     }
 
     private static int CalculatePercent(int current, int total)
@@ -1359,10 +1289,6 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 file,
                 OutputDirectory,
                 update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update));
-
-            HandleSelectedItemDetectionProgress(new DetectionProgressUpdate(
-                $"TVDB-Abgleich für {Path.GetFileName(file)}...",
-                CalculatePercent(getCompletedCount(), total)));
 
             target[index] = new BatchScanResult(
                 index,
@@ -1413,9 +1339,10 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 ? 0
                 : ((currentItem - 1) + (update.ProgressPercent / 100d)) / totalItems * 100d;
 
+            var scaledProgress = ScaleProgress((int)Math.Round(baseProgress), 0, AutomaticCompareProgressStart);
             SetStatus(
                 $"Scanne Ordner... {currentItem}/{totalItems} - {Path.GetFileName(currentFilePath)} - {update.StatusText}",
-                ScaleProgress((int)Math.Round(baseProgress), 0, AutomaticCompareProgressStart));
+                Math.Max(ProgressValue, scaledProgress));
         }
 
         if (Application.Current.Dispatcher.CheckAccess())
@@ -1465,56 +1392,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
     private void ClearEpisodeItems()
     {
-        foreach (var item in EpisodeItems)
-        {
-            item.PropertyChanged -= EpisodeItem_PropertyChanged;
-        }
-
-        EpisodeItems.Clear();
+        _episodeCollection.Clear();
         SelectedEpisodeItem = null;
-        EpisodeItemsView.Refresh();
-    }
-
-    private void AddEpisodeItem(BatchEpisodeItemViewModel item)
-    {
-        item.PropertyChanged += EpisodeItem_PropertyChanged;
-        EpisodeItems.Add(item);
-        EpisodeItemsView.Refresh();
-    }
-
-    private void EpisodeItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        RefreshCommands();
-        RefreshOverview();
-        EpisodeItemsView.Refresh();
-    }
-
-    private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        RefreshCommands();
-
-        if (e.PropertyName is nameof(BatchEpisodeItemViewModel.TitleForMux)
-            && sender is BatchEpisodeItemViewModel titleItem)
-        {
-            RefreshAutomaticOutputPath(titleItem);
-        }
-
-        if (ShouldRefreshOverview(e.PropertyName))
-        {
-            RefreshOverview();
-        }
-
-        if (ShouldRefreshView(e.PropertyName))
-        {
-            EpisodeItemsView.Refresh();
-        }
-
-        if (sender is BatchEpisodeItemViewModel item
-            && ReferenceEquals(SelectedEpisodeItem, item)
-            && ShouldRefreshSelectedItemPlanSummary(e.PropertyName))
-        {
-            ScheduleSelectedItemPlanSummaryRefresh();
-        }
     }
 
     private void SetStatus(string text, int progress)
@@ -1529,49 +1408,6 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(SelectedEpisodeCount));
         OnPropertyChanged(nameof(ExistingArchiveCount));
         OnPropertyChanged(nameof(PendingCheckCount));
-    }
-
-    private static bool ShouldRefreshOverview(string? propertyName)
-    {
-        return propertyName is null
-            or nameof(BatchEpisodeItemViewModel.IsSelected)
-            or nameof(BatchEpisodeItemViewModel.Status)
-            or nameof(BatchEpisodeItemViewModel.RequiresManualCheck)
-            or nameof(BatchEpisodeItemViewModel.IsMetadataReviewApproved)
-            or nameof(BatchEpisodeItemViewModel.RequiresMetadataReview)
-            or nameof(BatchEpisodeItemViewModel.OutputPath);
-    }
-
-    private bool ShouldRefreshView(string? propertyName)
-    {
-        if (propertyName is null)
-        {
-            return true;
-        }
-
-        return propertyName switch
-        {
-            nameof(BatchEpisodeItemViewModel.HasPendingChecks) => SelectedFilterMode == "Nur offen" || SelectedSortMode == "Prüfung zuerst",
-            nameof(BatchEpisodeItemViewModel.Status)
-                or nameof(BatchEpisodeItemViewModel.StatusSortKey) => SelectedFilterMode == "Nur Fehler" || SelectedSortMode == "Status zuerst",
-            nameof(BatchEpisodeItemViewModel.OutputPath)
-                or nameof(BatchEpisodeItemViewModel.ArchiveStateText)
-                or nameof(BatchEpisodeItemViewModel.ArchiveSortKey) => SelectedFilterMode is "Nur neu" or "Nur vorhanden" || SelectedSortMode == "Neu zuerst",
-            nameof(BatchEpisodeItemViewModel.MainVideoPath)
-                or nameof(BatchEpisodeItemViewModel.MainVideoFileName) => SelectedSortMode == "Dateiname" || SelectedSortMode == "Prüfung zuerst" || SelectedSortMode == "Status zuerst" || SelectedSortMode == "Neu zuerst",
-            _ => false
-        };
-    }
-
-    private static bool ShouldRefreshSelectedItemPlanSummary(string? propertyName)
-    {
-        return propertyName is null
-            or nameof(BatchEpisodeItemViewModel.TitleForMux)
-            or nameof(BatchEpisodeItemViewModel.MainVideoPath)
-            or nameof(BatchEpisodeItemViewModel.AudioDescriptionPath)
-            or nameof(BatchEpisodeItemViewModel.SubtitlePaths)
-            or nameof(BatchEpisodeItemViewModel.AttachmentPaths)
-            or nameof(BatchEpisodeItemViewModel.OutputPath);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
