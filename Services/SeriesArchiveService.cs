@@ -42,15 +42,17 @@ public sealed class SeriesArchiveService
         string mkvMergePath,
         SeriesEpisodeMuxRequest request,
         AutoDetectedEpisodeFiles detected,
-        IReadOnlyList<string> plannedVideoPaths)
+        IReadOnlyList<string> plannedVideoPaths,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var outputPath = request.OutputFilePath;
         if (!File.Exists(outputPath))
         {
             return ArchiveIntegrationDecision.CreateForFreshTarget(outputPath);
         }
 
-        var existingContainer = await _probeService.ReadContainerMetadataAsync(mkvMergePath, outputPath);
+        var existingContainer = await _probeService.ReadContainerMetadataAsync(mkvMergePath, outputPath, cancellationToken);
         var existingVideoTracks = existingContainer.Tracks
             .Where(track => string.Equals(track.Type, "video", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -66,7 +68,8 @@ public sealed class SeriesArchiveService
         var newVideoMetadata = new List<(string FilePath, MediaTrackMetadata Metadata)>();
         foreach (var videoPath in plannedVideoPaths)
         {
-            newVideoMetadata.Add((videoPath, await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath)));
+            cancellationToken.ThrowIfCancellationRequested();
+            newVideoMetadata.Add((videoPath, await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken)));
         }
 
         var newPrimaryVideo = newVideoMetadata.FirstOrDefault();

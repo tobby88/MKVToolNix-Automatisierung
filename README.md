@@ -4,14 +4,24 @@ Ein bewusst einfach gehaltenes C#-Projekt, um wiederkehrende MKVToolNix-Abläufe
 
 ## Aktueller Stand
 
-Die Anwendung ist jetzt als modulare WPF-App aufgebaut.
+Die Anwendung ist als modulare WPF-App aufgebaut.
 
 Aktuell gibt es zwei getrennte Funktionen:
 
-- `Einzelepisode`: muxe eine einzelne Episode mit automatischer Dateisuche und manueller Korrektur
-- `Batch-Verarbeitung`: scanne einen Ordner nach mehreren Episoden und verarbeite sie nacheinander
+- `Einzelepisode`: eine einzelne Episode mit automatischer Dateisuche und manueller Korrektur muxen
+- `Batch-Verarbeitung`: einen Ordner nach mehreren Episoden scannen und nacheinander verarbeiten
 
 Die Navigation erfolgt über eine linke Modulliste. Rechts wird jeweils das ausgewählte Modul angezeigt.
+
+## Portable Modus
+
+Die App ist bewusst portabel gedacht und nicht für eine klassische Installation vorgesehen.
+
+- Es gibt keinen Installer.
+- Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
+- Reservierte Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Cache` und `.\Logs`.
+- Der Anwendungsordner muss beschreibbar sein.
+- Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
 
 ## Unterstützte Dateien
 
@@ -48,4 +58,3 @@ im Projektordner:
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `C:\Users\tobby\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
-- Die bestehende Einzelfunktion wurde fachlich getestet; die neue Shell- und Batch-Struktur wurde erfolgreich gebaut.

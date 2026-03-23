@@ -31,6 +31,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="170" />
@@ -166,6 +167,29 @@
                     </Border>
 
                     <Border Grid.Row="2"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,0,0,8"
+                            Padding="10"
+                            Background="#FCE8E8"
+                            BorderBrush="#D28A8A"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasPlanRefreshProblem}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="{Binding PlanRefreshProblemText, Mode=OneWay}" />
+                    </Border>
+
+                    <Border Grid.Row="3"
                             Grid.Column="0"
                             Grid.ColumnSpan="3"
                             Margin="0,0,0,4"

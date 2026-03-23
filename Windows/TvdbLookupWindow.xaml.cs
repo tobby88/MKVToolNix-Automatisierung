@@ -132,9 +132,9 @@ public partial class TvdbLookupWindow : Window
         try
         {
             SetBusy(true, "Suche Serie bei TVDB...");
-            SaveSettingsCore();
+            var currentSettings = BuildTransientSettings();
 
-            _seriesResults = (await _lookupService.SearchSeriesAsync(SeriesSearchTextBox.Text.Trim())).ToList();
+            _seriesResults = (await _lookupService.SearchSeriesAsync(SeriesSearchTextBox.Text.Trim(), currentSettings)).ToList();
             SeriesResultsListBox.ItemsSource = _seriesResults.Select(result => new SelectableSeriesItem(result)).ToList();
             EpisodeResultsListBox.ItemsSource = null;
             _episodes = [];
@@ -180,10 +180,10 @@ public partial class TvdbLookupWindow : Window
         try
         {
             SetBusy(true, "Lade Episodenliste...");
-            SaveSettingsCore();
+            var currentSettings = BuildTransientSettings();
 
             var selectedSeries = _seriesResults[SeriesResultsListBox.SelectedIndex];
-            _episodes = (await _lookupService.LoadEpisodesAsync(selectedSeries.Id)).ToList();
+            _episodes = (await _lookupService.LoadEpisodesAsync(selectedSeries.Id, currentSettings)).ToList();
             ApplyEpisodeFilter(autoSelectBest);
 
             StatusTextBlock.Text = $"{_episodes.Count} Episode(n) geladen.";
@@ -246,12 +246,17 @@ public partial class TvdbLookupWindow : Window
 
     private void SaveSettingsCore()
     {
-        _lookupService.SaveSettings(new AppMetadataSettings
+        _lookupService.SaveSettings(BuildTransientSettings());
+    }
+
+    private AppMetadataSettings BuildTransientSettings()
+    {
+        return new AppMetadataSettings
         {
             TvdbApiKey = ApiKeyTextBox.Text.Trim(),
             TvdbPin = PinTextBox.Text.Trim(),
             SeriesMappings = _lookupService.LoadSettings().SeriesMappings
-        });
+        };
     }
 
     private void SetBusy(bool isBusy, string statusText)

@@ -68,7 +68,7 @@ internal sealed class AppBootstrapper
 
         if (settingsLoadResult.HasWarning)
         {
-            dialogService.ShowWarning("Einstellungen", settingsLoadResult.WarningMessage!);
+            dialogService.ShowWarning("Portable Daten", settingsLoadResult.WarningMessage!);
         }
 
         return new MainWindow(viewModel);

@@ -27,6 +27,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
     private string _lastSuggestedTitle = string.Empty;
     private bool _isApplyingSharedState;
     private string _outputTargetStatusText = string.Empty;
+    private string _planRefreshProblemText = string.Empty;
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _planSummaryVersion;
 
@@ -165,6 +166,24 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
     public string OutputTargetBadgeBorderBrush => EpisodeUiStyleBuilder.BuildOutputTargetBadgeBorderBrush(OutputTargetBadgeState);
 
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
+
+    public string PlanRefreshProblemText
+    {
+        get => _planRefreshProblemText;
+        private set
+        {
+            if (_planRefreshProblemText == value)
+            {
+                return;
+            }
+
+            _planRefreshProblemText = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPlanRefreshProblem));
+        }
+    }
+
+    public bool HasPlanRefreshProblem => !string.IsNullOrWhiteSpace(PlanRefreshProblemText);
 
     private void SetBusy(bool isBusy)
     {

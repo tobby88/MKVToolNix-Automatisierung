@@ -78,12 +78,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         ReportProgress(onProgress, "Lese Dateien im Ordner...", 8);
         var allFiles = Directory.GetFiles(directory);
+        var companionFilesByBaseName = BuildCompanionFileLookup(allFiles);
         var selectedSeed = BuildCandidateSeed(selectedPath);
         var selectedIdentity = selectedSeed.Identity;
         var episodeSeeds = CollectEpisodeSeeds(allFiles, selectedIdentity.Key);
 
         ReportProgress(onProgress, $"Prüfe {episodeSeeds.NormalVideoSeeds.Count} passende Videoquelle(n)...", 12);
-        var allNormalCandidates = BuildNormalVideoCandidates(episodeSeeds.NormalVideoSeeds, mkvMergePath, onProgress, 12, 72);
+        var allNormalCandidates = BuildNormalVideoCandidates(
+            episodeSeeds.NormalVideoSeeds,
+            mkvMergePath,
+            companionFilesByBaseName,
+            onProgress,
+            12,
+            72);
         var normalCandidates = allNormalCandidates
             .Where(candidate => excludedSourcePaths is null || !excludedSourcePaths.Contains(candidate.FilePath))
             .ToList();
@@ -97,7 +104,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var primaryVideoCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, primaryVideoCandidate);
         var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds);
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName);
 
         var audioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
@@ -155,7 +162,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
             Notes: notes);
     }
 
-    private static IReadOnlyList<string> CollectRelatedEpisodeFilePaths(IReadOnlyList<CandidateSeed> seeds)
+    private static IReadOnlyList<string> CollectRelatedEpisodeFilePaths(
+        IReadOnlyList<CandidateSeed> seeds,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
     {
         var relatedFilePaths = new List<string>();
 
@@ -168,7 +177,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 relatedFilePaths.Add(seed.AttachmentPath!);
             }
 
-            relatedFilePaths.AddRange(FindExactCompanionCleanupFiles(seed.FilePath));
+            relatedFilePaths.AddRange(FindExactCompanionCleanupFiles(seed.FilePath, companionFilesByBaseName));
         }
 
         return relatedFilePaths
@@ -206,6 +215,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private List<NormalVideoCandidate> BuildNormalVideoCandidates(
         IReadOnlyList<CandidateSeed> seeds,
         string mkvMergePath,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName,
         Action<DetectionProgressUpdate>? onProgress,
         int startPercent,
         int endPercent)
@@ -217,7 +227,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var seed = seeds[index];
             var percent = InterpolateProgress(startPercent, endPercent, index, Math.Max(1, seeds.Count));
             ReportProgress(onProgress, $"Analysiere Videoquelle {index + 1}/{seeds.Count}: {Path.GetFileName(seed.FilePath)}", percent);
-            candidates.Add(BuildNormalVideoCandidate(seed, mkvMergePath));
+            candidates.Add(BuildNormalVideoCandidate(seed, mkvMergePath, companionFilesByBaseName));
         }
 
         return candidates;
@@ -261,11 +271,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
         onProgress?.Invoke(new DetectionProgressUpdate(statusText, Math.Clamp(progressPercent, 0, 100)));
     }
 
-    public async Task<SeriesEpisodeMuxPlan> CreatePlanAsync(SeriesEpisodeMuxRequest request)
+    public async Task<SeriesEpisodeMuxPlan> CreatePlanAsync(
+        SeriesEpisodeMuxRequest request,
+        CancellationToken cancellationToken = default)
     {
         ValidateRequest(request);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var detected = DetectFromMainVideo(request.MainVideoPath);
+        cancellationToken.ThrowIfCancellationRequested();
         var subtitleFiles = request.SubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -282,7 +296,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             mkvMergePath,
             request,
             detected,
-            plannedVideoPaths);
+            plannedVideoPaths,
+            cancellationToken);
 
         if (archiveDecision.SkipMux)
         {
@@ -316,8 +331,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         for (var index = 0; index < effectiveVideoPaths.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var videoPath = effectiveVideoPaths[index];
-            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath);
+            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
             var trackName = BuildVideoTrackName(metadata);
             videoSources.Add(new VideoSourcePlan(videoPath, metadata.VideoTrackId, trackName, IsDefaultTrack: index == 0));
 
@@ -341,7 +357,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? null
             : archiveDecision.AudioDescriptionTrackId is int trackId
                 ? new AudioTrackMetadata(trackId, "Audio", "de", string.Empty, IsVisualImpaired: true)
-                : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath);
+                : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
 
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
             ? archiveDecision.SubtitleFiles
@@ -419,11 +435,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
         Directory.CreateDirectory(outputDirectory);
     }
 
-    private NormalVideoCandidate BuildNormalVideoCandidate(CandidateSeed seed, string mkvMergePath)
+    private NormalVideoCandidate BuildNormalVideoCandidate(
+        CandidateSeed seed,
+        string mkvMergePath,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
     {
-        var mediaMetadata = _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, seed.FilePath).GetAwaiter().GetResult();
+        var mediaMetadata = _probeService.ReadPrimaryVideoMetadata(mkvMergePath, seed.FilePath);
         var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration);
-        var subtitlePaths = FindExactSubtitleFiles(seed.FilePath);
+        var subtitlePaths = FindExactSubtitleFiles(seed.FilePath, companionFilesByBaseName);
 
         return new NormalVideoCandidate(
             FilePath: seed.FilePath,
@@ -612,25 +631,21 @@ public sealed partial class SeriesEpisodeMuxPlanner
             AudioDescriptionTrackName: $"Deutsch (sehbehinderte) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}");
     }
 
-    private static List<string> FindExactSubtitleFiles(string videoFilePath)
+    private static List<string> FindExactSubtitleFiles(
+        string videoFilePath,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
     {
-        var directory = Path.GetDirectoryName(videoFilePath)
-            ?? throw new InvalidOperationException("Der Ordner der Videodatei konnte nicht bestimmt werden.");
-        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(videoFilePath);
-
-        return Directory.GetFiles(directory, fileNameWithoutExtension + ".*")
+        return GetCompanionFiles(videoFilePath, companionFilesByBaseName)
             .Where(path => SupportedSubtitleExtensions.Contains(Path.GetExtension(path)))
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
-    private static List<string> FindExactCompanionCleanupFiles(string videoFilePath)
+    private static List<string> FindExactCompanionCleanupFiles(
+        string videoFilePath,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
     {
-        var directory = Path.GetDirectoryName(videoFilePath)
-            ?? throw new InvalidOperationException("Der Ordner der Videodatei konnte nicht bestimmt werden.");
-        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(videoFilePath);
-
-        return Directory.GetFiles(directory, fileNameWithoutExtension + ".*")
+        return GetCompanionFiles(videoFilePath, companionFilesByBaseName)
             .Where(path =>
             {
                 var extension = Path.GetExtension(path);
@@ -639,6 +654,36 @@ public sealed partial class SeriesEpisodeMuxPlanner
             })
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static Dictionary<string, IReadOnlyList<string>> BuildCompanionFileLookup(IEnumerable<string> allFiles)
+    {
+        var lookup = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in allFiles.GroupBy(BuildCompanionLookupKey, StringComparer.OrdinalIgnoreCase))
+        {
+            lookup[group.Key] = group.ToList();
+        }
+
+        return lookup;
+    }
+
+    private static IReadOnlyList<string> GetCompanionFiles(
+        string videoFilePath,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
+    {
+        var key = BuildCompanionLookupKey(videoFilePath);
+        return companionFilesByBaseName.TryGetValue(key, out var files)
+            ? files
+            : [];
+    }
+
+    private static string BuildCompanionLookupKey(string filePath)
+    {
+        var directory = Path.GetDirectoryName(filePath)
+            ?? throw new InvalidOperationException("Der Ordner der Videodatei konnte nicht bestimmt werden.");
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
+        return Path.Combine(directory, fileNameWithoutExtension);
     }
 
 }

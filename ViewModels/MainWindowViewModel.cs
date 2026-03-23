@@ -126,6 +126,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         ? $"mkvmerge gefunden:{Environment.NewLine}{MkvMergePath}"
         : "mkvmerge wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen.";
 
+    public string PortableModeText => "Portable: lokale Daten in .\\Data";
+
+    public string PortableModeTooltip => $"Portable Modus aktiv:{Environment.NewLine}{PortableAppStorage.DataDirectory}";
+
     public RelayCommand SelectFfprobeCommand { get; }
 
     public RelayCommand SelectMkvToolNixCommand { get; }

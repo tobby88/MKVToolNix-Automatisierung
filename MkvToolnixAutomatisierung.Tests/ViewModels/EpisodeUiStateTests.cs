@@ -28,13 +28,14 @@ public sealed class EpisodeUiStateTests
     }
 
     [Fact]
-    public void BatchEpisodeItemStatus_SetterKeepsErrorStatusKindForDetailedErrorText()
+    public void BatchEpisodeItemStatus_UsesExplicitStatusKindForDetailedErrorText()
     {
         var item = BatchEpisodeItemViewModel.CreateErrorItem(@"C:\Temp\episode.mp4", "boom");
 
-        item.Status = "Fehler (2)";
+        item.SetStatus(BatchEpisodeStatusKind.Error, "Fehler (2)");
 
         Assert.Equal(BatchEpisodeStatusKind.Error, item.StatusKind);
         Assert.Equal(0, item.StatusSortKey);
+        Assert.Equal("Fehler (2)", item.Status);
     }
 }

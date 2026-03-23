@@ -21,7 +21,9 @@ public sealed class EpisodePlanCoordinator
         _muxService = muxService;
     }
 
-    public Task<SeriesEpisodeMuxPlan> BuildPlanAsync(IEpisodePlanInput input)
+    public Task<SeriesEpisodeMuxPlan> BuildPlanAsync(
+        IEpisodePlanInput input,
+        CancellationToken cancellationToken = default)
     {
         return _muxService.CreatePlanAsync(new SeriesEpisodeMuxRequest(
             input.MainVideoPath,
@@ -29,6 +31,7 @@ public sealed class EpisodePlanCoordinator
             input.SubtitlePaths,
             input.AttachmentPaths,
             input.OutputPath,
-            input.TitleForMux));
+            input.TitleForMux),
+            cancellationToken);
     }
 }

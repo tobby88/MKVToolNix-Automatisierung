@@ -8,6 +8,7 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class MkvMergeProbeService
 {
+    private static readonly char[] MojibakeMarkers = [(char)0x00C3, (char)0x00E2];
     private readonly ConcurrentDictionary<string, CachedFileValue<MediaTrackMetadata>> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<AudioTrackMetadata>> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<ContainerMetadata>> _containerCache = new(StringComparer.OrdinalIgnoreCase);
@@ -32,7 +33,7 @@ public sealed class MkvMergeProbeService
         }
     }
 
-    public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(string mkvMergePath, string inputFilePath)
+    public MediaTrackMetadata ReadPrimaryVideoMetadata(string mkvMergePath, string inputFilePath)
     {
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
@@ -40,68 +41,33 @@ public sealed class MkvMergeProbeService
             return cachedMetadata.Value;
         }
 
-        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
-        var tracks = GetTracksElement(trackDocument, inputFilePath);
-
-        JsonElement? videoTrack = null;
-        JsonElement? audioTrack = null;
-
-        foreach (var track in tracks.EnumerateArray())
-        {
-            var type = track.TryGetProperty("type", out var typeElement)
-                ? typeElement.GetString()
-                : null;
-
-            if (type == "video" && videoTrack is null)
-            {
-                videoTrack = track;
-            }
-            else if (type == "audio" && audioTrack is null)
-            {
-                audioTrack = track;
-            }
-        }
-
-        if (videoTrack is null)
-        {
-            throw new InvalidOperationException("In der Quelldatei wurde keine Videospur gefunden.");
-        }
-
-        if (audioTrack is null)
-        {
-            throw new InvalidOperationException("In der Quelldatei wurde keine Tonspur gefunden.");
-        }
-
-        var videoProperties = videoTrack.Value.TryGetProperty("properties", out var videoPropertiesElement)
-            ? videoPropertiesElement
-            : default;
-
-        var audioProperties = audioTrack.Value.TryGetProperty("properties", out var audioPropertiesElement)
-            ? audioPropertiesElement
-            : default;
-
-        var width = videoProperties.ValueKind != JsonValueKind.Undefined && videoProperties.TryGetProperty("pixel_dimensions", out var pixelDimensionsElement)
-            ? ParseWidth(pixelDimensionsElement.GetString())
-            : 0;
-
-        var videoCodec = NormalizeVideoCodecName(ReadCodec(videoTrack.Value, videoProperties));
-        var audioCodec = NormalizeAudioCodecName(ReadCodec(audioTrack.Value, audioProperties));
-
-        var metadata = new MediaTrackMetadata(
-            VideoTrackId: ReadTrackId(videoTrack.Value),
-            AudioTrackId: ReadTrackId(audioTrack.Value),
-            VideoWidth: width,
-            ResolutionLabel: ResolutionLabel.FromWidth(width),
-            VideoCodecLabel: videoCodec,
-            AudioCodecLabel: audioCodec,
-            VideoLanguage: NormalizeLanguage(videoProperties),
-            AudioLanguage: NormalizeLanguage(audioProperties));
-
+        using var trackDocument = Identify(mkvMergePath, inputFilePath);
+        var metadata = CreatePrimaryVideoMetadata(trackDocument, inputFilePath);
         StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
         return metadata;
     }
 
-    public async Task<AudioTrackMetadata> ReadFirstAudioTrackMetadataAsync(string mkvMergePath, string inputFilePath)
+    public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
+        if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
+        {
+            return cachedMetadata.Value;
+        }
+
+        using var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        var metadata = CreatePrimaryVideoMetadata(trackDocument, inputFilePath);
+        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
+        return metadata;
+    }
+
+    public async Task<AudioTrackMetadata> ReadFirstAudioTrackMetadataAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        CancellationToken cancellationToken = default)
     {
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
@@ -109,7 +75,7 @@ public sealed class MkvMergeProbeService
             return cachedMetadata.Value;
         }
 
-        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
+        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
         var tracks = GetTracksElement(trackDocument, inputFilePath);
 
         foreach (var track in tracks.EnumerateArray())
@@ -135,7 +101,10 @@ public sealed class MkvMergeProbeService
         throw new InvalidOperationException("In der Datei wurde keine Audiospur gefunden.");
     }
 
-    public async Task<ContainerMetadata> ReadContainerMetadataAsync(string mkvMergePath, string inputFilePath)
+    public async Task<ContainerMetadata> ReadContainerMetadataAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        CancellationToken cancellationToken = default)
     {
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
@@ -143,7 +112,7 @@ public sealed class MkvMergeProbeService
             return cachedMetadata.Value;
         }
 
-        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
+        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
         var tracks = GetTracksElement(trackDocument, inputFilePath);
         var trackMetadata = new List<ContainerTrackMetadata>();
 
@@ -288,7 +257,7 @@ public sealed class MkvMergeProbeService
             return string.Empty;
         }
 
-        if (!value.Contains('Ã') && !value.Contains('â'))
+        if (!ContainsPotentialMojibakeMarker(value))
         {
             return value;
         }
@@ -302,6 +271,11 @@ public sealed class MkvMergeProbeService
         {
             return value;
         }
+    }
+
+    private static bool ContainsPotentialMojibakeMarker(string value)
+    {
+        return value.IndexOfAny(MojibakeMarkers) >= 0;
     }
 
     private static bool ReadBooleanProperty(JsonElement properties, string propertyName)
@@ -321,8 +295,12 @@ public sealed class MkvMergeProbeService
         };
     }
 
-    private async Task<JsonDocument> IdentifyAsync(string mkvMergePath, string inputFilePath)
+    private async Task<JsonDocument> IdentifyAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var startInfo = new ProcessStartInfo
         {
             FileName = mkvMergePath,
@@ -335,10 +313,25 @@ public sealed class MkvMergeProbeService
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
+        using var registration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+        });
 
-        var standardOutput = await process.StandardOutput.ReadToEndAsync();
-        var standardError = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(cancellationToken);
+        var standardOutput = await standardOutputTask;
+        var standardError = await standardErrorTask;
 
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
@@ -360,6 +353,106 @@ public sealed class MkvMergeProbeService
             : standardError.Trim();
 
         throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {details}");
+    }
+
+    private JsonDocument Identify(string mkvMergePath, string inputFilePath)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = mkvMergePath,
+            Arguments = $"--identify --identification-format json \"{inputFilePath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
+
+        var standardOutput = process.StandardOutput.ReadToEnd();
+        var standardError = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        if (!string.IsNullOrWhiteSpace(standardOutput))
+        {
+            try
+            {
+                return JsonDocument.Parse(standardOutput);
+            }
+            catch (JsonException)
+            {
+                if (process.ExitCode == 0)
+                {
+                    throw;
+                }
+            }
+        }
+
+        var details = string.IsNullOrWhiteSpace(standardError)
+            ? "Es wurde keine gültige JSON-Antwort geliefert."
+            : standardError.Trim();
+
+        throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {details}");
+    }
+
+    private static MediaTrackMetadata CreatePrimaryVideoMetadata(JsonDocument trackDocument, string inputFilePath)
+    {
+        var tracks = GetTracksElement(trackDocument, inputFilePath);
+
+        JsonElement? videoTrack = null;
+        JsonElement? audioTrack = null;
+
+        foreach (var track in tracks.EnumerateArray())
+        {
+            var type = track.TryGetProperty("type", out var typeElement)
+                ? typeElement.GetString()
+                : null;
+
+            if (type == "video" && videoTrack is null)
+            {
+                videoTrack = track;
+            }
+            else if (type == "audio" && audioTrack is null)
+            {
+                audioTrack = track;
+            }
+        }
+
+        if (videoTrack is null)
+        {
+            throw new InvalidOperationException("In der Quelldatei wurde keine Videospur gefunden.");
+        }
+
+        if (audioTrack is null)
+        {
+            throw new InvalidOperationException("In der Quelldatei wurde keine Tonspur gefunden.");
+        }
+
+        var videoProperties = videoTrack.Value.TryGetProperty("properties", out var videoPropertiesElement)
+            ? videoPropertiesElement
+            : default;
+
+        var audioProperties = audioTrack.Value.TryGetProperty("properties", out var audioPropertiesElement)
+            ? audioPropertiesElement
+            : default;
+
+        var width = videoProperties.ValueKind != JsonValueKind.Undefined && videoProperties.TryGetProperty("pixel_dimensions", out var pixelDimensionsElement)
+            ? ParseWidth(pixelDimensionsElement.GetString())
+            : 0;
+
+        var videoCodec = NormalizeVideoCodecName(ReadCodec(videoTrack.Value, videoProperties));
+        var audioCodec = NormalizeAudioCodecName(ReadCodec(audioTrack.Value, audioProperties));
+
+        return new MediaTrackMetadata(
+            VideoTrackId: ReadTrackId(videoTrack.Value),
+            AudioTrackId: ReadTrackId(audioTrack.Value),
+            VideoWidth: width,
+            ResolutionLabel: ResolutionLabel.FromWidth(width),
+            VideoCodecLabel: videoCodec,
+            AudioCodecLabel: audioCodec,
+            VideoLanguage: NormalizeLanguage(videoProperties),
+            AudioLanguage: NormalizeLanguage(audioProperties));
     }
 
     private static int ParseWidth(string? pixelDimensions)

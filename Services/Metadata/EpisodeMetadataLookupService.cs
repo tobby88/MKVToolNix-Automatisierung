@@ -4,8 +4,8 @@ public sealed class EpisodeMetadataLookupService
 {
     private readonly AppMetadataStore _store;
     private readonly TvdbClient _tvdbClient;
-    private readonly Dictionary<string, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<int, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
+    private readonly Dictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
+    private readonly Dictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
 
     public EpisodeMetadataLookupService(AppMetadataStore store, TvdbClient tvdbClient)
     {
@@ -21,8 +21,6 @@ public sealed class EpisodeMetadataLookupService
     public void SaveSettings(AppMetadataSettings settings)
     {
         _store.Save(settings);
-        _seriesSearchCache.Clear();
-        _episodeCache.Clear();
     }
 
     public SeriesMetadataMapping? FindSeriesMapping(string localSeriesName)
@@ -36,22 +34,32 @@ public sealed class EpisodeMetadataLookupService
         string query,
         CancellationToken cancellationToken = default)
     {
+        return await SearchSeriesAsync(query, LoadSettings(), cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+        string query,
+        AppMetadataSettings settings,
+        CancellationToken cancellationToken = default)
+    {
         var normalizedQuery = NormalizeText(query);
         if (string.IsNullOrWhiteSpace(normalizedQuery))
         {
             return [];
         }
 
-        if (_seriesSearchCache.TryGetValue(normalizedQuery, out var cachedResults))
+        EnsureApiKeyConfigured(settings);
+        var cacheKey = new TvdbSeriesSearchCacheKey(
+            settings.TvdbApiKey.Trim(),
+            settings.TvdbPin?.Trim() ?? string.Empty,
+            normalizedQuery);
+        if (_seriesSearchCache.TryGetValue(cacheKey, out var cachedResults))
         {
             return cachedResults;
         }
 
-        var settings = LoadSettings();
-        EnsureApiKeyConfigured(settings);
-
         var results = await _tvdbClient.SearchSeriesAsync(settings.TvdbApiKey, settings.TvdbPin, query, cancellationToken);
-        _seriesSearchCache[normalizedQuery] = results;
+        _seriesSearchCache[cacheKey] = results;
         return results;
     }
 
@@ -59,16 +67,26 @@ public sealed class EpisodeMetadataLookupService
         int seriesId,
         CancellationToken cancellationToken = default)
     {
-        if (_episodeCache.TryGetValue(seriesId, out var cachedEpisodes))
+        return await LoadEpisodesAsync(seriesId, LoadSettings(), cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<TvdbEpisodeRecord>> LoadEpisodesAsync(
+        int seriesId,
+        AppMetadataSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiKeyConfigured(settings);
+        var cacheKey = new TvdbEpisodeCacheKey(
+            settings.TvdbApiKey.Trim(),
+            settings.TvdbPin?.Trim() ?? string.Empty,
+            seriesId);
+        if (_episodeCache.TryGetValue(cacheKey, out var cachedEpisodes))
         {
             return cachedEpisodes;
         }
 
-        var settings = LoadSettings();
-        EnsureApiKeyConfigured(settings);
-
         var episodes = await _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, cancellationToken);
-        _episodeCache[seriesId] = episodes;
+        _episodeCache[cacheKey] = episodes;
         return episodes;
     }
 
@@ -590,3 +608,7 @@ public sealed class EpisodeMetadataLookupService
         public ScoredEpisodeMatch SelectionMatch { get; init; } = null!;
     }
 }
+
+internal readonly record struct TvdbSeriesSearchCacheKey(string ApiKey, string Pin, string Query);
+
+internal readonly record struct TvdbEpisodeCacheKey(string ApiKey, string Pin, int SeriesId);

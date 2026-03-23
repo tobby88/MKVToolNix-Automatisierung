@@ -31,9 +31,11 @@ public sealed class SeriesEpisodeMuxService
         return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
     }
 
-    public Task<SeriesEpisodeMuxPlan> CreatePlanAsync(SeriesEpisodeMuxRequest request)
+    public Task<SeriesEpisodeMuxPlan> CreatePlanAsync(
+        SeriesEpisodeMuxRequest request,
+        CancellationToken cancellationToken = default)
     {
-        return _planner.CreatePlanAsync(request);
+        return _planner.CreatePlanAsync(request, cancellationToken);
     }
 
     public string BuildPreviewText(SeriesEpisodeMuxPlan plan)

@@ -15,7 +15,7 @@ internal sealed record BatchScanResult(
 public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;
-    private string _status;
+    private string? _statusTextOverride;
     private BatchEpisodeStatusKind _statusKind;
 
     private BatchEpisodeItemViewModel(
@@ -72,7 +72,6 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             notes)
     {
         _statusKind = statusKind;
-        _status = EpisodeEditTextBuilder.BuildBatchStatusText(statusKind);
         _isSelected = isSelected;
     }
 
@@ -91,35 +90,9 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
-    public string Status
-    {
-        get => _status;
-        set
-        {
-            var normalized = string.IsNullOrWhiteSpace(value)
-                ? EpisodeEditTextBuilder.BuildBatchStatusText(BatchEpisodeStatusKind.Error)
-                : value;
-            var resolvedStatusKind = ResolveStatusKind(normalized);
-
-            if (_status == normalized && _statusKind == resolvedStatusKind)
-            {
-                return;
-            }
-
-            _status = normalized;
-            if (_statusKind != resolvedStatusKind)
-            {
-                _statusKind = resolvedStatusKind;
-                OnPropertyChanged(nameof(StatusKind));
-                OnPropertyChanged(nameof(StatusSortKey));
-                OnPropertyChanged(nameof(HasErrorStatus));
-                OnPropertyChanged(nameof(StatusBadgeBackground));
-                OnPropertyChanged(nameof(StatusBadgeBorderBrush));
-            }
-
-            OnPropertyChanged();
-        }
-    }
+    public string Status => string.IsNullOrWhiteSpace(_statusTextOverride)
+        ? EpisodeEditTextBuilder.BuildBatchStatusText(StatusKind)
+        : _statusTextOverride;
 
     public BatchEpisodeStatusKind StatusKind
     {
@@ -133,6 +106,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
             _statusKind = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(Status));
             OnPropertyChanged(nameof(StatusSortKey));
             OnPropertyChanged(nameof(HasErrorStatus));
             OnPropertyChanged(nameof(StatusBadgeBackground));
@@ -150,10 +124,20 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public void SetStatus(BatchEpisodeStatusKind statusKind, string? statusText = null)
     {
+        var previousStatus = Status;
         StatusKind = statusKind;
-        Status = string.IsNullOrWhiteSpace(statusText)
-            ? EpisodeEditTextBuilder.BuildBatchStatusText(statusKind)
-            : statusText;
+        var normalizedOverride = string.IsNullOrWhiteSpace(statusText) ? null : statusText;
+        if (_statusTextOverride != normalizedOverride)
+        {
+            _statusTextOverride = normalizedOverride;
+            OnPropertyChanged(nameof(Status));
+            return;
+        }
+
+        if (!string.Equals(previousStatus, Status, StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(Status));
+        }
     }
 
     public static BatchEpisodeItemViewModel CreateFromDetection(
@@ -325,22 +309,4 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
     }
 
-    private static BatchEpisodeStatusKind ResolveStatusKind(string statusText)
-    {
-        if (statusText.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase))
-        {
-            return BatchEpisodeStatusKind.Error;
-        }
-
-        return statusText switch
-        {
-            "Warnung" => BatchEpisodeStatusKind.Warning,
-            "Läuft" => BatchEpisodeStatusKind.Running,
-            "Vergleich offen" => BatchEpisodeStatusKind.ComparisonPending,
-            "Bereit" => BatchEpisodeStatusKind.Ready,
-            "Ziel aktuell" => BatchEpisodeStatusKind.UpToDate,
-            "Erfolgreich" => BatchEpisodeStatusKind.Success,
-            _ => BatchEpisodeStatusKind.Error
-        };
-    }
 }

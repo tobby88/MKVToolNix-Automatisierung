@@ -12,18 +12,12 @@ public static class AppSettingsFileLocator
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip
     };
+
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
 
     public static string GetSettingsFilePath()
     {
-        var settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
-        var directory = Path.GetDirectoryName(settingsPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        return settingsPath;
+        return PortableAppStorage.SettingsFilePath;
     }
 
     public static CombinedAppSettings LoadCombinedSettings()
@@ -41,6 +35,7 @@ public static class AppSettingsFileLocator
         var settingsPath = GetSettingsFilePath();
         var backupPath = GetBackupFilePath();
         var temporaryPath = settingsPath + ".tmp";
+        PortableAppStorage.EnsureDataDirectoryForSave();
         var json = JsonSerializer.Serialize(settings, SerializerOptions);
         File.WriteAllText(temporaryPath, json, Utf8Encoding);
 
@@ -54,30 +49,30 @@ public static class AppSettingsFileLocator
 
     private static string GetBackupFilePath()
     {
-        return GetSettingsFilePath() + ".bak";
+        return PortableAppStorage.SettingsBackupFilePath;
     }
 
     private static AppSettingsLoadResult LoadCombinedSettingsInternal(bool captureCorruptSnapshots)
     {
-        var settingsPath = GetSettingsFilePath();
-        var primaryAttempt = TryLoadSettings(settingsPath);
+        var storageWarningMessage = PortableAppStorage.PrepareForStartup();
+        var primaryAttempt = TryLoadSettings(GetSettingsFilePath());
         if (primaryAttempt.Success)
         {
-            return new AppSettingsLoadResult(primaryAttempt.Settings!, AppSettingsLoadStatus.LoadedPrimary);
+            return new AppSettingsLoadResult(
+                primaryAttempt.Settings!,
+                AppSettingsLoadStatus.LoadedPrimary,
+                storageWarningMessage);
         }
 
-        var backupPath = GetBackupFilePath();
-        var backupAttempt = TryLoadSettings(backupPath);
+        var backupAttempt = TryLoadSettings(GetBackupFilePath());
         if (backupAttempt.Success)
         {
-            var warningMessage = primaryAttempt.Exists
-                ? BuildBackupWarningMessage(primaryAttempt, captureCorruptSnapshots)
-                : null;
-
             return new AppSettingsLoadResult(
                 backupAttempt.Settings!,
                 AppSettingsLoadStatus.LoadedBackup,
-                warningMessage);
+                CombineWarningMessages(
+                    storageWarningMessage,
+                    BuildBackupWarningMessage(primaryAttempt, backupAttempt, captureCorruptSnapshots)));
         }
 
         var status = primaryAttempt.Exists || backupAttempt.Exists
@@ -88,8 +83,10 @@ public static class AppSettingsFileLocator
             new CombinedAppSettings(),
             status,
             status == AppSettingsLoadStatus.LoadedDefaultsAfterFailure
-                ? BuildDefaultsWarningMessage(primaryAttempt, backupAttempt, captureCorruptSnapshots)
-                : null);
+                ? CombineWarningMessages(
+                    storageWarningMessage,
+                    BuildDefaultsWarningMessage(primaryAttempt, backupAttempt, captureCorruptSnapshots))
+                : storageWarningMessage);
     }
 
     private static AppSettingsLoadAttempt TryLoadSettings(string filePath)
@@ -113,16 +110,19 @@ public static class AppSettingsFileLocator
         }
     }
 
-    private static string BuildBackupWarningMessage(AppSettingsLoadAttempt primaryAttempt, bool captureCorruptSnapshots)
+    private static string BuildBackupWarningMessage(
+        AppSettingsLoadAttempt primaryAttempt,
+        AppSettingsLoadAttempt backupAttempt,
+        bool captureCorruptSnapshots)
     {
         var lines = new List<string>
         {
-            $"Die Einstellungen aus '{Path.GetFileName(primaryAttempt.FilePath)}' konnten nicht gelesen werden.",
-            "Die Sicherung 'settings.json.bak' wurde geladen."
+            "Die normalen Einstellungen konnten nicht gelesen werden.",
+            $"Die Sicherung '{Path.GetFileName(backupAttempt.FilePath)}' wurde geladen."
         };
 
         AppendErrorDetails(lines, primaryAttempt);
-        AppendCorruptSnapshotDetails(lines, primaryAttempt.FilePath, captureCorruptSnapshots);
+        AppendCorruptSnapshotDetails(lines, primaryAttempt, captureCorruptSnapshots);
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -133,14 +133,14 @@ public static class AppSettingsFileLocator
     {
         var lines = new List<string>
         {
-            "Die Einstellungen konnten weder aus 'settings.json' noch aus der Sicherung geladen werden.",
+            "Die Einstellungen konnten nicht gelesen werden.",
             "Die App startet deshalb mit Standardwerten."
         };
 
         AppendErrorDetails(lines, primaryAttempt);
         AppendErrorDetails(lines, backupAttempt);
-        AppendCorruptSnapshotDetails(lines, primaryAttempt.FilePath, captureCorruptSnapshots);
-        AppendCorruptSnapshotDetails(lines, backupAttempt.FilePath, captureCorruptSnapshots);
+        AppendCorruptSnapshotDetails(lines, primaryAttempt, captureCorruptSnapshots);
+        AppendCorruptSnapshotDetails(lines, backupAttempt, captureCorruptSnapshots);
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -155,14 +155,14 @@ public static class AppSettingsFileLocator
         lines.Add($"{Path.GetFileName(attempt.FilePath)}: {attempt.ErrorMessage}");
     }
 
-    private static void AppendCorruptSnapshotDetails(List<string> lines, string filePath, bool captureCorruptSnapshots)
+    private static void AppendCorruptSnapshotDetails(List<string> lines, AppSettingsLoadAttempt attempt, bool captureCorruptSnapshots)
     {
-        if (!captureCorruptSnapshots)
+        if (!captureCorruptSnapshots || !attempt.Exists)
         {
             return;
         }
 
-        var snapshotPath = CreateCorruptSnapshot(filePath);
+        var snapshotPath = CreateCorruptSnapshot(attempt.FilePath);
         if (string.IsNullOrWhiteSpace(snapshotPath))
         {
             return;
@@ -207,6 +207,19 @@ public static class AppSettingsFileLocator
         {
             return null;
         }
+    }
+
+    private static string? CombineWarningMessages(params string?[] warningMessages)
+    {
+        var messages = warningMessages
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Select(message => message!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return messages.Count == 0
+            ? null
+            : string.Join(Environment.NewLine + Environment.NewLine, messages);
     }
 }
 

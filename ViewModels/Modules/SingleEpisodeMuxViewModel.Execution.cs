@@ -16,6 +16,7 @@ public sealed partial class SingleEpisodeMuxViewModel
             SetBusy(true);
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await BuildPlanAsync();
+            PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             UsageSummary = _currentPlan.BuildUsageSummary();
@@ -39,6 +40,7 @@ public sealed partial class SingleEpisodeMuxViewModel
         {
             SetBusy(true);
             _currentPlan ??= await BuildPlanAsync();
+            PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             UsageSummary = _currentPlan.BuildUsageSummary();
@@ -114,12 +116,12 @@ public sealed partial class SingleEpisodeMuxViewModel
         }
     }
 
-    private async Task<SeriesEpisodeMuxPlan> BuildPlanAsync()
+    private async Task<SeriesEpisodeMuxPlan> BuildPlanAsync(CancellationToken cancellationToken = default)
     {
         RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
         RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
         RequireValue(Title.Trim(), "Bitte einen Dateititel eingeben.");
-        return await _services.EpisodePlans.BuildPlanAsync(this);
+        return await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);
     }
 
     private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
@@ -286,14 +288,14 @@ public sealed partial class SingleEpisodeMuxViewModel
         try
         {
             await Task.Delay(250, cancellationToken);
-            await RefreshPlanSummaryAsync();
+            await RefreshPlanSummaryAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
         }
     }
 
-    private async Task RefreshPlanSummaryAsync()
+    private async Task RefreshPlanSummaryAsync(CancellationToken cancellationToken)
     {
         var version = Interlocked.Increment(ref _planSummaryVersion);
 
@@ -303,31 +305,35 @@ public sealed partial class SingleEpisodeMuxViewModel
         {
             PlanSummaryText = string.Empty;
             UsageSummary = null;
+            PlanRefreshProblemText = string.Empty;
             return;
         }
 
         try
         {
-            var plan = await BuildPlanAsync();
-            if (version != _planSummaryVersion)
+            var plan = await BuildPlanAsync(cancellationToken);
+            if (version != _planSummaryVersion || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
 
             _currentPlan = plan;
+            PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(plan);
             PlanSummaryText = plan.BuildCompactSummaryText();
             UsageSummary = plan.BuildUsageSummary();
         }
-        catch
+        catch (OperationCanceledException)
         {
-            if (version != _planSummaryVersion)
+        }
+        catch (Exception ex)
+        {
+            if (version != _planSummaryVersion || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
 
-            PlanSummaryText = string.Empty;
-            UsageSummary = null;
+            PlanRefreshProblemText = "Plan konnte gerade nicht aktualisiert werden: " + ex.Message;
         }
     }
 
