@@ -832,7 +832,7 @@ public sealed class SeriesEpisodeMuxPlanner
     {
         var normalized = Regex.Replace(value, @"\s*-\s*Neue Folgen?\b.*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\s*-\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\s*-\s*Der Samstagskrimi\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
         return normalized.Trim();
     }
