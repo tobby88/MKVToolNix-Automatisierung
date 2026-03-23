@@ -35,7 +35,7 @@ public sealed class SeriesArchiveService
 
     public bool IsArchivePath(string outputFilePath)
     {
-        return outputFilePath.StartsWith(ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase);
+        return PathComparisonHelper.IsPathWithinRoot(outputFilePath, ArchiveRootDirectory);
     }
 
     public async Task<ArchiveIntegrationDecision> PrepareAsync(

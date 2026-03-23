@@ -5,9 +5,9 @@ namespace MkvToolnixAutomatisierung;
 
 public partial class MainWindow : Window
 {
-    public MainWindow()
+    public MainWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
-        DataContext = MainWindowViewModel.CreateDefault();
+        DataContext = viewModel;
     }
 }

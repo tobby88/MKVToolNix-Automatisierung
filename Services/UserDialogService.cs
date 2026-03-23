@@ -143,16 +143,6 @@ public sealed class UserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
-    public bool ConfirmBatchStart(int itemCount)
-    {
-        return MessageBox.Show(
-            GetOwner(),
-            $"Sollen {itemCount} Episoden jetzt nacheinander verarbeitet werden?\n\nPflichtprüfungen wurden vorher bereits abgearbeitet.",
-            "Batch starten",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question) == MessageBoxResult.Yes;
-    }
-
     public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes)
     {
         var lines = new List<string>
@@ -186,16 +176,6 @@ public sealed class UserDialogService
             GetOwner(),
             $"Die vorhandene Zieldatei muss zuerst lokal kopiert werden:\n{copyPlan.SourceFilePath}\n\nArbeitskopie:\n{copyPlan.DestinationFilePath}\n\nDateigröße: {FormatFileSize(copyPlan.FileSizeBytes)}\n\nJetzt kopieren?",
             "Zieldatei kopieren",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question) == MessageBoxResult.Yes;
-    }
-
-    public bool ConfirmBatchArchiveCopy(int fileCount, long totalBytes)
-    {
-        return MessageBox.Show(
-            GetOwner(),
-            $"{fileCount} vorhandene Zieldatei(en) müssen vor dem Batch lokal kopiert werden.\n\nGesamtgröße: {FormatFileSize(totalBytes)}\n\nJetzt alle benötigten Dateien kopieren?",
-            "Zieldateien kopieren",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }

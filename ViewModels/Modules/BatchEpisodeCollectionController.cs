@@ -186,7 +186,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             BatchEpisodeFilterMode.PendingChecks => episode.HasPendingChecks,
             BatchEpisodeFilterMode.NewOnly => episode.ArchiveState == EpisodeArchiveState.New,
             BatchEpisodeFilterMode.ExistingOnly => episode.ArchiveState == EpisodeArchiveState.Existing,
-            BatchEpisodeFilterMode.ErrorsOnly => episode.Status.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase),
+            BatchEpisodeFilterMode.ErrorsOnly => episode.HasErrorStatus,
             _ => true
         };
     }
@@ -268,6 +268,8 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         {
             nameof(BatchEpisodeItemViewModel.HasPendingChecks) => _selectedFilterMode.Key == BatchEpisodeFilterMode.PendingChecks || _selectedSortMode.Key == BatchEpisodeSortMode.PendingChecksFirst,
             nameof(BatchEpisodeItemViewModel.Status)
+                or nameof(BatchEpisodeItemViewModel.StatusKind)
+                or nameof(BatchEpisodeItemViewModel.HasErrorStatus)
                 or nameof(BatchEpisodeItemViewModel.StatusSortKey) => _selectedFilterMode.Key == BatchEpisodeFilterMode.ErrorsOnly || _selectedSortMode.Key == BatchEpisodeSortMode.StatusFirst,
             nameof(BatchEpisodeItemViewModel.OutputPath)
                 or nameof(BatchEpisodeItemViewModel.ArchiveState)
@@ -284,6 +286,8 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return propertyName is null
             or nameof(BatchEpisodeItemViewModel.IsSelected)
             or nameof(BatchEpisodeItemViewModel.Status)
+            or nameof(BatchEpisodeItemViewModel.StatusKind)
+            or nameof(BatchEpisodeItemViewModel.HasErrorStatus)
             or nameof(BatchEpisodeItemViewModel.RequiresManualCheck)
             or nameof(BatchEpisodeItemViewModel.IsMetadataReviewApproved)
             or nameof(BatchEpisodeItemViewModel.RequiresMetadataReview)

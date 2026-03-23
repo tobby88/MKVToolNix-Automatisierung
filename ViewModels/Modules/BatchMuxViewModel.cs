@@ -175,6 +175,8 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     public int PendingCheckCount => _episodeCollection.PendingCheckCount;
 
+    public bool IsInteractive => !_isBusy;
+
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;
@@ -196,6 +198,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
     private void SetBusy(bool isBusy)
     {
         _isBusy = isBusy;
+        OnPropertyChanged(nameof(IsInteractive));
         RefreshCommands();
     }
 

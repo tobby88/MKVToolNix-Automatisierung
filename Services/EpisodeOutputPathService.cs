@@ -31,12 +31,15 @@ public sealed class EpisodeOutputPathService
 
         if (IsArchivePath(suggestedOutputPath))
         {
-            if (string.Equals(outputRootOverride, SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+            if (PathComparisonHelper.AreSamePath(outputRootOverride, SeriesArchiveService.ArchiveRootDirectory))
             {
                 return suggestedOutputPath;
             }
 
-            var relativePath = Path.GetRelativePath(SeriesArchiveService.ArchiveRootDirectory, suggestedOutputPath);
+            var relativePath = PathComparisonHelper.TryGetRelativePathWithinRoot(
+                suggestedOutputPath,
+                SeriesArchiveService.ArchiveRootDirectory)
+                ?? Path.GetFileName(suggestedOutputPath);
             return Path.Combine(outputRootOverride, relativePath);
         }
 
@@ -45,7 +48,6 @@ public sealed class EpisodeOutputPathService
 
     public bool IsArchivePath(string? path)
     {
-        return !string.IsNullOrWhiteSpace(path)
-            && path.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase);
+        return PathComparisonHelper.IsPathWithinRoot(path, SeriesArchiveService.ArchiveRootDirectory);
     }
 }

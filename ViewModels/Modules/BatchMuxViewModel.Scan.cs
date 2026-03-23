@@ -125,7 +125,7 @@ public sealed partial class BatchMuxViewModel
                     detected: detected,
                     metadataResolution: metadataResolution,
                     outputPath: outputPath,
-                    status: outputAlreadyExists ? "Vergleich offen" : "Bereit",
+                    statusKind: outputAlreadyExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
                     isSelected: true);
 
                 scannedItems.Add(item);

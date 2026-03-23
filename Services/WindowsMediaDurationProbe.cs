@@ -6,11 +6,24 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
-    private readonly ConcurrentDictionary<string, TimeSpan?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public TimeSpan? TryReadDuration(string filePath)
     {
-        return _cache.GetOrAdd(filePath, ReadDurationCore);
+        var snapshot = FileStateSnapshot.TryCreate(filePath);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        if (_cache.TryGetValue(filePath, out var cachedValue) && cachedValue.Matches(snapshot))
+        {
+            return cachedValue.Value;
+        }
+
+        var duration = ReadDurationCore(filePath);
+        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        return duration;
     }
 
     private static TimeSpan? ReadDurationCore(string filePath)

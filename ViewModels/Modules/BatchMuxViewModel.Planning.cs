@@ -29,7 +29,7 @@ public sealed partial class BatchMuxViewModel
             for (var index = 0; index < items.Count; index++)
             {
                 var item = items[index];
-                item.Status = "Läuft";
+                item.SetStatus(BatchEpisodeStatusKind.Running);
                 SetStatus(
                     automatic
                         ? $"Vergleiche vorhandene Bibliotheksdateien... {index + 1}/{items.Count}"
@@ -81,18 +81,18 @@ public sealed partial class BatchMuxViewModel
 
             if (outputExists)
             {
-                item.Status = plan.SkipMux ? "Ziel aktuell" : "Bereit";
+                item.SetStatus(plan.SkipMux ? BatchEpisodeStatusKind.UpToDate : BatchEpisodeStatusKind.Ready);
             }
             else
             {
-                item.Status = "Bereit";
+                item.SetStatus(BatchEpisodeStatusKind.Ready);
             }
         }
         catch (Exception ex)
         {
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
-            item.Status = "Warnung";
+            item.SetStatus(BatchEpisodeStatusKind.Warning);
         }
     }
 
@@ -117,7 +117,7 @@ public sealed partial class BatchMuxViewModel
                 var plan = await BuildPlanForItemAsync(item);
                 if (plan.SkipMux)
                 {
-                    item.Status = "Ziel aktuell";
+                    item.SetStatus(BatchEpisodeStatusKind.UpToDate);
                     AppendLog($"SKIP: {item.MainVideoFileName} -> {plan.SkipReason}");
                     continue;
                 }
@@ -126,7 +126,7 @@ public sealed partial class BatchMuxViewModel
             }
             catch (Exception ex)
             {
-                item.Status = "Fehler";
+                item.SetStatus(BatchEpisodeStatusKind.Error);
                 AppendLog($"PLAN-FEHLER: {item.MainVideoFileName} -> {ex.Message}");
             }
         }

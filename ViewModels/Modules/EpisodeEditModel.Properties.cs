@@ -218,6 +218,14 @@ public partial class EpisodeEditModel
 
     public int ArchiveSortKey => _archiveState == EpisodeArchiveState.New ? 0 : 1;
 
+    public string ArchiveBadgeBackground => EpisodeUiStyleBuilder.BuildArchiveBadgeBackground(ArchiveState);
+
+    public string ArchiveBadgeBorderBrush => EpisodeUiStyleBuilder.BuildArchiveBadgeBorderBrush(ArchiveState);
+
+    public bool HasPendingManualCheck => RequiresManualCheck && !IsManualCheckApproved;
+
+    public bool HasPendingMetadataReview => RequiresMetadataReview && !IsMetadataReviewApproved;
+
     public bool RequiresMetadataReview
     {
         get => _requiresMetadataReview;
@@ -230,7 +238,11 @@ public partial class EpisodeEditModel
 
             _requiresMetadataReview = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPendingMetadataReview));
+            OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewBadgeBackground));
+            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
         }
     }
@@ -247,7 +259,11 @@ public partial class EpisodeEditModel
 
             _isMetadataReviewApproved = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasPendingMetadataReview));
+            OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewBadgeBackground));
+            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
         }
     }
@@ -265,7 +281,11 @@ public partial class EpisodeEditModel
             _requiresManualCheck = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ManualCheckText));
+            OnPropertyChanged(nameof(HasPendingManualCheck));
+            OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewBadgeBackground));
+            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
         }
     }
@@ -279,8 +299,13 @@ public partial class EpisodeEditModel
     public bool IsManualCheckApproved => !RequiresManualCheck
         || string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase);
 
-    public bool HasPendingChecks => (RequiresManualCheck && !IsManualCheckApproved)
-        || (RequiresMetadataReview && !IsMetadataReviewApproved);
+    public bool HasPendingChecks => HasPendingManualCheck || HasPendingMetadataReview;
+
+    public EpisodeReviewState ReviewState => EpisodeEditTextBuilder.GetReviewState(
+        RequiresManualCheck,
+        IsManualCheckApproved,
+        RequiresMetadataReview,
+        IsMetadataReviewApproved);
 
     public bool UsesAutomaticOutputPath => !_outputPathWasManuallyChanged && !string.IsNullOrWhiteSpace(OutputPath);
 
@@ -288,13 +313,13 @@ public partial class EpisodeEditModel
     {
         get
         {
-            return EpisodeEditTextBuilder.BuildReviewHint(
-                RequiresManualCheck,
-                IsManualCheckApproved,
-                RequiresMetadataReview,
-                IsMetadataReviewApproved);
+            return EpisodeEditTextBuilder.BuildReviewHint(ReviewState);
         }
     }
+
+    public string ReviewBadgeBackground => EpisodeUiStyleBuilder.BuildReviewBadgeBackground(ReviewState);
+
+    public string ReviewBadgeBorderBrush => EpisodeUiStyleBuilder.BuildReviewBadgeBorderBrush(ReviewState);
 
     public IReadOnlyList<string> Notes => _notes;
 

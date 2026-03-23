@@ -16,6 +16,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;
     private string _status;
+    private BatchEpisodeStatusKind _statusKind;
 
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
@@ -37,7 +38,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         string metadataStatusText,
         bool requiresMetadataReview,
         bool isMetadataReviewApproved,
-        string status,
+        BatchEpisodeStatusKind statusKind,
         string planSummaryText,
         EpisodeUsageSummary? usageSummary,
         bool isSelected,
@@ -70,7 +71,8 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             manualCheckFilePaths,
             notes)
     {
-        _status = status;
+        _statusKind = statusKind;
+        _status = EpisodeEditTextBuilder.BuildBatchStatusText(statusKind);
         _isSelected = isSelected;
     }
 
@@ -94,28 +96,65 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         get => _status;
         set
         {
-            if (_status == value)
+            var normalized = string.IsNullOrWhiteSpace(value)
+                ? EpisodeEditTextBuilder.BuildBatchStatusText(BatchEpisodeStatusKind.Error)
+                : value;
+            var resolvedStatusKind = ResolveStatusKind(normalized);
+
+            if (_status == normalized && _statusKind == resolvedStatusKind)
             {
                 return;
             }
 
-            _status = value;
+            _status = normalized;
+            if (_statusKind != resolvedStatusKind)
+            {
+                _statusKind = resolvedStatusKind;
+                OnPropertyChanged(nameof(StatusKind));
+                OnPropertyChanged(nameof(StatusSortKey));
+                OnPropertyChanged(nameof(HasErrorStatus));
+                OnPropertyChanged(nameof(StatusBadgeBackground));
+                OnPropertyChanged(nameof(StatusBadgeBorderBrush));
+            }
+
             OnPropertyChanged();
-            OnPropertyChanged(nameof(StatusSortKey));
         }
     }
 
-    public int StatusSortKey => Status switch
+    public BatchEpisodeStatusKind StatusKind
     {
-        var value when value.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase) => 0,
-        "Warnung" => 1,
-        "L\u00e4uft" => 2,
-        "Vergleich offen" => 3,
-        "Bereit" => 4,
-        "Ziel aktuell" => 5,
-        "Erfolgreich" => 6,
-        _ => 99
-    };
+        get => _statusKind;
+        private set
+        {
+            if (_statusKind == value)
+            {
+                return;
+            }
+
+            _statusKind = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusSortKey));
+            OnPropertyChanged(nameof(HasErrorStatus));
+            OnPropertyChanged(nameof(StatusBadgeBackground));
+            OnPropertyChanged(nameof(StatusBadgeBorderBrush));
+        }
+    }
+
+    public bool HasErrorStatus => StatusKind == BatchEpisodeStatusKind.Error;
+
+    public int StatusSortKey => (int)StatusKind;
+
+    public string StatusBadgeBackground => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBackground(StatusKind);
+
+    public string StatusBadgeBorderBrush => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBorderBrush(StatusKind);
+
+    public void SetStatus(BatchEpisodeStatusKind statusKind, string? statusText = null)
+    {
+        StatusKind = statusKind;
+        Status = string.IsNullOrWhiteSpace(statusText)
+            ? EpisodeEditTextBuilder.BuildBatchStatusText(statusKind)
+            : statusText;
+    }
 
     public static BatchEpisodeItemViewModel CreateFromDetection(
         string requestedMainVideoPath,
@@ -123,7 +162,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
-        string status,
+        BatchEpisodeStatusKind statusKind,
         bool isSelected)
     {
         var outputExists = File.Exists(outputPath);
@@ -147,7 +186,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             metadataResolution.StatusText,
             metadataResolution.RequiresReview,
             !metadataResolution.RequiresReview,
-            status,
+            statusKind,
             outputExists
                 ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
                 : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.",
@@ -182,7 +221,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             "Keine TVDB-Daten vorhanden.",
             false,
             true,
-            "Fehler",
+            BatchEpisodeStatusKind.Error,
             "Keine Plan-Zusammenfassung verfügbar.",
             EpisodeUsageSummary.CreatePending("Fehler", "Keine Plan-Zusammenfassung verfügbar."),
             isSelected: false,
@@ -197,7 +236,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
-        string status)
+        BatchEpisodeStatusKind statusKind)
     {
         ApplyDetectedEpisodeState(
             requestedMainVideoPath,
@@ -205,7 +244,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             detected,
             metadataResolution,
             outputPath);
-        ApplyArchiveState(status);
+        ApplyArchiveState(statusKind);
         IsSelected = true;
     }
 
@@ -273,11 +312,11 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         ApplyArchiveState();
     }
 
-    private void ApplyArchiveState(string? statusOverride = null)
+    private void ApplyArchiveState(BatchEpisodeStatusKind? statusOverride = null)
     {
         RefreshArchiveState();
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
-        Status = statusOverride ?? (outputExists ? "Vergleich offen" : "Bereit");
+        SetStatus(statusOverride ?? (outputExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
         SetPlanSummary(outputExists
             ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
             : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.");
@@ -285,5 +324,23 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
             outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
     }
-}
 
+    private static BatchEpisodeStatusKind ResolveStatusKind(string statusText)
+    {
+        if (statusText.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase))
+        {
+            return BatchEpisodeStatusKind.Error;
+        }
+
+        return statusText switch
+        {
+            "Warnung" => BatchEpisodeStatusKind.Warning,
+            "Läuft" => BatchEpisodeStatusKind.Running,
+            "Vergleich offen" => BatchEpisodeStatusKind.ComparisonPending,
+            "Bereit" => BatchEpisodeStatusKind.Ready,
+            "Ziel aktuell" => BatchEpisodeStatusKind.UpToDate,
+            "Erfolgreich" => BatchEpisodeStatusKind.Success,
+            _ => BatchEpisodeStatusKind.Error
+        };
+    }
+}

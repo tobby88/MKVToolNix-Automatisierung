@@ -19,7 +19,7 @@ public sealed class EpisodeCleanupFilePlanner
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Where(File.Exists)
             .Where(path => string.IsNullOrWhiteSpace(sourceRoot)
-                || path.StartsWith(sourceRoot, StringComparison.OrdinalIgnoreCase))
+                || PathComparisonHelper.IsPathWithinRoot(path, sourceRoot))
             .Where(path => !_outputPaths.IsArchivePath(path))
             .Where(path => !string.Equals(path, outputPath, StringComparison.OrdinalIgnoreCase))
             .Where(path => string.IsNullOrWhiteSpace(workingCopyPath)

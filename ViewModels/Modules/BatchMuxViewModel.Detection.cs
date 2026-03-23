@@ -37,7 +37,7 @@ public sealed partial class BatchMuxViewModel
                 detected: result.Detected,
                 metadataResolution: result.MetadataResolution,
                 outputPath: outputPath,
-                status: outputAlreadyExists ? "Vergleich offen" : "Bereit");
+                statusKind: outputAlreadyExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready);
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");

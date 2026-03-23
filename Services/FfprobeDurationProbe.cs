@@ -6,7 +6,7 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class FfprobeDurationProbe : IMediaDurationProbe
 {
-    private readonly ConcurrentDictionary<string, TimeSpan?> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _pathSync = new();
     private readonly FfprobeLocator _locator;
     private string? _ffprobePath;
@@ -23,12 +23,20 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
     public TimeSpan? TryReadDuration(string filePath)
     {
         var ffprobePath = GetCurrentFfprobePath();
-        if (string.IsNullOrWhiteSpace(ffprobePath) || !File.Exists(filePath))
+        var snapshot = FileStateSnapshot.TryCreate(filePath);
+        if (string.IsNullOrWhiteSpace(ffprobePath) || snapshot is null)
         {
             return null;
         }
 
-        return _cache.GetOrAdd(filePath, path => ReadDurationCore(path, ffprobePath));
+        if (_cache.TryGetValue(filePath, out var cachedValue) && cachedValue.Matches(snapshot))
+        {
+            return cachedValue.Value;
+        }
+
+        var duration = ReadDurationCore(filePath, ffprobePath);
+        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        return duration;
     }
 
     private string? GetCurrentFfprobePath()

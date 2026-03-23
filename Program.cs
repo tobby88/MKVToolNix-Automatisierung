@@ -14,7 +14,8 @@ internal static class Program
                 ShutdownMode = ShutdownMode.OnMainWindowClose
             };
 
-            var window = new MainWindow();
+            var bootstrapper = new AppBootstrapper();
+            var window = bootstrapper.CreateMainWindow();
             app.Run(window);
         }
         catch (Exception ex)

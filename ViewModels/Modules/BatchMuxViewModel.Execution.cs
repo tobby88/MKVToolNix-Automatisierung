@@ -13,78 +13,79 @@ public sealed partial class BatchMuxViewModel
         var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
         if (selectedItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Bitte mindestens eine Episode für den Batch auswählen.");
+            _dialogService.ShowWarning("Hinweis", "Bitte mindestens eine Episode f\u00FCr den Batch ausw\u00E4hlen.");
             return;
         }
 
         var readyItems = selectedItems
-            .Where(item => item.Status != "Fehler")
+            .Where(item => !item.HasErrorStatus)
             .ToList();
 
         if (readyItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Es gibt keine gültigen Episoden für den Batch.");
+            _dialogService.ShowWarning("Hinweis", "Es gibt keine g\u00FCltigen Episoden f\u00FCr den Batch.");
             return;
-        }
-
-        var approved = await EnsurePendingChecksApprovedAsync(readyItems);
-        if (!approved)
-        {
-            _dialogService.ShowWarning(
-                "Hinweis",
-                "Der Batch wurde abgebrochen, weil nicht alle prüfpflichtigen Quellen freigegeben wurden.");
-            SetStatus("Batch abgebrochen", 0);
-            return;
-        }
-
-        SetStatus("Erstelle Mux-Pläne...", 0);
-        var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
-        var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker);
-
-        if (executablePlans.Count == 0)
-        {
-            SetStatus("Keine weiteren Mux-Vorgänge nötig", 100);
-            _dialogService.ShowInfo("Hinweis", "Alle ausgewählten Episoden sind bereits vollständig oder wurden wegen Fehlern übersprungen.");
-            return;
-        }
-
-        var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatus);
-        var copyPlans = executablePlans
-            .Select(entry => entry.Plan.WorkingCopy)
-            .Where(plan => plan is not null)
-            .Cast<FileCopyPlan>()
-            .GroupBy(plan => plan.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .ToList();
-
-        var copyPlansToExecute = copyPlans
-            .Where(_services.FileCopy.NeedsCopy)
-            .ToList();
-
-        var totalCopyBytes = copyPlansToExecute.Sum(plan => plan.FileSizeBytes);
-
-        if (!_dialogService.ConfirmBatchExecution(executablePlans.Count, copyPlansToExecute.Count, totalCopyBytes))
-        {
-            SetStatus("Abgebrochen", 0);
-            return;
-        }
-
-        if (copyPlansToExecute.Count > 0)
-        {
-            await CopyArchiveFilesAsync(copyPlansToExecute, totalCopyBytes, progressTracker);
-        }
-        else
-        {
-            progressTracker.ReportCopyCompleted(reusedExistingCopies: copyPlans.Count > 0);
-            if (copyPlans.Count > 0)
-            {
-                AppendLog("ARBEITSKOPIEN: Bereits vorhandene aktuelle Arbeitskopien werden wiederverwendet.");
-            }
         }
 
         try
         {
             SetBusy(true);
+
+            var approved = await EnsurePendingChecksApprovedAsync(readyItems);
+            if (!approved)
+            {
+                _dialogService.ShowWarning(
+                    "Hinweis",
+                    "Der Batch wurde abgebrochen, weil nicht alle pr\u00FCfpflichtigen Quellen freigegeben wurden.");
+                SetStatus("Batch abgebrochen", 0);
+                return;
+            }
+
+            SetStatus("Erstelle Mux-Pl\u00E4ne...", 0);
+            var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
+            var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker);
+
+            if (executablePlans.Count == 0)
+            {
+                SetStatus("Keine weiteren Mux-Vorg\u00E4nge n\u00F6tig", 100);
+                _dialogService.ShowInfo("Hinweis", "Alle ausgew\u00E4hlten Episoden sind bereits vollst\u00E4ndig oder wurden wegen Fehlern \u00FCbersprungen.");
+                return;
+            }
+
+            var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatus);
+            var copyPlans = executablePlans
+                .Select(entry => entry.Plan.WorkingCopy)
+                .Where(plan => plan is not null)
+                .Cast<FileCopyPlan>()
+                .GroupBy(plan => plan.SourceFilePath, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+
+            var copyPlansToExecute = copyPlans
+                .Where(_services.FileCopy.NeedsCopy)
+                .ToList();
+
+            var totalCopyBytes = copyPlansToExecute.Sum(plan => plan.FileSizeBytes);
+
+            if (!_dialogService.ConfirmBatchExecution(executablePlans.Count, copyPlansToExecute.Count, totalCopyBytes))
+            {
+                SetStatus("Abgebrochen", 0);
+                return;
+            }
+
+            if (copyPlansToExecute.Count > 0)
+            {
+                await CopyArchiveFilesAsync(copyPlansToExecute, totalCopyBytes, progressTracker);
+            }
+            else
+            {
+                progressTracker.ReportCopyCompleted(reusedExistingCopies: copyPlans.Count > 0);
+                if (copyPlans.Count > 0)
+                {
+                    AppendLog("ARBEITSKOPIEN: Bereits vorhandene aktuelle Arbeitskopien werden wiederverwendet.");
+                }
+            }
+
             ResetLog();
             var successCount = 0;
             var warningCount = 0;
@@ -100,7 +101,7 @@ public sealed partial class BatchMuxViewModel
                 var plan = workItem.Plan;
                 item.RefreshArchivePresence();
                 var outputExistedBeforeRun = item.ArchiveState == EpisodeArchiveState.Existing;
-                item.Status = "Läuft";
+                item.SetStatus(BatchEpisodeStatusKind.Running);
                 AppendLog($"STARTE: {item.MainVideoFileName}");
 
                 try
@@ -112,7 +113,7 @@ public sealed partial class BatchMuxViewModel
 
                     if (result.ExitCode == 0 && !result.HasWarning)
                     {
-                        item.Status = "Erfolgreich";
+                        item.SetStatus(BatchEpisodeStatusKind.Success);
                         successCount++;
                         item.RefreshArchivePresence();
                         if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
@@ -124,7 +125,7 @@ public sealed partial class BatchMuxViewModel
                     else if ((result.ExitCode == 0 && result.HasWarning)
                         || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
                     {
-                        item.Status = "Warnung";
+                        item.SetStatus(BatchEpisodeStatusKind.Warning);
                         warningCount++;
                         item.RefreshArchivePresence();
                         if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
@@ -135,13 +136,13 @@ public sealed partial class BatchMuxViewModel
                     }
                     else
                     {
-                        item.Status = $"Fehler ({result.ExitCode})";
+                        item.SetStatus(BatchEpisodeStatusKind.Error, $"Fehler ({result.ExitCode})");
                         errorCount++;
                     }
                 }
                 catch (Exception ex)
                 {
-                    item.Status = "Fehler";
+                    item.SetStatus(BatchEpisodeStatusKind.Error);
                     AppendLog($"  FEHLER: {ex.Message}");
                     errorCount++;
                 }
@@ -182,7 +183,7 @@ public sealed partial class BatchMuxViewModel
         var moveResult = await _services.Cleanup.MoveFilesToDirectoryAsync(
             cleanupFiles,
             doneDirectory,
-            (current, total, filePath) =>
+            (current, total, _filePath) =>
             {
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                     progressTracker.ReportMoveToDone(currentItemIndex, current, total));
@@ -227,7 +228,7 @@ public sealed partial class BatchMuxViewModel
         {
             var recycleResult = await _services.Cleanup.RecycleFilesAsync(
                 doneFiles,
-                (current, total, _) =>
+                (current, total, _filePath) =>
                 {
                     Application.Current.Dispatcher.BeginInvoke(() =>
                     {
@@ -267,7 +268,7 @@ public sealed partial class BatchMuxViewModel
         }
 
         AppendLog(string.Empty);
-        AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT:");
+        AppendLog("NEU IN SERIENBIBLIOTHEK EINGEF\u00DCGT:");
         foreach (var file in files)
         {
             AppendLog("  " + file);
@@ -277,7 +278,7 @@ public sealed partial class BatchMuxViewModel
         var reportPath = Path.Combine(SourceDirectory, $"Neu in Serienbibliothek - {timeStamp}.txt");
         File.WriteAllLines(reportPath,
         [
-            "Neu in Serienbibliothek eingefügte Dateien",
+            "Neu in Serienbibliothek eingef\u00FCgte Dateien",
             $"Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss}",
             string.Empty,
             .. files
@@ -317,5 +318,4 @@ public sealed partial class BatchMuxViewModel
 
         progressTracker.ReportCopyCompleted(reusedExistingCopies: false);
     }
-
 }

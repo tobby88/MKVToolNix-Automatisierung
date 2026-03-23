@@ -18,7 +18,7 @@ public sealed partial class BatchMuxViewModel
         }
 
         var readyItems = selectedItems
-            .Where(item => item.Status != "Fehler")
+            .Where(item => !item.HasErrorStatus)
             .ToList();
 
         if (readyItems.Count == 0)

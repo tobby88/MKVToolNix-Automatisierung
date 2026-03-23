@@ -108,18 +108,31 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
         ? "Quelle erneut prüfen"
         : "Quelle prüfen / freigeben";
 
-    public string ManualCheckBadgeText => RequiresManualCheck
-        ? IsManualCheckApproved ? "Quelle freigegeben" : "Quelle prüfen"
-        : "Quelle ok";
+    public ManualCheckBadgeState ManualCheckBadgeState => HasPendingManualCheck
+        ? ManualCheckBadgeState.Pending
+        : ManualCheckBadgeState.Approved;
+
+    public string ManualCheckBadgeText => EpisodeEditTextBuilder.BuildManualCheckBadgeText(ManualCheckBadgeState);
+
+    public string ManualCheckBadgeBackground => EpisodeUiStyleBuilder.BuildManualCheckBadgeBackground(ManualCheckBadgeState);
+
+    public string ManualCheckBadgeBorderBrush => EpisodeUiStyleBuilder.BuildManualCheckBadgeBorderBrush(ManualCheckBadgeState);
 
     public bool HasMetadataStatus => !string.IsNullOrWhiteSpace(MetadataStatusText);
-    public string MetadataActionButtonText => RequiresMetadataReview && !IsMetadataReviewApproved
+
+    public string MetadataActionButtonText => HasPendingMetadataReview
         ? "TVDB prüfen"
         : "TVDB anpassen";
 
-    public string MetadataBadgeText => RequiresMetadataReview
-        ? IsMetadataReviewApproved ? "TVDB freigegeben" : "TVDB prüfen"
-        : HasMetadataStatus ? "TVDB ok" : "TVDB offen";
+    public MetadataBadgeState MetadataBadgeState => HasPendingMetadataReview
+        ? MetadataBadgeState.Pending
+        : HasMetadataStatus ? MetadataBadgeState.Approved : MetadataBadgeState.Open;
+
+    public string MetadataBadgeText => EpisodeEditTextBuilder.BuildMetadataBadgeText(MetadataBadgeState);
+
+    public string MetadataBadgeBackground => EpisodeUiStyleBuilder.BuildMetadataBadgeBackground(MetadataBadgeState);
+
+    public string MetadataBadgeBorderBrush => EpisodeUiStyleBuilder.BuildMetadataBadgeBorderBrush(MetadataBadgeState);
 
     public string OutputTargetStatusText
     {
@@ -134,15 +147,22 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
             _outputTargetStatusText = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasOutputTargetStatus));
-            OnPropertyChanged(nameof(OutputTargetBadgeText));
         }
     }
 
     public bool HasOutputTargetStatus => !string.IsNullOrWhiteSpace(OutputTargetStatusText);
 
-    public string OutputTargetBadgeText => string.IsNullOrWhiteSpace(OutputPath)
-        ? "Bibliothek offen"
-        : File.Exists(OutputPath) ? "In Bibliothek" : "Neu für Bibliothek";
+    public OutputTargetBadgeState OutputTargetBadgeState => string.IsNullOrWhiteSpace(OutputPath)
+        ? OutputTargetBadgeState.Open
+        : ArchiveState == EpisodeArchiveState.Existing
+            ? OutputTargetBadgeState.InLibrary
+            : OutputTargetBadgeState.NewForLibrary;
+
+    public string OutputTargetBadgeText => EpisodeEditTextBuilder.BuildOutputTargetBadgeText(OutputTargetBadgeState);
+
+    public string OutputTargetBadgeBackground => EpisodeUiStyleBuilder.BuildOutputTargetBadgeBackground(OutputTargetBadgeState);
+
+    public string OutputTargetBadgeBorderBrush => EpisodeUiStyleBuilder.BuildOutputTargetBadgeBorderBrush(OutputTargetBadgeState);
 
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
 
@@ -193,21 +213,35 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
                 base.OnPropertyChanged(nameof(AttachmentDisplayText));
                 break;
             case nameof(OutputPath):
+            case nameof(ArchiveState):
+                base.OnPropertyChanged(nameof(OutputTargetBadgeState));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeText));
+                base.OnPropertyChanged(nameof(OutputTargetBadgeBackground));
+                base.OnPropertyChanged(nameof(OutputTargetBadgeBorderBrush));
                 break;
             case nameof(RequiresManualCheck):
+            case nameof(IsManualCheckApproved):
             case nameof(ManualCheckText):
                 base.OnPropertyChanged(nameof(ManualCheckButtonText));
+                base.OnPropertyChanged(nameof(ManualCheckBadgeState));
                 base.OnPropertyChanged(nameof(ManualCheckBadgeText));
+                base.OnPropertyChanged(nameof(ManualCheckBadgeBackground));
+                base.OnPropertyChanged(nameof(ManualCheckBadgeBorderBrush));
                 break;
             case nameof(MetadataStatusText):
                 base.OnPropertyChanged(nameof(HasMetadataStatus));
+                base.OnPropertyChanged(nameof(MetadataBadgeState));
                 base.OnPropertyChanged(nameof(MetadataBadgeText));
+                base.OnPropertyChanged(nameof(MetadataBadgeBackground));
+                base.OnPropertyChanged(nameof(MetadataBadgeBorderBrush));
                 break;
             case nameof(RequiresMetadataReview):
             case nameof(IsMetadataReviewApproved):
                 base.OnPropertyChanged(nameof(MetadataActionButtonText));
+                base.OnPropertyChanged(nameof(MetadataBadgeState));
                 base.OnPropertyChanged(nameof(MetadataBadgeText));
+                base.OnPropertyChanged(nameof(MetadataBadgeBackground));
+                base.OnPropertyChanged(nameof(MetadataBadgeBorderBrush));
                 break;
             case nameof(PlanSummaryText):
                 base.OnPropertyChanged(nameof(HasPlanSummary));
@@ -228,5 +262,3 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
         }
     }
 }
-
-

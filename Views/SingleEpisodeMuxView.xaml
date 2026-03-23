@@ -83,61 +83,27 @@
                                 <Border Margin="0,0,8,6"
                                         Padding="8,3"
                                         CornerRadius="10"
+                                        Background="{Binding OutputTargetBadgeBackground, Mode=OneWay}"
+                                        BorderBrush="{Binding OutputTargetBadgeBorderBrush, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#E8F3FF" />
-                                            <Setter Property="BorderBrush" Value="#8CB4D8" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding OutputTargetBadgeText, Mode=OneWay}" Value="In Bibliothek">
-                                                    <Setter Property="Background" Value="#EEF6E8" />
-                                                    <Setter Property="BorderBrush" Value="#88B06E" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding OutputTargetBadgeText, Mode=OneWay}" />
                                 </Border>
 
                                 <Border Margin="0,0,8,6"
                                         Padding="8,3"
                                         CornerRadius="10"
+                                        Background="{Binding ManualCheckBadgeBackground, Mode=OneWay}"
+                                        BorderBrush="{Binding ManualCheckBadgeBorderBrush, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#EEF6E8" />
-                                            <Setter Property="BorderBrush" Value="#88B06E" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ManualCheckBadgeText, Mode=OneWay}" Value="Quelle prüfen">
-                                                    <Setter Property="Background" Value="#FFF4D6" />
-                                                    <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding ManualCheckBadgeText, Mode=OneWay}" />
                                 </Border>
 
                                 <Border Margin="0,0,0,6"
                                         Padding="8,3"
                                         CornerRadius="10"
+                                        Background="{Binding MetadataBadgeBackground, Mode=OneWay}"
+                                        BorderBrush="{Binding MetadataBadgeBorderBrush, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#EEF6E8" />
-                                            <Setter Property="BorderBrush" Value="#88B06E" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding MetadataBadgeText, Mode=OneWay}" Value="TVDB prüfen">
-                                                    <Setter Property="Background" Value="#FFF4D6" />
-                                                    <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding MetadataBadgeText, Mode=OneWay}" Value="TVDB offen">
-                                                    <Setter Property="Background" Value="#E8F3FF" />
-                                                    <Setter Property="BorderBrush" Value="#8CB4D8" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding MetadataBadgeText, Mode=OneWay}" />
                                 </Border>
                             </WrapPanel>

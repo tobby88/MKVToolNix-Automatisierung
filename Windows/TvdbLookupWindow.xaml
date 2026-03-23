@@ -142,7 +142,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Width="190" Margin="0,0,12,0" Padding="10,6" Click="KeepLocalButton_Click" Content="Lokale Erkennung behalten" />
                 <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
-                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="Übernehmen" />
+                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="übernehmen" />
             </StackPanel>
         </DockPanel>
     </Grid>

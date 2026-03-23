@@ -8,9 +8,9 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class MkvMergeProbeService
 {
-    private readonly ConcurrentDictionary<string, MediaTrackMetadata> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, AudioTrackMetadata> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, ContainerMetadata> _containerCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedFileValue<MediaTrackMetadata>> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedFileValue<AudioTrackMetadata>> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CachedFileValue<ContainerMetadata>> _containerCache = new(StringComparer.OrdinalIgnoreCase);
 
     public void Invalidate(string? filePath)
     {
@@ -34,9 +34,10 @@ public sealed class MkvMergeProbeService
 
     public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(string mkvMergePath, string inputFilePath)
     {
-        if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
+        if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
-            return cachedMetadata;
+            return cachedMetadata.Value;
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
@@ -96,15 +97,16 @@ public sealed class MkvMergeProbeService
             VideoLanguage: NormalizeLanguage(videoProperties),
             AudioLanguage: NormalizeLanguage(audioProperties));
 
-        _mediaTrackCache[inputFilePath] = metadata;
+        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
         return metadata;
     }
 
     public async Task<AudioTrackMetadata> ReadFirstAudioTrackMetadataAsync(string mkvMergePath, string inputFilePath)
     {
-        if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
+        if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
-            return cachedMetadata;
+            return cachedMetadata.Value;
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
@@ -125,7 +127,7 @@ public sealed class MkvMergeProbeService
                     TrackName: ReadTrackName(properties),
                     IsVisualImpaired: ReadBooleanProperty(properties, "flag_visual_impaired"));
 
-                _audioTrackCache[inputFilePath] = metadata;
+                StoreCachedValue(_audioTrackCache, inputFilePath, snapshot, metadata);
                 return metadata;
             }
         }
@@ -135,9 +137,10 @@ public sealed class MkvMergeProbeService
 
     public async Task<ContainerMetadata> ReadContainerMetadataAsync(string mkvMergePath, string inputFilePath)
     {
-        if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata))
+        var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
+        if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
-            return cachedMetadata;
+            return cachedMetadata.Value;
         }
 
         var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath);
@@ -196,8 +199,23 @@ public sealed class MkvMergeProbeService
         }
 
         var metadata = new ContainerMetadata(trackMetadata, attachments);
-        _containerCache[inputFilePath] = metadata;
+        StoreCachedValue(_containerCache, inputFilePath, snapshot, metadata);
         return metadata;
+    }
+
+    private static void StoreCachedValue<T>(
+        ConcurrentDictionary<string, CachedFileValue<T>> cache,
+        string filePath,
+        FileStateSnapshot? snapshot,
+        T value)
+    {
+        if (snapshot is null)
+        {
+            cache.TryRemove(filePath, out _);
+            return;
+        }
+
+        cache[filePath] = new CachedFileValue<T>(snapshot.Value, value);
     }
 
     private static JsonElement GetTracksElement(JsonDocument trackDocument, string inputFilePath)

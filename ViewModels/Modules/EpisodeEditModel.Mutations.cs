@@ -86,6 +86,13 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(IsMetadataReviewApproved));
         OnPropertyChanged(nameof(ManualCheckFilePaths));
         OnPropertyChanged(nameof(IsManualCheckApproved));
+        OnPropertyChanged(nameof(HasPendingMetadataReview));
+        OnPropertyChanged(nameof(HasPendingManualCheck));
+        OnPropertyChanged(nameof(ReviewState));
+        OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewBadgeBackground));
+        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
+        OnPropertyChanged(nameof(HasPendingChecks));
         OnPropertyChanged(nameof(Notes));
         OnPropertyChanged(nameof(NotesDisplayText));
         OnPropertyChanged(nameof(SourceFilePaths));
@@ -99,7 +106,12 @@ public partial class EpisodeEditModel
         _approvedReviewPath = null;
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
+        OnPropertyChanged(nameof(HasPendingManualCheck));
+        OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewBadgeBackground));
+        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
+        OnPropertyChanged(nameof(HasPendingChecks));
     }
 
     public virtual void SetSubtitles(IEnumerable<string> paths)
@@ -166,7 +178,11 @@ public partial class EpisodeEditModel
         _approvedReviewPath = CurrentReviewTargetPath;
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
+        OnPropertyChanged(nameof(HasPendingManualCheck));
+        OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewBadgeBackground));
+        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
     }
 
@@ -265,7 +281,11 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(ManualCheckFilePaths));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
+        OnPropertyChanged(nameof(HasPendingManualCheck));
+        OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewBadgeBackground));
+        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
     }
 
@@ -291,6 +311,8 @@ public partial class EpisodeEditModel
         _archiveState = archiveState;
         OnPropertyChanged(nameof(ArchiveState));
         OnPropertyChanged(nameof(ArchiveStateText));
+        OnPropertyChanged(nameof(ArchiveBadgeBackground));
+        OnPropertyChanged(nameof(ArchiveBadgeBorderBrush));
         OnPropertyChanged(nameof(ArchiveSortKey));
     }
 

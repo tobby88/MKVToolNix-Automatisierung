@@ -14,35 +14,91 @@ internal static class EpisodeEditTextBuilder
             : "Die aktuell ausgewählte Quelle ist prüfpflichtig. Bitte vor dem Muxen kurz prüfen und freigeben.";
     }
 
-    public static string BuildReviewHint(
+    public static EpisodeReviewState GetReviewState(
         bool requiresManualCheck,
         bool isManualCheckApproved,
         bool requiresMetadataReview,
         bool isMetadataReviewApproved)
     {
-        var pendingChecks = new List<string>();
+        var hasPendingManualCheck = requiresManualCheck && !isManualCheckApproved;
+        var hasPendingMetadataReview = requiresMetadataReview && !isMetadataReviewApproved;
 
-        if (requiresManualCheck && !isManualCheckApproved)
+        if (hasPendingManualCheck && hasPendingMetadataReview)
         {
-            pendingChecks.Add("Quelle");
+            return EpisodeReviewState.ManualAndMetadataPending;
         }
 
-        if (requiresMetadataReview && !isMetadataReviewApproved)
+        if (hasPendingManualCheck)
         {
-            pendingChecks.Add("TVDB");
+            return EpisodeReviewState.ManualCheckPending;
         }
 
-        if (pendingChecks.Count > 0)
+        if (hasPendingMetadataReview)
         {
-            return string.Join(" + ", pendingChecks) + " prüfen";
+            return EpisodeReviewState.MetadataReviewPending;
         }
 
         if (requiresManualCheck || requiresMetadataReview)
         {
-            return "Freigegeben";
+            return EpisodeReviewState.Approved;
         }
 
-        return "Keine nötig";
+        return EpisodeReviewState.NoneNeeded;
+    }
+
+    public static string BuildReviewHint(EpisodeReviewState reviewState)
+    {
+        return reviewState switch
+        {
+            EpisodeReviewState.Approved => "Freigegeben",
+            EpisodeReviewState.ManualCheckPending => "Quelle prüfen",
+            EpisodeReviewState.MetadataReviewPending => "TVDB prüfen",
+            EpisodeReviewState.ManualAndMetadataPending => "Quelle + TVDB prüfen",
+            _ => "Keine nötig"
+        };
+    }
+
+    public static string BuildManualCheckBadgeText(ManualCheckBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            ManualCheckBadgeState.Pending => "Quelle prüfen",
+            _ => "Quelle ok"
+        };
+    }
+
+    public static string BuildMetadataBadgeText(MetadataBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            MetadataBadgeState.Pending => "TVDB prüfen",
+            MetadataBadgeState.Approved => "TVDB ok",
+            _ => "TVDB offen"
+        };
+    }
+
+    public static string BuildOutputTargetBadgeText(OutputTargetBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            OutputTargetBadgeState.InLibrary => "In Bibliothek",
+            OutputTargetBadgeState.NewForLibrary => "Neu für Bibliothek",
+            _ => "Bibliothek offen"
+        };
+    }
+
+    public static string BuildBatchStatusText(BatchEpisodeStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            BatchEpisodeStatusKind.Warning => "Warnung",
+            BatchEpisodeStatusKind.Running => "Läuft",
+            BatchEpisodeStatusKind.ComparisonPending => "Vergleich offen",
+            BatchEpisodeStatusKind.Ready => "Bereit",
+            BatchEpisodeStatusKind.UpToDate => "Ziel aktuell",
+            BatchEpisodeStatusKind.Success => "Erfolgreich",
+            _ => "Fehler"
+        };
     }
 
     public static string BuildNotesDisplayText(IReadOnlyList<string> notes)

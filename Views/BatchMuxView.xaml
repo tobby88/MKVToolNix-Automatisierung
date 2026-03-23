@@ -21,7 +21,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,8">
+        <Grid Grid.Row="0" Margin="0,0,0,8" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="*" />
@@ -62,7 +62,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False">
+            <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="False" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Text="Filter" />
                     <ComboBox Width="150"
@@ -90,126 +90,67 @@
                           SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}"
                           AutoGenerateColumns="False"
                           IsReadOnly="False"
+                          IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"
-                          Loaded="EpisodeItemsGrid_OnLoaded"
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
-                          SizeChanged="EpisodeItemsGrid_OnSizeChanged"
                           MinHeight="130"
                           Margin="8">
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
-                        <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="0.9*" MinWidth="110" IsReadOnly="True" />
-                        <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="Auto" IsReadOnly="True" />
+                        <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="SizeToHeader" />
+                        <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="1.2*" MinWidth="140" IsReadOnly="True" />
+                        <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="SizeToCells" IsReadOnly="True" />
 
-                        <DataGridTemplateColumn Header="In Bibliothek" Width="Auto">
+                        <DataGridTemplateColumn Header="In Bibliothek" Width="SizeToHeader">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#EEF6E8" />
-                                                <Setter Property="BorderBrush" Value="#88B06E" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ArchiveStateText}" Value="vorhanden">
-                                                        <Setter Property="Background" Value="#E8F3FF" />
-                                                        <Setter Property="BorderBrush" Value="#8CB4D8" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
+                                        <Border.Background>
+                                            <Binding Path="ArchiveBadgeBackground" Mode="OneWay" />
+                                        </Border.Background>
+                                        <Border.BorderBrush>
+                                            <Binding Path="ArchiveBadgeBorderBrush" Mode="OneWay" />
+                                        </Border.BorderBrush>
                                         <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Text="{Binding ArchiveStateText}" />
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn Header="Pr&#252;fung" Width="Auto">
+                        <DataGridTemplateColumn Header="Pr&#252;fung" Width="SizeToCells">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#F3F6FA" />
-                                                <Setter Property="BorderBrush" Value="#C7D1DC" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Freigegeben">
-                                                        <Setter Property="Background" Value="#EEF6E8" />
-                                                        <Setter Property="BorderBrush" Value="#88B06E" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Keine n&#246;tig">
-                                                        <Setter Property="Background" Value="#EEF6E8" />
-                                                        <Setter Property="BorderBrush" Value="#88B06E" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Quelle + TVDB pr&#252;fen">
-                                                        <Setter Property="Background" Value="#FFF4D6" />
-                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Quelle pr&#252;fen">
-                                                        <Setter Property="Background" Value="#FFF4D6" />
-                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="TVDB pr&#252;fen">
-                                                        <Setter Property="Background" Value="#FFF4D6" />
-                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
+                                        <Border.Background>
+                                            <Binding Path="ReviewBadgeBackground" Mode="OneWay" />
+                                        </Border.Background>
+                                        <Border.BorderBrush>
+                                            <Binding Path="ReviewBadgeBorderBrush" Mode="OneWay" />
+                                        </Border.BorderBrush>
                                         <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Text="{Binding ReviewHint}" />
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn Header="Status" Width="Auto">
+                        <DataGridTemplateColumn Header="Status" Width="SizeToCells">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#F3F6FA" />
-                                                <Setter Property="BorderBrush" Value="#C7D1DC" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="0">
-                                                        <Setter Property="Background" Value="#FCE8E8" />
-                                                        <Setter Property="BorderBrush" Value="#D28A8A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="1">
-                                                        <Setter Property="Background" Value="#FFF4D6" />
-                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="2">
-                                                        <Setter Property="Background" Value="#FFF4D6" />
-                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="3">
-                                                        <Setter Property="Background" Value="#E8F3FF" />
-                                                        <Setter Property="BorderBrush" Value="#8CB4D8" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="4">
-                                                        <Setter Property="Background" Value="#EEF6E8" />
-                                                        <Setter Property="BorderBrush" Value="#88B06E" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="5">
-                                                        <Setter Property="Background" Value="#EEF6E8" />
-                                                        <Setter Property="BorderBrush" Value="#88B06E" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding StatusSortKey}" Value="6">
-                                                        <Setter Property="Background" Value="#EEF6E8" />
-                                                        <Setter Property="BorderBrush" Value="#88B06E" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
+                                        <Border.Background>
+                                            <Binding Path="StatusBadgeBackground" Mode="OneWay" />
+                                        </Border.Background>
+                                        <Border.BorderBrush>
+                                            <Binding Path="StatusBadgeBorderBrush" Mode="OneWay" />
+                                        </Border.BorderBrush>
                                         <TextBlock HorizontalAlignment="Center" FontWeight="SemiBold" Text="{Binding Status}" />
                                     </Border>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="3.2*" MinWidth="220" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
+                        <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2.8*" MinWidth="260" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                     </DataGrid.Columns>
                 </DataGrid>
             </GroupBox>
@@ -329,6 +270,7 @@
                       Margin="0,6,0,0"
                       Header="Korrekturen und Details"
                       MaxHeight="240"
+                      IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                       IsExpanded="False">
                 <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="300">
@@ -525,7 +467,7 @@
             </Expander>
         </Grid>
 
-        <WrapPanel Grid.Row="2" Margin="0,12,0,0">
+        <WrapPanel Grid.Row="2" Margin="0,12,0,0" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
             <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />

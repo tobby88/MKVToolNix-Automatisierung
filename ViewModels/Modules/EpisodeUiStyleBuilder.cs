@@ -1,0 +1,98 @@
+namespace MkvToolnixAutomatisierung.ViewModels.Modules;
+
+internal static class EpisodeUiStyleBuilder
+{
+    public static string BuildArchiveBadgeBackground(EpisodeArchiveState archiveState)
+    {
+        return archiveState == EpisodeArchiveState.Existing ? "#E8F3FF" : "#EEF6E8";
+    }
+
+    public static string BuildArchiveBadgeBorderBrush(EpisodeArchiveState archiveState)
+    {
+        return archiveState == EpisodeArchiveState.Existing ? "#8CB4D8" : "#88B06E";
+    }
+
+    public static string BuildReviewBadgeBackground(EpisodeReviewState reviewState)
+    {
+        return reviewState switch
+        {
+            EpisodeReviewState.Approved or EpisodeReviewState.NoneNeeded => "#EEF6E8",
+            EpisodeReviewState.ManualCheckPending or EpisodeReviewState.MetadataReviewPending or EpisodeReviewState.ManualAndMetadataPending => "#FFF4D6",
+            _ => "#F3F6FA"
+        };
+    }
+
+    public static string BuildReviewBadgeBorderBrush(EpisodeReviewState reviewState)
+    {
+        return reviewState switch
+        {
+            EpisodeReviewState.Approved or EpisodeReviewState.NoneNeeded => "#88B06E",
+            EpisodeReviewState.ManualCheckPending or EpisodeReviewState.MetadataReviewPending or EpisodeReviewState.ManualAndMetadataPending => "#D8B46A",
+            _ => "#C7D1DC"
+        };
+    }
+
+    public static string BuildBatchStatusBadgeBackground(BatchEpisodeStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            BatchEpisodeStatusKind.Error => "#FCE8E8",
+            BatchEpisodeStatusKind.Warning or BatchEpisodeStatusKind.Running => "#FFF4D6",
+            BatchEpisodeStatusKind.ComparisonPending => "#E8F3FF",
+            BatchEpisodeStatusKind.Ready or BatchEpisodeStatusKind.UpToDate or BatchEpisodeStatusKind.Success => "#EEF6E8",
+            _ => "#F3F6FA"
+        };
+    }
+
+    public static string BuildBatchStatusBadgeBorderBrush(BatchEpisodeStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            BatchEpisodeStatusKind.Error => "#D28A8A",
+            BatchEpisodeStatusKind.Warning or BatchEpisodeStatusKind.Running => "#D8B46A",
+            BatchEpisodeStatusKind.ComparisonPending => "#8CB4D8",
+            BatchEpisodeStatusKind.Ready or BatchEpisodeStatusKind.UpToDate or BatchEpisodeStatusKind.Success => "#88B06E",
+            _ => "#C7D1DC"
+        };
+    }
+
+    public static string BuildManualCheckBadgeBackground(ManualCheckBadgeState badgeState)
+    {
+        return badgeState == ManualCheckBadgeState.Pending ? "#FFF4D6" : "#EEF6E8";
+    }
+
+    public static string BuildManualCheckBadgeBorderBrush(ManualCheckBadgeState badgeState)
+    {
+        return badgeState == ManualCheckBadgeState.Pending ? "#D8B46A" : "#88B06E";
+    }
+
+    public static string BuildMetadataBadgeBackground(MetadataBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            MetadataBadgeState.Pending => "#FFF4D6",
+            MetadataBadgeState.Open => "#E8F3FF",
+            _ => "#EEF6E8"
+        };
+    }
+
+    public static string BuildMetadataBadgeBorderBrush(MetadataBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            MetadataBadgeState.Pending => "#D8B46A",
+            MetadataBadgeState.Open => "#8CB4D8",
+            _ => "#88B06E"
+        };
+    }
+
+    public static string BuildOutputTargetBadgeBackground(OutputTargetBadgeState badgeState)
+    {
+        return badgeState == OutputTargetBadgeState.InLibrary ? "#EEF6E8" : "#E8F3FF";
+    }
+
+    public static string BuildOutputTargetBadgeBorderBrush(OutputTargetBadgeState badgeState)
+    {
+        return badgeState == OutputTargetBadgeState.InLibrary ? "#88B06E" : "#8CB4D8";
+    }
+}
