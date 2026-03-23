@@ -296,7 +296,13 @@ public sealed class EpisodeMetadataLookupService
             {
                 Episode = episode,
                 TitleSimilarity = CalculateTitleSimilarity(guess.EpisodeTitle, episode.Name),
-                EpisodeScore = CalculateEpisodeScore(guess, episode)
+                EpisodeScore = 0
+            })
+            .Select(entry => new
+            {
+                entry.Episode,
+                entry.TitleSimilarity,
+                EpisodeScore = CalculateEpisodeScore(guess, entry.Episode, entry.TitleSimilarity)
             })
             .ToList();
 
@@ -474,21 +480,29 @@ public sealed class EpisodeMetadataLookupService
         return score;
     }
 
-    private static int CalculateEpisodeScore(EpisodeMetadataGuess guess, TvdbEpisodeRecord episode)
+    private static int CalculateEpisodeScore(EpisodeMetadataGuess guess, TvdbEpisodeRecord episode, int titleSimilarity)
     {
         var score = 0;
 
         if (int.TryParse(guess.SeasonNumber, out var seasonNumber))
         {
-            score += episode.SeasonNumber == seasonNumber ? 35 : -18;
+            score += episode.SeasonNumber == seasonNumber
+                ? 35
+                : titleSimilarity >= 30 ? 0
+                : titleSimilarity >= 22 ? -6
+                : -18;
         }
 
         if (int.TryParse(guess.EpisodeNumber, out var episodeNumber))
         {
-            score += episode.EpisodeNumber == episodeNumber ? 35 : -18;
+            score += episode.EpisodeNumber == episodeNumber
+                ? 35
+                : titleSimilarity >= 30 ? 0
+                : titleSimilarity >= 22 ? -6
+                : -18;
         }
 
-        score += CalculateTitleSimilarity(guess.EpisodeTitle, episode.Name);
+        score += titleSimilarity;
         return score;
     }
 
