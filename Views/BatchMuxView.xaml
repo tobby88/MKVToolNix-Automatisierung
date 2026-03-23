@@ -89,9 +89,130 @@
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="Auto" />
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="2*" IsReadOnly="True" />
                         <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="In Ablage" Binding="{Binding ArchiveStateText}" Width="*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Prüfung" Binding="{Binding ReviewHint}" Width="*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" IsReadOnly="True" />
+                        <DataGridTemplateColumn Header="In Ablage" Width="*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Margin="2"
+                                            Padding="6,2"
+                                            CornerRadius="9"
+                                            BorderThickness="1"
+                                            BorderBrush="#8CB4D8"
+                                            Background="#E8F3FF">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#E8F3FF" />
+                                                <Setter Property="BorderBrush" Value="#8CB4D8" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ArchiveStateText}" Value="vorhanden">
+                                                        <Setter Property="Background" Value="#EEF6E8" />
+                                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding ArchiveStateText}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Prüfung" Width="*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Margin="2"
+                                            Padding="6,2"
+                                            CornerRadius="9"
+                                            BorderThickness="1"
+                                            BorderBrush="#C7D1DC"
+                                            Background="#F3F6FA">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#F3F6FA" />
+                                                <Setter Property="BorderBrush" Value="#C7D1DC" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Freigegeben">
+                                                        <Setter Property="Background" Value="#EEF6E8" />
+                                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Keine">
+                                                        <Setter Property="Background" Value="#F3F6FA" />
+                                                        <Setter Property="BorderBrush" Value="#C7D1DC" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Quelle + TVDB prüfen">
+                                                        <Setter Property="Background" Value="#FFF4D6" />
+                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="Quelle prüfen">
+                                                        <Setter Property="Background" Value="#FFF4D6" />
+                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ReviewHint}" Value="TVDB prüfen">
+                                                        <Setter Property="Background" Value="#FFF4D6" />
+                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding ReviewHint}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Status" Width="*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border Margin="2"
+                                            Padding="6,2"
+                                            CornerRadius="9"
+                                            BorderThickness="1"
+                                            BorderBrush="#C7D1DC"
+                                            Background="#F3F6FA">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#F3F6FA" />
+                                                <Setter Property="BorderBrush" Value="#C7D1DC" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Bereit">
+                                                        <Setter Property="Background" Value="#E8F3FF" />
+                                                        <Setter Property="BorderBrush" Value="#8CB4D8" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="In Ablage vorhanden">
+                                                        <Setter Property="Background" Value="#EEF6E8" />
+                                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Ziel aktuell">
+                                                        <Setter Property="Background" Value="#EEF6E8" />
+                                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Läuft">
+                                                        <Setter Property="Background" Value="#FFF4D6" />
+                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Warnung">
+                                                        <Setter Property="Background" Value="#FFF4D6" />
+                                                        <Setter Property="BorderBrush" Value="#D8B46A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Fehler">
+                                                        <Setter Property="Background" Value="#FCE8E8" />
+                                                        <Setter Property="BorderBrush" Value="#D28A8A" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Erfolgreich">
+                                                        <Setter Property="Background" Value="#EEF6E8" />
+                                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding Status}" />
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Quelle" Binding="{Binding MainVideoFileName}" Width="2*" IsReadOnly="True" SortMemberPath="MainVideoFileName" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -180,7 +301,7 @@
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Serienablage" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                                 <TextBlock.ToolTip>
                                     <StackPanel>
                                         <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.ArchiveAction, Mode=OneWay}" />
@@ -193,7 +314,7 @@
                             </TextBlock>
 
                             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Video" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,2,0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                                 <TextBlock.ToolTip>
                                     <StackPanel>
                                         <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.MainVideo, Mode=OneWay}" />
@@ -206,7 +327,7 @@
                             </TextBlock>
 
                             <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,2,0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                                 <TextBlock.ToolTip>
                                     <StackPanel>
                                         <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Audio, Mode=OneWay}" />
@@ -219,7 +340,7 @@
                             </TextBlock>
 
                             <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Untertitel" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,2,0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                                 <TextBlock.ToolTip>
                                     <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Subtitles, Mode=OneWay}" />
                                 </TextBlock.ToolTip>
@@ -227,7 +348,7 @@
                             </TextBlock>
 
                             <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Anhänge" />
-                            <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+                            <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,2,0,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
                                 <TextBlock.ToolTip>
                                     <TextBlock Text="{Binding SelectedEpisodeItem.UsageSummary.Attachments, Mode=OneWay}" />
                                 </TextBlock.ToolTip>

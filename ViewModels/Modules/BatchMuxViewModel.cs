@@ -562,7 +562,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             {
                 var (item, plan) = executablePlans[index];
                 var outputExistedBeforeRun = File.Exists(item.OutputPath);
-                item.Status = "Laeuft";
+                item.Status = "Läuft";
                 AppendLog($"STARTE: {item.MainVideoFileName}");
 
                 try
@@ -610,7 +610,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     _services.Cleanup.DeleteTemporaryFile(plan.WorkingCopy?.DestinationFilePath);
                 }
 
-                SetStatus($"Batch laeuft... {index + 1}/{executablePlans.Count}", CalculatePercent(index + 1, executablePlans.Count));
+                SetStatus($"Batch läuft... {index + 1}/{executablePlans.Count}", CalculatePercent(index + 1, executablePlans.Count));
             }
 
             await OfferBatchDoneCleanupAsync(doneDirectory, movedDoneFiles);
@@ -972,7 +972,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 item.ApproveCurrentReviewTarget();
                 SetStatus(
                     isBatchPreparation
-                        ? $"Quelle fuer '{item.Title}' freigegeben"
+                        ? $"Quelle für '{item.Title}' freigegeben"
                         : "Quelle freigegeben",
                     100);
                 return true;
@@ -1247,8 +1247,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         var statusText = update.ProgressPercent is int itemProgressPercent
-            ? $"Batch laeuft... {currentItem}/{totalItems} ({itemProgressPercent}% in aktueller Episode)"
-            : $"Batch laeuft... {currentItem}/{totalItems}";
+            ? $"Batch läuft... {currentItem}/{totalItems} ({itemProgressPercent}% in aktueller Episode)"
+            : $"Batch läuft... {currentItem}/{totalItems}";
 
         if (update.HasWarning)
         {
@@ -1780,7 +1780,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
                 return "Freigegeben";
             }
 
-            return string.Empty;
+            return "Keine";
         }
     }
 

@@ -229,7 +229,7 @@ public partial class TvdbLookupWindow : Window
         var match = _lookupService.FindBestEpisodeMatch(_guess, selectedSeries, _episodes);
         if (match is null)
         {
-            StatusTextBlock.Text = "Keine Episode automatisch sicher vorgewaehlt.";
+            StatusTextBlock.Text = "Keine Episode automatisch sicher vorgewählt.";
             UpdateComparisonSummary();
             return;
         }

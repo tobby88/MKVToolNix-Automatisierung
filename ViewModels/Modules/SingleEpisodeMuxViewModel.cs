@@ -121,6 +121,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             _outputPath = string.IsNullOrWhiteSpace(value) ? null : value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputTargetBadgeText));
         }
     }
 
@@ -245,6 +246,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         {
             _requiresManualCheck = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ManualCheckBadgeText));
+            OnPropertyChanged(nameof(ManualCheckButtonText));
         }
     }
 
@@ -262,6 +265,10 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         ? "Quelle erneut prüfen"
         : "Quelle prüfen / freigeben";
 
+    public string ManualCheckBadgeText => RequiresManualCheck
+        ? IsManualCheckApproved ? "Quelle freigegeben" : "Quelle prüfen"
+        : "Quelle ok";
+
     public string MetadataStatusText
     {
         get => _metadataStatusText;
@@ -275,6 +282,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _metadataStatusText = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasMetadataStatus));
+            OnPropertyChanged(nameof(MetadataBadgeText));
         }
     }
 
@@ -293,6 +301,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _requiresMetadataReview = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataActionButtonText));
+            OnPropertyChanged(nameof(MetadataBadgeText));
         }
     }
 
@@ -309,12 +318,17 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _isMetadataReviewApproved = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(MetadataActionButtonText));
+            OnPropertyChanged(nameof(MetadataBadgeText));
         }
     }
 
     public string MetadataActionButtonText => RequiresMetadataReview && !IsMetadataReviewApproved
         ? "TVDB prüfen"
         : "TVDB anpassen";
+
+    public string MetadataBadgeText => RequiresMetadataReview
+        ? IsMetadataReviewApproved ? "TVDB freigegeben" : "TVDB prüfen"
+        : HasMetadataStatus ? "TVDB ok" : "TVDB offen";
 
     public string OutputTargetStatusText
     {
@@ -329,10 +343,15 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             _outputTargetStatusText = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasOutputTargetStatus));
+            OnPropertyChanged(nameof(OutputTargetBadgeText));
         }
     }
 
     public bool HasOutputTargetStatus => !string.IsNullOrWhiteSpace(OutputTargetStatusText);
+
+    public string OutputTargetBadgeText => string.IsNullOrWhiteSpace(OutputPath)
+        ? "Ablage offen"
+        : File.Exists(OutputPath) ? "Ablage vorhanden" : "Ablage neu";
 
     public string PlanSummaryText
     {
@@ -564,6 +583,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         UpdateManualCheckText();
         OnPropertyChanged(nameof(ManualCheckButtonText));
+        OnPropertyChanged(nameof(ManualCheckBadgeText));
     }
 
     private async Task RescanFromMainVideoAsync()
@@ -850,6 +870,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                 _approvedReviewPath = reviewTargetPath;
                 UpdateManualCheckText();
                 OnPropertyChanged(nameof(ManualCheckButtonText));
+                OnPropertyChanged(nameof(ManualCheckBadgeText));
                 SetStatus("Quelle freigegeben", 100);
                 return;
             }
