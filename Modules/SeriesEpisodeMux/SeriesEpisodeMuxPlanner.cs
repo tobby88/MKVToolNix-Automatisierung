@@ -739,7 +739,7 @@ public sealed class SeriesEpisodeMuxPlanner
     private static string NormalizeSeriesName(string rawSeriesName)
     {
         var normalized = NormalizeNameForParsing(rawSeriesName);
-        normalized = Regex.Replace(normalized, @"\s*-\s*Neue Folgen?\b.*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = RemoveEditorialLabels(normalized);
         return normalized.Trim();
     }
 
@@ -818,7 +818,7 @@ public sealed class SeriesEpisodeMuxPlanner
         }
 
         var normalized = NormalizeSeparators(value);
-        normalized = Regex.Replace(normalized, @"\s*-\s*Neue Folgen?\b", string.Empty, RegexOptions.IgnoreCase);
+        normalized = RemoveEditorialLabels(normalized);
         normalized = Regex.Replace(normalized, @"\(S\d{1,2}\s*[_/]\s*E\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,2}\s*,\s*Folge\s*\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
@@ -826,6 +826,15 @@ public sealed class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);
         return normalized;
+    }
+
+    private static string RemoveEditorialLabels(string value)
+    {
+        var normalized = Regex.Replace(value, @"\s*-\s*Neue Folgen?\b.*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\s*-\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
+        return normalized.Trim();
     }
 
     private static string NormalizeSeparators(string value)
