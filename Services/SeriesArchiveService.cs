@@ -102,6 +102,7 @@ public sealed class SeriesArchiveService
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
+            .Where(plan => existingSubtitleKinds.All(kind => !string.Equals(kind.DisplayName, plan.Kind.DisplayName, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         var embeddedSubtitlePlans = existingSubtitleTracks
@@ -157,8 +158,10 @@ public sealed class SeriesArchiveService
                 PrimarySubtitleTrackIds: finalSubtitlePlans.Count > 0 ? [] : null,
                 IncludePrimaryAttachments: true,
                 AdditionalVideoPaths: newAdditionalVideoPaths,
-                AudioDescriptionFilePath: existingAudioDescription is null ? request.AudioDescriptionPath : null,
-                AudioDescriptionTrackId: null,
+                AudioDescriptionFilePath: existingAudioDescription is null
+                    ? request.AudioDescriptionPath
+                    : outputPath,
+                AudioDescriptionTrackId: existingAudioDescription?.TrackId,
                 SubtitleFiles: finalSubtitlePlans,
                 AttachmentFilePaths: BuildAttachmentPathsForUsedVideos(newAdditionalVideoPaths),
                 FallbackToRequestAttachments: false,
