@@ -100,7 +100,7 @@ public sealed class EpisodeMetadataLookupService
             return new EpisodeMetadataResolutionResult(
                 guess,
                 Selection: null,
-                StatusText: "TVDB-Automatik uebersprungen: API-Key fehlt.",
+                StatusText: "TVDB-Automatik übersprungen: API-Key fehlt.",
                 ConfidenceScore: 0,
                 RequiresReview: false,
                 QueryWasAttempted: false,
@@ -118,7 +118,7 @@ public sealed class EpisodeMetadataLookupService
                 return new EpisodeMetadataResolutionResult(
                     guess,
                     Selection: null,
-                    StatusText: "TVDB: keine passende Serie gefunden. Bitte pruefen.",
+                    StatusText: "TVDB: keine passende Serie gefunden. Bitte prüfen.",
                     ConfidenceScore: 0,
                     RequiresReview: true,
                     QueryWasAttempted: true,
@@ -131,7 +131,7 @@ public sealed class EpisodeMetadataLookupService
                 return new EpisodeMetadataResolutionResult(
                     guess,
                     Selection: null,
-                    StatusText: "TVDB: keine Episode sicher zuordenbar. Bitte pruefen.",
+                    StatusText: "TVDB: keine Episode sicher zuordenbar. Bitte prüfen.",
                     ConfidenceScore: 0,
                     RequiresReview: true,
                     QueryWasAttempted: true,
@@ -393,7 +393,7 @@ public sealed class EpisodeMetadataLookupService
         var parts = new List<string>
         {
             requiresReview
-                ? $"TVDB-Vorschlag pruefen: S{match.Selection.SeasonNumber}E{match.Selection.EpisodeNumber} - {match.Selection.EpisodeTitle}"
+                ? $"TVDB-Vorschlag prüfen: S{match.Selection.SeasonNumber}E{match.Selection.EpisodeNumber} - {match.Selection.EpisodeTitle}"
                 : $"TVDB automatisch erkannt: S{match.Selection.SeasonNumber}E{match.Selection.EpisodeNumber} - {match.Selection.EpisodeTitle}"
         };
 

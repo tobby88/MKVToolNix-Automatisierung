@@ -19,7 +19,7 @@
                    Margin="0,0,0,12"
                    FontSize="15"
                    FontWeight="SemiBold"
-                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Beim Oeffnen startet direkt eine automatische Suche. Nur wenn der Vorschlag nicht passt, musst du noch Serie oder Episode manuell anpassen.</TextBlock>
+                   TextWrapping="Wrap">TVDB-Zuordnung<LineBreak />Beim Öffnen startet direkt eine automatische Suche. Nur wenn der Vorschlag nicht passt, musst du noch Serie oder Episode manuell anpassen.</TextBlock>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
             <Grid.RowDefinitions>
@@ -41,7 +41,7 @@
             <TextBox x:Name="PinTextBox" Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" />
             <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,8" TextWrapping="Wrap" Foreground="#555555" Text="Nur falls TVDB ihn verlangt." />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555555" Text="Die Zuordnung der lokalen Serie zur TVDB-Series-ID wird lokal gespeichert und spaeter wiederverwendet." />
+            <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#555555" Text="Die Zuordnung der lokalen Serie zur TVDB-Series-ID wird lokal gespeichert und später wiederverwendet." />
         </Grid>
 
         <Grid Grid.Row="2">
@@ -140,7 +140,7 @@
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Width="190" Margin="0,0,12,0" Padding="10,6" Click="KeepLocalButton_Click" Content="Lokale Erkennung behalten" />
                 <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
-                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="Uebernehmen" />
+                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="Übernehmen" />
             </StackPanel>
         </DockPanel>
     </Grid>

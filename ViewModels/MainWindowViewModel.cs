@@ -61,7 +61,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         [
             new ModuleNavigationItem(
                 "Einzelepisode",
-                "Auto erkennen,\npruefen, muxen.",
+                "Auto erkennen,\nprüfen, muxen.",
                 singleEpisode),
             new ModuleNavigationItem(
                 "Batch-Verarbeitung",

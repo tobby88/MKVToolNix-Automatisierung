@@ -86,7 +86,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ExecuteMuxCommand { get; }
 
     public string AudioDescriptionButtonText => string.IsNullOrWhiteSpace(_mainVideoPath)
-        ? "AD-Datei waehlen"
+        ? "AD-Datei wählen"
         : "AD korrigieren";
 
     public string MainVideoPath
@@ -259,8 +259,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     }
 
     public string ManualCheckButtonText => IsManualCheckApproved
-        ? "Quelle erneut pruefen"
-        : "Quelle pruefen / freigeben";
+        ? "Quelle erneut prüfen"
+        : "Quelle prüfen / freigeben";
 
     public string MetadataStatusText
     {
@@ -313,7 +313,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     }
 
     public string MetadataActionButtonText => RequiresMetadataReview && !IsMetadataReviewApproved
-        ? "TVDB pruefen"
+        ? "TVDB prüfen"
         : "TVDB anpassen";
 
     public string OutputTargetStatusText
@@ -524,7 +524,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         var lines = new List<string>
         {
-            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf pruefen.",
+            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf prüfen.",
             $"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}",
             $"Erkannte Episode: {detected.SeriesName} - S{detected.SeasonNumber}E{detected.EpisodeNumber} - {detected.SuggestedTitle}"
         };
@@ -536,7 +536,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         if (detected.AttachmentPaths.Count > 0)
         {
-            lines.Add("Anhaenge: " + string.Join(", ", detected.AttachmentPaths.Select(Path.GetFileName)));
+            lines.Add("Anhänge: " + string.Join(", ", detected.AttachmentPaths.Select(Path.GetFileName)));
         }
 
         if (detected.Notes.Count > 0)
@@ -570,7 +570,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
-            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
+            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswählen.");
             return;
         }
 
@@ -660,13 +660,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         if (File.Exists(_outputPath))
         {
             OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
-                ? "Am Ziel liegt bereits eine Archiv-MKV. Bei Vorschau oder Mux wird geprueft, ob etwas fehlt oder ersetzt werden muss."
-                : "Die Zieldatei existiert bereits und wuerde beim Mux ueberschrieben.";
+                ? "Am Ziel liegt bereits eine MKV. Bei Vorschau oder Mux wird geprüft, ob etwas fehlt oder ersetzt werden muss."
+                : "Die Zieldatei existiert bereits und würde beim Mux überschrieben.";
             return;
         }
 
         OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
-            ? "Das Archivziel ist noch frei. Die Episode kann direkt dort einsortiert werden."
+            ? "Das Ziel in der Serienablage ist noch frei. Die Episode kann direkt dort einsortiert werden."
             : "Die Zieldatei existiert noch nicht.";
     }
 
@@ -719,7 +719,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
-            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
+            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswählen.");
             return;
         }
 
@@ -746,7 +746,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         if (string.IsNullOrWhiteSpace(_mainVideoPath))
         {
-            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswaehlen.");
+            _dialogService.ShowError("Bitte zuerst ein Hauptvideo auswählen.");
             return;
         }
 
@@ -803,7 +803,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
             ApplyLocalMetadataGuess();
             MarkMetadataAsReviewed("Lokale Erkennung wurde bewusst beibehalten.");
             SetStatus("Lokale Erkennung beibehalten", 100);
-            PreviewText = "Lokale Metadaten beibehalten. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausfuehren.";
+            PreviewText = "Lokale Metadaten beibehalten. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
             RefreshCommands();
             return;
         }
@@ -815,9 +815,9 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
         ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
         MarkMetadataAsReviewed(
-            $"TVDB manuell uebernommen: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
-        SetStatus("TVDB-Zuordnung uebernommen", 100);
-        PreviewText = "TVDB-Metadaten uebernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausfuehren.";
+            $"TVDB manuell übernommen: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
+        SetStatus("TVDB-Zuordnung übernommen", 100);
+        PreviewText = "TVDB-Metadaten übernommen. Bitte bei Bedarf 'Vorschau erzeugen' erneut ausführen.";
         RefreshCommands();
         await Task.CompletedTask;
     }
@@ -832,7 +832,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         while (RequiresManualCheck && !string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
         {
             var reviewTargetPath = CurrentReviewTargetPath!;
-            SetStatus("Pruefe Quelle...", ProgressValue);
+            SetStatus("Prüfe Quelle...", ProgressValue);
             _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
 
             var result = _dialogService.AskSourceReviewResult(
@@ -841,7 +841,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
             if (result == MessageBoxResult.Cancel)
             {
-                SetStatus("Quellenpruefung abgebrochen", ProgressValue);
+                SetStatus("Quellenprüfung abgebrochen", ProgressValue);
                 return;
             }
 
@@ -896,8 +896,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         ManualCheckText = IsManualCheckApproved
-            ? "Die aktuell ausgewaehlte Quelle wurde bereits geprueft und freigegeben."
-            : "Die aktuell ausgewaehlte Quelle ist pruefpflichtig. Bitte vor dem Muxen kurz pruefen und freigeben.";
+            ? "Die aktuell ausgewählte Quelle wurde bereits geprüft und freigegeben."
+            : "Die aktuell ausgewählte Quelle ist prüfpflichtig. Bitte vor dem Muxen kurz prüfen und freigeben.";
     }
 
     private void ApplyTvdbSelection(TvdbEpisodeSelection selection)
@@ -1040,21 +1040,21 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
             if (_currentPlan.SkipMux)
             {
-                SetStatus("Archiv bereits aktuell", 100);
-                _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Archivdatei ist bereits vollstaendig.");
+                SetStatus("Zieldatei bereits aktuell", 100);
+                _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
                 return;
             }
 
             if (RequiresManualCheck && !IsManualCheckApproved)
             {
-                _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine pruefpflichtige Quelle. Bitte zuerst 'Quelle pruefen' ausfuehren und die Quelle freigeben.");
+                _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine prüfpflichtige Quelle. Bitte zuerst 'Quelle prüfen' ausführen und die Quelle freigeben.");
                 SetStatus("Freigabe der Quelle fehlt", 0);
                 return;
             }
 
             if (RequiresMetadataReview && !IsMetadataReviewApproved)
             {
-                _dialogService.ShowWarning("Hinweis", "Die TVDB-Zuordnung ist noch nicht freigegeben. Bitte zuerst 'TVDB pruefen' ausfuehren oder die Metadaten manuell korrigieren.");
+                _dialogService.ShowWarning("Hinweis", "Die TVDB-Zuordnung ist noch nicht freigegeben. Bitte zuerst 'TVDB prüfen' ausführen oder die Metadaten manuell korrigieren.");
                 SetStatus("Freigabe der TVDB-Metadaten fehlt", 0);
                 return;
             }
@@ -1075,7 +1075,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
                         return;
                     }
 
-                    SetStatus("Kopiere Archivdatei...", 0);
+                    SetStatus("Kopiere Zieldatei...", 0);
                     await _services.FileCopy.CopyAsync(
                         _currentPlan.WorkingCopy,
                         (copiedBytes, totalBytes) =>
@@ -1086,13 +1086,13 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
 
                             _ = Application.Current.Dispatcher.BeginInvoke(() =>
                             {
-                                SetStatus($"Kopiere Archivdatei... {progress}%", progress);
+                                SetStatus($"Kopiere Zieldatei... {progress}%", progress);
                             });
                         });
                 }
                 else
                 {
-                    SetStatus("Arbeitskopie bereits aktuell - uebernehme vorhandene Kopie...", 100);
+                    SetStatus("Arbeitskopie bereits aktuell - übernehme vorhandene Kopie...", 100);
                 }
             }
 
@@ -1133,11 +1133,11 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     private async Task<SeriesEpisodeMuxPlan> BuildPlanAsync()
     {
         var request = new SeriesEpisodeMuxRequest(
-            RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswaehlen."),
+            RequireValue(_mainVideoPath, "Bitte ein Hauptvideo auswählen."),
             _audioDescriptionPath,
             _subtitlePaths,
             _attachmentPaths,
-            RequireValue(_outputPath, "Bitte eine Ausgabedatei waehlen."),
+            RequireValue(_outputPath, "Bitte eine Ausgabedatei wählen."),
             RequireValue(_title.Trim(), "Bitte einen Dateititel eingeben."));
 
         return await _services.SeriesEpisodeMux.CreatePlanAsync(request);
@@ -1147,15 +1147,15 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     {
         if (plan.SkipMux)
         {
-            OutputTargetStatusText = plan.SkipReason ?? "Die Archivdatei ist bereits vollstaendig.";
+            OutputTargetStatusText = plan.SkipReason ?? "Die Zieldatei ist bereits vollständig.";
             return;
         }
 
         if (plan.WorkingCopy is not null)
         {
             OutputTargetStatusText = plan.WorkingCopy.IsReusable
-                ? "Am Ziel liegt bereits eine Archiv-MKV. Eine aktuelle Arbeitskopie ist schon vorhanden und wird direkt weiterverwendet."
-                : "Am Ziel liegt bereits eine Archiv-MKV. Vor dem Mux wird eine lokale Arbeitskopie erstellt und die fehlenden oder besseren Spuren werden eingearbeitet.";
+                ? "Am Ziel liegt bereits eine MKV. Eine aktuelle Arbeitskopie ist schon vorhanden und wird direkt weiterverwendet."
+                : "Am Ziel liegt bereits eine MKV. Vor dem Mux wird eine lokale Arbeitskopie erstellt und die fehlenden oder besseren Spuren werden eingearbeitet.";
             return;
         }
 

@@ -281,17 +281,17 @@ public sealed class SeriesEpisodeMuxPlan
         if (SkipMux)
         {
             return EpisodeUsageSummary.CreatePending(
-                SkipReason ?? "Die Archivdatei ist bereits vollstaendig.",
+                SkipReason ?? "Die Zieldatei ist bereits vollständig.",
                 "keine weiteren Aktionen");
         }
 
         var archiveAction = WorkingCopy is not null
             ? string.Equals(VideoSources[0].FilePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase)
-                ? "Archiv-MKV vorhanden, bleibt Basis"
-                : "Archiv-MKV vorhanden, neue Hauptquelle ersetzt Basis"
+                ? "Vorhandene Zieldatei bleibt Basis"
+                : "Vorhandene Zieldatei wird mit neuer Hauptquelle aktualisiert"
             : File.Exists(OutputFilePath)
-                ? "Zieldatei vorhanden, wird aktualisiert"
-                : "Zieldatei noch nicht vorhanden";
+                ? "MKV in der Serienablage vorhanden, wird aktualisiert"
+                : "MKV in der Serienablage noch nicht vorhanden";
 
         var archiveDetails = WorkingCopy is not null
             ? WorkingCopy.IsReusable
@@ -327,7 +327,7 @@ public sealed class SeriesEpisodeMuxPlan
             $"Audio: {summary.Audio}",
             $"AD: {summary.AudioDescription}",
             $"Untertitel: {summary.Subtitles}",
-            $"Anhaenge: {summary.Attachments}"
+            $"Anhänge: {summary.Attachments}"
         ]);
     }
 
@@ -368,7 +368,7 @@ public sealed class SeriesEpisodeMuxPlan
         if (SkipMux)
         {
             builder.AppendLine();
-            builder.AppendLine($"Kein Mux noetig: {SkipReason}");
+            builder.AppendLine($"Kein Mux nötig: {SkipReason}");
         }
         else
         {
@@ -383,7 +383,7 @@ public sealed class SeriesEpisodeMuxPlan
             builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
             builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
             builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel)))}");
-            builder.AppendLine($"Anhaenge: {BuildAttachmentPreview()}");
+            builder.AppendLine($"Anhänge: {BuildAttachmentPreview()}");
 
             if (WorkingCopy is not null)
             {
@@ -419,7 +419,7 @@ public sealed class SeriesEpisodeMuxPlan
 
         if (IncludePrimarySourceAttachments && PreservedAttachmentNames.Count > 0)
         {
-            parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (Archiv)"));
+            parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (aus Zieldatei)"));
         }
 
         parts.AddRange(AttachmentFilePaths

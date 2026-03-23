@@ -143,8 +143,8 @@ public sealed class SeriesArchiveService
             {
                 return ArchiveIntegrationDecision.CreateSkip(
                     outputPath,
-                    "Die Archiv-MKV enthaelt bereits die bevorzugte Videoquelle sowie alle benoetigten Zusatzspuren.",
-                    ["Archiv bereits vollstaendig. Kein erneutes Muxen noetig."]);
+                    "Die vorhandene MKV in der Serienablage enthält bereits die bevorzugte Videoquelle sowie alle benötigten Zusatzspuren.",
+                    ["Zieldatei bereits vollständig. Kein erneutes Muxen nötig."]);
             }
 
             return new ArchiveIntegrationDecision(

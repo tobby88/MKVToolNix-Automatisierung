@@ -307,7 +307,7 @@ public partial class TvdbLookupWindow : Window
 
         if (differences.Count == 0)
         {
-            ComparisonSummaryTextBlock.Text = "TVDB stimmt mit der lokalen Erkennung ueberein.";
+            ComparisonSummaryTextBlock.Text = "TVDB stimmt mit der lokalen Erkennung überein.";
             return;
         }
 

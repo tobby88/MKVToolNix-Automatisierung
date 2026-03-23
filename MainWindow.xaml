@@ -48,7 +48,7 @@
                            Margin="0,0,0,16"
                            TextWrapping="Wrap"
                            Foreground="#444444"
-                           Text="Links Modul waehlen, rechts bearbeiten." />
+                           Text="Links Modul wählen, rechts bearbeiten." />
 
                 <ListBox Grid.Row="2"
                          ItemsSource="{Binding Modules}"

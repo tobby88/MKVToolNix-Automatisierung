@@ -424,7 +424,7 @@ public sealed class SeriesEpisodeMuxPlanner
             .ToList();
         if (audioDescriptionPath is not null && IsSrfSender(ReadTextMetadata(Path.ChangeExtension(audioDescriptionPath, ".txt")).Sender))
         {
-            notes.Add("Die ausgewaehlte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen pruefen.");
+            notes.Add("Die ausgewählte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }
 
         return new SeriesEpisodeMuxPlan(
@@ -478,7 +478,7 @@ public sealed class SeriesEpisodeMuxPlanner
         var outputDirectory = Path.GetDirectoryName(request.OutputFilePath);
         if (string.IsNullOrWhiteSpace(outputDirectory))
         {
-            throw new DirectoryNotFoundException($"Ausgabeordner nicht gefunden: {outputDirectory}");
+            throw new DirectoryNotFoundException($"Ausgabeziel nicht gefunden: {outputDirectory}");
         }
 
         Directory.CreateDirectory(outputDirectory);
@@ -621,17 +621,17 @@ public sealed class SeriesEpisodeMuxPlanner
 
         if (selectedVideoCandidates.Count > 1)
         {
-            notes.Add($"Es werden {selectedVideoCandidates.Count} Videospuren mit unterschiedlichen Codecs uebernommen.");
+            notes.Add($"Es werden {selectedVideoCandidates.Count} Videospuren mit unterschiedlichen Codecs übernommen.");
         }
 
         if (selectedVideoCandidates.Any(candidate => IsSrfSender(candidate.Sender)))
         {
-            notes.Add("Mindestens eine ausgewaehlte Videoquelle stammt von SRF. Bitte die Datei vor dem Muxen pruefen.");
+            notes.Add("Mindestens eine ausgewählte Videoquelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }
 
         if (selectedAudioDescription is not null && IsSrfSender(selectedAudioDescription.Sender))
         {
-            notes.Add("Die ausgewaehlte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen pruefen.");
+            notes.Add("Die ausgewählte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }
 
         return notes;

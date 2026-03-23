@@ -101,7 +101,7 @@ public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? Embed
     public string TrackName => $"Deutsch (hörgeschädigte) - {Kind.DisplayName}";
 
     public string PreviewLabel => IsEmbedded
-        ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, Archiv)"
+        ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, aus Zieldatei)"
         : Path.GetFileName(FilePath);
 }
 

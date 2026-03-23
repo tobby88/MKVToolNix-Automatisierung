@@ -10,7 +10,7 @@ public sealed class UserDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Video-Datei auswaehlen",
+            Title = "Video-Datei auswählen",
             Filter = "MP4-Dateien (*.mp4)|*.mp4",
             CheckFileExists = true,
             Multiselect = false,
@@ -24,7 +24,7 @@ public sealed class UserDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "AD-Datei auswaehlen",
+            Title = "AD-Datei auswählen",
             Filter = "MP4-Dateien (*.mp4)|*.mp4",
             CheckFileExists = true,
             InitialDirectory = initialDirectory
@@ -37,7 +37,7 @@ public sealed class UserDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Untertitel auswaehlen",
+            Title = "Untertitel auswählen",
             Filter = "Untertitel (*.srt;*.ass;*.vtt)|*.srt;*.ass;*.vtt",
             CheckFileExists = true,
             Multiselect = true,
@@ -51,7 +51,7 @@ public sealed class UserDialogService
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Text-Anhaenge auswaehlen",
+            Title = "Metadaten-Anhänge auswählen",
             Filter = "Textdateien (*.txt)|*.txt",
             CheckFileExists = true,
             Multiselect = true,
@@ -65,7 +65,7 @@ public sealed class UserDialogService
     {
         var dialog = new SaveFileDialog
         {
-            Title = "Zieldatei auswaehlen",
+            Title = "Zieldatei auswählen",
             Filter = "MKV-Dateien (*.mkv)|*.mkv",
             OverwritePrompt = true,
             AddExtension = true,
@@ -93,7 +93,7 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Ja = AD-Datei manuell waehlen, Nein = AD-Datei leeren, Abbrechen = nichts aendern.",
+            "Ja = AD-Datei manuell wählen, Nein = AD-Datei leeren, Abbrechen = nichts ändern.",
             "AD-Datei korrigieren",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
@@ -103,7 +103,7 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Ja = Untertitel manuell waehlen, Nein = Untertitel leeren, Abbrechen = nichts aendern.",
+            "Ja = Untertitel manuell wählen, Nein = Untertitel leeren, Abbrechen = nichts ändern.",
             "Untertitel korrigieren",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
@@ -113,8 +113,8 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Ja = Anhaenge manuell waehlen, Nein = Anhaenge leeren, Abbrechen = nichts aendern.",
-            "Anhaenge korrigieren",
+            "Ja = Anhänge manuell wählen, Nein = Anhänge leeren, Abbrechen = nichts ändern.",
+            "Anhänge korrigieren",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
     }
@@ -123,7 +123,7 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Soll der angezeigte mkvmerge-Aufruf jetzt ausgefuehrt werden?",
+            "Soll der angezeigte mkvmerge-Aufruf jetzt ausgeführt werden?",
             "Muxing starten",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
@@ -133,7 +133,7 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            $"Sollen {itemCount} Episoden jetzt nacheinander verarbeitet werden?\n\nPflichtpruefungen wurden vorher bereits abgearbeitet.",
+            $"Sollen {itemCount} Episoden jetzt nacheinander verarbeitet werden?\n\nPflichtprüfungen wurden vorher bereits abgearbeitet.",
             "Batch starten",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
@@ -145,14 +145,14 @@ public sealed class UserDialogService
         {
             $"{itemCount} Episode(n) werden jetzt nacheinander verarbeitet.",
             string.Empty,
-            "Pflichtpruefungen wurden vorher bereits abgearbeitet."
+            "Pflichtprüfungen wurden vorher bereits abgearbeitet."
         };
 
         if (archiveFileCount > 0)
         {
             lines.Add(string.Empty);
-            lines.Add($"{archiveFileCount} Archivdatei(en) werden vorher lokal kopiert.");
-            lines.Add($"Gesamtgroesse: {FormatFileSize(archiveTotalBytes)}");
+            lines.Add($"{archiveFileCount} vorhandene Zieldatei(en) werden vorher lokal kopiert.");
+            lines.Add($"Gesamtgröße: {FormatFileSize(archiveTotalBytes)}");
         }
 
         lines.Add(string.Empty);
@@ -170,8 +170,8 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            $"Die vorhandene Archiv-MKV muss zuerst lokal kopiert werden:\n{copyPlan.SourceFilePath}\n\nZiel:\n{copyPlan.DestinationFilePath}\n\nDateigroesse: {FormatFileSize(copyPlan.FileSizeBytes)}\n\nJetzt kopieren?",
-            "Archivdatei kopieren",
+            $"Die vorhandene Zieldatei muss zuerst lokal kopiert werden:\n{copyPlan.SourceFilePath}\n\nArbeitskopie:\n{copyPlan.DestinationFilePath}\n\nDateigröße: {FormatFileSize(copyPlan.FileSizeBytes)}\n\nJetzt kopieren?",
+            "Zieldatei kopieren",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
@@ -180,8 +180,8 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            $"{fileCount} vorhandene Archivdatei(en) muessen vor dem Batch lokal kopiert werden.\n\nGesamtgroesse: {FormatFileSize(totalBytes)}\n\nJetzt alle benoetigten Dateien kopieren?",
-            "Archivdateien kopieren",
+            $"{fileCount} vorhandene Zieldatei(en) müssen vor dem Batch lokal kopiert werden.\n\nGesamtgröße: {FormatFileSize(totalBytes)}\n\nJetzt alle benötigten Dateien kopieren?",
+            "Zieldateien kopieren",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
@@ -210,7 +210,7 @@ public sealed class UserDialogService
         return MessageBox.Show(
             GetOwner(),
             string.Join(Environment.NewLine, lines),
-            "Quelldateien aufraeumen",
+            "Quelldateien aufräumen",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
@@ -220,7 +220,7 @@ public sealed class UserDialogService
         return MessageBox.Show(
             GetOwner(),
             $"{fileCount} Datei(en) dieses Laufs liegen jetzt in:\n{doneDirectory}\n\nSollen sie jetzt gesammelt in den Papierkorb verschoben werden?",
-            "Done-Ordner aufraeumen",
+            "Done-Ordner aufräumen",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
@@ -229,8 +229,8 @@ public sealed class UserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            $"Der Done-Ordner bleibt vorerst erhalten:\n{doneDirectory}\n\nJetzt zur Kontrolle oeffnen?",
-            "Done-Ordner oeffnen",
+            $"Der Done-Ordner bleibt vorerst erhalten:\n{doneDirectory}\n\nJetzt zur Kontrolle öffnen?",
+            "Done-Ordner öffnen",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
@@ -245,7 +245,7 @@ public sealed class UserDialogService
 
         if (files.Count == 0)
         {
-            ShowWarning("Hinweis", "Es wurden keine pruefbaren Quelldateien gefunden.");
+            ShowWarning("Hinweis", "Es wurden keine prüfbaren Quelldateien gefunden.");
             return;
         }
 
@@ -263,7 +263,7 @@ public sealed class UserDialogService
     {
         if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
         {
-            ShowWarning("Hinweis", "Der Pfad konnte nicht geoeffnet werden.");
+            ShowWarning("Hinweis", "Der Pfad konnte nicht geöffnet werden.");
             return;
         }
 
@@ -277,13 +277,13 @@ public sealed class UserDialogService
     public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)
     {
         var noText = canTryAlternative
-            ? "Nein = diese Quelle verwerfen und die naechste Alternative pruefen."
+            ? "Nein = diese Quelle verwerfen und die nächste Alternative prüfen."
             : "Nein = diese Quelle ist nicht in Ordnung.";
 
         return MessageBox.Show(
             GetOwner(),
-            $"Die Quelle wurde zur Pruefung geoeffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung und wird freigegeben.\n{noText}\nAbbrechen = vorerst nichts aendern.",
-            "Quelle pruefen",
+            $"Die Quelle wurde zur Prüfung geöffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung und wird freigegeben.\n{noText}\nAbbrechen = vorerst nichts ändern.",
+            "Quelle prüfen",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
     }
