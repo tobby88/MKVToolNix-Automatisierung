@@ -73,6 +73,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources);
         OpenSelectedSourcesCommand = new RelayCommand(OpenSelectedSources, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null);
+        RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => !_isBusy && EpisodeItems.Any());
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedAudioDescriptionCommand = new RelayCommand(EditSelectedAudioDescription, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedSubtitlesCommand = new RelayCommand(EditSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem is not null);
@@ -91,6 +92,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public RelayCommand OpenSelectedSourcesCommand { get; }
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
+    public AsyncRelayCommand RefreshAllComparisonsCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }
     public RelayCommand EditSelectedAudioDescriptionCommand { get; }
     public RelayCommand EditSelectedSubtitlesCommand { get; }
@@ -331,6 +333,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
             var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
             SetStatus($"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt", 100);
+            await RefreshComparisonPlansAsync(
+                EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
+                automatic: true);
             RefreshCommands();
         }
         finally
@@ -490,6 +495,96 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         await ReviewEpisodeMetadataAsync(item, isBatchPreparation: false);
+    }
+
+    private async Task RefreshAllComparisonsAsync()
+    {
+        await RefreshComparisonPlansAsync(
+            EpisodeItems.Where(item => item.ArchiveStateText == "vorhanden").ToList(),
+            automatic: false);
+    }
+
+    private async Task RefreshComparisonPlansAsync(
+        IReadOnlyList<BatchEpisodeItemViewModel> items,
+        bool automatic)
+    {
+        if (items.Count == 0)
+        {
+            SetStatus(
+                automatic
+                    ? "Keine vorhandenen Bibliotheksdateien zum Vergleichen"
+                    : "Keine vorhandenen Bibliotheksdateien ausgewählt",
+                ProgressValue);
+            return;
+        }
+
+        try
+        {
+            SetBusy(true);
+
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                item.Status = "Läuft";
+                SetStatus(
+                    automatic
+                        ? $"Vergleiche vorhandene Bibliotheksdateien... {index + 1}/{items.Count}"
+                        : $"Aktualisiere Vergleiche... {index + 1}/{items.Count}",
+                    CalculatePercent(index + 1, items.Count));
+
+                await RefreshComparisonForItemAsync(item);
+            }
+
+            SetStatus(
+                automatic
+                    ? $"Scan und Zielvergleiche abgeschlossen ({items.Count} vorhandene Bibliotheksdatei(en) geprüft)"
+                    : $"Vergleiche aktualisiert ({items.Count} vorhandene Bibliotheksdatei(en) geprüft)",
+                100);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task RefreshComparisonForItemAsync(BatchEpisodeItemViewModel item)
+    {
+        if (string.IsNullOrWhiteSpace(item.MainVideoPath)
+            || string.IsNullOrWhiteSpace(item.OutputPath)
+            || string.IsNullOrWhiteSpace(item.TitleForMux))
+        {
+            item.SetPlanSummary(string.Empty);
+            return;
+        }
+
+        item.SetPlanSummary(File.Exists(item.OutputPath)
+            ? "Zielvergleich wird berechnet..."
+            : "Verwendungsplan wird berechnet...");
+        item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
+            File.Exists(item.OutputPath) ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
+            File.Exists(item.OutputPath) ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
+
+        try
+        {
+            var plan = await BuildPlanForItemAsync(item);
+            item.SetPlanSummary(plan.BuildCompactSummaryText());
+            item.SetUsageSummary(plan.BuildUsageSummary());
+
+            if (File.Exists(item.OutputPath))
+            {
+                item.Status = plan.SkipMux ? "Ziel aktuell" : "Bereit";
+            }
+            else
+            {
+                item.Status = "Bereit";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
+            item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
+            item.Status = "Warnung";
+        }
     }
 
     private async Task ReviewPendingSourcesAsync()
@@ -819,23 +914,13 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        item.SetPlanSummary(File.Exists(item.OutputPath)
-            ? "Zielvergleich wird berechnet..."
-            : "Verwendungsplan wird berechnet...");
-        item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
-            File.Exists(item.OutputPath) ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
-            File.Exists(item.OutputPath) ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
-
         try
         {
-            var plan = await BuildPlanForItemAsync(item);
+            await RefreshComparisonForItemAsync(item);
             if (version != _selectedPlanSummaryVersion || !ReferenceEquals(SelectedEpisodeItem, item))
             {
                 return;
             }
-
-            item.SetPlanSummary(plan.BuildCompactSummaryText());
-            item.SetUsageSummary(plan.BuildUsageSummary());
         }
         catch (Exception ex)
         {
@@ -1459,6 +1544,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
+        RefreshAllComparisonsCommand.RaiseCanExecuteChanged();
         RedetectSelectedEpisodeCommand.RaiseCanExecuteChanged();
         EditSelectedAudioDescriptionCommand.RaiseCanExecuteChanged();
         EditSelectedSubtitlesCommand.RaiseCanExecuteChanged();
@@ -1889,7 +1975,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
                 return "Freigegeben";
             }
 
-            return "Keine";
+            return "Keine nötig";
         }
     }
 
