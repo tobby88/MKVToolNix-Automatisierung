@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -31,6 +32,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
     private int _selectedPlanSummaryVersion;
     private bool _logFlushScheduled;
+    private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
 
     public BatchMuxViewModel(AppServices services, UserDialogService dialogService)
     {
@@ -145,7 +147,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             _selectedEpisodeItem = value;
             OnPropertyChanged();
             RefreshCommands();
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
 
@@ -309,7 +311,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetAudioDescription(null);
             SetStatus("AD-Datei geleert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
 
@@ -323,7 +325,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetAudioDescription(path);
             SetStatus("AD-Datei aktualisiert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
 
@@ -340,7 +342,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetSubtitles([]);
             SetStatus("Untertitel geleert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
 
@@ -354,7 +356,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetSubtitles(paths);
             SetStatus("Untertitel aktualisiert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
 
@@ -371,7 +373,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetAttachments([]);
             SetStatus("Anhaenge geleert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
 
@@ -385,7 +387,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetAttachments(paths);
             SetStatus("Anhaenge aktualisiert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
 
@@ -405,7 +407,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             item.SetOutputPath(path);
             SetStatus("Ausgabedatei aktualisiert", ProgressValue);
-            _ = RefreshSelectedItemPlanSummaryAsync();
+            ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
 
@@ -667,7 +669,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             SetStatus("Eintrag aktualisiert", 100);
             if (ReferenceEquals(SelectedEpisodeItem, item))
             {
-                _ = RefreshSelectedItemPlanSummaryAsync();
+                ScheduleSelectedItemPlanSummaryRefresh();
             }
             return true;
         }
@@ -716,6 +718,29 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         return Path.Combine(OutputDirectory, Path.GetFileName(detected.SuggestedOutputFilePath));
+    }
+
+    private void ScheduleSelectedItemPlanSummaryRefresh()
+    {
+        _selectedPlanSummaryRefreshCts?.Cancel();
+        _selectedPlanSummaryRefreshCts?.Dispose();
+
+        var cancellationSource = new CancellationTokenSource();
+        _selectedPlanSummaryRefreshCts = cancellationSource;
+
+        _ = RefreshSelectedItemPlanSummaryDebouncedAsync(cancellationSource.Token);
+    }
+
+    private async Task RefreshSelectedItemPlanSummaryDebouncedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(200, cancellationToken);
+            await RefreshSelectedItemPlanSummaryAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task RefreshSelectedItemPlanSummaryAsync()

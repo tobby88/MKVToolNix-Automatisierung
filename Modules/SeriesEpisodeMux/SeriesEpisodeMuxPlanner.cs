@@ -61,18 +61,9 @@ public sealed class SeriesEpisodeMuxPlanner
         var allFiles = Directory.GetFiles(directory);
         var selectedSeed = BuildCandidateSeed(mainVideoPath);
         var selectedIdentity = selectedSeed.Identity;
-        var allEpisodeVideoSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
-            .ToList();
-
-        var allNormalSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Where(path => !LooksLikeAudioDescription(path))
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
-            .ToList();
+        var episodeSeeds = CollectEpisodeSeeds(allFiles, selectedIdentity.Key);
+        var allEpisodeVideoSeeds = episodeSeeds.AllEpisodeVideoSeeds;
+        var allNormalSeeds = episodeSeeds.NormalVideoSeeds;
 
         var normalSeeds = allNormalSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
@@ -95,11 +86,7 @@ public sealed class SeriesEpisodeMuxPlanner
         var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
         var relatedFilePaths = CollectRelatedEpisodeFilePaths(allEpisodeVideoSeeds);
 
-        var audioDescriptionSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Where(LooksLikeAudioDescription)
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+        var audioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
@@ -140,18 +127,9 @@ public sealed class SeriesEpisodeMuxPlanner
         var allFiles = Directory.GetFiles(directory);
         var selectedSeed = BuildCandidateSeed(audioDescriptionPath);
         var selectedIdentity = selectedSeed.Identity;
-        var allEpisodeVideoSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
-            .ToList();
-
-        var allNormalSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Where(path => !LooksLikeAudioDescription(path))
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
-            .ToList();
+        var episodeSeeds = CollectEpisodeSeeds(allFiles, selectedIdentity.Key);
+        var allEpisodeVideoSeeds = episodeSeeds.AllEpisodeVideoSeeds;
+        var allNormalSeeds = episodeSeeds.NormalVideoSeeds;
 
         var normalSeeds = allNormalSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
@@ -174,11 +152,7 @@ public sealed class SeriesEpisodeMuxPlanner
         var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
         var relatedFilePaths = CollectRelatedEpisodeFilePaths(allEpisodeVideoSeeds);
 
-        var audioDescriptionSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Where(LooksLikeAudioDescription)
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == selectedIdentity.Key)
+        var audioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
@@ -278,6 +252,20 @@ public sealed class SeriesEpisodeMuxPlanner
         var textMetadata = ReadTextMetadata(attachmentPath);
         var identity = ParseEpisodeIdentity(filePath, textMetadata);
         return new CandidateSeed(filePath, attachmentPath, textMetadata, identity);
+    }
+
+    private EpisodeSeedCollection CollectEpisodeSeeds(IEnumerable<string> allFiles, string episodeKey)
+    {
+        var episodeSeeds = allFiles
+            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+            .Select(BuildCandidateSeed)
+            .Where(seed => seed.Identity.Key == episodeKey)
+            .ToList();
+
+        return new EpisodeSeedCollection(
+            episodeSeeds,
+            episodeSeeds.Where(seed => !LooksLikeAudioDescription(seed.FilePath)).ToList(),
+            episodeSeeds.Where(seed => LooksLikeAudioDescription(seed.FilePath)).ToList());
     }
 
     private List<NormalVideoCandidate> BuildNormalVideoCandidates(
@@ -981,6 +969,11 @@ public sealed class SeriesEpisodeMuxPlanner
         string? AttachmentPath,
         TextMetadata TextMetadata,
         EpisodeIdentity Identity);
+
+    private sealed record EpisodeSeedCollection(
+        IReadOnlyList<CandidateSeed> AllEpisodeVideoSeeds,
+        IReadOnlyList<CandidateSeed> NormalVideoSeeds,
+        IReadOnlyList<CandidateSeed> AudioDescriptionSeeds);
 
     private sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber, string Key);
     private sealed record TitleDetails(string Title, string SeasonNumber, string EpisodeNumber);
