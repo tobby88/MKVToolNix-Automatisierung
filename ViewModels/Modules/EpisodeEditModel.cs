@@ -490,7 +490,8 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
         EpisodeMetadataGuess localGuess,
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
-        string outputPath)
+        string outputPath,
+        string? titleOverride = null)
     {
         _requestedMainVideoPath = requestedMainVideoPath;
         _detectionSeedPath = requestedMainVideoPath;
@@ -510,7 +511,7 @@ public class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpis
         _relatedEpisodeFilePaths = detected.RelatedFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
-        Title = detected.SuggestedTitle;
+        Title = string.IsNullOrWhiteSpace(titleOverride) ? detected.SuggestedTitle : titleOverride;
         MetadataStatusText = metadataResolution.StatusText;
         RequiresMetadataReview = metadataResolution.RequiresReview;
         IsMetadataReviewApproved = !metadataResolution.RequiresReview;
