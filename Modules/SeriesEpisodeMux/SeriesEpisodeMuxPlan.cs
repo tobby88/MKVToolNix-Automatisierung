@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
@@ -290,8 +290,8 @@ public sealed class SeriesEpisodeMuxPlan
                 ? "Vorhandene Zieldatei bleibt Basis"
                 : "Vorhandene Zieldatei wird mit neuer Hauptquelle aktualisiert"
             : File.Exists(OutputFilePath)
-                ? "MKV in der Serienablage vorhanden, wird aktualisiert"
-                : "MKV in der Serienablage noch nicht vorhanden";
+                ? "MKV in der Serienbibliothek vorhanden, wird aktualisiert"
+                : "MKV in der Serienbibliothek noch nicht vorhanden";
 
         var archiveDetails = WorkingCopy is not null
             ? WorkingCopy.IsReusable
@@ -327,7 +327,7 @@ public sealed class SeriesEpisodeMuxPlan
             $"Audio: {summary.Audio}",
             $"AD: {summary.AudioDescription}",
             $"Untertitel: {summary.Subtitles}",
-            $"Anhänge: {summary.Attachments}"
+            $"AnhÃ¤nge: {summary.Attachments}"
         ]);
     }
 
@@ -383,7 +383,7 @@ public sealed class SeriesEpisodeMuxPlan
             builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
             builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
             builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel)))}");
-            builder.AppendLine($"Anhänge: {BuildAttachmentPreview()}");
+            builder.AppendLine($"AnhÃ¤nge: {BuildAttachmentPreview()}");
 
             if (WorkingCopy is not null)
             {
@@ -454,3 +454,4 @@ public sealed record EpisodeUsageSummary(
             "(wird berechnet)");
     }
 }
+

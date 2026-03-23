@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Text;
@@ -350,8 +350,8 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
     public bool HasOutputTargetStatus => !string.IsNullOrWhiteSpace(OutputTargetStatusText);
 
     public string OutputTargetBadgeText => string.IsNullOrWhiteSpace(OutputPath)
-        ? "Ablage offen"
-        : File.Exists(OutputPath) ? "Ablage vorhanden" : "Ablage neu";
+        ? "Bibliothek offen"
+        : File.Exists(OutputPath) ? "In Bibliothek" : "Neu für Bibliothek";
 
     public string PlanSummaryText
     {
@@ -686,7 +686,7 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         }
 
         OutputTargetStatusText = _outputPath.StartsWith(SeriesArchiveService.ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase)
-            ? "Das Ziel in der Serienablage ist noch frei. Die Episode kann direkt dort einsortiert werden."
+            ? "Das Ziel in der Serienbibliothek ist noch frei. Die Episode kann direkt dort einsortiert werden."
             : "Die Zieldatei existiert noch nicht.";
     }
 
@@ -1399,3 +1399,6 @@ public sealed class SingleEpisodeMuxViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+
+

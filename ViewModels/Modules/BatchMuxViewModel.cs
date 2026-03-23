@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows;
+using System.Windows.Data;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -33,6 +34,8 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private int _selectedPlanSummaryVersion;
     private bool _logFlushScheduled;
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
+    private string _selectedFilterMode = "Alle";
+    private string _selectedSortMode = "Dateiname";
 
     public BatchMuxViewModel(AppServices services, UserDialogService dialogService)
     {
@@ -40,6 +43,27 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         _dialogService = dialogService;
 
         EpisodeItems.CollectionChanged += EpisodeItems_CollectionChanged;
+        EpisodeItemsView = CollectionViewSource.GetDefaultView(EpisodeItems);
+        EpisodeItemsView.Filter = FilterEpisodeItem;
+
+        FilterModes =
+        [
+            "Alle",
+            "Nur offen",
+            "Nur neu",
+            "Nur vorhanden",
+            "Nur Fehler"
+        ];
+
+        SortModes =
+        [
+            "Dateiname",
+            "Prüfung zuerst",
+            "Status zuerst",
+            "Neu zuerst"
+        ];
+
+        ApplyEpisodeItemsViewConfiguration();
 
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
@@ -75,6 +99,9 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     public AsyncRelayCommand RunBatchCommand { get; }
 
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems { get; } = [];
+    public ICollectionView EpisodeItemsView { get; }
+    public IReadOnlyList<string> FilterModes { get; }
+    public IReadOnlyList<string> SortModes { get; }
 
     public string SourceDirectory
     {
@@ -93,6 +120,38 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         {
             _outputDirectory = value;
             OnPropertyChanged();
+        }
+    }
+
+    public string SelectedFilterMode
+    {
+        get => _selectedFilterMode;
+        set
+        {
+            if (_selectedFilterMode == value)
+            {
+                return;
+            }
+
+            _selectedFilterMode = value;
+            OnPropertyChanged();
+            EpisodeItemsView.Refresh();
+        }
+    }
+
+    public string SelectedSortMode
+    {
+        get => _selectedSortMode;
+        set
+        {
+            if (_selectedSortMode == value)
+            {
+                return;
+            }
+
+            _selectedSortMode = value;
+            OnPropertyChanged();
+            ApplyEpisodeItemsViewConfiguration();
         }
     }
 
@@ -178,7 +237,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
     private void SelectOutputDirectory()
     {
         var initialDirectory = Directory.Exists(OutputDirectory) ? OutputDirectory : SourceDirectory;
-        var path = _dialogService.SelectFolder("Serienablage für den Batch auswählen", initialDirectory);
+        var path = _dialogService.SelectFolder("Serienbibliothek für den Batch auswählen", initialDirectory);
         if (!string.IsNullOrWhiteSpace(path))
         {
             OutputDirectory = path;
@@ -259,14 +318,14 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                     detected: detected,
                     metadataResolution: metadataResolution,
                     outputPath: outputPath,
-                    status: outputAlreadyExists ? "In Ablage vorhanden" : "Bereit",
+                    status: outputAlreadyExists ? "Vergleich offen" : "Bereit",
                     isSelected: true);
 
                 AddEpisodeItem(item);
                 itemsByEpisodeKey[episodeKey] = item;
 
                 AppendLog(outputAlreadyExists
-                    ? $"OK: {Path.GetFileName(result.SourcePath)} -> In der Serienablage bereits vorhanden, wird später genauer verglichen."
+                    ? $"OK: {Path.GetFileName(result.SourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
                     : $"OK: {Path.GetFileName(result.SourcePath)}");
             }
 
@@ -443,12 +502,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         var readyItems = selectedItems
-            .Where(item => item.Status is not "Fehler" and not "Existiert bereits")
+            .Where(item => item.Status != "Fehler")
             .ToList();
 
         if (readyItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Es gibt keine gueltigen Episoden fuer den Batch.");
+            _dialogService.ShowWarning("Hinweis", "Es gibt keine gültigen Episoden für den Batch.");
             return;
         }
 
@@ -469,12 +528,12 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         var readyItems = selectedItems
-            .Where(item => item.Status is not "Fehler" and not "Existiert bereits")
+            .Where(item => item.Status != "Fehler")
             .ToList();
 
         if (readyItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Es gibt keine gueltigen Episoden fuer den Batch.");
+            _dialogService.ShowWarning("Hinweis", "Es gibt keine gültigen Episoden für den Batch.");
             return;
         }
 
@@ -488,7 +547,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             return;
         }
 
-        SetStatus("Erstelle Mux-Plaene...", 0);
+        SetStatus("Erstelle Mux-Pläne...", 0);
         var executablePlans = new List<(BatchEpisodeItemViewModel Item, SeriesEpisodeMuxPlan Plan)>();
         foreach (var item in readyItems)
         {
@@ -662,7 +721,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 detected: detected,
                 metadataResolution: metadataResolution,
                 outputPath: outputPath,
-                status: outputAlreadyExists ? "In Ablage vorhanden" : "Bereit");
+                status: outputAlreadyExists ? "Vergleich offen" : "Bereit");
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");
@@ -895,25 +954,25 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         }
 
         AppendLog(string.Empty);
-        AppendLog("NEU INS ZIEL EINGEFÜGT:");
+        AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT:");
         foreach (var file in files)
         {
             AppendLog("  " + file);
         }
 
         var timeStamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss");
-        var reportPath = Path.Combine(SourceDirectory, $"Neu im Ziel - {timeStamp}.txt");
+        var reportPath = Path.Combine(SourceDirectory, $"Neu in Serienbibliothek - {timeStamp}.txt");
         File.WriteAllLines(reportPath,
         [
-            "Neu ins Ziel eingefügte Dateien",
+            "Neu in Serienbibliothek eingefügte Dateien",
             $"Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss}",
             string.Empty,
             .. files
         ]);
 
         _dialogService.ShowInfo(
-            "Neue Dateien in der Serienablage",
-            $"{files.Count} neue Datei(en) wurden neu in der Serienablage angelegt.\n\nListe im Protokoll und in:\n{reportPath}");
+            "Neue Dateien in der Serienbibliothek",
+            $"{files.Count} neue Datei(en) wurden neu in der Serienbibliothek angelegt.\n\nListe im Protokoll und in:\n{reportPath}");
     }
 
     private async Task CopyArchiveFilesAsync(IReadOnlyList<FileCopyPlan> copyPlans, long totalCopyBytes)
@@ -1040,7 +1099,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
             item.ApproveMetadataReview("Lokale Erkennung wurde bewusst beibehalten.");
             SetStatus(
                 isBatchPreparation
-                    ? $"Lokale Erkennung fuer '{item.Title}' freigegeben"
+                    ? $"Lokale Erkennung für '{item.Title}' freigegeben"
                     : "Lokale Erkennung freigegeben",
                 100);
             return true;
@@ -1054,11 +1113,11 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
         item.ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
         item.ApproveMetadataReview(
-            $"TVDB manuell bestaetigt: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
+            $"TVDB manuell bestätigt: S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
 
         SetStatus(
             isBatchPreparation
-                ? $"TVDB-Zuordnung fuer '{item.Title}' freigegeben"
+                ? $"TVDB-Zuordnung für '{item.Title}' freigegeben"
                 : "TVDB-Zuordnung freigegeben",
             100);
 
@@ -1168,6 +1227,50 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
         RefreshCommands();
     }
 
+    private bool FilterEpisodeItem(object item)
+    {
+        if (item is not BatchEpisodeItemViewModel episode)
+        {
+            return false;
+        }
+
+        return SelectedFilterMode switch
+        {
+            "Nur offen" => episode.HasPendingChecks,
+            "Nur neu" => episode.ArchiveStateText == "neu",
+            "Nur vorhanden" => episode.ArchiveStateText == "vorhanden",
+            "Nur Fehler" => episode.Status.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private void ApplyEpisodeItemsViewConfiguration()
+    {
+        using (EpisodeItemsView.DeferRefresh())
+        {
+            EpisodeItemsView.SortDescriptions.Clear();
+
+            switch (SelectedSortMode)
+            {
+                case "Prüfung zuerst":
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.HasPendingChecks), ListSortDirection.Descending));
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
+                    break;
+                case "Status zuerst":
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.StatusSortKey), ListSortDirection.Ascending));
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
+                    break;
+                case "Neu zuerst":
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.ArchiveSortKey), ListSortDirection.Ascending));
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
+                    break;
+                default:
+                    EpisodeItemsView.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
+                    break;
+            }
+        }
+    }
+
     private static bool LooksLikeAudioDescription(string filePath)
     {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
@@ -1203,7 +1306,7 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
                 detected.EpisodeNumber);
 
             HandleSelectedItemDetectionProgress(new DetectionProgressUpdate(
-                $"TVDB-Abgleich fuer {Path.GetFileName(file)}...",
+                $"TVDB-Abgleich für {Path.GetFileName(file)}...",
                 CalculatePercent(getCompletedCount(), total)));
 
             var metadataResolution = await ResolveMetadataAsync(detected);
@@ -1373,24 +1476,28 @@ public sealed class BatchMuxViewModel : INotifyPropertyChanged
 
         EpisodeItems.Clear();
         SelectedEpisodeItem = null;
+        EpisodeItemsView.Refresh();
     }
 
     private void AddEpisodeItem(BatchEpisodeItemViewModel item)
     {
         item.PropertyChanged += EpisodeItem_PropertyChanged;
         EpisodeItems.Add(item);
+        EpisodeItemsView.Refresh();
     }
 
     private void EpisodeItems_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         RefreshCommands();
         RefreshOverview();
+        EpisodeItemsView.Refresh();
     }
 
     private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         RefreshCommands();
         RefreshOverview();
+        EpisodeItemsView.Refresh();
     }
 
     private void SetStatus(string text, int progress)
@@ -1694,6 +1801,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
     public string ArchiveStateText => File.Exists(OutputPath) ? "vorhanden" : "neu";
 
+    public int ArchiveSortKey => ArchiveStateText == "neu" ? 0 : 1;
+
     public bool RequiresMetadataReview
     {
         get => _requiresMetadataReview;
@@ -1817,8 +1926,21 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
 
             _status = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusSortKey));
         }
     }
+
+    public int StatusSortKey => Status switch
+    {
+        var value when value.StartsWith("Fehler", StringComparison.OrdinalIgnoreCase) => 0,
+        "Warnung" => 1,
+        "Läuft" => 2,
+        "Vergleich offen" => 3,
+        "Bereit" => 4,
+        "Ziel aktuell" => 5,
+        "Erfolgreich" => 6,
+        _ => 99
+    };
 
     public string RequestedSourcesDisplayText => FormatPaths(_requestedSourcePaths);
 
@@ -1890,10 +2012,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             !metadataResolution.RequiresReview,
             status,
             File.Exists(outputPath)
-                ? "In der Serienablage bereits vorhanden. Detail auswählen für den genauen Vergleich."
-                : "Noch nicht in der Serienablage vorhanden. Neue MKV wird erstellt.",
+                ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
+                : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.",
             EpisodeUsageSummary.CreatePending(
-                File.Exists(outputPath) ? "In Serienablage vorhanden" : "Noch nicht in Serienablage",
+                File.Exists(outputPath) ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
                 File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"),
             isSelected,
             detected.RequiresManualCheck,
@@ -1986,10 +2108,10 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         IsMetadataReviewApproved = !metadataResolution.RequiresReview;
         Status = status;
         PlanSummaryText = File.Exists(outputPath)
-            ? "In der Serienablage bereits vorhanden. Detail auswählen für den genauen Vergleich."
-            : "Noch nicht in der Serienablage vorhanden. Neue MKV wird erstellt.";
+            ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
+            : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.";
         UsageSummary = EpisodeUsageSummary.CreatePending(
-            File.Exists(outputPath) ? "In Serienablage vorhanden" : "Noch nicht in Serienablage",
+            File.Exists(outputPath) ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
             File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -1998,7 +2120,7 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             _approvedReviewPath = null;
         }
         _notes = detected.Notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        IsSelected = status != "Existiert bereits";
+        IsSelected = true;
 
         OnPropertyChanged(nameof(RequestedMainVideoPath));
         OnPropertyChanged(nameof(RequestedSourcesDisplayText));
@@ -2020,6 +2142,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(UsageSummary));
         OnPropertyChanged(nameof(MetadataDisplayText));
         OnPropertyChanged(nameof(ArchiveStateText));
+        OnPropertyChanged(nameof(ArchiveSortKey));
+        OnPropertyChanged(nameof(StatusSortKey));
         OnPropertyChanged(nameof(IsMetadataReviewApproved));
         OnPropertyChanged(nameof(ManualCheckFilePaths));
         OnPropertyChanged(nameof(IsManualCheckApproved));
@@ -2068,15 +2192,17 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
     {
         _outputPathWasManuallyChanged = true;
         OutputPath = outputPath;
-        Status = File.Exists(outputPath) ? "Existiert bereits" : "Bereit";
+        Status = File.Exists(outputPath) ? "Vergleich offen" : "Bereit";
         PlanSummaryText = File.Exists(outputPath)
-            ? "In der Serienablage bereits vorhanden. Detail auswählen für den genauen Vergleich."
-            : "Noch nicht in der Serienablage vorhanden. Neue MKV wird erstellt.";
+            ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
+            : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.";
         UsageSummary = EpisodeUsageSummary.CreatePending(
-            File.Exists(outputPath) ? "In Serienablage vorhanden" : "Noch nicht in Serienablage",
+            File.Exists(outputPath) ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
             File.Exists(outputPath) ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
         OnPropertyChanged(nameof(ArchiveStateText));
-        IsSelected = Status != "Existiert bereits";
+        OnPropertyChanged(nameof(ArchiveSortKey));
+        OnPropertyChanged(nameof(StatusSortKey));
+        IsSelected = true;
     }
 
     public void SetPlanSummary(string summaryText)
@@ -2182,8 +2308,8 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
             SeasonNumber,
             EpisodeNumber,
             TitleForMux);
-        Status = File.Exists(OutputPath) ? "Existiert bereits" : "Bereit";
-        IsSelected = Status != "Existiert bereits";
+        Status = File.Exists(OutputPath) ? "Vergleich offen" : "Bereit";
+        IsSelected = true;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -2191,3 +2317,6 @@ public sealed class BatchEpisodeItemViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+
+

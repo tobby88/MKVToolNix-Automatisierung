@@ -1,4 +1,4 @@
-using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+﻿using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -143,7 +143,7 @@ public sealed class SeriesArchiveService
             {
                 return ArchiveIntegrationDecision.CreateSkip(
                     outputPath,
-                    "Die vorhandene MKV in der Serienablage enthält bereits die bevorzugte Videoquelle sowie alle benötigten Zusatzspuren.",
+                    "Die vorhandene MKV in der Serienbibliothek enthält bereits die bevorzugte Videoquelle sowie alle benötigten Zusatzspuren.",
                     ["Zieldatei bereits vollständig. Kein erneutes Muxen nötig."]);
             }
 
@@ -347,3 +347,4 @@ public sealed record ArchiveIntegrationDecision(
             Notes: notes);
     }
 }
+

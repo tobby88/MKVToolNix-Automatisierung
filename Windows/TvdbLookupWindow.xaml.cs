@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -27,7 +27,7 @@ public partial class TvdbLookupWindow : Window
         SeriesSearchTextBox.Text = guess.SeriesName;
         EpisodeSearchTextBox.Text = guess.EpisodeTitle;
         GuessSummaryTextBlock.Text = BuildGuessSummaryText();
-        ComparisonSummaryTextBlock.Text = "Noch kein TVDB-Treffer ausgewaehlt.";
+        ComparisonSummaryTextBlock.Text = "Noch kein TVDB-Treffer ausgewählt.";
 
         Loaded += TvdbLookupWindow_Loaded;
     }
@@ -69,13 +69,13 @@ public partial class TvdbLookupWindow : Window
     {
         if (SeriesResultsListBox.SelectedIndex < 0 || SeriesResultsListBox.SelectedIndex >= _seriesResults.Count)
         {
-            MessageBox.Show(this, "Bitte zuerst eine Serie auswaehlen.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Bitte zuerst eine Serie auswählen.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
         if (EpisodeResultsListBox.SelectedItem is not SelectableEpisodeItem selectedEpisode)
         {
-            MessageBox.Show(this, "Bitte zuerst eine Episode auswaehlen.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(this, "Bitte zuerst eine Episode auswählen.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -270,13 +270,13 @@ public partial class TvdbLookupWindow : Window
     {
         if (SeriesResultsListBox.SelectedIndex < 0 || SeriesResultsListBox.SelectedIndex >= _seriesResults.Count)
         {
-            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Serie ausgewaehlt.";
+            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Serie ausgewählt.";
             return;
         }
 
         if (EpisodeResultsListBox.SelectedItem is not SelectableEpisodeItem selectedEpisode)
         {
-            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Episode ausgewaehlt.";
+            ComparisonSummaryTextBlock.Text = "Noch keine TVDB-Episode ausgewählt.";
             return;
         }
 
@@ -350,3 +350,4 @@ public partial class TvdbLookupWindow : Window
         public string DisplayText => $"S{FormatNumber(Episode.SeasonNumber)}E{FormatNumber(Episode.EpisodeNumber)} - {Episode.Name}";
     }
 }
+
