@@ -1,48 +1,20 @@
-using System.Text.Json;
-
 namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class AppToolPathStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true
-    };
-
-    private readonly string _settingsFilePath;
-
-    public AppToolPathStore()
-    {
-        var rootDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "MkvToolnixAutomatisierung");
-        Directory.CreateDirectory(rootDirectory);
-        _settingsFilePath = Path.Combine(rootDirectory, "tool-paths.json");
-    }
-
     public AppToolPathSettings Load()
     {
-        if (!File.Exists(_settingsFilePath))
-        {
-            return new AppToolPathSettings();
-        }
-
-        try
-        {
-            var json = File.ReadAllText(_settingsFilePath);
-            return JsonSerializer.Deserialize<AppToolPathSettings>(json, SerializerOptions) ?? new AppToolPathSettings();
-        }
-        catch
-        {
-            return new AppToolPathSettings();
-        }
+        return AppSettingsFileLocator.LoadCombinedSettings().ToolPaths ?? new AppToolPathSettings();
     }
 
     public void Save(AppToolPathSettings settings)
     {
-        var json = JsonSerializer.Serialize(settings, SerializerOptions);
-        File.WriteAllText(_settingsFilePath, json);
+        var combinedSettings = AppSettingsFileLocator.LoadCombinedSettings();
+        combinedSettings.ToolPaths = settings;
+        AppSettingsFileLocator.SaveCombinedSettings(combinedSettings);
     }
+
+    public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
 public sealed class AppToolPathSettings

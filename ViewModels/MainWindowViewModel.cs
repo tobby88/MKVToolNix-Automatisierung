@@ -226,6 +226,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void RefreshToolStatus()
     {
+        var settings = _toolPathStore.Load();
         var ffprobePath = _ffprobeLocator.TryFindFfprobePath();
         FfprobePath = ffprobePath;
         IsFfprobeAvailable = !string.IsNullOrWhiteSpace(ffprobePath) && File.Exists(ffprobePath);
@@ -242,6 +243,19 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         MkvMergePath = mkvMergePath;
         IsMkvToolNixAvailable = !string.IsNullOrWhiteSpace(mkvMergePath) && File.Exists(mkvMergePath);
+
+        var normalizedFfprobePath = ffprobePath ?? string.Empty;
+        var normalizedMkvToolPath = string.IsNullOrWhiteSpace(mkvMergePath)
+            ? string.Empty
+            : Path.GetDirectoryName(mkvMergePath) ?? mkvMergePath;
+
+        if (!string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(settings.MkvToolNixDirectoryPath, normalizedMkvToolPath, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.FfprobePath = normalizedFfprobePath;
+            settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
+            _toolPathStore.Save(settings);
+        }
     }
 
     private static string GetInitialDirectory(string? filePath)
