@@ -111,6 +111,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             OnPropertyChanged(nameof(HasErrorStatus));
             OnPropertyChanged(nameof(StatusBadgeBackground));
             OnPropertyChanged(nameof(StatusBadgeBorderBrush));
+            OnPropertyChanged(nameof(StatusTooltip));
         }
     }
 
@@ -122,6 +123,8 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public string StatusBadgeBorderBrush => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBorderBrush(StatusKind);
 
+    public string StatusTooltip => EpisodeEditTextBuilder.BuildBatchStatusTooltip(StatusKind, Status);
+
     public void SetStatus(BatchEpisodeStatusKind statusKind, string? statusText = null)
     {
         var previousStatus = Status;
@@ -131,12 +134,14 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         {
             _statusTextOverride = normalizedOverride;
             OnPropertyChanged(nameof(Status));
+            OnPropertyChanged(nameof(StatusTooltip));
             return;
         }
 
         if (!string.Equals(previousStatus, Status, StringComparison.Ordinal))
         {
             OnPropertyChanged(nameof(Status));
+            OnPropertyChanged(nameof(StatusTooltip));
         }
     }
 

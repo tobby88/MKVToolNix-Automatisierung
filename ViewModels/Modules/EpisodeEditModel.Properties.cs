@@ -222,6 +222,8 @@ public partial class EpisodeEditModel
 
     public string ArchiveBadgeBorderBrush => EpisodeUiStyleBuilder.BuildArchiveBadgeBorderBrush(ArchiveState);
 
+    public string ArchiveStateTooltip => EpisodeEditTextBuilder.BuildArchiveStateTooltip(ArchiveState);
+
     public bool HasPendingManualCheck => RequiresManualCheck && !IsManualCheckApproved;
 
     public bool HasPendingMetadataReview => RequiresMetadataReview && !IsMetadataReviewApproved;
@@ -241,6 +243,7 @@ public partial class EpisodeEditModel
             OnPropertyChanged(nameof(HasPendingMetadataReview));
             OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewHintTooltip));
             OnPropertyChanged(nameof(ReviewBadgeBackground));
             OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
@@ -262,6 +265,7 @@ public partial class EpisodeEditModel
             OnPropertyChanged(nameof(HasPendingMetadataReview));
             OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewHintTooltip));
             OnPropertyChanged(nameof(ReviewBadgeBackground));
             OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
@@ -284,6 +288,7 @@ public partial class EpisodeEditModel
             OnPropertyChanged(nameof(HasPendingManualCheck));
             OnPropertyChanged(nameof(ReviewState));
             OnPropertyChanged(nameof(ReviewHint));
+            OnPropertyChanged(nameof(ReviewHintTooltip));
             OnPropertyChanged(nameof(ReviewBadgeBackground));
             OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
             OnPropertyChanged(nameof(HasPendingChecks));
@@ -316,6 +321,8 @@ public partial class EpisodeEditModel
             return EpisodeEditTextBuilder.BuildReviewHint(ReviewState);
         }
     }
+
+    public string ReviewHintTooltip => EpisodeEditTextBuilder.BuildReviewHintTooltip(ReviewState);
 
     public string ReviewBadgeBackground => EpisodeUiStyleBuilder.BuildReviewBadgeBackground(ReviewState);
 

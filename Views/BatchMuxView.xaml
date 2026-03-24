@@ -81,6 +81,7 @@
                         Margin="12,0,0,0"
                         Padding="10,6"
                         Command="{Binding RefreshAllComparisonsCommand}"
+                        ToolTip="{Binding RefreshAllComparisonsTooltip, Mode=OneWay}"
                         Content="Alle Vergleiche aktualisieren" />
             </DockPanel>
 
@@ -105,7 +106,7 @@
                         <DataGridTemplateColumn Header="In Bibliothek" Width="SizeToHeader">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
+                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding ArchiveStateTooltip, Mode=OneWay}">
                                         <Border.Background>
                                             <Binding Path="ArchiveBadgeBackground" Mode="OneWay" />
                                         </Border.Background>
@@ -121,7 +122,7 @@
                         <DataGridTemplateColumn Header="Pr&#252;fung" Width="SizeToCells">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
+                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding ReviewHintTooltip, Mode=OneWay}">
                                         <Border.Background>
                                             <Binding Path="ReviewBadgeBackground" Mode="OneWay" />
                                         </Border.Background>
@@ -137,7 +138,7 @@
                         <DataGridTemplateColumn Header="Status" Width="SizeToCells">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1">
+                                    <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding StatusTooltip, Mode=OneWay}">
                                         <Border.Background>
                                             <Binding Path="StatusBadgeBackground" Mode="OneWay" />
                                         </Border.Background>
@@ -303,7 +304,7 @@
                                             </ScrollViewer>
                                         </Border>
                                     </StackPanel>
-                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding ReviewSelectedMetadataCommand}" Content="TVDB pr&#252;fen" />
+                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding ReviewSelectedMetadataCommand}" ToolTip="{Binding ReviewSelectedMetadataTooltip, Mode=OneWay}" Content="TVDB pr&#252;fen" />
                                 </Grid>
                             </GroupBox>
 
@@ -335,7 +336,7 @@
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" Content="Quelle pr&#252;fen" />
+                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Quelle pr&#252;fen" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
                                     <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="48" Style="{StaticResource DisplaySurfaceBorderStyle}">
@@ -344,7 +345,7 @@
                                                        Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" Content="Video neu erkennen" />
+                                    <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" ToolTip="{Binding RedetectSelectedEpisodeTooltip, Mode=OneWay}" Content="Video neu erkennen" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videos und AD" />
                                     <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" Style="{StaticResource DisplaySurfaceBorderStyle}">
@@ -468,11 +469,11 @@
         </Grid>
 
         <WrapPanel Grid.Row="2" Margin="0,12,0,0" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
-            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" Content="Ordner scannen" />
+            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" ToolTip="{Binding ScanDirectoryTooltip, Mode=OneWay}" Content="Ordner scannen" />
             <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
             <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />
-            <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" Content="Pflichtchecks starten" />
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" Content="Batch starten" />
+            <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" ToolTip="{Binding ReviewPendingSourcesTooltip, Mode=OneWay}" Content="Pflichtchecks starten" />
+            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" ToolTip="{Binding RunBatchTooltip, Mode=OneWay}" Content="Batch starten" />
         </WrapPanel>
     </Grid>
 </UserControl>

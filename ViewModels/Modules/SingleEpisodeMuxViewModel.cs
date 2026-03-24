@@ -119,6 +119,10 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
     public string ManualCheckBadgeBorderBrush => EpisodeUiStyleBuilder.BuildManualCheckBadgeBorderBrush(ManualCheckBadgeState);
 
+    public string ManualCheckBadgeTooltip => EpisodeEditTextBuilder.BuildManualCheckBadgeTooltip(ManualCheckBadgeState);
+
+    public string ManualCheckButtonTooltip => "Prüft die aktuell ausgewählte Quelle und erlaubt bei Bedarf eine alternative Datei.";
+
     public bool HasMetadataStatus => !string.IsNullOrWhiteSpace(MetadataStatusText);
 
     public string MetadataActionButtonText => HasPendingMetadataReview
@@ -134,6 +138,12 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
     public string MetadataBadgeBackground => EpisodeUiStyleBuilder.BuildMetadataBadgeBackground(MetadataBadgeState);
 
     public string MetadataBadgeBorderBrush => EpisodeUiStyleBuilder.BuildMetadataBadgeBorderBrush(MetadataBadgeState);
+
+    public string MetadataBadgeTooltip => EpisodeEditTextBuilder.BuildMetadataBadgeTooltip(MetadataBadgeState);
+
+    public string MetadataActionButtonTooltip => HasPendingMetadataReview
+        ? "Öffnet den TVDB-Dialog, um Serie und Episode zu prüfen und freizugeben."
+        : "Öffnet den TVDB-Dialog, um die Zuordnung bei Bedarf manuell anzupassen.";
 
     public string OutputTargetStatusText
     {
@@ -165,6 +175,8 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
     public string OutputTargetBadgeBorderBrush => EpisodeUiStyleBuilder.BuildOutputTargetBadgeBorderBrush(OutputTargetBadgeState);
 
+    public string OutputTargetBadgeTooltip => EpisodeEditTextBuilder.BuildOutputTargetBadgeTooltip(OutputTargetBadgeState);
+
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
 
     public string PlanRefreshProblemText
@@ -184,6 +196,12 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
     }
 
     public bool HasPlanRefreshProblem => !string.IsNullOrWhiteSpace(PlanRefreshProblemText);
+
+    public string RescanButtonTooltip => "Erkennt Quellen, Begleitdateien und Ausgabeziel erneut ausgehend vom aktuellen Hauptvideo.";
+
+    public string CreatePreviewButtonTooltip => "Erstellt den geplanten mkvmerge-Aufruf und zeigt die Details an, ohne eine MKV zu schreiben.";
+
+    public string ExecuteMuxButtonTooltip => "Startet das eigentliche Muxing mit der aktuellen Planung.";
 
     private void SetBusy(bool isBusy)
     {
@@ -237,6 +255,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
                 base.OnPropertyChanged(nameof(OutputTargetBadgeText));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeBackground));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeBorderBrush));
+                base.OnPropertyChanged(nameof(OutputTargetBadgeTooltip));
                 break;
             case nameof(RequiresManualCheck):
             case nameof(IsManualCheckApproved):
@@ -246,6 +265,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
                 base.OnPropertyChanged(nameof(ManualCheckBadgeText));
                 base.OnPropertyChanged(nameof(ManualCheckBadgeBackground));
                 base.OnPropertyChanged(nameof(ManualCheckBadgeBorderBrush));
+                base.OnPropertyChanged(nameof(ManualCheckBadgeTooltip));
                 break;
             case nameof(MetadataStatusText):
                 base.OnPropertyChanged(nameof(HasMetadataStatus));
@@ -253,14 +273,17 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
                 base.OnPropertyChanged(nameof(MetadataBadgeText));
                 base.OnPropertyChanged(nameof(MetadataBadgeBackground));
                 base.OnPropertyChanged(nameof(MetadataBadgeBorderBrush));
+                base.OnPropertyChanged(nameof(MetadataBadgeTooltip));
                 break;
             case nameof(RequiresMetadataReview):
             case nameof(IsMetadataReviewApproved):
                 base.OnPropertyChanged(nameof(MetadataActionButtonText));
+                base.OnPropertyChanged(nameof(MetadataActionButtonTooltip));
                 base.OnPropertyChanged(nameof(MetadataBadgeState));
                 base.OnPropertyChanged(nameof(MetadataBadgeText));
                 base.OnPropertyChanged(nameof(MetadataBadgeBackground));
                 base.OnPropertyChanged(nameof(MetadataBadgeBorderBrush));
+                base.OnPropertyChanged(nameof(MetadataBadgeTooltip));
                 break;
             case nameof(PlanSummaryText):
                 base.OnPropertyChanged(nameof(HasPlanSummary));

@@ -130,6 +130,26 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string PortableModeTooltip => $"Portable Modus aktiv:{Environment.NewLine}{PortableAppStorage.DataDirectory}";
 
+    public string QuickHelpText
+    {
+        get
+        {
+            var moduleHint = string.Equals(SelectedModule.Title, "Batch", StringComparison.Ordinal)
+                ? "Batch: Quellordner wählen, scannen, offene Pflichtchecks klären, dann Batch starten."
+                : "Einzelepisode: Hauptvideo wählen, Erkennung prüfen, bei Bedarf TVDB öffnen, Vorschau erzeugen, dann muxen.";
+
+            return string.Join(
+                Environment.NewLine,
+                "Erststart:",
+                "1. Prüfen, ob mkvmerge links unten bereit ist.",
+                "2. Optional ffprobe auswählen, falls genauere Laufzeiten gewünscht sind.",
+                "3. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
+                string.Empty,
+                "Aktuelles Modul:",
+                moduleHint);
+        }
+    }
+
     public RelayCommand SelectFfprobeCommand { get; }
 
     public RelayCommand SelectMkvToolNixCommand { get; }
@@ -146,6 +166,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _selectedModule = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(QuickHelpText));
         }
     }
 

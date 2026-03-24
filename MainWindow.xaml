@@ -139,6 +139,25 @@
                                    TextWrapping="Wrap"
                                    Text="{Binding PortableModeText}" />
                     </Border>
+
+                    <Expander Margin="0,8,0,0"
+                              IsExpanded="False"
+                              ToolTip="Kurze Hinweise zum Erststart und zum aktuell gewählten Modul.">
+                        <Expander.Header>
+                            <TextBlock FontWeight="SemiBold" Text="Kurzinfo" />
+                        </Expander.Header>
+                        <Border Margin="0,6,0,0"
+                                Padding="8"
+                                Background="#FAFBFC"
+                                BorderBrush="#D8DEE5"
+                                BorderThickness="1"
+                                CornerRadius="6">
+                            <TextBlock FontSize="12"
+                                       Foreground="#44515D"
+                                       TextWrapping="Wrap"
+                                       Text="{Binding QuickHelpText}" />
+                        </Border>
+                    </Expander>
                 </StackPanel>
             </Grid>
         </Border>

@@ -90,6 +90,7 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(HasPendingManualCheck));
         OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewHintTooltip));
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
@@ -109,6 +110,7 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(HasPendingManualCheck));
         OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewHintTooltip));
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
@@ -181,6 +183,7 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(HasPendingManualCheck));
         OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewHintTooltip));
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
@@ -284,6 +287,7 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(HasPendingManualCheck));
         OnPropertyChanged(nameof(ReviewState));
         OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewHintTooltip));
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
@@ -311,6 +315,7 @@ public partial class EpisodeEditModel
         _archiveState = archiveState;
         OnPropertyChanged(nameof(ArchiveState));
         OnPropertyChanged(nameof(ArchiveStateText));
+        OnPropertyChanged(nameof(ArchiveStateTooltip));
         OnPropertyChanged(nameof(ArchiveBadgeBackground));
         OnPropertyChanged(nameof(ArchiveBadgeBorderBrush));
         OnPropertyChanged(nameof(ArchiveSortKey));

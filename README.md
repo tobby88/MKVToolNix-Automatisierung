@@ -1,17 +1,21 @@
 # MKVToolNix-Automatisierung
 
-Ein bewusst einfach gehaltenes C#-Projekt, um wiederkehrende MKVToolNix-Abläufe Schritt für Schritt zu automatisieren.
+Eine bewusst schlanke WPF-App, um wiederkehrende MKVToolNix-Abläufe für einzelne Episoden oder ganze Ordner Schritt für Schritt zu automatisieren.
 
-## Aktueller Stand
+## Überblick
 
-Die Anwendung ist als modulare WPF-App aufgebaut.
+Die Anwendung besteht aktuell aus zwei Modulen:
 
-Aktuell gibt es zwei getrennte Funktionen:
+- `Einzelepisode`: eine einzelne Episode erkennen, prüfen und muxen
+- `Batch`: einen Ordner scannen und mehrere Episoden gesammelt verarbeiten
 
-- `Einzelepisode`: eine einzelne Episode mit automatischer Dateisuche und manueller Korrektur muxen
-- `Batch-Verarbeitung`: einen Ordner nach mehreren Episoden scannen und nacheinander verarbeiten
+Die Navigation erfolgt über die linke Modulleiste. Rechts wird jeweils das ausgewählte Modul angezeigt.
 
-Die Navigation erfolgt über eine linke Modulliste. Rechts wird jeweils das ausgewählte Modul angezeigt.
+## Voraussetzungen
+
+- `mkvmerge.exe` aus MKVToolNix ist für das eigentliche Muxing erforderlich.
+- `ffprobe.exe` ist optional. Wenn `ffprobe` fehlt, nutzt die App für Laufzeiten den Windows-Fallback.
+- Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
 
 ## Portable Modus
 
@@ -22,6 +26,32 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 - Reservierte Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Cache` und `.\Logs`.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
+
+## Erststart
+
+1. App starten.
+2. Links unten prüfen, ob `mkvmerge: bereit` angezeigt wird. Falls nicht, den MKVToolNix-Ordner auswählen.
+3. Optional `ffprobe` auswählen, wenn Laufzeiten möglichst zuverlässig über `ffprobe` ermittelt werden sollen.
+4. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
+5. Danach mit `Einzelepisode` oder `Batch` arbeiten.
+
+## Typischer Workflow: Einzelepisode
+
+1. `Hauptvideo wählen`.
+2. Automatische Erkennung für Quelle, Begleitdateien und Metadaten prüfen.
+3. Falls angezeigt, `Quelle prüfen / freigeben` und/oder `TVDB prüfen`.
+4. Bei Bedarf im Bereich `Korrekturen und Ausgabe` manuell nachbessern.
+5. `Vorschau erzeugen`, um den geplanten `mkvmerge`-Aufruf zu kontrollieren.
+6. `Muxen`, um die MKV tatsächlich zu erstellen.
+
+## Typischer Workflow: Batch
+
+1. Quellordner wählen.
+2. Scan abwarten und gefundene Episoden prüfen.
+3. Bei Bedarf Einträge auswählen oder abwählen.
+4. Offene Pflichtprüfungen mit `Pflichtchecks starten` oder einzeln im Detailbereich erledigen.
+5. `Batch starten`.
+6. Danach Protokoll, neue Bibliotheksdateien und den optionalen `done`-Ordner prüfen.
 
 ## Unterstützte Dateien
 
@@ -36,11 +66,11 @@ Im aktuellen Serien-Modul werden verwendet:
 
 ## Projektaufbau
 
-- `MainWindow.xaml`: Shell mit Modulnavigation
+- `MainWindow.xaml`: Shell mit Modulnavigation und Tool-Status
 - `ViewModels/MainWindowViewModel.cs`: Shell-ViewModel
 - `Views/`: WPF-Views für die einzelnen Module
 - `ViewModels/Modules/`: ViewModels der einzelnen Module
-- `Services/`: technische Dienste wie Dialoge, `mkvmerge`-Suche und Prozessausführung
+- `Services/`: technische Dienste wie Dialoge, Toolsuche und Prozessausführung
 - `Modules/SeriesEpisodeMux/`: Fachlogik für Muxing und Dateierkennung
 
 ## Starten
@@ -58,3 +88,4 @@ im Projektordner:
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `C:\Users\tobby\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
+- Portable Daten, Cache und Logs bleiben im Anwendungsordner.

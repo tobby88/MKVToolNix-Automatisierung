@@ -177,6 +177,20 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     public bool IsInteractive => !_isBusy;
 
+    public string ScanDirectoryTooltip => "Scannt den Quellordner nach Episoden und erstellt Vorschläge für Quellen, Titel und Zielpfade.";
+
+    public string ReviewPendingSourcesTooltip => "Öffnet nacheinander alle noch offenen Quellen- und TVDB-Prüfungen der ausgewählten Episoden.";
+
+    public string OpenSelectedSourcesTooltip => "Prüft die Quelldateien des markierten Eintrags und erlaubt bei Bedarf eine alternative Quelle.";
+
+    public string ReviewSelectedMetadataTooltip => "Öffnet den TVDB-Dialog für den aktuell ausgewählten Batch-Eintrag.";
+
+    public string RefreshAllComparisonsTooltip => "Berechnet die Vergleiche für bereits vorhandene Bibliotheksziele erneut.";
+
+    public string RedetectSelectedEpisodeTooltip => "Lässt die Dateierkennung für den markierten Eintrag erneut laufen.";
+
+    public string RunBatchTooltip => "Startet das Muxing für alle ausgewählten Episoden. Offene Pflichtprüfungen werden vorher noch abgearbeitet.";
+
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;

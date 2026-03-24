@@ -58,12 +58,33 @@ internal static class EpisodeEditTextBuilder
         };
     }
 
+    public static string BuildReviewHintTooltip(EpisodeReviewState reviewState)
+    {
+        return reviewState switch
+        {
+            EpisodeReviewState.Approved => "Alle nötigen Quellen- und Metadatenprüfungen sind bereits erledigt.",
+            EpisodeReviewState.ManualCheckPending => "Die erkannte Quelle sollte vor dem Muxen geprüft und freigegeben werden.",
+            EpisodeReviewState.MetadataReviewPending => "Die TVDB-Zuordnung sollte vor dem Muxen geprüft und freigegeben werden.",
+            EpisodeReviewState.ManualAndMetadataPending => "Sowohl die Quelle als auch die TVDB-Zuordnung sollten vor dem Muxen geprüft werden.",
+            _ => "Für diese Episode sind aktuell keine zusätzlichen Prüfungen nötig."
+        };
+    }
+
     public static string BuildManualCheckBadgeText(ManualCheckBadgeState badgeState)
     {
         return badgeState switch
         {
             ManualCheckBadgeState.Pending => "Quelle prüfen",
             _ => "Quelle ok"
+        };
+    }
+
+    public static string BuildManualCheckBadgeTooltip(ManualCheckBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            ManualCheckBadgeState.Pending => "Die Quelle ist prüfpflichtig. Öffne die Quellenprüfung, bevor du muxst.",
+            _ => "Die aktuelle Quelle ist freigegeben oder benötigt keine zusätzliche Prüfung."
         };
     }
 
@@ -77,6 +98,16 @@ internal static class EpisodeEditTextBuilder
         };
     }
 
+    public static string BuildMetadataBadgeTooltip(MetadataBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            MetadataBadgeState.Pending => "Die TVDB-Zuordnung sollte geprüft und freigegeben werden.",
+            MetadataBadgeState.Approved => "Die TVDB-Zuordnung ist freigegeben oder automatisch sicher erkannt.",
+            _ => "Es liegt noch keine freigegebene TVDB-Zuordnung vor. Bei Bedarf kannst du den TVDB-Dialog öffnen."
+        };
+    }
+
     public static string BuildOutputTargetBadgeText(OutputTargetBadgeState badgeState)
     {
         return badgeState switch
@@ -85,6 +116,23 @@ internal static class EpisodeEditTextBuilder
             OutputTargetBadgeState.NewForLibrary => "Neu für Bibliothek",
             _ => "Bibliothek offen"
         };
+    }
+
+    public static string BuildOutputTargetBadgeTooltip(OutputTargetBadgeState badgeState)
+    {
+        return badgeState switch
+        {
+            OutputTargetBadgeState.InLibrary => "Die Ausgabe zeigt auf eine bereits vorhandene Datei in der Serienbibliothek.",
+            OutputTargetBadgeState.NewForLibrary => "Die Ausgabe wird als neue Datei in der Serienbibliothek angelegt.",
+            _ => "Das Ausgabeziel ist noch nicht vollständig festgelegt."
+        };
+    }
+
+    public static string BuildArchiveStateTooltip(EpisodeArchiveState archiveState)
+    {
+        return archiveState == EpisodeArchiveState.Existing
+            ? "Für diese Episode existiert bereits eine Datei in der Serienbibliothek. Ein Vergleich entscheidet, ob etwas ergänzt oder ersetzt werden muss."
+            : "Für diese Episode liegt in der Serienbibliothek noch kein Ziel vor. Es wird eine neue MKV angelegt.";
     }
 
     public static string BuildBatchStatusText(BatchEpisodeStatusKind statusKind)
@@ -99,6 +147,29 @@ internal static class EpisodeEditTextBuilder
             BatchEpisodeStatusKind.Success => "Erfolgreich",
             _ => "Fehler"
         };
+    }
+
+    public static string BuildBatchStatusTooltip(BatchEpisodeStatusKind statusKind, string statusText)
+    {
+        var explanation = statusKind switch
+        {
+            BatchEpisodeStatusKind.Warning => "Der Eintrag wurde verarbeitet, aber es gab Warnungen. Details oder Protokoll prüfen.",
+            BatchEpisodeStatusKind.Running => "Dieser Eintrag wird gerade geplant, kopiert oder gemuxt.",
+            BatchEpisodeStatusKind.ComparisonPending => "Für eine bereits vorhandene Bibliotheksdatei fehlt noch der aktuelle Vergleich.",
+            BatchEpisodeStatusKind.Ready => "Der Eintrag ist bereit für den Batch-Lauf.",
+            BatchEpisodeStatusKind.UpToDate => "Die Zieldatei ist bereits vollständig vorhanden. Ein neuer Lauf ist normalerweise nicht nötig.",
+            BatchEpisodeStatusKind.Success => "Der Eintrag wurde erfolgreich verarbeitet.",
+            _ => "Bei diesem Eintrag ist ein Fehler aufgetreten."
+        };
+
+        var normalizedStatus = string.IsNullOrWhiteSpace(statusText)
+            ? string.Empty
+            : statusText.Trim();
+
+        return string.IsNullOrWhiteSpace(normalizedStatus)
+            || string.Equals(normalizedStatus, BuildBatchStatusText(statusKind), StringComparison.Ordinal)
+            ? explanation
+            : $"{explanation}{Environment.NewLine}Status: {normalizedStatus}";
     }
 
     public static string BuildNotesDisplayText(IReadOnlyList<string> notes)
