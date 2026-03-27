@@ -46,6 +46,21 @@ public sealed class SeriesEpisodeMuxService
         return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
     }
 
+    public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
+        string selectedVideoPath,
+        SeriesEpisodeMuxPlanner.DirectoryDetectionContext directoryContext,
+        Action<DetectionProgressUpdate>? onProgress = null,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
+    {
+        ArgumentNullException.ThrowIfNull(directoryContext);
+        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, onProgress, excludedSourcePaths));
+    }
+
+    public SeriesEpisodeMuxPlanner.DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
+    {
+        return _planner.CreateDirectoryDetectionContext(sourceDirectory);
+    }
+
     /// <summary>
     /// Erstellt aus einer UI-Anfrage einen vollständig aufgelösten Mux-Plan.
     /// </summary>

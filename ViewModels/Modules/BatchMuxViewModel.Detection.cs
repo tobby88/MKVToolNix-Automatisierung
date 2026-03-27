@@ -74,6 +74,7 @@ public sealed partial class BatchMuxViewModel
     }
 
     private async Task ProcessBatchScanItemAsync(
+        BatchScanDirectoryContext directoryContext,
         string file,
         int index,
         int total,
@@ -86,6 +87,7 @@ public sealed partial class BatchMuxViewModel
         try
         {
             var result = await _services.BatchScan.ScanAsync(
+                directoryContext,
                 file,
                 OutputDirectory,
                 update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update));

@@ -57,6 +57,45 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.False(result);
     }
 
+    [Fact]
+    public void AudioDescriptionButtonText_ReturnsCorrectionText_WhenMainVideoExists()
+    {
+        var viewModel = CreateViewModel();
+        SetPrivateField(viewModel, "_mainVideoPath", @"C:\Temp\episode.mp4");
+
+        Assert.Equal("AD korrigieren", viewModel.AudioDescriptionButtonText);
+    }
+
+    [Fact]
+    public void SubtitleDisplayText_ReturnsOnlyFileNames()
+    {
+        var viewModel = CreateViewModel();
+        SetPrivateField(viewModel, "_subtitlePaths", new List<string>
+        {
+            @"C:\Temp\untertitel-a.srt",
+            @"D:\Andere\untertitel-b.ass"
+        });
+
+        Assert.Equal(
+            "untertitel-a.srt" + Environment.NewLine + "untertitel-b.ass",
+            viewModel.SubtitleDisplayText);
+    }
+
+    [Fact]
+    public void AttachmentDisplayText_ReturnsOnlyFileNames()
+    {
+        var viewModel = CreateViewModel();
+        SetPrivateField(viewModel, "_attachmentPaths", new List<string>
+        {
+            @"C:\Temp\infos-a.txt",
+            @"D:\Andere\infos-b.txt"
+        });
+
+        Assert.Equal(
+            "infos-a.txt" + Environment.NewLine + "infos-b.txt",
+            viewModel.AttachmentDisplayText);
+    }
+
     private static SingleEpisodeMuxViewModel CreateViewModel()
     {
         var metadataService = new EpisodeMetadataLookupService(
@@ -89,7 +128,7 @@ public sealed class SingleEpisodeMuxViewModelTests
         return Assert.IsType<bool>(method!.Invoke(viewModel, [selectedVideoPath]));
     }
 
-    private static void SetPrivateField(object target, string fieldName, string value)
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
     {
         var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? target.GetType().BaseType?.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);

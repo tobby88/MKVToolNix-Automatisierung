@@ -104,14 +104,12 @@ public sealed class SeriesArchiveService
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
     /// <param name="request">Aktuelle Nutzereingaben für den Mux-Lauf.</param>
-    /// <param name="detected">Automatisch erkannte Quellen und Vorschläge.</param>
     /// <param name="plannedVideoPaths">Geplante Videodateien für den Lauf.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Archiventscheidung inklusive eventueller Arbeitskopie, zu übernehmender Tracks und Notizen.</returns>
     public async Task<ArchiveIntegrationDecision> PrepareAsync(
         string mkvMergePath,
         SeriesEpisodeMuxRequest request,
-        AutoDetectedEpisodeFiles detected,
         IReadOnlyList<string> plannedVideoPaths,
         CancellationToken cancellationToken = default)
     {

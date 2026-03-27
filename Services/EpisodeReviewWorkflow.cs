@@ -36,10 +36,10 @@ public interface IEpisodeReviewItem
 /// </summary>
 public sealed class EpisodeReviewWorkflow
 {
-    private readonly UserDialogService _dialogService;
+    private readonly IUserDialogService _dialogService;
     private readonly EpisodeMetadataLookupService _episodeMetadata;
 
-    public EpisodeReviewWorkflow(UserDialogService dialogService, EpisodeMetadataLookupService episodeMetadata)
+    public EpisodeReviewWorkflow(IUserDialogService dialogService, EpisodeMetadataLookupService episodeMetadata)
     {
         _dialogService = dialogService;
         _episodeMetadata = episodeMetadata;
@@ -74,8 +74,13 @@ public sealed class EpisodeReviewWorkflow
             if (result == MessageBoxResult.Yes)
             {
                 item.ApproveCurrentReviewTarget();
-                reportStatus(approvedStatusText, 100);
-                return true;
+                if (!item.RequiresManualCheck || item.IsManualCheckApproved)
+                {
+                    reportStatus(approvedStatusText, 100);
+                    return true;
+                }
+
+                continue;
             }
 
             var tentativeExclusions = new HashSet<string>(item.ExcludedSourcePaths, StringComparer.OrdinalIgnoreCase)

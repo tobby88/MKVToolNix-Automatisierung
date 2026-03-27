@@ -106,7 +106,7 @@ public sealed class MkvMergeProbeService
             return cachedMetadata.Value;
         }
 
-        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        using var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
         var tracks = GetTracksElement(trackDocument, inputFilePath);
 
         foreach (var track in tracks.EnumerateArray())
@@ -295,6 +295,12 @@ public sealed class MkvMergeProbeService
             return string.Empty;
         }
 
+        var repairedCommonSequences = RepairCommonMojibakeSequences(value);
+        if (!ContainsPotentialMojibakeMarker(repairedCommonSequences))
+        {
+            return repairedCommonSequences;
+        }
+
         if (!ContainsPotentialMojibakeMarker(value))
         {
             return value;
@@ -302,13 +308,26 @@ public sealed class MkvMergeProbeService
 
         try
         {
-            var repaired = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
-            return string.IsNullOrWhiteSpace(repaired) ? value : repaired;
+            var repaired = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(repairedCommonSequences));
+            return string.IsNullOrWhiteSpace(repaired) ? repairedCommonSequences : repaired;
         }
         catch
         {
-            return value;
+            return repairedCommonSequences;
         }
+    }
+
+    private static string RepairCommonMojibakeSequences(string value)
+    {
+        return value
+            .Replace("\u00C3\u00A4", "\u00E4", StringComparison.Ordinal)
+            .Replace("\u00C3\u00B6", "\u00F6", StringComparison.Ordinal)
+            .Replace("\u00C3\u00BC", "\u00FC", StringComparison.Ordinal)
+            .Replace("\u00C3\u0084", "\u00C4", StringComparison.Ordinal)
+            .Replace("\u00C3\u0096", "\u00D6", StringComparison.Ordinal)
+            .Replace("\u00C3\u009C", "\u00DC", StringComparison.Ordinal)
+            .Replace("\u00C3\u0178", "\u00DF", StringComparison.Ordinal)
+            .Replace("\u00C3\u009F", "\u00DF", StringComparison.Ordinal);
     }
 
     private static bool ContainsPotentialMojibakeMarker(string value)

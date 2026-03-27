@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -37,6 +36,17 @@ public sealed class BatchScanCoordinator
     }
 
     /// <summary>
+    /// Bereitet einen Batch-Ordner einmalig für mehrere Einzelscans vor.
+    /// </summary>
+    /// <param name="sourceDirectory">Zu scannender Quellordner.</param>
+    /// <returns>Wiederverwendbarer Ordnerkontext inklusive vorgefilterter Hauptvideos.</returns>
+    public BatchScanDirectoryContext CreateDirectoryContext(string sourceDirectory)
+    {
+        var detectionContext = _muxService.CreateDirectoryDetectionContext(sourceDirectory);
+        return new BatchScanDirectoryContext(sourceDirectory, detectionContext.MainVideoFiles, detectionContext);
+    }
+
+    /// <summary>
     /// Führt Erkennung, TVDB-Auflösung und finale Ausgabepfad-Bildung für eine einzelne Batch-Quelle aus.
     /// </summary>
     /// <param name="sourceFilePath">Pfad zur primären Videodatei.</param>
@@ -50,8 +60,35 @@ public sealed class BatchScanCoordinator
         Action<DetectionProgressUpdate>? onDetectionProgress = null,
         IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
+        var sourceDirectory = Path.GetDirectoryName(sourceFilePath)
+            ?? throw new InvalidOperationException("Der Ordner der Batch-Quelle konnte nicht bestimmt werden.");
+        return await ScanAsync(
+            CreateDirectoryContext(sourceDirectory),
+            sourceFilePath,
+            outputDirectory,
+            onDetectionProgress,
+            excludedSourcePaths);
+    }
+
+    /// <summary>
+    /// Führt Erkennung, TVDB-Auflösung und finale Ausgabepfad-Bildung für eine einzelne Batch-Quelle mit vorbereitetem Ordnerkontext aus.
+    /// </summary>
+    /// <param name="directoryContext">Vorbereiteter Batch-Ordnerkontext.</param>
+    /// <param name="sourceFilePath">Pfad zur primären Videodatei.</param>
+    /// <param name="outputDirectory">Aktuelle Zielwurzel für die Ausgabedatei.</param>
+    /// <param name="onDetectionProgress">Optionaler Callback für Fortschrittsmeldungen der Dateierkennung.</param>
+    /// <param name="excludedSourcePaths">Optionaler Satz an Dateipfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <returns>Gesamtergebnis aus lokaler Erkennung, Metadatenauflösung und Ausgabepfad.</returns>
+    public async Task<BatchScanCoordinatorResult> ScanAsync(
+        BatchScanDirectoryContext directoryContext,
+        string sourceFilePath,
+        string outputDirectory,
+        Action<DetectionProgressUpdate>? onDetectionProgress = null,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
+    {
         var detected = await _muxService.DetectFromSelectedVideoAsync(
             sourceFilePath,
+            directoryContext.DetectionContext,
             onDetectionProgress,
             excludedSourcePaths);
         var localGuess = new EpisodeMetadataGuess(
@@ -90,3 +127,11 @@ public sealed record BatchScanCoordinatorResult(
     EpisodeMetadataGuess LocalGuess,
     EpisodeMetadataResolutionResult MetadataResolution,
     string OutputPath);
+
+/// <summary>
+/// Vorbereiteter Batch-Ordnerkontext mit Hauptvideo-Liste und wiederverwendbarer Detection-Grundlage.
+/// </summary>
+public sealed record BatchScanDirectoryContext(
+    string SourceDirectory,
+    IReadOnlyList<string> MainVideoFiles,
+    SeriesEpisodeMuxPlanner.DirectoryDetectionContext DetectionContext);

@@ -7,7 +7,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Kapselt alle Dateidialoge, Bestätigungen und Shell-Öffnungen an einer Stelle.
 /// </summary>
-public sealed class UserDialogService
+public sealed class UserDialogService : IUserDialogService
 {
     public string? SelectMainVideo(string initialDirectory)
     {

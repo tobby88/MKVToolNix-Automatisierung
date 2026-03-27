@@ -363,29 +363,29 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<string> RelatedFilePaths,
         IReadOnlyList<AudioDescriptionCandidate> AudioDescriptionCandidates);
 
-    private sealed record TextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration)
+    internal sealed record TextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration)
     {
         public static TextMetadata Empty { get; } = new(null, null, null, null);
     }
 
-    private sealed record CandidateSeed(
+    internal sealed record CandidateSeed(
         string FilePath,
         string? AttachmentPath,
         TextMetadata TextMetadata,
         EpisodeIdentity Identity);
 
-    private sealed record EpisodeSeedCollection(
+    internal sealed record EpisodeSeedCollection(
         IReadOnlyList<CandidateSeed> AllEpisodeVideoSeeds,
         IReadOnlyList<CandidateSeed> NormalVideoSeeds,
         IReadOnlyList<CandidateSeed> AudioDescriptionSeeds);
 
-    private sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber, string Key);
-    private sealed record TitleDetails(string Title, string SeasonNumber, string EpisodeNumber);
-    private sealed record EpisodeNameParts(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber);
+    internal sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber, string Key);
+    internal sealed record TitleDetails(string Title, string SeasonNumber, string EpisodeNumber);
+    internal sealed record EpisodeNameParts(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber);
 
-    private abstract record EpisodeCandidateBase(EpisodeIdentity Identity, string Sender, int? DurationSeconds);
+    internal abstract record EpisodeCandidateBase(EpisodeIdentity Identity, string Sender, int? DurationSeconds);
 
-    private sealed record NormalVideoCandidate(
+    internal sealed record NormalVideoCandidate(
         string FilePath,
         EpisodeIdentity Identity,
         string Sender,
@@ -397,7 +397,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<string> SubtitlePaths,
         string? AttachmentPath) : EpisodeCandidateBase(Identity, Sender, DurationSeconds);
 
-    private sealed record AudioDescriptionCandidate(
+    internal sealed record AudioDescriptionCandidate(
         string FilePath,
         EpisodeIdentity Identity,
         string Sender,

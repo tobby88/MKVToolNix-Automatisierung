@@ -44,7 +44,17 @@ public sealed partial class SeriesEpisodeMuxPlanner
         Action<DetectionProgressUpdate>? onProgress = null,
         IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
-        if (onProgress is null
+        return DetectFromMainVideo(mainVideoPath, directoryContext: null, onProgress, excludedSourcePaths);
+    }
+
+    internal AutoDetectedEpisodeFiles DetectFromMainVideo(
+        string mainVideoPath,
+        DirectoryDetectionContext? directoryContext,
+        Action<DetectionProgressUpdate>? onProgress = null,
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
+    {
+        if (directoryContext is null
+            && onProgress is null
             && (excludedSourcePaths is null || excludedSourcePaths.Count == 0)
             && _autoDetectionCache.TryGetValue(mainVideoPath, out var cachedDetection))
         {
@@ -63,10 +73,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
             : new HashSet<string>(excludedSourcePaths, StringComparer.OrdinalIgnoreCase);
 
         var detected = EpisodeFileNameHelper.LooksLikeAudioDescription(mainVideoPath)
-            ? DetectFromAudioDescription(mainVideoPath, onProgress, excludedPathSet)
-            : DetectFromNormalVideo(mainVideoPath, onProgress, excludedPathSet);
+            ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet)
+            : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet);
 
-        if (onProgress is null && (excludedSourcePaths is null || excludedSourcePaths.Count == 0))
+        if (directoryContext is null
+            && onProgress is null
+            && (excludedSourcePaths is null || excludedSourcePaths.Count == 0))
         {
             lock (_cacheSync)
             {
@@ -75,6 +87,23 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         return detected;
+    }
+
+    public DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
+    {
+        if (!Directory.Exists(sourceDirectory))
+        {
+            throw new DirectoryNotFoundException($"Quellordner nicht gefunden: {sourceDirectory}");
+        }
+
+        var allFiles = Directory.GetFiles(sourceDirectory);
+        var companionFilesByBaseName = BuildCompanionFileLookup(allFiles);
+        var videoSeeds = allFiles
+            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
+            .Select(BuildCandidateSeed)
+            .ToList();
+
+        return new DirectoryDetectionContext(this, sourceDirectory, companionFilesByBaseName, videoSeeds);
     }
 
     public void InvalidatePlanningCaches()

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -7,11 +8,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
 {
     private AutoDetectedEpisodeFiles DetectFromNormalVideo(
         string mainVideoPath,
+        DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress,
         ISet<string>? excludedSourcePaths)
     {
         var context = BuildEpisodeDetectionContext(
             mainVideoPath,
+            directoryContext,
             onProgress,
             excludedSourcePaths,
             "Es konnten keine passenden Videoquellen fuer diese Episode gefunden werden.");
@@ -35,11 +38,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
     }
     private AutoDetectedEpisodeFiles DetectFromAudioDescription(
         string audioDescriptionPath,
+        DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress,
         ISet<string>? excludedSourcePaths)
     {
         var context = BuildEpisodeDetectionContext(
             audioDescriptionPath,
+            directoryContext,
             onProgress,
             excludedSourcePaths,
             "Zu der ausgewählten AD-Datei konnte keine passende Hauptdatei gefunden werden.");
@@ -67,6 +72,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     }
     private EpisodeDetectionContext BuildEpisodeDetectionContext(
         string selectedPath,
+        DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress,
         ISet<string>? excludedSourcePaths,
         string noVideoCandidatesMessage)
@@ -77,15 +83,31 @@ public sealed partial class SeriesEpisodeMuxPlanner
         ReportProgress(onProgress, "Suche mkvmerge...", 3);
         var mkvMergePath = _locator.FindMkvMergePath();
 
-        ReportProgress(onProgress, "Lese Dateien im Ordner...", 8);
-        var allFiles = Directory.GetFiles(directory);
-        var companionFilesByBaseName = BuildCompanionFileLookup(allFiles);
-        var selectedSeed = BuildCandidateSeed(selectedPath);
+        DirectoryDetectionContext preparedContext;
+        if (directoryContext is null)
+        {
+            ReportProgress(onProgress, "Lese Dateien im Ordner...", 8);
+            preparedContext = CreateDirectoryDetectionContext(directory);
+        }
+        else
+        {
+            if (!PathComparisonHelper.AreSamePath(directoryContext.SourceDirectory, directory))
+            {
+                throw new InvalidOperationException("Der vorbereitete Ordnerkontext passt nicht zur gewählten Datei.");
+            }
+
+            ReportProgress(onProgress, "Nutze vorbereiteten Ordnerkontext...", 8);
+            preparedContext = directoryContext;
+        }
+
+        var companionFilesByBaseName = preparedContext.CompanionFilesByBaseName;
+        var selectedSeed = preparedContext.GetSelectedSeed(selectedPath);
         var selectedIdentity = selectedSeed.Identity;
-        var episodeSeeds = CollectEpisodeSeeds(allFiles, selectedIdentity.Key);
+        var episodeSeeds = preparedContext.GetEpisodeSeeds(selectedSeed);
 
         ReportProgress(onProgress, $"Prüfe {episodeSeeds.NormalVideoSeeds.Count} passende Videoquelle(n)...", 12);
         var allNormalCandidates = BuildNormalVideoCandidates(
+            preparedContext,
             episodeSeeds.NormalVideoSeeds,
             mkvMergePath,
             companionFilesByBaseName,
@@ -112,7 +134,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
 
         ReportProgress(onProgress, $"Prüfe {audioDescriptionSeeds.Count} passende AD-Quelle(n)...", 76);
-        var audioDescriptionCandidates = BuildAudioDescriptionCandidates(audioDescriptionSeeds, onProgress, 76, 88);
+        var audioDescriptionCandidates = BuildAudioDescriptionCandidates(preparedContext, audioDescriptionSeeds, onProgress, 76, 88);
 
         return new EpisodeDetectionContext(
             directory,
@@ -199,21 +221,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return new CandidateSeed(filePath, attachmentPath, textMetadata, identity);
     }
 
-    private EpisodeSeedCollection CollectEpisodeSeeds(IEnumerable<string> allFiles, string episodeKey)
-    {
-        var episodeSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Select(BuildCandidateSeed)
-            .Where(seed => seed.Identity.Key == episodeKey)
-            .ToList();
-
-        return new EpisodeSeedCollection(
-            episodeSeeds,
-            episodeSeeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
-            episodeSeeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList());
-    }
-
     private List<NormalVideoCandidate> BuildNormalVideoCandidates(
+        DirectoryDetectionContext? directoryContext,
         IReadOnlyList<CandidateSeed> seeds,
         string mkvMergePath,
         IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName,
@@ -228,13 +237,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var seed = seeds[index];
             var percent = InterpolateProgress(startPercent, endPercent, index, Math.Max(1, seeds.Count));
             ReportProgress(onProgress, $"Analysiere Videoquelle {index + 1}/{seeds.Count}: {Path.GetFileName(seed.FilePath)}", percent);
-            candidates.Add(BuildNormalVideoCandidate(seed, mkvMergePath, companionFilesByBaseName));
+            candidates.Add(directoryContext?.GetOrCreateNormalVideoCandidate(seed, mkvMergePath) ?? BuildNormalVideoCandidate(seed, mkvMergePath, companionFilesByBaseName));
         }
 
         return candidates;
     }
 
     private List<AudioDescriptionCandidate> BuildAudioDescriptionCandidates(
+        DirectoryDetectionContext? directoryContext,
         IReadOnlyList<CandidateSeed> seeds,
         Action<DetectionProgressUpdate>? onProgress,
         int startPercent,
@@ -247,7 +257,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var seed = seeds[index];
             var percent = InterpolateProgress(startPercent, endPercent, index, Math.Max(1, seeds.Count));
             ReportProgress(onProgress, $"Analysiere AD-Quelle {index + 1}/{seeds.Count}: {Path.GetFileName(seed.FilePath)}", percent);
-            candidates.Add(BuildAudioDescriptionCandidate(seed));
+            candidates.Add(directoryContext?.GetOrCreateAudioDescriptionCandidate(seed) ?? BuildAudioDescriptionCandidate(seed));
         }
 
         return candidates;
@@ -296,7 +306,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var archiveDecision = await _archiveService.PrepareAsync(
             mkvMergePath,
             request,
-            detected,
             plannedVideoPaths,
             cancellationToken);
 
@@ -685,6 +694,97 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ?? throw new InvalidOperationException("Der Ordner der Videodatei konnte nicht bestimmt werden.");
         var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
         return Path.Combine(directory, fileNameWithoutExtension);
+    }
+
+    public sealed class DirectoryDetectionContext
+    {
+        private readonly SeriesEpisodeMuxPlanner _owner;
+        private readonly Dictionary<string, IReadOnlyList<string>> _companionFilesByBaseName;
+        private readonly Dictionary<string, CandidateSeed> _candidateSeedsByPath;
+        private readonly Dictionary<string, EpisodeSeedCollection> _episodeSeedsByKey;
+        private readonly ConcurrentDictionary<string, Lazy<NormalVideoCandidate>> _normalVideoCandidates;
+        private readonly ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>> _audioDescriptionCandidates;
+
+        internal DirectoryDetectionContext(
+            SeriesEpisodeMuxPlanner owner,
+            string sourceDirectory,
+            IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName,
+            IReadOnlyList<CandidateSeed> candidateSeeds)
+        {
+            _owner = owner;
+            SourceDirectory = sourceDirectory;
+            _companionFilesByBaseName = companionFilesByBaseName.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value,
+                StringComparer.OrdinalIgnoreCase);
+            _candidateSeedsByPath = candidateSeeds.ToDictionary(seed => seed.FilePath, seed => seed, StringComparer.OrdinalIgnoreCase);
+            _episodeSeedsByKey = candidateSeeds
+                .GroupBy(seed => seed.Identity.Key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group =>
+                    {
+                        var seeds = group.ToList();
+                        return new EpisodeSeedCollection(
+                            seeds,
+                            seeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
+                            seeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList());
+                    },
+                    StringComparer.OrdinalIgnoreCase);
+            _normalVideoCandidates = new ConcurrentDictionary<string, Lazy<NormalVideoCandidate>>(StringComparer.OrdinalIgnoreCase);
+            _audioDescriptionCandidates = new ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>>(StringComparer.OrdinalIgnoreCase);
+            MainVideoFiles = candidateSeeds
+                .Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
+                .Select(seed => seed.FilePath)
+                .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        public string SourceDirectory { get; }
+
+        public IReadOnlyList<string> MainVideoFiles { get; }
+
+        internal IReadOnlyDictionary<string, IReadOnlyList<string>> CompanionFilesByBaseName => _companionFilesByBaseName;
+
+        internal CandidateSeed GetSelectedSeed(string selectedPath)
+        {
+            return _candidateSeedsByPath.TryGetValue(selectedPath, out var selectedSeed)
+                ? selectedSeed
+                : _owner.BuildCandidateSeed(selectedPath);
+        }
+
+        internal EpisodeSeedCollection GetEpisodeSeeds(CandidateSeed selectedSeed)
+        {
+            if (_episodeSeedsByKey.TryGetValue(selectedSeed.Identity.Key, out var episodeSeeds))
+            {
+                return episodeSeeds;
+            }
+
+            return new EpisodeSeedCollection(
+                [selectedSeed],
+                EpisodeFileNameHelper.LooksLikeAudioDescription(selectedSeed.FilePath) ? [] : [selectedSeed],
+                EpisodeFileNameHelper.LooksLikeAudioDescription(selectedSeed.FilePath) ? [selectedSeed] : []);
+        }
+
+        internal NormalVideoCandidate GetOrCreateNormalVideoCandidate(CandidateSeed seed, string mkvMergePath)
+        {
+            var lazyCandidate = _normalVideoCandidates.GetOrAdd(
+                seed.FilePath,
+                _ => new Lazy<NormalVideoCandidate>(
+                    () => _owner.BuildNormalVideoCandidate(seed, mkvMergePath, CompanionFilesByBaseName),
+                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+            return lazyCandidate.Value;
+        }
+
+        internal AudioDescriptionCandidate GetOrCreateAudioDescriptionCandidate(CandidateSeed seed)
+        {
+            var lazyCandidate = _audioDescriptionCandidates.GetOrAdd(
+                seed.FilePath,
+                _ => new Lazy<AudioDescriptionCandidate>(
+                    () => _owner.BuildAudioDescriptionCandidate(seed),
+                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
+            return lazyCandidate.Value;
+        }
     }
 
 }

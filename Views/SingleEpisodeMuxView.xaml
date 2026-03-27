@@ -14,6 +14,16 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Top" />
         </Style>
+        <Style x:Key="EpisodeIndexTextBoxStyle" TargetType="TextBox">
+            <Style.Triggers>
+                <Trigger Property="Text" Value="xx">
+                    <Setter Property="Background" Value="#FFF4F4" />
+                    <Setter Property="BorderBrush" Value="#C85B5B" />
+                    <Setter Property="BorderThickness" Value="1.5" />
+                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -257,9 +267,19 @@
                             <ColumnDefinition Width="60" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" Text="Staffel" />
-                        <TextBox Grid.Column="1" Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="1"
+                                 Tag="Staffel fehlt oder ist noch ungültig."
+                                 Style="{StaticResource EpisodeIndexTextBoxStyle}"
+                                 PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
+                                 DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
+                                 Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
-                        <TextBox Grid.Column="4" Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBox Grid.Column="4"
+                                 Tag="Folge fehlt oder ist noch ungültig."
+                                 Style="{StaticResource EpisodeIndexTextBoxStyle}"
+                                 PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
+                                 DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
+                                 Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
                     </Grid>
                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" ToolTip="{Binding RescanButtonTooltip, Mode=OneWay}" Content="Auto-Erkennung neu" />
 

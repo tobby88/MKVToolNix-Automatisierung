@@ -63,10 +63,11 @@ public sealed partial class BatchMuxViewModel
             SetBusy(true);
             ClearEpisodeItems();
             ResetLog();
-            SetStatus("Scanne Ordner...", 0);
+            SetStatus("Bereite Batch-Scan vor...", 0);
 
             var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
-            var mainVideoFiles = _services.BatchScan.FindMainVideoFiles(SourceDirectory);
+            var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory));
+            var mainVideoFiles = directoryContext.MainVideoFiles;
 
             var total = mainVideoFiles.Count;
             if (total == 0)
@@ -82,6 +83,7 @@ public sealed partial class BatchMuxViewModel
             var scanResults = new BatchScanResult[total];
 
             var scanTasks = mainVideoFiles.Select((file, index) => ProcessBatchScanItemAsync(
+                directoryContext,
                 file,
                 index,
                 total,
