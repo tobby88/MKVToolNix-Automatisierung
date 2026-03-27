@@ -14,9 +14,17 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Remove="MkvToolnixAutomatisierung.Tests\**\*.cs" />
+    <Compile Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*.cs" />
+    <Compile Remove="TestTools\**\*.cs" />
     <EmbeddedResource Remove="MkvToolnixAutomatisierung.Tests\**\*" />
+    <EmbeddedResource Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
+    <EmbeddedResource Remove="TestTools\**\*" />
     <None Remove="MkvToolnixAutomatisierung.Tests\**\*" />
+    <None Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
+    <None Remove="TestTools\**\*" />
     <Page Remove="MkvToolnixAutomatisierung.Tests\**\*" />
+    <Page Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
+    <Page Remove="TestTools\**\*" />
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md">
