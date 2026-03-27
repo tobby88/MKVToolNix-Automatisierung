@@ -111,7 +111,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Single(outcome.MovedDoneFiles);
         Assert.Equal(movedDoneFile, outcome.MovedDoneFiles[0]);
         Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
-        Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
+        Assert.Equal(BatchEpisodeStatusKind.Success, item.StatusKind);
         Assert.Contains(logs, line => line.StartsWith("STARTE:", StringComparison.Ordinal));
         Assert.Contains(logs, line => line.StartsWith("DONE:", StringComparison.Ordinal));
         Assert.Equal(cleanupSource, Assert.Single(cleanup.LastMoveSourceFiles));
@@ -146,7 +146,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal(0, outcome.ErrorCount);
         Assert.Single(outcome.NewOutputFiles);
         Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
-        Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
+        Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
     }
 
     [Fact]

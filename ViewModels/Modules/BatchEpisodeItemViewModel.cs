@@ -296,9 +296,9 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         IsSelected = true;
     }
 
-    public void RefreshArchivePresence()
+    public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null)
     {
-        ApplyArchiveState();
+        ApplyArchiveState(statusOverride);
     }
 
     private void ApplyArchiveState(BatchEpisodeStatusKind? statusOverride = null)

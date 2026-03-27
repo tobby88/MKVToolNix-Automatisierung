@@ -109,7 +109,7 @@ internal sealed class BatchExecutionRunner
                 {
                     item.SetStatus(BatchEpisodeStatusKind.Success);
                     successCount++;
-                    item.RefreshArchivePresence();
+                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Success);
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
                         newOutputFiles.Add(item.OutputPath);
@@ -122,7 +122,7 @@ internal sealed class BatchExecutionRunner
                 {
                     item.SetStatus(BatchEpisodeStatusKind.Warning);
                     warningCount++;
-                    item.RefreshArchivePresence();
+                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning);
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
                         newOutputFiles.Add(item.OutputPath);
