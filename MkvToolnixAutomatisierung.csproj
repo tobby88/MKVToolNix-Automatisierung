@@ -19,7 +19,11 @@
     <Page Remove="MkvToolnixAutomatisierung.Tests\**\*" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md">
+    <None Update="README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+    <None Update="LICENSE.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>

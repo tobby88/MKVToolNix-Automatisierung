@@ -7,6 +7,21 @@ Verantwortlich für Konzeption, Code-Erstellung, Überarbeitungen und große Tei
 
 Eine bewusst schlanke WPF-App, um wiederkehrende MKVToolNix-Abläufe für einzelne Episoden oder ganze Ordner Schritt für Schritt zu automatisieren.
 
+## Lizenz
+
+Dieses Repository steht unter `CC BY-NC-SA 4.0`, siehe [LICENSE.md](LICENSE.md).
+
+Praktisch bedeutet das:
+
+- Nutzung und Weitergabe sind erlaubt
+- kommerzielle Nutzung ist nicht erlaubt
+- Wenn geänderte Fassungen weitergegeben oder veröffentlicht werden, müssen sie wieder unter derselben Lizenz stehen
+- der ursprüngliche Autor muss genannt bleiben
+
+Wichtig:
+
+Creative Commons empfiehlt diese Lizenzfamilie selbst nicht für Software. Sie wurde hier trotzdem bewusst gewählt, weil sie die gewünschten Bedingungen für dieses Repository am besten abbildet.
+
 ## Überblick
 
 Die Anwendung besteht aktuell aus zwei Modulen:
@@ -102,3 +117,11 @@ im Projektordner:
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek ist links unten konfigurierbar und wird lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
+
+## Veröffentlichung
+
+Vor einer Veröffentlichung oder Weitergabe sollte beachtet werden:
+
+- `.\Data\settings.json` kann lokale Toolpfade sowie TVDB-Zugangsdaten enthalten und gehört nicht ins Repo
+- `.\Logs` enthält Laufprotokolle und lokale Dateipfade und gehört ebenfalls nicht ins Repo
+- dieses Projekt ist wegen der `NC`-Klausel nicht als klassische Open-Source-Lizenz im OSI-Sinne zu verstehen
