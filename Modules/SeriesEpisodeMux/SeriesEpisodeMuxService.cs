@@ -46,6 +46,14 @@ public sealed class SeriesEpisodeMuxService
         return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
     }
 
+    /// <summary>
+    /// Führt die Dateierkennung auf einem STA-Thread mit bereits vorbereitetem Ordnerkontext aus.
+    /// </summary>
+    /// <param name="selectedVideoPath">Pfad zur vom Benutzer ausgewählten Videodatei.</param>
+    /// <param name="directoryContext">Vorbereiteter Ordnerkontext derselben Quelle für wiederholte Scans.</param>
+    /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
+    /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
         SeriesEpisodeMuxPlanner.DirectoryDetectionContext directoryContext,
@@ -56,6 +64,11 @@ public sealed class SeriesEpisodeMuxService
         return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, onProgress, excludedSourcePaths));
     }
 
+    /// <summary>
+    /// Bereitet einen Quellordner einmalig für mehrere Erkennungsläufe vor und liefert den wiederverwendbaren Kontext zurück.
+    /// </summary>
+    /// <param name="sourceDirectory">Ordner mit Episodenquellen und ihren Begleitdateien.</param>
+    /// <returns>Wiederverwendbarer Ordnerkontext für Batch-Scans.</returns>
     public SeriesEpisodeMuxPlanner.DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
     {
         return _planner.CreateDirectoryDetectionContext(sourceDirectory);

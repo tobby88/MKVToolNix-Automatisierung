@@ -82,6 +82,53 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         Assert.EndsWith("Zulu - Finale (S01_E03).mp4", files[1], StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ScanAsync_WithPreparedDirectoryContext_ReusesPreparedMetadataAcrossMultipleScans()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "prepared-context");
+        var archiveDirectory = Path.Combine(_tempDirectory, "prepared-context-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var firstVideoPath = CreateFile(sourceDirectory, "Quelle Eins.mp4");
+        var secondVideoPath = CreateFile(sourceDirectory, "Quelle Zwei.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Quelle Eins.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Auftakt (S02_E05)\r\nDauer: 00:42:00");
+        var secondAttachmentPath = CreateFile(
+            sourceDirectory,
+            "Quelle Zwei.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Finale (S02_E06)\r\nDauer: 00:43:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            firstVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            secondVideoPath,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
+            CreateAudioTrack(1, "AAC"));
+
+        var coordinator = CreateBatchScanCoordinator(archiveDirectory, new StubTvdbClient());
+        var directoryContext = coordinator.CreateDirectoryContext(sourceDirectory);
+
+        var firstResult = await coordinator.ScanAsync(directoryContext, firstVideoPath, archiveDirectory);
+        File.Delete(secondAttachmentPath);
+        var secondResult = await coordinator.ScanAsync(directoryContext, secondVideoPath, archiveDirectory);
+
+        Assert.Equal("Beispielserie", firstResult.Detected.SeriesName);
+        Assert.Equal("Auftakt", firstResult.Detected.SuggestedTitle);
+        Assert.Equal("02", firstResult.Detected.SeasonNumber);
+        Assert.Equal("05", firstResult.Detected.EpisodeNumber);
+        Assert.Equal("Beispielserie", secondResult.Detected.SeriesName);
+        Assert.Equal("Finale", secondResult.Detected.SuggestedTitle);
+        Assert.Equal("02", secondResult.Detected.SeasonNumber);
+        Assert.Equal("06", secondResult.Detected.EpisodeNumber);
+        Assert.Equal(
+            Path.Combine(archiveDirectory, "Beispielserie", "Season 2", "Beispielserie - S02E06 - Finale.mkv"),
+            secondResult.OutputPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

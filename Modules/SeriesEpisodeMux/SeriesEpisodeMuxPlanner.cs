@@ -89,23 +89,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return detected;
     }
 
-    public DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
-    {
-        if (!Directory.Exists(sourceDirectory))
-        {
-            throw new DirectoryNotFoundException($"Quellordner nicht gefunden: {sourceDirectory}");
-        }
-
-        var allFiles = Directory.GetFiles(sourceDirectory);
-        var companionFilesByBaseName = BuildCompanionFileLookup(allFiles);
-        var videoSeeds = allFiles
-            .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Select(BuildCandidateSeed)
-            .ToList();
-
-        return new DirectoryDetectionContext(this, sourceDirectory, companionFilesByBaseName, videoSeeds);
-    }
-
     public void InvalidatePlanningCaches()
     {
         lock (_cacheSync)
