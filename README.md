@@ -1,5 +1,10 @@
 # MKVToolNix-Automatisierung
 
+## Wichtiger Hinweis
+
+Dieses Projekt wurde vollständig KI-gestützt erstellt und weiterentwickelt.  
+Verantwortlich für Konzeption, Code-Erstellung, Überarbeitungen und große Teile der Dokumentation ist die KI, nicht ein klassisch manuell entwickeltes Teamprojekt.
+
 Eine bewusst schlanke WPF-App, um wiederkehrende MKVToolNix-Abläufe für einzelne Episoden oder ganze Ordner Schritt für Schritt zu automatisieren.
 
 ## Überblick
