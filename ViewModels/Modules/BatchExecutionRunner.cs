@@ -4,6 +4,9 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Führt die eigentliche Batch-Ausführung aus: Arbeitskopien, Mux-Läufe und Done-Verschiebungen.
+/// </summary>
 internal sealed class BatchExecutionRunner
 {
     private readonly AppServices _services;
@@ -192,11 +195,17 @@ internal sealed class BatchExecutionRunner
     }
 }
 
+/// <summary>
+/// Vorbereitete Liste einzigartiger Arbeitskopien für einen Batch-Lauf.
+/// </summary>
 internal sealed record BatchCopyPreparation(
     IReadOnlyList<FileCopyPlan> CopyPlans,
     IReadOnlyList<FileCopyPlan> CopyPlansToExecute,
     long TotalCopyBytes);
 
+/// <summary>
+/// Zusammenfassung eines kompletten Batch-Laufs für UI und Log-Speicherung.
+/// </summary>
 internal sealed record BatchExecutionOutcome(
     int SuccessCount,
     int WarningCount,

@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Baut die sichtbaren Status- und Hilfetexte für Episode- und Batch-UI konsistent an einer Stelle.
+/// </summary>
 internal static class EpisodeEditTextBuilder
 {
     public static string BuildManualCheckText(bool requiresManualCheck, bool isManualCheckApproved)

@@ -6,12 +6,18 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Beschreibt nur, ob das aktuelle Ausgabeziel schon existiert oder neu erzeugt würde.
+/// </summary>
 public enum EpisodeArchiveState
 {
     New = 0,
     Existing = 1
 }
 
+/// <summary>
+/// Gemeinsame Basis für Einzel- und Batch-Episoden mit allen editierbaren Metadaten und Prüfzuständen.
+/// </summary>
 public partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInput, IEpisodeReviewItem
 {
     private string _localSeriesName = string.Empty;

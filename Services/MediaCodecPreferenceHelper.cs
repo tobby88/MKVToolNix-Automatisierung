@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Zentrale Präferenzregeln für Codec-Vergleiche beim Archivabgleich.
+/// </summary>
 internal static class MediaCodecPreferenceHelper
 {
     public static int GetVideoCodecPreferenceRank(string codecLabel)

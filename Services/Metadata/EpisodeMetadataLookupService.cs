@@ -2,6 +2,9 @@ using System.Collections.Concurrent;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
+/// <summary>
+/// Führt TVDB-Suche, Caching und automatische Auswahlregeln für Serien- und Episodenmetadaten zusammen.
+/// </summary>
 public sealed class EpisodeMetadataLookupService
 {
     private readonly AppMetadataStore _store;

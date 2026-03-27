@@ -3,6 +3,9 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Bündelt die gemeinsam genutzten Fachservices, damit ViewModels mit einer stabilen Service-Oberfläche arbeiten können.
+/// </summary>
 public sealed record AppServices(
     SeriesEpisodeMuxService SeriesEpisodeMux,
     EpisodePlanCoordinator EpisodePlans,

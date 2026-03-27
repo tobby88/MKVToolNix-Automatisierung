@@ -4,6 +4,9 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+/// <summary>
+/// Herzstück der fachlichen Planung: erkennt Dateien, bereitet Archivintegration vor und erzeugt Mux-Pläne.
+/// </summary>
 public sealed partial class SeriesEpisodeMuxPlanner
 {
     private static readonly HashSet<string> SupportedSubtitleExtensions = new(StringComparer.OrdinalIgnoreCase)

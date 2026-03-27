@@ -2,6 +2,9 @@
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+/// <summary>
+/// Vollständig aufgelöster Plan für einen einzelnen mkvmerge-Aufruf inklusive Archiv- und Zusatzspurenlogik.
+/// </summary>
 public sealed class SeriesEpisodeMuxPlan
 {
     public SeriesEpisodeMuxPlan(
@@ -431,6 +434,9 @@ public sealed class SeriesEpisodeMuxPlan
     }
 }
 
+/// <summary>
+/// Kurzfassung für die UI, wie eine Episode relativ zur Bibliothek eingeordnet wird.
+/// </summary>
 public sealed record EpisodeUsageSummary(
     string ArchiveAction,
     string ArchiveDetails,

@@ -2,6 +2,9 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+/// <summary>
+/// Fassadenservice über Planner und Prozessausführung für Erkennung, Vorschau und echten Mux-Lauf.
+/// </summary>
 public sealed class SeriesEpisodeMuxService
 {
     private readonly SeriesEpisodeMuxPlanner _planner;
@@ -125,6 +128,12 @@ public sealed class SeriesEpisodeMuxService
     }
 }
 
+/// <summary>
+/// Fortschrittssignal während eines laufenden mkvmerge-Prozesses.
+/// </summary>
 public sealed record MuxExecutionUpdate(int? ProgressPercent, bool HasWarning);
 
+/// <summary>
+/// Verdichtetes Ergebnis eines abgeschlossenen mkvmerge-Prozesses.
+/// </summary>
 public sealed record MuxExecutionResult(int ExitCode, bool HasWarning, int? LastProgressPercent);

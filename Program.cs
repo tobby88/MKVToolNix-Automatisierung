@@ -2,6 +2,9 @@
 
 namespace MkvToolnixAutomatisierung;
 
+/// <summary>
+/// Startet die WPF-Anwendung bewusst ohne klassischen App.xaml-Bootstrap, damit der Einstieg komplett im Code nachvollziehbar bleibt.
+/// </summary>
 internal static class Program
 {
     [STAThread]

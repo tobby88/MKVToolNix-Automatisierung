@@ -4,6 +4,9 @@ using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Gemeinsame Oberfläche für Einzel- und Batch-Episoden, damit Review-Dialoge dieselbe Logik verwenden können.
+/// </summary>
 public interface IEpisodeReviewItem
 {
     string ReviewTitle { get; }
@@ -28,6 +31,9 @@ public interface IEpisodeReviewItem
     void ApproveMetadataReview(string statusText);
 }
 
+/// <summary>
+/// Kapselt Pflichtprüfungen für Quelle und TVDB-Metadaten inklusive Dialogabfolge.
+/// </summary>
 public sealed class EpisodeReviewWorkflow
 {
     private readonly UserDialogService _dialogService;
@@ -147,6 +153,9 @@ public sealed class EpisodeReviewWorkflow
     }
 }
 
+/// <summary>
+/// Ergebnis des manuellen TVDB-Dialogs.
+/// </summary>
 public enum EpisodeMetadataReviewOutcome
 {
     Cancelled,

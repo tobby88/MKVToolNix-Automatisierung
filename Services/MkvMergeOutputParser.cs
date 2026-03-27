@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Übersetzt mkvmerge-Konsolenzeilen in strukturierte Fortschritts- und Warnereignisse.
+/// </summary>
 public sealed class MkvMergeOutputParser
 {
     private static readonly Regex NamedProgressRegex = new(
@@ -32,4 +35,7 @@ public sealed class MkvMergeOutputParser
     }
 }
 
+/// <summary>
+/// Einzelnes, aus der Prozessausgabe abgeleitetes Statusereignis.
+/// </summary>
 public sealed record MkvMergeOutputEvent(int? ProgressPercent, bool IsWarning);

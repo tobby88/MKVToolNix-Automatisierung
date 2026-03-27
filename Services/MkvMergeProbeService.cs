@@ -6,6 +6,9 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Fragt mkvmerge für Container- und Track-Metadaten ab und hält diese dateibezogen im Speicher vor.
+/// </summary>
 public sealed class MkvMergeProbeService
 {
     private static readonly char[] MojibakeMarkers = [(char)0x00C3, (char)0x00E2];

@@ -2,6 +2,9 @@ using Microsoft.VisualBasic.FileIO;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Verschiebt oder löscht temporäre/verbrauchte Dateien nach erfolgreicher Verarbeitung.
+/// </summary>
 public class EpisodeCleanupService
 {
     public virtual async Task<FileMoveResult> MoveFilesToDirectoryAsync(
@@ -139,10 +142,16 @@ public class EpisodeCleanupService
     }
 }
 
+/// <summary>
+/// Rückgabe eines Verschiebevorgangs inklusive Dateien, die nicht bewegt werden konnten.
+/// </summary>
 public sealed record FileMoveResult(
     IReadOnlyList<string> MovedFiles,
     IReadOnlyList<string> FailedFiles);
 
+/// <summary>
+/// Rückgabe eines Papierkorb-Laufs inklusive Fehlkandidaten.
+/// </summary>
 public sealed record FileRecycleResult(
     IReadOnlyList<string> RecycledFiles,
     IReadOnlyList<string> FailedFiles);

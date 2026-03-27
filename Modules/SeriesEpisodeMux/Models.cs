@@ -1,5 +1,8 @@
 ﻿namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+/// <summary>
+/// Vom UI zusammengestellte Eingabe für einen konkreten Mux-Vorgang.
+/// </summary>
 public sealed record SeriesEpisodeMuxRequest(
     string MainVideoPath,
     string? AudioDescriptionPath,
@@ -8,6 +11,9 @@ public sealed record SeriesEpisodeMuxRequest(
     string OutputFilePath,
     string Title);
 
+/// <summary>
+/// Ergebnis der automatischen Dateierkennung rund um eine Episode.
+/// </summary>
 public sealed record AutoDetectedEpisodeFiles(
     string MainVideoPath,
     IReadOnlyList<string> AdditionalVideoPaths,
@@ -24,10 +30,16 @@ public sealed record AutoDetectedEpisodeFiles(
     IReadOnlyList<string> ManualCheckFilePaths,
     IReadOnlyList<string> Notes);
 
+/// <summary>
+/// Fortschrittsmeldung aus der Dateierkennung.
+/// </summary>
 public sealed record DetectionProgressUpdate(
     string StatusText,
     int ProgressPercent);
 
+/// <summary>
+/// Beschreibt eine wiederverwendbare oder neu anzulegende Arbeitskopie einer bestehenden Archivdatei.
+/// </summary>
 public sealed record FileCopyPlan(
     string SourceFilePath,
     string DestinationFilePath,
@@ -50,6 +62,9 @@ public sealed record FileCopyPlan(
     }
 }
 
+/// <summary>
+/// Verdichtete Primär-Metadaten einer Videodatei für Qualitätsvergleiche.
+/// </summary>
 public sealed record MediaTrackMetadata(
     int VideoTrackId,
     int AudioTrackId,
@@ -60,6 +75,9 @@ public sealed record MediaTrackMetadata(
     string VideoLanguage,
     string AudioLanguage);
 
+/// <summary>
+/// Metadaten der ersten relevanten Audiospur einer Quelldatei.
+/// </summary>
 public sealed record AudioTrackMetadata(
     int TrackId,
     string CodecLabel,
@@ -67,6 +85,9 @@ public sealed record AudioTrackMetadata(
     string TrackName,
     bool IsVisualImpaired);
 
+/// <summary>
+/// Vollständige Track-Metadaten eines vorhandenen Containers.
+/// </summary>
 public sealed record ContainerTrackMetadata(
     int TrackId,
     string Type,
@@ -78,22 +99,37 @@ public sealed record ContainerTrackMetadata(
     bool IsHearingImpaired,
     bool IsDefaultTrack);
 
+/// <summary>
+/// Anhänge, die beim Archivabgleich erhalten bleiben können.
+/// </summary>
 public sealed record ContainerAttachmentMetadata(string FileName);
 
+/// <summary>
+/// Zusammenfassung aller Tracks und Anhänge eines Containers.
+/// </summary>
 public sealed record ContainerMetadata(
     IReadOnlyList<ContainerTrackMetadata> Tracks,
     IReadOnlyList<ContainerAttachmentMetadata> Attachments);
 
+/// <summary>
+/// Beschreibt eine einzubindende Videospur im finalen Mux-Plan.
+/// </summary>
 public sealed record VideoSourcePlan(
     string FilePath,
     int TrackId,
     string TrackName,
     bool IsDefaultTrack);
 
+/// <summary>
+/// Zielnamen für automatisch erzeugte Audio- und AD-Trackbezeichnungen.
+/// </summary>
 public sealed record EpisodeTrackMetadata(
     string AudioTrackName,
     string AudioDescriptionTrackName);
 
+/// <summary>
+/// Externe oder eingebettete Untertitelquelle für den finalen Mux.
+/// </summary>
 public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null, string? SourceLabel = null)
 {
     public bool IsEmbedded => EmbeddedTrackId is not null;
@@ -105,6 +141,9 @@ public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? Embed
         : Path.GetFileName(FilePath);
 }
 
+/// <summary>
+/// Normalisierte Darstellung eines Untertiteltyps inklusive Sortierpräferenz.
+/// </summary>
 public sealed record SubtitleKind(string DisplayName, int SortRank)
 {
     public static SubtitleKind FromExtension(string extension) => extension.ToLowerInvariant() switch
@@ -124,6 +163,9 @@ public sealed record SubtitleKind(string DisplayName, int SortRank)
     };
 }
 
+/// <summary>
+/// Vereinfachtes Auflösungslabel, das nur für relative Qualitätsentscheidungen gebraucht wird.
+/// </summary>
 public sealed record ResolutionLabel(string Value)
 {
     public static ResolutionLabel FromWidth(int width)

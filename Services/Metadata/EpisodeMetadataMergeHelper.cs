@@ -2,6 +2,9 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+/// <summary>
+/// Vereinheitlicht, wie TVDB-Daten oder lokale Fallbacks in erkannte Episodenobjekte zurückgemischt werden.
+/// </summary>
 public static class EpisodeMetadataMergeHelper
 {
     public static AutoDetectedEpisodeFiles ApplySelection(

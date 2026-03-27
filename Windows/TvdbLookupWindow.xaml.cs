@@ -4,6 +4,9 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Windows;
 
+/// <summary>
+/// Reines Dialogfenster für die manuelle TVDB-Auswahl; die eigentliche Logik steckt im zugehörigen Workflow/VM-Kontext.
+/// </summary>
 public partial class TvdbLookupWindow : Window
 {
     private readonly EpisodeMetadataLookupService _lookupService;

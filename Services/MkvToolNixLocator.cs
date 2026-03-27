@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Findet die mkvmerge.exe aus den gespeicherten Toolpfaden.
+/// </summary>
 public sealed class MkvToolNixLocator
 {
     private const string DownloadsFolderName = "Downloads";

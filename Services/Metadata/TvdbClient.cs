@@ -5,6 +5,9 @@ using System.Text.Json;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
+/// <summary>
+/// Schlanker TVDB-v4-Client mit gemeinsamem Auth-Token und Seiteniteration für Serien-/Episodenabfragen.
+/// </summary>
 public class TvdbClient
 {
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");

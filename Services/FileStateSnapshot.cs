@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Minimaler Dateisnapshot, um Cache-Einträge an Größe und Änderungszeit zu koppeln.
+/// </summary>
 internal readonly record struct FileStateSnapshot(long Length, DateTime LastWriteTimeUtc)
 {
     public static FileStateSnapshot? TryCreate(string? filePath)
@@ -14,6 +17,9 @@ internal readonly record struct FileStateSnapshot(long Length, DateTime LastWrit
     }
 }
 
+/// <summary>
+/// Hält einen gecachten Wert zusammen mit dem Dateisnapshot, aus dem er abgeleitet wurde.
+/// </summary>
 internal sealed record CachedFileValue<T>(FileStateSnapshot Snapshot, T Value)
 {
     public bool Matches(FileStateSnapshot? snapshot)

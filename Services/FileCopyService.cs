@@ -2,6 +2,9 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Kopiert vorhandene Archivdateien als lokale Arbeitskopien, bevor sie erweitert oder neu gemuxt werden.
+/// </summary>
 public class FileCopyService
 {
     private const int BufferSize = 1024 * 1024;

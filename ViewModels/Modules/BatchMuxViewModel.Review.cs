@@ -6,6 +6,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+// Dieser Partial enthält Sammelaktionen rund um Pflichtprüfungen und TVDB-Review im Batch.
 public sealed partial class BatchMuxViewModel
 {
     private void EditSelectedAudioDescription()

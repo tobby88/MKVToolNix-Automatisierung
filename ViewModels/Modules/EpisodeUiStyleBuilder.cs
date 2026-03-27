@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Liefert die zentral definierten Badge-Farben, damit Statusdarstellung nicht in XAML verteilt werden muss.
+/// </summary>
 internal static class EpisodeUiStyleBuilder
 {
     public static string BuildArchiveBadgeBackground(EpisodeArchiveState archiveState)

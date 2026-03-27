@@ -3,6 +3,9 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Rohes Scan-Ergebnis, bevor daraus eine bindbare Batch-Zeile gebaut wird.
+/// </summary>
 internal sealed record BatchScanResult(
     int Index,
     string SourcePath,
@@ -12,6 +15,9 @@ internal sealed record BatchScanResult(
     string? OutputPath,
     string? ErrorMessage);
 
+/// <summary>
+/// Repräsentiert eine Zeile im Batch-Bildschirm inklusive Auswahl-, Status- und Review-Zustand.
+/// </summary>
 public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;

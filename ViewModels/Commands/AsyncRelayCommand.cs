@@ -3,6 +3,9 @@ using System.Windows.Input;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Commands;
 
+/// <summary>
+/// ICommand-Variante für asynchrone Aktionen; das ViewModel steuert Fehlerbehandlung und Busy-State außerhalb dieser Hülle.
+/// </summary>
 public sealed class AsyncRelayCommand : ICommand
 {
     private readonly Func<Task> _executeAsync;

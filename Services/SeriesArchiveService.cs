@@ -2,6 +2,9 @@
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Verwaltet die Serienbibliothek als bevorzugtes Ziel und entscheidet, wie bestehende Archiv-MKV-Dateien integriert werden.
+/// </summary>
 public sealed class SeriesArchiveService
 {
     public const string DefaultArchiveRootDirectory = @"Z:\Videos\Serien";
@@ -320,6 +323,9 @@ public sealed class SeriesArchiveService
     }
 }
 
+/// <summary>
+/// Beschreibt, wie eine bereits vorhandene Archivdatei in einen neuen Mux-Plan eingebunden werden soll.
+/// </summary>
 public sealed record ArchiveIntegrationDecision(
     string OutputFilePath,
     bool SkipMux,

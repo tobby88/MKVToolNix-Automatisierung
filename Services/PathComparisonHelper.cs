@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Vereinheitlicht robuste Pfadvergleiche, damit Root-/Relative-Checks nicht an Slash- oder Case-Unterschieden scheitern.
+/// </summary>
 internal static class PathComparisonHelper
 {
     public static bool AreSamePath(string? left, string? right)

@@ -5,6 +5,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+// Dieser Partial enthält die bindbaren Eigenschaften und ihre abgeleiteten Anzeigeinformationen.
 public partial class EpisodeEditModel
 {
 

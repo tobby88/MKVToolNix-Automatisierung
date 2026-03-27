@@ -5,6 +5,9 @@ using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung.Views;
 
+/// <summary>
+/// Enthält nur UI-spezifische Eingabefilter, die im ViewModel keinen Platz haben.
+/// </summary>
 public partial class BatchMuxView : UserControl
 {
     public BatchMuxView()

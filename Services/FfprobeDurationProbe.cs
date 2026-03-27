@@ -4,6 +4,9 @@ using System.Globalization;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Liest Laufzeiten über ffprobe und cached Ergebnisse dateibezogen.
+/// </summary>
 public sealed class FfprobeDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);

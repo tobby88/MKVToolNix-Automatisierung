@@ -6,6 +6,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+// Dieser Partial enthält die Dateiauswahl und das Anwenden frischer Erkennungsergebnisse auf einzelne Batch-Zeilen.
 public sealed partial class BatchMuxViewModel
 {
     private async Task ApplyDetectionToItemAsync(BatchEpisodeItemViewModel item, string selectedVideoPath)

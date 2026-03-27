@@ -2,6 +2,9 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Hält die kombinierten App-Einstellungen im Speicher und serialisiert Zugriffe auf die JSON-Datei.
+/// </summary>
 public sealed class AppSettingsStore
 {
     private readonly object _sync = new();

@@ -4,6 +4,7 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+// Dieser Partial enthält alle string- und metadatenbasierten Heuristiken für Dateinamen, TXT-Begleitdateien und Mojibake-Reparatur.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
     private EpisodeIdentity ParseEpisodeIdentity(string filePath, TextMetadata textMetadata)

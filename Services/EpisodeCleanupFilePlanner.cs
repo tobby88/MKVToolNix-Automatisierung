@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Bestimmt, welche Quelldateien nach einem erfolgreichen Lauf gefahrlos in den Done-Ordner verschoben werden dürfen.
+/// </summary>
 public sealed class EpisodeCleanupFilePlanner
 {
     private readonly EpisodeOutputPathService _outputPaths;

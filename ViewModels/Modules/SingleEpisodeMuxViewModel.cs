@@ -10,6 +10,9 @@ using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Zentrales ViewModel des Einzelmodus; die Partial-Dateien trennen Auswahl/Erkennung und Ausführung.
+/// </summary>
 public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 {
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];

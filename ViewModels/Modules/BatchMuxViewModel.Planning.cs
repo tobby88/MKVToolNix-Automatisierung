@@ -6,6 +6,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+// Dieser Partial übersetzt sichtbare Batch-Zeilen in konkrete Mux-Pläne.
 public sealed partial class BatchMuxViewModel
 {
     private async Task RefreshComparisonPlansAsync(

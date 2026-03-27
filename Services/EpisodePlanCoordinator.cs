@@ -2,6 +2,9 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Minimale Eingabeoberfläche, damit Planerzeugung aus unterschiedlichen ViewModels heraus wiederverwendbar bleibt.
+/// </summary>
 public interface IEpisodePlanInput
 {
     string MainVideoPath { get; }
@@ -12,6 +15,9 @@ public interface IEpisodePlanInput
     string TitleForMux { get; }
 }
 
+/// <summary>
+/// Erzeugt Mux-Pläne aus den aktuell sichtbaren Eingaben eines Moduls.
+/// </summary>
 public sealed class EpisodePlanCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;

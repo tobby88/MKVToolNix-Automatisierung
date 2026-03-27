@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Baut Ausgabepfade für neue Folgen und kann vorgeschlagene Archivpfade in benutzerdefinierte Zielwurzeln umsetzen.
+/// </summary>
 public sealed class EpisodeOutputPathService
 {
     private readonly SeriesArchiveService _archiveService;

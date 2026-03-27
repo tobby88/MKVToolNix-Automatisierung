@@ -4,6 +4,9 @@ using System.Runtime.InteropServices;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Liest Laufzeiten über Windows-Shell-Eigenschaften als Fallback, wenn ffprobe nicht verfügbar ist.
+/// </summary>
 public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);

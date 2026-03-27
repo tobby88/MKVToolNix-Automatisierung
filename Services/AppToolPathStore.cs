@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Liest und schreibt ausschließlich den Toolpfad-Teil der kombinierten Einstellungen.
+/// </summary>
 public sealed class AppToolPathStore
 {
     private readonly AppSettingsStore _settingsStore;
@@ -28,6 +31,9 @@ public sealed class AppToolPathStore
     public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
+/// <summary>
+/// Persistente Pfade für externe Werkzeuge, die die App optional oder zwingend benötigt.
+/// </summary>
 public sealed class AppToolPathSettings
 {
     public string FfprobePath { get; set; } = string.Empty;

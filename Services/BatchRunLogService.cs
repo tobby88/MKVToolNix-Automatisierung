@@ -2,6 +2,9 @@ using System.Text;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Persistiert den Abschluss eines Batch-Laufs als menschenlesbares Log plus separate Liste neuer Ausgabedateien.
+/// </summary>
 public sealed class BatchRunLogService
 {
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
@@ -107,6 +110,9 @@ public sealed class BatchRunLogService
     }
 }
 
+/// <summary>
+/// Beschreibt die geschriebenen Batch-Artefakte, damit die UI Pfade und neue Dateien anzeigen kann.
+/// </summary>
 public sealed record BatchRunLogSaveResult(
     string BatchLogPath,
     string? NewOutputListPath,

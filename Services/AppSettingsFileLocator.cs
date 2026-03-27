@@ -4,6 +4,9 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Kapselt die portable Dateiablage für Einstellungen inklusive Backup- und Korruptions-Fallback.
+/// </summary>
 public static class AppSettingsFileLocator
 {
     public static readonly JsonSerializerOptions SerializerOptions = new()
@@ -224,6 +227,9 @@ public static class AppSettingsFileLocator
     }
 }
 
+/// <summary>
+/// Vereint alle dauerhaft gespeicherten App-Bereiche in einem gemeinsamen JSON-Dokument.
+/// </summary>
 public sealed class CombinedAppSettings
 {
     public AppMetadataSettings? Metadata { get; set; } = new();
@@ -243,6 +249,9 @@ public sealed class CombinedAppSettings
     }
 }
 
+/// <summary>
+/// Beschreibt, aus welcher Quelle die App-Einstellungen erfolgreich geladen wurden.
+/// </summary>
 public enum AppSettingsLoadStatus
 {
     LoadedPrimary,
@@ -251,6 +260,9 @@ public enum AppSettingsLoadStatus
     LoadedDefaultsAfterFailure
 }
 
+/// <summary>
+/// Liefert geladene Einstellungen zusammen mit Diagnoseinformationen für den Startdialog.
+/// </summary>
 public sealed record AppSettingsLoadResult(
     CombinedAppSettings Settings,
     AppSettingsLoadStatus Status,
@@ -259,6 +271,9 @@ public sealed record AppSettingsLoadResult(
     public bool HasWarning => !string.IsNullOrWhiteSpace(WarningMessage);
 }
 
+/// <summary>
+/// Interner Zwischenschritt eines einzelnen Ladeversuchs für Primär- oder Backup-Datei.
+/// </summary>
 internal sealed record AppSettingsLoadAttempt(
     string FilePath,
     bool Exists,

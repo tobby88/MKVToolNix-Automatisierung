@@ -10,6 +10,7 @@
         MinHeight="760"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
+        <!-- Verknüpft Modul-ViewModels mit ihren Ansichten, damit die rechte Seite rein datengetrieben umschaltet. -->
         <DataTemplate DataType="{x:Type moduleVm:SingleEpisodeMuxViewModel}">
             <views:SingleEpisodeMuxView />
         </DataTemplate>
@@ -25,6 +26,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
+        <!-- Linke Modulleiste plus globale Status-/Konfigurationsaktionen. -->
         <Border Grid.Column="0"
                 Padding="12"
                 Background="#F5F5F5"
@@ -184,6 +186,7 @@
             </Grid>
         </Border>
 
+        <!-- Rechte Hauptfläche hostet jeweils das aktuell gewählte Modul. -->
         <ContentControl Grid.Column="2" Content="{Binding SelectedModule.ContentViewModel}" />
     </Grid>
 </Window>

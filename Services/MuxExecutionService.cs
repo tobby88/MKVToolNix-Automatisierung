@@ -2,6 +2,9 @@ using System.Diagnostics;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Startet den externen mkvmerge-Prozess und liefert seine Konsolenausgabe fortlaufend an den Aufrufer zurück.
+/// </summary>
 public sealed class MuxExecutionService
 {
     public async Task<int> ExecuteAsync(string mkvMergePath, IReadOnlyList<string> arguments, Action<string>? onOutput = null)

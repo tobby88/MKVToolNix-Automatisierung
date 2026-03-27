@@ -8,6 +8,7 @@
         MinHeight="620"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
+        <!-- Oben: Zugangsdaten und Suchparameter. Mitte: Serien-/Episodenauswahl. Unten: Übernahme oder Abbruch. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

@@ -2,6 +2,7 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
+// Dieser Partial enthält die eigentliche Quellenauswahl: Kandidaten gruppieren, priorisieren und zu einer Episode zusammenführen.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
     private AutoDetectedEpisodeFiles DetectFromNormalVideo(

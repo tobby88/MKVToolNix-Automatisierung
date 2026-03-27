@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Kleine zentrale Heuristiken für Episodendateinamen, damit Benennung und AD-Erkennung nicht im Projekt verteilt sind.
+/// </summary>
 internal static class EpisodeFileNameHelper
 {
     public static bool LooksLikeAudioDescription(string filePath)

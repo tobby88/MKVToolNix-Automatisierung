@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Kapselt den dauerhaft gespeicherten Standardpfad der Serienbibliothek.
+/// </summary>
 public sealed class AppArchiveSettingsStore
 {
     private readonly AppSettingsStore _settingsStore;
@@ -26,6 +29,9 @@ public sealed class AppArchiveSettingsStore
     }
 }
 
+/// <summary>
+/// Persistente Einstellungen rund um die Archiv-/Bibliotheksintegration.
+/// </summary>
 public sealed class AppArchiveSettings
 {
     public string DefaultSeriesArchiveRootPath { get; set; } = SeriesArchiveService.DefaultArchiveRootDirectory;

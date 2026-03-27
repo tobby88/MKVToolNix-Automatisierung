@@ -7,6 +7,9 @@ using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung.ViewModels;
 
+/// <summary>
+/// Verwaltet Modulnavigation und globale Status-/Konfigurationsaktionen im Hauptfenster.
+/// </summary>
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
@@ -341,4 +344,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 }
 
+/// <summary>
+/// Beschreibt einen auswählbaren Eintrag in der linken Modulnavigation.
+/// </summary>
 public sealed record ModuleNavigationItem(string Title, string Description, object ContentViewModel);

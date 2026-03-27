@@ -2,6 +2,9 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
+/// <summary>
+/// Verknüpft Arbeitskopie, Mux-Ausführung und temporäres Aufräumen zu einem robusten Einzellauf.
+/// </summary>
 public class MuxWorkflowCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
@@ -74,4 +77,7 @@ public class MuxWorkflowCoordinator
     }
 }
 
+/// <summary>
+/// Fortschrittsmeldung für die Vorbereitung einer lokalen Arbeitskopie.
+/// </summary>
 public sealed record WorkingCopyPreparationUpdate(int ProgressPercent, bool ReusesExistingCopy);

@@ -1,5 +1,8 @@
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
+/// <summary>
+/// Rechnet die mehrphasige Batch-Ausführung in eine einzige UI-Fortschrittsanzeige um.
+/// </summary>
 internal sealed class BatchRunProgressTracker
 {
     private const double PlanningStart = 0d;

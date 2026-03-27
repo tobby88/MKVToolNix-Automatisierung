@@ -6,6 +6,9 @@ using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung;
 
+/// <summary>
+/// Zentraler Composition Root der App: hier werden alle langlebigen Services und ViewModels einmalig verdrahtet.
+/// </summary>
 internal sealed class AppCompositionRoot
 {
     public AppComposition Create()
@@ -74,6 +77,9 @@ internal sealed class AppCompositionRoot
     }
 }
 
+/// <summary>
+/// Bündelt das Ergebnis des Bootstrap-Vorgangs, damit Startcode und Fenstererzeugung nicht jede Abhängigkeit einzeln tragen müssen.
+/// </summary>
 internal sealed record AppComposition(
     UserDialogService DialogService,
     AppSettingsLoadResult SettingsLoadResult,

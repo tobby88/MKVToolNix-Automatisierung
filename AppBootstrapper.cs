@@ -6,6 +6,9 @@ using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung;
 
+/// <summary>
+/// Baut das Hauptfenster auf und zeigt Startwarnungen an, bevor die eigentliche UI sichtbar wird.
+/// </summary>
 internal sealed class AppBootstrapper
 {
     public MainWindow CreateMainWindow()
