@@ -20,11 +20,6 @@ internal sealed class AppBootstrapper
             composition.DialogService.ShowWarning("Portable Daten", composition.SettingsLoadResult.WarningMessage!);
         }
 
-        if (!composition.Services.Archive.IsArchiveAvailable())
-        {
-            composition.DialogService.ShowWarning("Serienbibliothek", composition.Services.Archive.BuildArchiveUnavailableWarningMessage());
-        }
-
         return new MainWindow(composition.MainWindowViewModel);
     }
 }

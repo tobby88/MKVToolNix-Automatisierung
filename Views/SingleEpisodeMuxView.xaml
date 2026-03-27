@@ -14,6 +14,12 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Top" />
         </Style>
+        <!-- Mehrzeilige Dateilisten dürfen etwas wachsen, bleiben aber bewusst kompakt. -->
+        <Style x:Key="CompactListSurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="MaxHeight" Value="92" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
         <Style x:Key="EpisodeIndexTextBoxStyle" TargetType="TextBox">
             <Style.Triggers>
                 <Trigger Property="Text" Value="xx">
@@ -349,7 +355,7 @@
                 <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="{Binding AudioDescriptionButtonText, Mode=OneWay}" />
 
                 <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
-                <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="56" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding SubtitlePaths, Mode=OneWay}">
                             <ItemsControl.ItemTemplate>
@@ -365,7 +371,7 @@
                 <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectSubtitlesCommand}" Content="Untertitel korrigieren" />
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Metadaten-Anhänge (.txt)" />
-                <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="56" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding AttachmentPaths, Mode=OneWay}">
                             <ItemsControl.ItemTemplate>

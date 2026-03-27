@@ -131,6 +131,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(ArchiveStatusText));
             OnPropertyChanged(nameof(ArchiveStatusTooltip));
+            OnPropertyChanged(nameof(HasArchiveNotice));
+            OnPropertyChanged(nameof(ArchiveNoticeText));
         }
     }
 
@@ -147,6 +149,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _archiveRootDirectory = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ArchiveStatusTooltip));
+            OnPropertyChanged(nameof(ArchiveNoticeText));
         }
     }
 
@@ -173,6 +176,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string ArchiveStatusTooltip => IsArchiveAvailable
         ? $"Serienbibliothek gefunden:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern."
         : $"Konfigurierte Serienbibliothek nicht erreichbar:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern.";
+
+    public bool HasArchiveNotice => !IsArchiveAvailable;
+
+    public string ArchiveNoticeText => IsArchiveAvailable
+        ? string.Empty
+        : "Serienbibliothek aktuell nicht erreichbar."
+            + Environment.NewLine
+            + "Automatische Ausgabepfade nutzen deshalb vorerst den jeweiligen Quellordner.";
 
     public string PortableModeText => "Portable: lokale Daten in .\\Data";
 

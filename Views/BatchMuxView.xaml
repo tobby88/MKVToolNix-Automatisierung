@@ -14,6 +14,12 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Top" />
         </Style>
+        <!-- Detailflächen dürfen für mehrere Einträge etwas wachsen, ohne den Detailbereich unnötig aufzublähen. -->
+        <Style x:Key="CompactListSurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="MaxHeight" Value="104" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
         <Style x:Key="EpisodeIndexTextBoxStyle" TargetType="TextBox">
             <Style.Triggers>
                 <Trigger Property="Text" Value="xx">
@@ -340,7 +346,7 @@
                                             <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
                                                        Text="{Binding SelectedEpisodeItem.MetadataDisplayText, Mode=OneWay}" />
                                         </Border>
-                                        <Border Margin="0,4,12,4" Height="52" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                        <Border Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                                 <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
                                                            Text="{Binding SelectedEpisodeItem.MetadataStatusText, Mode=OneWay}" />
@@ -366,7 +372,7 @@
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Gefundene Quellen" />
-                                    <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Height="64" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                    <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.RequestedSourcePaths, Mode=OneWay}">
                                                 <ItemsControl.ItemTemplate>
@@ -382,7 +388,7 @@
                                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Quelle pr&#252;fen" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
-                                    <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Height="48" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                    <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
                                                        Text="{Binding SelectedEpisodeItem.MainVideoDisplayText, Mode=OneWay}" />
@@ -391,7 +397,7 @@
                                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RedetectSelectedEpisodeCommand}" ToolTip="{Binding RedetectSelectedEpisodeTooltip, Mode=OneWay}" Content="Video neu erkennen" />
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Weitere Videos und AD" />
-                                    <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Height="72" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                    <Border Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
                                                        Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
@@ -400,7 +406,7 @@
                                     <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
-                                    <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Height="72" Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                    <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.SubtitlePaths, Mode=OneWay}">
                                                 <ItemsControl.ItemTemplate>
@@ -434,8 +440,7 @@
                                     <Border Grid.Row="0"
                                             Grid.Column="1"
                                             Margin="0,4,12,4"
-                                            Height="64"
-                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                            Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.AttachmentPaths, Mode=OneWay}">
                                                 <ItemsControl.ItemTemplate>
@@ -476,8 +481,7 @@
                                             Grid.Column="1"
                                             Grid.ColumnSpan="2"
                                             Margin="0,4,0,4"
-                                            Height="64"
-                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                            Style="{StaticResource CompactListSurfaceBorderStyle}">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                                             <ItemsControl ItemsSource="{Binding SelectedEpisodeItem.Notes, Mode=OneWay}">
                                                 <ItemsControl.ItemTemplate>

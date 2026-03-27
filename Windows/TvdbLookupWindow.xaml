@@ -15,7 +15,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,12" IsEnabled="{Binding IsInteractive}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -27,22 +27,28 @@
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
-            <TextBox x:Name="ApiKeyTextBox"
-                     Grid.Row="0"
+            <TextBox Grid.Row="0"
                      Grid.Column="1"
                      Margin="0,4,12,4"
+                     Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
                      ToolTip="TVDB-API-Schl&#252;ssel f&#252;r die automatische Serien- und Episodensuche." />
-            <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Click="SaveSettingsButton_Click" Content="Speichern" />
+            <Button Grid.Row="0"
+                    Grid.Column="2"
+                    Margin="0,2,0,2"
+                    Padding="10,6"
+                    IsEnabled="{Binding IsInteractive}"
+                    Click="SaveSettingsButton_Click"
+                    Content="Speichern" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
-            <TextBox x:Name="PinTextBox"
-                     Grid.Row="1"
+            <TextBox Grid.Row="1"
                      Grid.Column="1"
                      Margin="0,4,12,4"
+                     Text="{Binding Pin, UpdateSourceTrigger=PropertyChanged}"
                      ToolTip="Nur eintragen, wenn TVDB zus&#228;tzlich eine PIN verlangt." />
         </Grid>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" IsEnabled="{Binding IsInteractive}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -67,12 +73,12 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock x:Name="GuessSummaryTextBlock"
-                               Grid.Row="0"
+                    <TextBlock Grid.Row="0"
                                Margin="0,0,0,8"
+                               Text="{Binding GuessSummaryText}"
                                TextWrapping="Wrap" />
-                    <TextBlock x:Name="ComparisonSummaryTextBlock"
-                               Grid.Row="1"
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding ComparisonSummaryText}"
                                TextWrapping="Wrap"
                                Foreground="#334A62" />
                 </Grid>
@@ -89,14 +95,24 @@
                         <ColumnDefinition Width="140" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBox x:Name="SeriesSearchTextBox"
-                             Grid.Row="0"
+                    <TextBox Grid.Row="0"
                              Grid.Column="0"
                              Margin="0,0,12,8"
+                             Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Seriennamen suchen oder anpassen. Beim &#214;ffnen wird bereits automatisch gesucht." />
-                    <Button Grid.Row="0" Grid.Column="1" Padding="10,6" Click="SearchSeriesButton_Click" Content="Neu suchen" />
+                    <Button Grid.Row="0"
+                            Grid.Column="1"
+                            Padding="10,6"
+                            Click="SearchSeriesButton_Click"
+                            Content="Neu suchen" />
 
-                    <ListBox x:Name="SeriesResultsListBox" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" SelectionChanged="SeriesResultsListBox_SelectionChanged">
+                    <ListBox x:Name="SeriesResultsListBox"
+                             Grid.Row="1"
+                             Grid.Column="0"
+                             Grid.ColumnSpan="2"
+                             ItemsSource="{Binding SeriesResults}"
+                             SelectedItem="{Binding SelectedSeriesItem, Mode=TwoWay}"
+                             SelectionChanged="SeriesResultsListBox_SelectionChanged">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
@@ -116,14 +132,16 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBox x:Name="EpisodeSearchTextBox"
-                             Grid.Row="0"
+                    <TextBox Grid.Row="0"
                              Grid.Column="0"
                              Margin="0,0,0,8"
-                             ToolTip="Episodenliste der gew&#228;hlten Serie filtern."
-                             TextChanged="EpisodeSearchTextBox_TextChanged" />
+                             Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Episodenliste der gew&#228;hlten Serie filtern." />
 
-                    <ListBox x:Name="EpisodeResultsListBox" Grid.Row="1" Grid.Column="0" SelectionChanged="EpisodeResultsListBox_SelectionChanged">
+                    <ListBox Grid.Row="1"
+                             Grid.Column="0"
+                             ItemsSource="{Binding EpisodeResults}"
+                             SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
@@ -135,15 +153,23 @@
         </Grid>
 
         <DockPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock x:Name="StatusTextBlock"
-                       DockPanel.Dock="Left"
+            <TextBlock DockPanel.Dock="Left"
                        VerticalAlignment="Center"
                        TextWrapping="Wrap"
-                       Text="Bereit" />
+                       Text="{Binding StatusText}" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Width="190" Margin="0,0,12,0" Padding="10,6" Click="KeepLocalButton_Click" Content="Lokale Erkennung behalten" />
+                <Button Width="190"
+                        Margin="0,0,12,0"
+                        Padding="10,6"
+                        IsEnabled="{Binding IsInteractive}"
+                        Click="KeepLocalButton_Click"
+                        Content="Lokale Erkennung behalten" />
                 <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
-                <Button Width="140" Padding="10,6" Click="ApplyButton_Click" Content="übernehmen" />
+                <Button Width="140"
+                        Padding="10,6"
+                        IsEnabled="{Binding CanApply}"
+                        Click="ApplyButton_Click"
+                        Content="Übernehmen" />
             </StackPanel>
         </DockPanel>
     </Grid>
