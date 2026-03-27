@@ -14,6 +14,7 @@ public sealed class TvdbClient
         BaseAddress = BaseAddress,
         Timeout = TimeSpan.FromSeconds(30)
     };
+    private readonly SemaphoreSlim _authSync = new(1, 1);
 
     private string? _currentApiKey;
     private string? _currentPin;
@@ -125,46 +126,64 @@ public sealed class TvdbClient
 
     private async Task EnsureAuthenticatedAsync(string apiKey, string? pin, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(_bearerToken)
-            && _tokenValidUntilUtc > DateTimeOffset.UtcNow.AddMinutes(5)
-            && string.Equals(_currentApiKey, apiKey, StringComparison.Ordinal)
-            && string.Equals(_currentPin ?? string.Empty, pin ?? string.Empty, StringComparison.Ordinal))
+        if (HasReusableToken(apiKey, pin))
         {
             return;
         }
 
-        var payload = new Dictionary<string, string>
+        await _authSync.WaitAsync(cancellationToken);
+        try
         {
-            ["apikey"] = apiKey
-        };
+            if (HasReusableToken(apiKey, pin))
+            {
+                return;
+            }
 
-        if (!string.IsNullOrWhiteSpace(pin))
-        {
-            payload["pin"] = pin;
+            var payload = new Dictionary<string, string>
+            {
+                ["apikey"] = apiKey
+            };
+
+            if (!string.IsNullOrWhiteSpace(pin))
+            {
+                payload["pin"] = pin;
+            }
+
+            using var response = await _httpClient.PostAsJsonAsync("login", payload, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using var document = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(cancellationToken),
+                cancellationToken: cancellationToken);
+
+            var token = document.RootElement
+                .GetProperty("data")
+                .GetProperty("token")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                throw new InvalidOperationException("TVDB hat kein Bearer-Token geliefert.");
+            }
+
+            _currentApiKey = apiKey;
+            _currentPin = pin;
+            _bearerToken = token;
+            _tokenValidUntilUtc = DateTimeOffset.UtcNow.AddDays(30);
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
-
-        using var response = await _httpClient.PostAsJsonAsync("login", payload, cancellationToken);
-        response.EnsureSuccessStatusCode();
-
-        using var document = await JsonDocument.ParseAsync(
-            await response.Content.ReadAsStreamAsync(cancellationToken),
-            cancellationToken: cancellationToken);
-
-        var token = document.RootElement
-            .GetProperty("data")
-            .GetProperty("token")
-            .GetString();
-
-        if (string.IsNullOrWhiteSpace(token))
+        finally
         {
-            throw new InvalidOperationException("TVDB hat kein Bearer-Token geliefert.");
+            _authSync.Release();
         }
+    }
 
-        _currentApiKey = apiKey;
-        _currentPin = pin;
-        _bearerToken = token;
-        _tokenValidUntilUtc = DateTimeOffset.UtcNow.AddDays(30);
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    private bool HasReusableToken(string apiKey, string? pin)
+    {
+        return !string.IsNullOrWhiteSpace(_bearerToken)
+            && _tokenValidUntilUtc > DateTimeOffset.UtcNow.AddMinutes(5)
+            && string.Equals(_currentApiKey, apiKey, StringComparison.Ordinal)
+            && string.Equals(_currentPin ?? string.Empty, pin ?? string.Empty, StringComparison.Ordinal);
     }
 
     private static bool HasNextPage(JsonElement rootElement)

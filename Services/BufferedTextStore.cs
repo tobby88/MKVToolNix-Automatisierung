@@ -44,6 +44,14 @@ public sealed class BufferedTextStore
         _scheduleFlush(Flush);
     }
 
+    public string GetTextSnapshot()
+    {
+        lock (_sync)
+        {
+            return _buffer.ToString();
+        }
+    }
+
     private void Flush()
     {
         string text;

@@ -13,4 +13,5 @@ public sealed record AppServices(
     EpisodeMetadataLookupService EpisodeMetadata,
     FileCopyService FileCopy,
     EpisodeCleanupService Cleanup,
-    MuxWorkflowCoordinator MuxWorkflow);
+    MuxWorkflowCoordinator MuxWorkflow,
+    BatchRunLogService BatchLogs);

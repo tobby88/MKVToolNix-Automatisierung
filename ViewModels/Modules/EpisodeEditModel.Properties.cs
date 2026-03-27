@@ -299,10 +299,10 @@ public partial class EpisodeEditModel
 
     public string ManualCheckText => EpisodeEditTextBuilder.BuildManualCheckText(RequiresManualCheck, IsManualCheckApproved);
 
-    public string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault();
+    public string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault(path => !_approvedReviewPaths.Contains(path));
 
     public bool IsManualCheckApproved => !RequiresManualCheck
-        || string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase);
+        || string.IsNullOrWhiteSpace(CurrentReviewTargetPath);
 
     public bool HasPendingChecks => HasPendingManualCheck || HasPendingMetadataReview;
 

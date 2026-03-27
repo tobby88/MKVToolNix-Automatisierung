@@ -167,19 +167,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return normalized;
     }
 
-    private static bool LooksLikeAudioDescription(string filePath)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        return fileName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
-    }
-
-    private static string SanitizeFileName(string fileName)
-    {
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        return string.Concat(fileName.Select(character => invalidCharacters.Contains(character) ? '_' : character));
-    }
-
     private static string NormalizeSender(string? sender)
     {
         return string.IsNullOrWhiteSpace(sender) ? "Unbekannt" : sender.Trim();
@@ -219,16 +206,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         return 5;
-    }
-
-    private static int GetCodecPreferenceRank(string codecLabel)
-    {
-        return codecLabel.ToUpperInvariant() switch
-        {
-            "H.264" => 0,
-            "H.265" => 1,
-            _ => 2
-        };
     }
 
     private int? ReadDurationSeconds(string filePath, TimeSpan? fallbackDuration)

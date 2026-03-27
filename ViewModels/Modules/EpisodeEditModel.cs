@@ -43,7 +43,7 @@ public partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInpu
     private string _detectionSeedPath = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
-    private string? _approvedReviewPath;
+    private readonly HashSet<string> _approvedReviewPaths = new(StringComparer.OrdinalIgnoreCase);
 
     protected EpisodeEditModel()
     {

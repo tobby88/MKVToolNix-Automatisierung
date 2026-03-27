@@ -23,7 +23,7 @@ public sealed class BatchScanCoordinator
     public IReadOnlyList<string> FindMainVideoFiles(string sourceDirectory)
     {
         return Directory.GetFiles(sourceDirectory, "*.mp4")
-            .Where(file => !LooksLikeAudioDescription(file))
+            .Where(file => !EpisodeFileNameHelper.LooksLikeAudioDescription(file))
             .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -63,13 +63,6 @@ public sealed class BatchScanCoordinator
             outputDirectory);
 
         return new BatchScanCoordinatorResult(detected, localGuess, metadataResolution, outputPath);
-    }
-
-    private static bool LooksLikeAudioDescription(string filePath)
-    {
-        var fileName = Path.GetFileNameWithoutExtension(filePath);
-        return fileName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
     }
 }
 

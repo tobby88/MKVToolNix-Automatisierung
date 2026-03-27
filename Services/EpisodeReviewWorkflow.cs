@@ -7,6 +7,10 @@ namespace MkvToolnixAutomatisierung.Services;
 public interface IEpisodeReviewItem
 {
     string ReviewTitle { get; }
+    string SeriesName { get; }
+    string SeasonNumber { get; }
+    string EpisodeNumber { get; }
+    string Title { get; }
     bool RequiresManualCheck { get; }
     bool IsManualCheckApproved { get; }
     string? CurrentReviewTargetPath { get; }
@@ -102,10 +106,10 @@ public sealed class EpisodeReviewWorkflow
         reportStatus(reviewStatusText, currentProgress);
 
         var guess = new EpisodeMetadataGuess(
-            item.LocalSeriesName,
-            item.LocalTitle,
-            item.LocalSeasonNumber,
-            item.LocalEpisodeNumber);
+            item.SeriesName,
+            item.Title,
+            item.SeasonNumber,
+            item.EpisodeNumber);
 
         var dialog = new TvdbLookupWindow(_episodeMetadata, guess)
         {

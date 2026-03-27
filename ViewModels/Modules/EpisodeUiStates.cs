@@ -26,7 +26,8 @@ public enum OutputTargetBadgeState
 {
     Open = 0,
     NewForLibrary = 1,
-    InLibrary = 2
+    InLibrary = 2,
+    CustomTarget = 3
 }
 
 public enum BatchEpisodeStatusKind

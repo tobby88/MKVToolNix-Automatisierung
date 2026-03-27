@@ -21,9 +21,15 @@ public sealed partial class BatchMuxViewModel
         SourceDirectory = path;
         if (string.IsNullOrWhiteSpace(OutputDirectory))
         {
-            OutputDirectory = Directory.Exists(SeriesArchiveService.ArchiveRootDirectory)
-                ? SeriesArchiveService.ArchiveRootDirectory
-                : path;
+            if (_services.Archive.IsArchiveAvailable())
+            {
+                OutputDirectory = SeriesArchiveService.ArchiveRootDirectory;
+            }
+            else
+            {
+                OutputDirectory = path;
+                _dialogService.ShowWarning("Serienbibliothek", _services.Archive.BuildArchiveUnavailableWarningMessage());
+            }
         }
 
         ResetLog();

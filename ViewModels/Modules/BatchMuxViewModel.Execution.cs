@@ -155,11 +155,16 @@ public sealed partial class BatchMuxViewModel
             }
 
             await OfferBatchDoneCleanupAsync(doneDirectory, movedDoneFiles, progressTracker);
-            WriteNewArchiveFileReport(newArchiveFiles);
+            var logSaveResult = PersistBatchRunArtifacts(newArchiveFiles, successCount, warningCount, errorCount);
 
             SetStatus(
                 $"Batch abgeschlossen: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler",
                 100);
+
+            if (logSaveResult is not null)
+            {
+                ShowBatchRunArtifactInfo(logSaveResult);
+            }
         }
         finally
         {
@@ -254,7 +259,11 @@ public sealed partial class BatchMuxViewModel
         }
     }
 
-    private void WriteNewArchiveFileReport(IReadOnlyList<string> newArchiveFiles)
+    private BatchRunLogSaveResult? PersistBatchRunArtifacts(
+        IReadOnlyList<string> newArchiveFiles,
+        int successCount,
+        int warningCount,
+        int errorCount)
     {
         var files = newArchiveFiles
             .Where(File.Exists)
@@ -264,29 +273,59 @@ public sealed partial class BatchMuxViewModel
 
         if (files.Count == 0)
         {
-            return;
+            AppendLog(string.Empty);
+            AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT: keine");
         }
-
-        AppendLog(string.Empty);
-        AppendLog("NEU IN SERIENBIBLIOTHEK EINGEF\u00DCGT:");
-        foreach (var file in files)
+        else
         {
-            AppendLog("  " + file);
+            AppendLog(string.Empty);
+            AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT:");
+            foreach (var file in files)
+            {
+                AppendLog("  " + file);
+            }
         }
 
-        var timeStamp = DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss");
-        var reportPath = Path.Combine(SourceDirectory, $"Neu in Serienbibliothek - {timeStamp}.txt");
-        File.WriteAllLines(reportPath,
-        [
-            "Neu in Serienbibliothek eingef\u00FCgte Dateien",
-            $"Erstellt am: {DateTime.Now:dd.MM.yyyy HH:mm:ss}",
-            string.Empty,
-            .. files
-        ]);
+        try
+        {
+            return _services.BatchLogs.SaveBatchRunArtifacts(
+                SourceDirectory,
+                OutputDirectory,
+                _logBuffer.GetTextSnapshot(),
+                files,
+                successCount,
+                warningCount,
+                errorCount);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"LOG-FEHLER: {ex.Message}");
+            _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
+            return null;
+        }
+    }
 
-        _dialogService.ShowInfo(
-            "Neue Dateien in der Serienbibliothek",
-            $"{files.Count} neue Datei(en) wurden neu in der Serienbibliothek angelegt.\n\nListe im Protokoll und in:\n{reportPath}");
+    private void ShowBatchRunArtifactInfo(BatchRunLogSaveResult logSaveResult)
+    {
+        var lines = new List<string>
+        {
+            $"Batch-Protokoll gespeichert unter:",
+            logSaveResult.BatchLogPath
+        };
+
+        if (logSaveResult.NewArchiveFiles.Count > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"{logSaveResult.NewArchiveFiles.Count} neue Datei(en) wurden neu in der Serienbibliothek angelegt.");
+
+            if (!string.IsNullOrWhiteSpace(logSaveResult.NewArchiveListPath))
+            {
+                lines.Add("Liste für Emby-Katalogisierung:");
+                lines.Add(logSaveResult.NewArchiveListPath!);
+            }
+        }
+
+        _dialogService.ShowInfo("Batch-Protokoll", string.Join(Environment.NewLine, lines));
     }
 
     private async Task CopyArchiveFilesAsync(

@@ -23,7 +23,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Reservierte Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Cache` und `.\Logs`.
+- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data` und `.\Logs`.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
 
@@ -52,6 +52,12 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 4. Offene Pflichtprüfungen mit `Pflichtchecks starten` oder einzeln im Detailbereich erledigen.
 5. `Batch starten`.
 6. Danach Protokoll, neue Bibliotheksdateien und den optionalen `done`-Ordner prüfen.
+
+Nach jedem Batch-Lauf:
+
+- bleibt das Batch-Protokoll in der GUI sichtbar
+- wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
+- wird dort auch eine Liste neuer Bibliotheksdateien gespeichert, damit sie anschließend manuell in Emby katalogisiert werden können
 
 ## Unterstützte Dateien
 
@@ -88,4 +94,4 @@ im Projektordner:
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `C:\Users\tobby\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
-- Portable Daten, Cache und Logs bleiben im Anwendungsordner.
+- Portable Daten und Logs bleiben im Anwendungsordner.

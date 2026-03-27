@@ -40,27 +40,19 @@ public static class EpisodeMetadataMergeHelper
         string title)
     {
         var normalizedSeriesName = string.IsNullOrWhiteSpace(seriesName) ? "Unbekannte Serie" : seriesName.Trim();
-        var normalizedSeasonNumber = NormalizeEpisodeNumber(seasonNumber);
-        var normalizedEpisodeNumber = NormalizeEpisodeNumber(episodeNumber);
         var normalizedTitle = string.IsNullOrWhiteSpace(title) ? "Unbekannter Titel" : title.Trim();
 
-        var fileName = $"{normalizedSeriesName} - S{normalizedSeasonNumber}E{normalizedEpisodeNumber} - {normalizedTitle}.mkv";
-        return Path.Combine(directory, SanitizeFileName(fileName));
+        return Path.Combine(
+            directory,
+            EpisodeFileNameHelper.BuildEpisodeFileName(
+                normalizedSeriesName,
+                seasonNumber,
+                episodeNumber,
+                normalizedTitle));
     }
 
     public static string NormalizeEpisodeNumber(string? value)
     {
-        if (int.TryParse(value, out var number) && number >= 0)
-        {
-            return number.ToString("00");
-        }
-
-        return "xx";
-    }
-
-    private static string SanitizeFileName(string fileName)
-    {
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        return string.Concat(fileName.Select(character => invalidCharacters.Contains(character) ? '_' : character));
+        return EpisodeFileNameHelper.NormalizeEpisodeNumber(value);
     }
 }

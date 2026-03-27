@@ -102,9 +102,9 @@ public sealed partial class SingleEpisodeMuxViewModel
             SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
             var automaticMetadata = await ApplyAutomaticMetadataAsync(detected);
             detected = automaticMetadata.Detected;
-            var resolvedTitle = string.IsNullOrWhiteSpace(Title) || Title == _lastSuggestedTitle
-                ? detected.SuggestedTitle
-                : Title;
+            var resolvedTitle = ShouldPreserveManualTitle(selectedVideoPath)
+                ? Title
+                : detected.SuggestedTitle;
 
             ApplySharedState(() =>
             {
@@ -491,6 +491,18 @@ public sealed partial class SingleEpisodeMuxViewModel
         }
 
         return (detected, resolution);
+    }
+
+    private bool ShouldPreserveManualTitle(string selectedVideoPath)
+    {
+        if (string.IsNullOrWhiteSpace(Title)
+            || string.Equals(Title, _lastSuggestedTitle, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return PathComparisonHelper.AreSamePath(selectedVideoPath, DetectionSeedPath)
+            || PathComparisonHelper.AreSamePath(selectedVideoPath, MainVideoPath);
     }
 
     public override void ApproveMetadataReview(string statusText)

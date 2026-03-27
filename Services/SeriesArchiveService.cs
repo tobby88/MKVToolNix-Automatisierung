@@ -15,7 +15,7 @@ public sealed class SeriesArchiveService
 
     public string BuildSuggestedOutputPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)
     {
-        if (!Directory.Exists(ArchiveRootDirectory))
+        if (!IsArchiveAvailable())
         {
             return EpisodeMetadataPath(fallbackDirectory, seriesName, seasonNumber, episodeNumber, title);
         }
@@ -29,13 +29,27 @@ public sealed class SeriesArchiveService
             SanitizePathPart(seriesName),
             seasonFolderName);
 
-        var fileName = $"{seriesName} - S{NormalizeEpisodeNumber(seasonNumber)}E{NormalizeEpisodeNumber(episodeNumber)} - {title}.mkv";
-        return Path.Combine(targetDirectory, SanitizeFileName(fileName));
+        return Path.Combine(targetDirectory, EpisodeFileNameHelper.BuildEpisodeFileName(seriesName, seasonNumber, episodeNumber, title));
     }
 
     public bool IsArchivePath(string outputFilePath)
     {
         return PathComparisonHelper.IsPathWithinRoot(outputFilePath, ArchiveRootDirectory);
+    }
+
+    public bool IsArchiveAvailable()
+    {
+        return Directory.Exists(ArchiveRootDirectory);
+    }
+
+    public string BuildArchiveUnavailableWarningMessage()
+    {
+        return "Die Standard-Serienbibliothek ist aktuell nicht erreichbar:"
+            + Environment.NewLine
+            + ArchiveRootDirectory
+            + Environment.NewLine
+            + Environment.NewLine
+            + "Automatische Ausgabepfade verwenden deshalb vorerst den jeweiligen Quellordner.";
     }
 
     public async Task<ArchiveIntegrationDecision> PrepareAsync(
@@ -80,7 +94,7 @@ public sealed class SeriesArchiveService
 
         var bestExistingVideo = existingVideoTracks
             .OrderByDescending(track => track.VideoWidth)
-            .ThenBy(track => GetCodecPreferenceRank(track.CodecLabel))
+            .ThenBy(track => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(track.CodecLabel))
             .ThenBy(track => track.TrackId)
             .FirstOrDefault();
 
@@ -223,17 +237,8 @@ public sealed class SeriesArchiveService
             return newVideo.VideoWidth > existingVideo.VideoWidth;
         }
 
-        return GetCodecPreferenceRank(newVideo.VideoCodecLabel) < GetCodecPreferenceRank(existingVideo.CodecLabel);
-    }
-
-    private static int GetCodecPreferenceRank(string codecLabel)
-    {
-        return codecLabel.ToUpperInvariant() switch
-        {
-            "H.264" => 0,
-            "H.265" => 1,
-            _ => 2
-        };
+        return MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(newVideo.VideoCodecLabel)
+            < MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(existingVideo.CodecLabel);
     }
 
     private static IReadOnlyList<string> BuildAttachmentPathsForUsedVideos(IEnumerable<string> usedVideoPaths)
@@ -270,26 +275,12 @@ public sealed class SeriesArchiveService
 
     private static string EpisodeMetadataPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)
     {
-        var fileName = $"{seriesName} - S{NormalizeEpisodeNumber(seasonNumber)}E{NormalizeEpisodeNumber(episodeNumber)} - {title}.mkv";
-        return Path.Combine(fallbackDirectory, SanitizeFileName(fileName));
-    }
-
-    private static string NormalizeEpisodeNumber(string? value)
-    {
-        return int.TryParse(value, out var number) && number >= 0
-            ? number.ToString("00")
-            : "xx";
+        return Path.Combine(fallbackDirectory, EpisodeFileNameHelper.BuildEpisodeFileName(seriesName, seasonNumber, episodeNumber, title));
     }
 
     private static string SanitizePathPart(string value)
     {
         return string.Concat(value.Select(character => Path.GetInvalidPathChars().Contains(character) || character == ':' ? '_' : character)).Trim();
-    }
-
-    private static string SanitizeFileName(string fileName)
-    {
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        return string.Concat(fileName.Select(character => invalidCharacters.Contains(character) ? '_' : character));
     }
 }
 

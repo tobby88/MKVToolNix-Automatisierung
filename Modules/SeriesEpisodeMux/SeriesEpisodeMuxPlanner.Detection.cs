@@ -208,8 +208,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         return new EpisodeSeedCollection(
             episodeSeeds,
-            episodeSeeds.Where(seed => !LooksLikeAudioDescription(seed.FilePath)).ToList(),
-            episodeSeeds.Where(seed => LooksLikeAudioDescription(seed.FilePath)).ToList());
+            episodeSeeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
+            episodeSeeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList());
     }
 
     private List<NormalVideoCandidate> BuildNormalVideoCandidates(
@@ -475,7 +475,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var bestCandidate = candidates
             .OrderBy(candidate => candidate.Identity.SeasonNumber == "xx")
             .ThenByDescending(candidate => candidate.VideoWidth)
-            .ThenBy(candidate => GetCodecPreferenceRank(candidate.VideoCodecLabel))
+            .ThenBy(candidate => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(candidate.VideoCodecLabel))
             .ThenByDescending(candidate => candidate.FileSizeBytes)
             .ThenBy(candidate => GetSenderPriority(candidate.Sender))
             .FirstOrDefault();
@@ -487,7 +487,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         return candidates
             .OrderByDescending(candidate => candidate.VideoWidth)
-            .ThenBy(candidate => GetCodecPreferenceRank(candidate.VideoCodecLabel))
+            .ThenBy(candidate => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(candidate.VideoCodecLabel))
             .ThenByDescending(candidate => candidate.FileSizeBytes)
             .ThenBy(candidate => GetSenderPriority(candidate.Sender))
             .First();
@@ -504,7 +504,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var additionalCandidates = bestByCodec
             .Where(candidate => !string.Equals(candidate.FilePath, primaryCandidate.FilePath, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(candidate => candidate.VideoWidth)
-            .ThenBy(candidate => GetCodecPreferenceRank(candidate.VideoCodecLabel))
+            .ThenBy(candidate => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(candidate.VideoCodecLabel))
             .ThenByDescending(candidate => candidate.FileSizeBytes)
             .ThenBy(candidate => GetSenderPriority(candidate.Sender))
             .ToList();

@@ -88,11 +88,21 @@ internal static class EpisodeUiStyleBuilder
 
     public static string BuildOutputTargetBadgeBackground(OutputTargetBadgeState badgeState)
     {
-        return badgeState == OutputTargetBadgeState.InLibrary ? "#EEF6E8" : "#E8F3FF";
+        return badgeState switch
+        {
+            OutputTargetBadgeState.InLibrary => "#EEF6E8",
+            OutputTargetBadgeState.CustomTarget => "#F3F6FA",
+            _ => "#E8F3FF"
+        };
     }
 
     public static string BuildOutputTargetBadgeBorderBrush(OutputTargetBadgeState badgeState)
     {
-        return badgeState == OutputTargetBadgeState.InLibrary ? "#88B06E" : "#8CB4D8";
+        return badgeState switch
+        {
+            OutputTargetBadgeState.InLibrary => "#88B06E",
+            OutputTargetBadgeState.CustomTarget => "#C7D1DC",
+            _ => "#8CB4D8"
+        };
     }
 }

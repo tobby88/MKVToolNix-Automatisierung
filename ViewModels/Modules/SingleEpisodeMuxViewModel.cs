@@ -165,9 +165,11 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
     public OutputTargetBadgeState OutputTargetBadgeState => string.IsNullOrWhiteSpace(OutputPath)
         ? OutputTargetBadgeState.Open
-        : ArchiveState == EpisodeArchiveState.Existing
-            ? OutputTargetBadgeState.InLibrary
-            : OutputTargetBadgeState.NewForLibrary;
+        : _services.OutputPaths.IsArchivePath(OutputPath)
+            ? ArchiveState == EpisodeArchiveState.Existing
+                ? OutputTargetBadgeState.InLibrary
+                : OutputTargetBadgeState.NewForLibrary
+            : OutputTargetBadgeState.CustomTarget;
 
     public string OutputTargetBadgeText => EpisodeEditTextBuilder.BuildOutputTargetBadgeText(OutputTargetBadgeState);
 

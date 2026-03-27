@@ -46,7 +46,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
         _episodeCollection.CommandsChanged += RefreshCommands;
         _episodeCollection.OverviewChanged += RefreshOverview;
-        _episodeCollection.TitleForMuxChanged += RefreshAutomaticOutputPath;
+        _episodeCollection.AutomaticOutputInputsChanged += RefreshAutomaticOutputPath;
         _episodeCollection.SelectedItemPlanInputsChanged += ScheduleSelectedItemPlanSummaryRefresh;
 
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy);

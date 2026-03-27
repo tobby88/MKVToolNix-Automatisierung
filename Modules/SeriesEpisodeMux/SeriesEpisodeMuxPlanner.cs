@@ -59,7 +59,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? null
             : new HashSet<string>(excludedSourcePaths, StringComparer.OrdinalIgnoreCase);
 
-        var detected = LooksLikeAudioDescription(mainVideoPath)
+        var detected = EpisodeFileNameHelper.LooksLikeAudioDescription(mainVideoPath)
             ? DetectFromAudioDescription(mainVideoPath, onProgress, excludedPathSet)
             : DetectFromNormalVideo(mainVideoPath, onProgress, excludedPathSet);
 

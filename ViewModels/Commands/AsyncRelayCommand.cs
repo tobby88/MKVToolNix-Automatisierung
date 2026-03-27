@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Input;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Commands;
@@ -33,6 +34,18 @@ public sealed class AsyncRelayCommand : ICommand
             _isExecuting = true;
             RaiseCanExecuteChanged();
             await _executeAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                Application.Current?.MainWindow,
+                $"Unerwarteter Fehler:\n\n{ex.Message}",
+                "Fehler",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
         finally
         {

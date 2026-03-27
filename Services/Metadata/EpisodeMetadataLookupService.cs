@@ -1,11 +1,13 @@
+using System.Collections.Concurrent;
+
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
 public sealed class EpisodeMetadataLookupService
 {
     private readonly AppMetadataStore _store;
     private readonly TvdbClient _tvdbClient;
-    private readonly Dictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
-    private readonly Dictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
+    private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
 
     public EpisodeMetadataLookupService(AppMetadataStore store, TvdbClient tvdbClient)
     {
@@ -178,9 +180,9 @@ public sealed class EpisodeMetadataLookupService
             return new EpisodeMetadataResolutionResult(
                 guess,
                 Selection: null,
-                StatusText: $"TVDB-Automatik fehlgeschlagen: {ex.Message}",
+                StatusText: $"TVDB-Automatik fehlgeschlagen: {ex.Message} Bitte prüfen.",
                 ConfidenceScore: 0,
-                RequiresReview: false,
+                RequiresReview: true,
                 QueryWasAttempted: true,
                 QuerySucceeded: false);
         }

@@ -62,9 +62,13 @@ public partial class EpisodeEditModel
         IsMetadataReviewApproved = !metadataResolution.RequiresReview;
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (!RequiresManualCheck || !string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase))
+        if (!RequiresManualCheck)
         {
-            _approvedReviewPath = null;
+            _approvedReviewPaths.Clear();
+        }
+        else
+        {
+            _approvedReviewPaths.IntersectWith(_manualCheckFilePaths);
         }
 
         _notes = detected.Notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -85,6 +89,7 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(MetadataStatusText));
         OnPropertyChanged(nameof(IsMetadataReviewApproved));
         OnPropertyChanged(nameof(ManualCheckFilePaths));
+        OnPropertyChanged(nameof(CurrentReviewTargetPath));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(HasPendingMetadataReview));
         OnPropertyChanged(nameof(HasPendingManualCheck));
@@ -104,7 +109,8 @@ public partial class EpisodeEditModel
     public virtual void SetAudioDescription(string? path)
     {
         AudioDescriptionPath = string.IsNullOrWhiteSpace(path) ? string.Empty : path;
-        _approvedReviewPath = null;
+        _approvedReviewPaths.Clear();
+        OnPropertyChanged(nameof(CurrentReviewTargetPath));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
         OnPropertyChanged(nameof(HasPendingManualCheck));
@@ -177,7 +183,12 @@ public partial class EpisodeEditModel
 
     public virtual void ApproveCurrentReviewTarget()
     {
-        _approvedReviewPath = CurrentReviewTargetPath;
+        if (!string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
+        {
+            _approvedReviewPaths.Add(CurrentReviewTargetPath);
+        }
+
+        OnPropertyChanged(nameof(CurrentReviewTargetPath));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
         OnPropertyChanged(nameof(HasPendingManualCheck));
@@ -276,12 +287,17 @@ public partial class EpisodeEditModel
     {
         RequiresManualCheck = requiresManualCheck;
         _manualCheckFilePaths = filePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (!RequiresManualCheck || !string.Equals(_approvedReviewPath, CurrentReviewTargetPath, StringComparison.OrdinalIgnoreCase))
+        if (!RequiresManualCheck)
         {
-            _approvedReviewPath = null;
+            _approvedReviewPaths.Clear();
+        }
+        else
+        {
+            _approvedReviewPaths.IntersectWith(_manualCheckFilePaths);
         }
 
         OnPropertyChanged(nameof(ManualCheckFilePaths));
+        OnPropertyChanged(nameof(CurrentReviewTargetPath));
         OnPropertyChanged(nameof(IsManualCheckApproved));
         OnPropertyChanged(nameof(ManualCheckText));
         OnPropertyChanged(nameof(HasPendingManualCheck));

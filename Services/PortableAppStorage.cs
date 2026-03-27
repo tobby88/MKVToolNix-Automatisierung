@@ -3,15 +3,12 @@ namespace MkvToolnixAutomatisierung.Services;
 public static class PortableAppStorage
 {
     private const string DataDirectoryName = "Data";
-    private const string CacheDirectoryName = "Cache";
     private const string LogsDirectoryName = "Logs";
     private const string SettingsFileName = "settings.json";
 
     public static string AppDirectory => Path.GetFullPath(AppContext.BaseDirectory);
 
     public static string DataDirectory => Path.Combine(AppDirectory, DataDirectoryName);
-
-    public static string CacheDirectory => Path.Combine(AppDirectory, CacheDirectoryName);
 
     public static string LogsDirectory => Path.Combine(AppDirectory, LogsDirectoryName);
 
@@ -28,7 +25,6 @@ public static class PortableAppStorage
             return string.Join(Environment.NewLine + Environment.NewLine, warnings.Distinct(StringComparer.Ordinal));
         }
 
-        EnsureOptionalDirectoryExists(CacheDirectory);
         EnsureOptionalDirectoryExists(LogsDirectory);
         VerifyDataDirectoryWritable(warnings);
 
@@ -40,6 +36,11 @@ public static class PortableAppStorage
     public static void EnsureDataDirectoryForSave()
     {
         Directory.CreateDirectory(DataDirectory);
+    }
+
+    public static void EnsureLogsDirectoryForSave()
+    {
+        Directory.CreateDirectory(LogsDirectory);
     }
 
     private static bool EnsureDataDirectoryExists(List<string> warnings)

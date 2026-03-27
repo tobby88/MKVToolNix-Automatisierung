@@ -31,6 +31,7 @@ internal sealed class AppBootstrapper
         var fileCopyService = new FileCopyService();
         var cleanupService = new EpisodeCleanupService();
         var muxWorkflow = new MuxWorkflowCoordinator(muxService, fileCopyService, cleanupService);
+        var batchLogService = new BatchRunLogService();
         var metadataStore = new AppMetadataStore();
         var tvdbClient = new TvdbClient();
         var metadataLookupService = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
@@ -45,7 +46,8 @@ internal sealed class AppBootstrapper
             metadataLookupService,
             fileCopyService,
             cleanupService,
-            muxWorkflow);
+            muxWorkflow,
+            batchLogService);
 
         var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);
         var batch = new BatchMuxViewModel(appServices, dialogService);
@@ -69,6 +71,11 @@ internal sealed class AppBootstrapper
         if (settingsLoadResult.HasWarning)
         {
             dialogService.ShowWarning("Portable Daten", settingsLoadResult.WarningMessage!);
+        }
+
+        if (!archiveService.IsArchiveAvailable())
+        {
+            dialogService.ShowWarning("Serienbibliothek", archiveService.BuildArchiveUnavailableWarningMessage());
         }
 
         return new MainWindow(viewModel);

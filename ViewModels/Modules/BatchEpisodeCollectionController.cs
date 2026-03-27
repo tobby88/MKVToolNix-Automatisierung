@@ -67,7 +67,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public event Action? CommandsChanged;
     public event Action? OverviewChanged;
-    public event Action<BatchEpisodeItemViewModel>? TitleForMuxChanged;
+    public event Action<BatchEpisodeItemViewModel>? AutomaticOutputInputsChanged;
     public event Action? SelectedItemPlanInputsChanged;
 
     public ObservableCollection<BatchEpisodeItemViewModel> Items => _items;
@@ -233,10 +233,13 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     {
         CommandsChanged?.Invoke();
 
-        if (e.PropertyName is nameof(BatchEpisodeItemViewModel.TitleForMux)
+        if (e.PropertyName is nameof(BatchEpisodeItemViewModel.SeriesName)
+            or nameof(BatchEpisodeItemViewModel.SeasonNumber)
+            or nameof(BatchEpisodeItemViewModel.EpisodeNumber)
+            or nameof(BatchEpisodeItemViewModel.TitleForMux)
             && sender is BatchEpisodeItemViewModel titleItem)
         {
-            TitleForMuxChanged?.Invoke(titleItem);
+            AutomaticOutputInputsChanged?.Invoke(titleItem);
         }
 
         if (ShouldRefreshOverview(e.PropertyName))
@@ -298,6 +301,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     private static bool ShouldRefreshSelectedItemPlanSummary(string? propertyName)
     {
         return propertyName is null
+            or nameof(BatchEpisodeItemViewModel.SeriesName)
+            or nameof(BatchEpisodeItemViewModel.SeasonNumber)
+            or nameof(BatchEpisodeItemViewModel.EpisodeNumber)
             or nameof(BatchEpisodeItemViewModel.TitleForMux)
             or nameof(BatchEpisodeItemViewModel.MainVideoPath)
             or nameof(BatchEpisodeItemViewModel.AudioDescriptionPath)

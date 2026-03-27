@@ -114,6 +114,7 @@ internal static class EpisodeEditTextBuilder
         {
             OutputTargetBadgeState.InLibrary => "In Bibliothek",
             OutputTargetBadgeState.NewForLibrary => "Neu für Bibliothek",
+            OutputTargetBadgeState.CustomTarget => "Eigener Pfad",
             _ => "Bibliothek offen"
         };
     }
@@ -124,6 +125,7 @@ internal static class EpisodeEditTextBuilder
         {
             OutputTargetBadgeState.InLibrary => "Die Ausgabe zeigt auf eine bereits vorhandene Datei in der Serienbibliothek.",
             OutputTargetBadgeState.NewForLibrary => "Die Ausgabe wird als neue Datei in der Serienbibliothek angelegt.",
+            OutputTargetBadgeState.CustomTarget => "Die Ausgabe zeigt auf einen Pfad außerhalb der Serienbibliothek.",
             _ => "Das Ausgabeziel ist noch nicht vollständig festgelegt."
         };
     }
