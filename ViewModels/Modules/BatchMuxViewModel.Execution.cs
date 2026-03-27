@@ -53,112 +53,35 @@ public sealed partial class BatchMuxViewModel
             }
 
             var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatus);
-            var copyPlans = executablePlans
-                .Select(entry => entry.Plan.WorkingCopy)
-                .Where(plan => plan is not null)
-                .Cast<FileCopyPlan>()
-                .GroupBy(plan => plan.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First())
-                .ToList();
+            var copyPreparation = _executionRunner.BuildCopyPreparation(executablePlans);
 
-            var copyPlansToExecute = copyPlans
-                .Where(_services.FileCopy.NeedsCopy)
-                .ToList();
-
-            var totalCopyBytes = copyPlansToExecute.Sum(plan => plan.FileSizeBytes);
-
-            if (!_dialogService.ConfirmBatchExecution(executablePlans.Count, copyPlansToExecute.Count, totalCopyBytes))
+            if (!_dialogService.ConfirmBatchExecution(
+                executablePlans.Count,
+                copyPreparation.CopyPlansToExecute.Count,
+                copyPreparation.TotalCopyBytes))
             {
                 SetStatus("Abgebrochen", 0);
                 return;
             }
 
-            if (copyPlansToExecute.Count > 0)
-            {
-                await CopyArchiveFilesAsync(copyPlansToExecute, totalCopyBytes, progressTracker);
-            }
-            else
-            {
-                progressTracker.ReportCopyCompleted(reusedExistingCopies: copyPlans.Count > 0);
-                if (copyPlans.Count > 0)
-                {
-                    AppendLog("ARBEITSKOPIEN: Bereits vorhandene aktuelle Arbeitskopien werden wiederverwendet.");
-                }
-            }
-
+            await _executionRunner.PrepareWorkingCopiesAsync(copyPreparation, progressTracker, AppendLog);
             ResetLog();
-            var successCount = 0;
-            var warningCount = 0;
-            var errorCount = 0;
-            var movedDoneFiles = new List<string>();
-            var newArchiveFiles = new List<string>();
             var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
+            var executionOutcome = await _executionRunner.ExecutePlansAsync(
+                executablePlans,
+                doneDirectory,
+                progressTracker,
+                AppendLog);
 
-            for (var index = 0; index < executablePlans.Count; index++)
-            {
-                var workItem = executablePlans[index];
-                var item = workItem.Item;
-                var plan = workItem.Plan;
-                item.RefreshArchivePresence();
-                var outputExistedBeforeRun = item.ArchiveState == EpisodeArchiveState.Existing;
-                item.SetStatus(BatchEpisodeStatusKind.Running);
-                AppendLog($"STARTE: {item.MainVideoFileName}");
-
-                try
-                {
-                    var result = await _services.MuxWorkflow.ExecuteMuxAsync(
-                        plan,
-                        line => AppendLog($"  {line}"),
-                        update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning));
-
-                    if (result.ExitCode == 0 && !result.HasWarning)
-                    {
-                        item.SetStatus(BatchEpisodeStatusKind.Success);
-                        successCount++;
-                        item.RefreshArchivePresence();
-                        if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
-                        {
-                            newArchiveFiles.Add(item.OutputPath);
-                        }
-                        movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(workItem, doneDirectory, index + 1, progressTracker));
-                    }
-                    else if ((result.ExitCode == 0 && result.HasWarning)
-                        || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
-                    {
-                        item.SetStatus(BatchEpisodeStatusKind.Warning);
-                        warningCount++;
-                        item.RefreshArchivePresence();
-                        if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
-                        {
-                            newArchiveFiles.Add(item.OutputPath);
-                        }
-                        movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(workItem, doneDirectory, index + 1, progressTracker));
-                    }
-                    else
-                    {
-                        item.SetStatus(BatchEpisodeStatusKind.Error, $"Fehler ({result.ExitCode})");
-                        errorCount++;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    item.SetStatus(BatchEpisodeStatusKind.Error);
-                    AppendLog($"  FEHLER: {ex.Message}");
-                    errorCount++;
-                }
-                finally
-                {
-                    progressTracker.ReportFinalizingItem(index + 1);
-                }
-
-                progressTracker.ReportItemCompleted(index + 1);
-            }
-
-            await OfferBatchDoneCleanupAsync(doneDirectory, movedDoneFiles, progressTracker);
-            var logSaveResult = PersistBatchRunArtifacts(newArchiveFiles, successCount, warningCount, errorCount);
+            await OfferBatchDoneCleanupAsync(doneDirectory, executionOutcome.MovedDoneFiles, progressTracker);
+            var logSaveResult = PersistBatchRunArtifacts(
+                executionOutcome.NewOutputFiles,
+                executionOutcome.SuccessCount,
+                executionOutcome.WarningCount,
+                executionOutcome.ErrorCount);
 
             SetStatus(
-                $"Batch abgeschlossen: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler",
+                $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich, {executionOutcome.WarningCount} Warnung(en), {executionOutcome.ErrorCount} Fehler",
                 100);
 
             if (logSaveResult is not null)
@@ -170,38 +93,6 @@ public sealed partial class BatchMuxViewModel
         {
             SetBusy(false);
         }
-    }
-
-    private async Task<IReadOnlyList<string>> MoveEpisodeFilesToDoneAsync(
-        BatchExecutionWorkItem workItem,
-        string doneDirectory,
-        int currentItemIndex,
-        BatchRunProgressTracker progressTracker)
-    {
-        var item = workItem.Item;
-        var cleanupFiles = workItem.CleanupFiles;
-        if (cleanupFiles.Count == 0)
-        {
-            return [];
-        }
-
-        var moveResult = await _services.Cleanup.MoveFilesToDirectoryAsync(
-            cleanupFiles,
-            doneDirectory,
-            (current, total, _filePath) =>
-            {
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    progressTracker.ReportMoveToDone(currentItemIndex, current, total));
-            });
-
-        AppendLog($"DONE: {item.MainVideoFileName} -> {moveResult.MovedFiles.Count} Datei(en) verschoben.");
-
-        if (moveResult.FailedFiles.Count > 0)
-        {
-            AppendLog("  NICHT VERSCHOBEN: " + string.Join(", ", moveResult.FailedFiles.Select(Path.GetFileName)));
-        }
-
-        return moveResult.MovedFiles;
     }
 
     private List<string> BuildBatchCleanupFileList(BatchEpisodeItemViewModel item, SeriesEpisodeMuxPlan plan)
@@ -260,12 +151,12 @@ public sealed partial class BatchMuxViewModel
     }
 
     private BatchRunLogSaveResult? PersistBatchRunArtifacts(
-        IReadOnlyList<string> newArchiveFiles,
+        IReadOnlyList<string> newOutputFiles,
         int successCount,
         int warningCount,
         int errorCount)
     {
-        var files = newArchiveFiles
+        var files = newOutputFiles
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -274,12 +165,12 @@ public sealed partial class BatchMuxViewModel
         if (files.Count == 0)
         {
             AppendLog(string.Empty);
-            AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT: keine");
+            AppendLog("NEU ERZEUGTE AUSGABEDATEIEN: keine");
         }
         else
         {
             AppendLog(string.Empty);
-            AppendLog("NEU IN SERIENBIBLIOTHEK EINGEFÜGT:");
+            AppendLog("NEU ERZEUGTE AUSGABEDATEIEN:");
             foreach (var file in files)
             {
                 AppendLog("  " + file);
@@ -313,48 +204,18 @@ public sealed partial class BatchMuxViewModel
             logSaveResult.BatchLogPath
         };
 
-        if (logSaveResult.NewArchiveFiles.Count > 0)
+        if (logSaveResult.NewOutputFiles.Count > 0)
         {
             lines.Add(string.Empty);
-            lines.Add($"{logSaveResult.NewArchiveFiles.Count} neue Datei(en) wurden neu in der Serienbibliothek angelegt.");
+            lines.Add($"{logSaveResult.NewOutputFiles.Count} neue Datei(en) wurden in diesem Lauf erzeugt.");
 
-            if (!string.IsNullOrWhiteSpace(logSaveResult.NewArchiveListPath))
+            if (!string.IsNullOrWhiteSpace(logSaveResult.NewOutputListPath))
             {
-                lines.Add("Liste für Emby-Katalogisierung:");
-                lines.Add(logSaveResult.NewArchiveListPath!);
+                lines.Add("Dateiliste:");
+                lines.Add(logSaveResult.NewOutputListPath!);
             }
         }
 
         _dialogService.ShowInfo("Batch-Protokoll", string.Join(Environment.NewLine, lines));
-    }
-
-    private async Task CopyArchiveFilesAsync(
-        IReadOnlyList<FileCopyPlan> copyPlans,
-        long totalCopyBytes,
-        BatchRunProgressTracker progressTracker)
-    {
-        long copiedBeforeCurrentFile = 0;
-
-        for (var index = 0; index < copyPlans.Count; index++)
-        {
-            var copyPlan = copyPlans[index];
-            AppendLog($"KOPIERE: {Path.GetFileName(copyPlan.SourceFilePath)}");
-
-            await _services.FileCopy.CopyAsync(
-                copyPlan,
-                (copiedBytes, _) =>
-                {
-                    var combinedCopiedBytes = copiedBeforeCurrentFile + copiedBytes;
-
-                    Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        progressTracker.ReportCopyProgress(index + 1, copyPlans.Count, combinedCopiedBytes, totalCopyBytes);
-                    });
-                });
-
-            copiedBeforeCurrentFile += copyPlan.FileSizeBytes;
-        }
-
-        progressTracker.ReportCopyCompleted(reusedExistingCopies: false);
     }
 }

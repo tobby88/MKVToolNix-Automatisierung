@@ -23,6 +23,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
     private readonly BufferedTextStore _logBuffer;
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private readonly BatchEpisodeCollectionController _episodeCollection;
+    private readonly BatchExecutionRunner _executionRunner;
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -40,6 +41,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
         _dialogService = dialogService;
         _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _episodeCollection = new BatchEpisodeCollectionController();
+        _executionRunner = new BatchExecutionRunner(services);
         _logBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => LogText = text);

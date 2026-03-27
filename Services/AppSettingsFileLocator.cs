@@ -102,6 +102,7 @@ public static class AppSettingsFileLocator
             var settings = JsonSerializer.Deserialize<CombinedAppSettings>(json, SerializerOptions) ?? new CombinedAppSettings();
             settings.Metadata ??= new AppMetadataSettings();
             settings.ToolPaths ??= new AppToolPathSettings();
+            settings.Archive ??= new AppArchiveSettings();
             return new AppSettingsLoadAttempt(filePath, Exists: true, Success: true, Settings: settings, ErrorMessage: null);
         }
         catch (Exception ex)
@@ -228,6 +229,18 @@ public sealed class CombinedAppSettings
     public AppMetadataSettings? Metadata { get; set; } = new();
 
     public AppToolPathSettings? ToolPaths { get; set; } = new();
+
+    public AppArchiveSettings? Archive { get; set; } = new();
+
+    public CombinedAppSettings Clone()
+    {
+        return new CombinedAppSettings
+        {
+            Metadata = Metadata?.Clone() ?? new AppMetadataSettings(),
+            ToolPaths = ToolPaths?.Clone() ?? new AppToolPathSettings(),
+            Archive = Archive?.Clone() ?? new AppArchiveSettings()
+        };
+    }
 }
 
 public enum AppSettingsLoadStatus

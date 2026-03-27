@@ -32,8 +32,9 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 1. App starten.
 2. Links unten prüfen, ob `mkvmerge: bereit` angezeigt wird. Falls nicht, den MKVToolNix-Ordner auswählen.
 3. Optional `ffprobe` auswählen, wenn Laufzeiten möglichst zuverlässig über `ffprobe` ermittelt werden sollen.
-4. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
-5. Danach mit `Einzelepisode` oder `Batch` arbeiten.
+4. Bei Bedarf links unten die Standard-Serienbibliothek anpassen.
+5. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
+6. Danach mit `Einzelepisode` oder `Batch` arbeiten.
 
 ## Typischer Workflow: Einzelepisode
 
@@ -57,7 +58,7 @@ Nach jedem Batch-Lauf:
 
 - bleibt das Batch-Protokoll in der GUI sichtbar
 - wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
-- wird dort auch eine Liste neuer Bibliotheksdateien gespeichert, damit sie anschließend manuell in Emby katalogisiert werden können
+- wird dort auch eine Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend geprüft oder bei Bedarf in Emby katalogisiert werden können
 
 ## Unterstützte Dateien
 
@@ -94,4 +95,5 @@ im Projektordner:
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `C:\Users\tobby\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
+- Die Standard-Serienbibliothek ist links unten konfigurierbar und wird lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.

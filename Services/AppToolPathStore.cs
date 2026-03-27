@@ -2,16 +2,27 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class AppToolPathStore
 {
+    private readonly AppSettingsStore _settingsStore;
+
+    public AppToolPathStore()
+        : this(new AppSettingsStore())
+    {
+    }
+
+    public AppToolPathStore(AppSettingsStore settingsStore)
+    {
+        _settingsStore = settingsStore;
+    }
+
     public AppToolPathSettings Load()
     {
-        return AppSettingsFileLocator.LoadCombinedSettings().ToolPaths ?? new AppToolPathSettings();
+        return _settingsStore.Load().ToolPaths?.Clone() ?? new AppToolPathSettings();
     }
 
     public void Save(AppToolPathSettings settings)
     {
-        var combinedSettings = AppSettingsFileLocator.LoadCombinedSettings();
-        combinedSettings.ToolPaths = settings;
-        AppSettingsFileLocator.SaveCombinedSettings(combinedSettings);
+        var normalizedSettings = settings?.Clone() ?? new AppToolPathSettings();
+        _settingsStore.Update(combinedSettings => combinedSettings.ToolPaths = normalizedSettings.Clone());
     }
 
     public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
@@ -22,4 +33,13 @@ public sealed class AppToolPathSettings
     public string FfprobePath { get; set; } = string.Empty;
 
     public string MkvToolNixDirectoryPath { get; set; } = string.Empty;
+
+    public AppToolPathSettings Clone()
+    {
+        return new AppToolPathSettings
+        {
+            FfprobePath = FfprobePath,
+            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath
+        };
+    }
 }

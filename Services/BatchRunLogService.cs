@@ -10,7 +10,7 @@ public sealed class BatchRunLogService
         string sourceDirectory,
         string outputDirectory,
         string logText,
-        IReadOnlyList<string> newArchiveFiles,
+        IReadOnlyList<string> newOutputFiles,
         int successCount,
         int warningCount,
         int errorCount)
@@ -19,7 +19,7 @@ public sealed class BatchRunLogService
 
         var now = DateTime.Now;
         var fileStamp = now.ToString("yyyy-MM-dd HH-mm-ss");
-        var normalizedNewFiles = newArchiveFiles
+        var normalizedNewFiles = newOutputFiles
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -42,10 +42,10 @@ public sealed class BatchRunLogService
         string? newFilesListPath = null;
         if (normalizedNewFiles.Count > 0)
         {
-            newFilesListPath = Path.Combine(PortableAppStorage.LogsDirectory, $"Neu in Serienbibliothek - {fileStamp}.txt");
+            newFilesListPath = Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.txt");
             File.WriteAllLines(
                 newFilesListPath,
-                BuildNewArchiveFileReportLines(now, sourceDirectory, outputDirectory, normalizedNewFiles),
+                BuildNewOutputFileReportLines(now, sourceDirectory, outputDirectory, normalizedNewFiles),
                 Utf8Encoding);
         }
 
@@ -57,7 +57,7 @@ public sealed class BatchRunLogService
         string sourceDirectory,
         string outputDirectory,
         string logText,
-        IReadOnlyList<string> newArchiveFiles,
+        IReadOnlyList<string> newOutputFiles,
         int successCount,
         int warningCount,
         int errorCount)
@@ -66,18 +66,18 @@ public sealed class BatchRunLogService
         builder.AppendLine("MKVToolNix-Automatisierung - Batch-Log");
         builder.AppendLine($"Erstellt am: {createdAt:dd.MM.yyyy HH:mm:ss}");
         builder.AppendLine($"Quellordner: {sourceDirectory}");
-        builder.AppendLine($"Serienbibliothek: {outputDirectory}");
+        builder.AppendLine($"Ausgabeordner: {outputDirectory}");
         builder.AppendLine($"Ergebnis: {successCount} erfolgreich, {warningCount} Warnung(en), {errorCount} Fehler");
         builder.AppendLine();
-        builder.AppendLine("Neue Dateien in der Serienbibliothek:");
+        builder.AppendLine("Neu erzeugte Ausgabedateien:");
 
-        if (newArchiveFiles.Count == 0)
+        if (newOutputFiles.Count == 0)
         {
             builder.AppendLine("(keine)");
         }
         else
         {
-            foreach (var file in newArchiveFiles)
+            foreach (var file in newOutputFiles)
             {
                 builder.AppendLine(file);
             }
@@ -89,25 +89,25 @@ public sealed class BatchRunLogService
         return builder.ToString();
     }
 
-    private static IReadOnlyList<string> BuildNewArchiveFileReportLines(
+    private static IReadOnlyList<string> BuildNewOutputFileReportLines(
         DateTime createdAt,
         string sourceDirectory,
         string outputDirectory,
-        IReadOnlyList<string> newArchiveFiles)
+        IReadOnlyList<string> newOutputFiles)
     {
         return
         [
-            "Neu in Serienbibliothek eingefügte Dateien",
+            "Neu erzeugte Ausgabedateien",
             $"Erstellt am: {createdAt:dd.MM.yyyy HH:mm:ss}",
             $"Quellordner: {sourceDirectory}",
-            $"Serienbibliothek: {outputDirectory}",
+            $"Ausgabeordner: {outputDirectory}",
             string.Empty,
-            .. newArchiveFiles
+            .. newOutputFiles
         ];
     }
 }
 
 public sealed record BatchRunLogSaveResult(
     string BatchLogPath,
-    string? NewArchiveListPath,
-    IReadOnlyList<string> NewArchiveFiles);
+    string? NewOutputListPath,
+    IReadOnlyList<string> NewOutputFiles);

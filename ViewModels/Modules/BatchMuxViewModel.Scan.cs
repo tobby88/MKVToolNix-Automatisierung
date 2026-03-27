@@ -23,7 +23,7 @@ public sealed partial class BatchMuxViewModel
         {
             if (_services.Archive.IsArchiveAvailable())
             {
-                OutputDirectory = SeriesArchiveService.ArchiveRootDirectory;
+                OutputDirectory = _services.Archive.ArchiveRootDirectory;
             }
             else
             {

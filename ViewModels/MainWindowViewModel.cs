@@ -19,6 +19,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? _ffprobePath;
     private bool _isMkvToolNixAvailable;
     private string? _mkvMergePath;
+    private bool _isArchiveAvailable;
+    private string? _archiveRootDirectory;
 
     public MainWindowViewModel(
         IReadOnlyList<ModuleNavigationItem> modules,
@@ -37,7 +39,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _selectedModule = Modules.First();
         SelectFfprobeCommand = new RelayCommand(SelectFfprobePath);
         SelectMkvToolNixCommand = new RelayCommand(SelectMkvToolNixDirectory);
+        SelectArchiveRootCommand = new RelayCommand(SelectArchiveRootDirectory);
         RefreshToolStatus();
+        RefreshArchiveStatus();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -110,6 +114,39 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool IsArchiveAvailable
+    {
+        get => _isArchiveAvailable;
+        private set
+        {
+            if (_isArchiveAvailable == value)
+            {
+                return;
+            }
+
+            _isArchiveAvailable = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ArchiveStatusText));
+            OnPropertyChanged(nameof(ArchiveStatusTooltip));
+        }
+    }
+
+    public string? ArchiveRootDirectory
+    {
+        get => _archiveRootDirectory;
+        private set
+        {
+            if (_archiveRootDirectory == value)
+            {
+                return;
+            }
+
+            _archiveRootDirectory = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ArchiveStatusTooltip));
+        }
+    }
+
     public string MediaProbeStatusText => IsFfprobeAvailable
         ? "Laufzeiten: ffprobe"
         : "Laufzeiten: Windows-Fallback";
@@ -125,6 +162,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string MkvToolNixStatusTooltip => IsMkvToolNixAvailable
         ? $"mkvmerge gefunden:{Environment.NewLine}{MkvMergePath}"
         : "mkvmerge wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen.";
+
+    public string ArchiveStatusText => IsArchiveAvailable
+        ? "Archiv: bereit"
+        : "Archiv: fehlt";
+
+    public string ArchiveStatusTooltip => IsArchiveAvailable
+        ? $"Serienbibliothek gefunden:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern."
+        : $"Konfigurierte Serienbibliothek nicht erreichbar:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern.";
 
     public string PortableModeText => "Portable: lokale Daten in .\\Data";
 
@@ -143,7 +188,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 "Erststart:",
                 "1. Prüfen, ob mkvmerge links unten bereit ist.",
                 "2. Optional ffprobe auswählen, falls genauere Laufzeiten gewünscht sind.",
-                "3. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
+                "3. Serienbibliothek links unten bei Bedarf anpassen.",
+                "4. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
                 string.Empty,
                 "Aktuelles Modul:",
                 moduleHint);
@@ -153,6 +199,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public RelayCommand SelectFfprobeCommand { get; }
 
     public RelayCommand SelectMkvToolNixCommand { get; }
+
+    public RelayCommand SelectArchiveRootCommand { get; }
 
     public ModuleNavigationItem SelectedModule
     {
@@ -209,6 +257,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         RefreshToolStatus();
     }
 
+    private void SelectArchiveRootDirectory()
+    {
+        var initialDirectory = GetInitialDirectory(ArchiveRootDirectory);
+        var selectedDirectory = _dialogService.SelectFolder(
+            "Standard-Serienbibliothek auswählen",
+            initialDirectory);
+
+        if (string.IsNullOrWhiteSpace(selectedDirectory))
+        {
+            return;
+        }
+
+        _services.Archive.ConfigureArchiveRootDirectory(selectedDirectory);
+        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
+        RefreshArchiveStatus();
+    }
+
     private void RefreshToolStatus()
     {
         var settings = _toolPathStore.Load();
@@ -241,6 +306,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
             _toolPathStore.Save(settings);
         }
+    }
+
+    private void RefreshArchiveStatus()
+    {
+        ArchiveRootDirectory = _services.Archive.ArchiveRootDirectory;
+        IsArchiveAvailable = _services.Archive.IsArchiveAvailable();
     }
 
     private static string GetInitialDirectory(string? filePath)

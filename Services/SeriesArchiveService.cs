@@ -4,14 +4,19 @@ namespace MkvToolnixAutomatisierung.Services;
 
 public sealed class SeriesArchiveService
 {
-    public const string ArchiveRootDirectory = @"Z:\Videos\Serien";
+    public const string DefaultArchiveRootDirectory = @"Z:\Videos\Serien";
 
     private readonly MkvMergeProbeService _probeService;
+    private readonly AppArchiveSettingsStore _archiveSettingsStore;
 
-    public SeriesArchiveService(MkvMergeProbeService probeService)
+    public SeriesArchiveService(MkvMergeProbeService probeService, AppArchiveSettingsStore archiveSettingsStore)
     {
         _probeService = probeService;
+        _archiveSettingsStore = archiveSettingsStore;
+        ArchiveRootDirectory = NormalizeArchiveRootDirectory(_archiveSettingsStore.Load().DefaultSeriesArchiveRootPath);
     }
+
+    public string ArchiveRootDirectory { get; private set; }
 
     public string BuildSuggestedOutputPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)
     {
@@ -37,6 +42,16 @@ public sealed class SeriesArchiveService
         return PathComparisonHelper.IsPathWithinRoot(outputFilePath, ArchiveRootDirectory);
     }
 
+    public void ConfigureArchiveRootDirectory(string archiveRootDirectory)
+    {
+        var normalizedPath = NormalizeArchiveRootDirectory(archiveRootDirectory);
+        _archiveSettingsStore.Save(new AppArchiveSettings
+        {
+            DefaultSeriesArchiveRootPath = normalizedPath
+        });
+        ArchiveRootDirectory = normalizedPath;
+    }
+
     public bool IsArchiveAvailable()
     {
         return Directory.Exists(ArchiveRootDirectory);
@@ -44,7 +59,7 @@ public sealed class SeriesArchiveService
 
     public string BuildArchiveUnavailableWarningMessage()
     {
-        return "Die Standard-Serienbibliothek ist aktuell nicht erreichbar:"
+        return "Die konfigurierte Serienbibliothek ist aktuell nicht erreichbar:"
             + Environment.NewLine
             + ArchiveRootDirectory
             + Environment.NewLine
@@ -276,6 +291,27 @@ public sealed class SeriesArchiveService
     private static string EpisodeMetadataPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)
     {
         return Path.Combine(fallbackDirectory, EpisodeFileNameHelper.BuildEpisodeFileName(seriesName, seasonNumber, episodeNumber, title));
+    }
+
+    private static string NormalizeArchiveRootDirectory(string? archiveRootDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(archiveRootDirectory))
+        {
+            return DefaultArchiveRootDirectory;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(archiveRootDirectory.Trim());
+            var rootPath = Path.GetPathRoot(fullPath);
+            return string.Equals(fullPath, rootPath, StringComparison.OrdinalIgnoreCase)
+                ? fullPath
+                : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            return DefaultArchiveRootDirectory;
+        }
     }
 
     private static string SanitizePathPart(string value)

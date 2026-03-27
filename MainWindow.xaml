@@ -128,6 +128,28 @@
                                    Text="{Binding MkvToolNixStatusText}" />
                     </Button>
 
+                    <Button Margin="0,8,0,0"
+                            Padding="10,8"
+                            BorderThickness="1"
+                            Command="{Binding SelectArchiveRootCommand}"
+                            ToolTip="{Binding ArchiveStatusTooltip}">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="#FFF4D6" />
+                                <Setter Property="BorderBrush" Value="#D8B46A" />
+                                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsArchiveAvailable}" Value="True">
+                                        <Setter Property="Background" Value="#EEF6E8" />
+                                        <Setter Property="BorderBrush" Value="#88B06E" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{Binding ArchiveStatusText}" />
+                    </Button>
+
                     <Border Margin="0,10,0,0"
                             Padding="10,8"
                             Background="#F3F6FA"
