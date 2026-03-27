@@ -1,5 +1,7 @@
 # MKVToolNix-Automatisierung
 
+[![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/workflows/CI%20and%20Docs/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
+
 ## Wichtiger Hinweis
 
 Dieses Projekt wurde vollständig KI-gestützt erstellt und weiterentwickelt.  
