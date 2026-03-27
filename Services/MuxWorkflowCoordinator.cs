@@ -2,7 +2,7 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
-public sealed class MuxWorkflowCoordinator
+public class MuxWorkflowCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
     private readonly FileCopyService _fileCopyService;
@@ -18,12 +18,12 @@ public sealed class MuxWorkflowCoordinator
         _cleanupService = cleanupService;
     }
 
-    public bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
+    public virtual bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
     {
         return plan.WorkingCopy is not null && _fileCopyService.NeedsCopy(plan.WorkingCopy);
     }
 
-    public async Task PrepareWorkingCopyAsync(
+    public virtual async Task PrepareWorkingCopyAsync(
         SeriesEpisodeMuxPlan plan,
         Action<WorkingCopyPreparationUpdate>? onUpdate = null,
         CancellationToken cancellationToken = default)
@@ -55,7 +55,7 @@ public sealed class MuxWorkflowCoordinator
         onUpdate?.Invoke(new WorkingCopyPreparationUpdate(100, ReusesExistingCopy: false));
     }
 
-    public async Task<MuxExecutionResult> ExecuteMuxAsync(
+    public virtual async Task<MuxExecutionResult> ExecuteMuxAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
         Action<MuxExecutionUpdate>? onUpdate = null,

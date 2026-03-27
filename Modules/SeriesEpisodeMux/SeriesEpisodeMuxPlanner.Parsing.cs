@@ -275,14 +275,65 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return value;
         }
 
+        var repairedCommonSequences = RepairCommonMojibakeSequences(value);
+        if (!LooksLikeMojibake(repairedCommonSequences))
+        {
+            return repairedCommonSequences;
+        }
+
         try
         {
-            var repaired = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(value));
-            return string.IsNullOrWhiteSpace(repaired) ? value : repaired;
+            var repaired = TryRepairMojibakeWithEncoding(value, TryGetWindows1252Encoding())
+                ?? TryRepairMojibakeWithEncoding(value, Encoding.Latin1);
+            if (string.IsNullOrWhiteSpace(repaired))
+            {
+                return repairedCommonSequences;
+            }
+
+            return LooksLikeMojibake(repaired) && !LooksLikeMojibake(repairedCommonSequences)
+                ? repairedCommonSequences
+                : repaired;
         }
         catch
         {
-            return value;
+            return repairedCommonSequences;
+        }
+    }
+
+    private static string RepairCommonMojibakeSequences(string value)
+    {
+        return value
+            .Replace("\u00C3\u00A4", "\u00E4", StringComparison.Ordinal)
+            .Replace("\u00C3\u00B6", "\u00F6", StringComparison.Ordinal)
+            .Replace("\u00C3\u00BC", "\u00FC", StringComparison.Ordinal)
+            .Replace("\u00C3\u0084", "\u00C4", StringComparison.Ordinal)
+            .Replace("\u00C3\u0096", "\u00D6", StringComparison.Ordinal)
+            .Replace("\u00C3\u009C", "\u00DC", StringComparison.Ordinal)
+            .Replace("\u00C3\u0178", "\u00DF", StringComparison.Ordinal)
+            .Replace("\u00C3\u009F", "\u00DF", StringComparison.Ordinal);
+    }
+
+    private static string? TryRepairMojibakeWithEncoding(string value, Encoding? encoding)
+    {
+        if (encoding is null)
+        {
+            return null;
+        }
+
+        var repaired = Encoding.UTF8.GetString(encoding.GetBytes(value));
+        return string.IsNullOrWhiteSpace(repaired) ? null : repaired;
+    }
+
+    private static Encoding? TryGetWindows1252Encoding()
+    {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(1252);
+        }
+        catch
+        {
+            return null;
         }
     }
 

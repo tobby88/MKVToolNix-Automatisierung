@@ -25,13 +25,44 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     [Fact]
     public void NormalizeEpisodeTitle_RemovesYearBasedSeasonMarker()
     {
-        var method = typeof(SeriesEpisodeMuxPlanner).GetMethod(
+        var normalizedTitle = InvokePrivateStringMethod("NormalizeEpisodeTitle", "Beispieltitel (S2001 / E03)");
+        Assert.Equal("Beispieltitel", normalizedTitle);
+    }
+
+    [Fact]
+    public void NormalizeEpisodeTitle_RemovesEditorialLabelsAndAudioDescription()
+    {
+        var normalizedTitle = InvokePrivateStringMethod(
             "NormalizeEpisodeTitle",
+            "Der Samstagskrimi - Beispieltitel - Neue Folge (Audiodeskription)");
+
+        Assert.Equal("Beispieltitel", normalizedTitle);
+    }
+
+    [Fact]
+    public void NormalizeSeparators_RepairsMojibakeAndUnicodeDashes()
+    {
+        var mojibake = "Stra\u00C3\u0178e \u2013 Teil 1";
+        var normalized = InvokePrivateStringMethod("NormalizeSeparators", mojibake);
+
+        Assert.Equal("Stra\u00DFe - Teil 1", normalized);
+    }
+
+    [Fact]
+    public void NormalizeEpisodeTitle_RemovesTrailingPunctuationAfterCleanup()
+    {
+        var normalizedTitle = InvokePrivateStringMethod("NormalizeEpisodeTitle", "Beispieltitel: ");
+
+        Assert.Equal("Beispieltitel", normalizedTitle);
+    }
+
+    private static string InvokePrivateStringMethod(string methodName, string input)
+    {
+        var method = typeof(SeriesEpisodeMuxPlanner).GetMethod(
+            methodName,
             BindingFlags.NonPublic | BindingFlags.Static);
 
         Assert.NotNull(method);
-
-        var normalizedTitle = Assert.IsType<string>(method!.Invoke(null, ["Beispieltitel (S2001 / E03)"]));
-        Assert.Equal("Beispieltitel", normalizedTitle);
+        return Assert.IsType<string>(method!.Invoke(null, [input]));
     }
 }

@@ -2,9 +2,9 @@ using Microsoft.VisualBasic.FileIO;
 
 namespace MkvToolnixAutomatisierung.Services;
 
-public sealed class EpisodeCleanupService
+public class EpisodeCleanupService
 {
-    public async Task<FileMoveResult> MoveFilesToDirectoryAsync(
+    public virtual async Task<FileMoveResult> MoveFilesToDirectoryAsync(
         IReadOnlyList<string> sourceFilePaths,
         string targetDirectory,
         Action<int, int, string>? onProgress = null)
@@ -41,7 +41,7 @@ public sealed class EpisodeCleanupService
         });
     }
 
-    public async Task<FileRecycleResult> RecycleFilesAsync(
+    public virtual async Task<FileRecycleResult> RecycleFilesAsync(
         IReadOnlyList<string> filePaths,
         Action<int, int, string>? onProgress = null)
     {
@@ -77,7 +77,7 @@ public sealed class EpisodeCleanupService
         });
     }
 
-    public void DeleteTemporaryFile(string? filePath)
+    public virtual void DeleteTemporaryFile(string? filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
@@ -93,7 +93,7 @@ public sealed class EpisodeCleanupService
         }
     }
 
-    public void DeleteDirectoryIfEmpty(string? directoryPath)
+    public virtual void DeleteDirectoryIfEmpty(string? directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
         {

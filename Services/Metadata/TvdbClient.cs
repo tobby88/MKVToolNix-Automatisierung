@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
-public sealed class TvdbClient
+public class TvdbClient
 {
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
 
@@ -21,7 +21,7 @@ public sealed class TvdbClient
     private string? _bearerToken;
     private DateTimeOffset _tokenValidUntilUtc;
 
-    public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+    public virtual async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
         string apiKey,
         string? pin,
         string query,
@@ -68,7 +68,7 @@ public sealed class TvdbClient
         return results;
     }
 
-    public async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+    public virtual async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
         string apiKey,
         string? pin,
         int seriesId,

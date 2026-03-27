@@ -2,7 +2,7 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
-public sealed class AppMetadataStore
+public class AppMetadataStore
 {
     private readonly AppSettingsStore _settingsStore;
 
@@ -16,18 +16,18 @@ public sealed class AppMetadataStore
         _settingsStore = settingsStore;
     }
 
-    public AppMetadataSettings Load()
+    public virtual AppMetadataSettings Load()
     {
         return _settingsStore.Load().Metadata?.Clone() ?? new AppMetadataSettings();
     }
 
-    public void Save(AppMetadataSettings settings)
+    public virtual void Save(AppMetadataSettings settings)
     {
         var normalizedSettings = settings?.Clone() ?? new AppMetadataSettings();
         _settingsStore.Update(combinedSettings => combinedSettings.Metadata = normalizedSettings.Clone());
     }
 
-    public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
+    public virtual string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
 public sealed class AppMetadataSettings

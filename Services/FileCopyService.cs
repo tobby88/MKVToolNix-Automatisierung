@@ -2,16 +2,16 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
 
-public sealed class FileCopyService
+public class FileCopyService
 {
     private const int BufferSize = 1024 * 1024;
 
-    public bool NeedsCopy(FileCopyPlan copyPlan)
+    public virtual bool NeedsCopy(FileCopyPlan copyPlan)
     {
         return !copyPlan.IsReusable;
     }
 
-    public async Task CopyAsync(
+    public virtual async Task CopyAsync(
         FileCopyPlan copyPlan,
         Action<long, long>? onProgress = null,
         CancellationToken cancellationToken = default)
