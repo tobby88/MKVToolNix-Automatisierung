@@ -86,9 +86,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var patterns = new[]
         {
-            @"\(S(?<season>\d{1,2})\s*_\s*E(?<episode>\d{1,2})\)",
-            @"\(S(?<season>\d{1,2})\s*/\s*E(?<episode>\d{1,2})\)",
-            @"\(Staffel\s*(?<season>\d{1,2})\s*,\s*Folge\s*(?<episode>\d{1,2})\)"
+            @"\(S(?<season>\d{1,4})\s*_\s*E(?<episode>\d{1,4})\)",
+            @"\(S(?<season>\d{1,4})\s*/\s*E(?<episode>\d{1,4})\)",
+            @"\(Staffel\s*(?<season>\d{1,4})\s*,\s*Folge\s*(?<episode>\d{1,4})\)"
         };
 
         foreach (var pattern in patterns)
@@ -136,8 +136,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var normalized = NormalizeSeparators(value);
         normalized = RemoveEditorialLabels(normalized);
-        normalized = Regex.Replace(normalized, @"\(S\d{1,2}\s*[_/]\s*E\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,2}\s*,\s*Folge\s*\d{1,2}\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();

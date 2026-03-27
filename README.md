@@ -94,11 +94,11 @@ dotnet run
 
 im Projektordner:
 
-`C:\Users\tobby\Documents\mkvtoolnix-Automatisierung`
+`<dein-projektordner>\mkvtoolnix-Automatisierung`
 
 ## Hinweise
 
-- `mkvmerge.exe` wird automatisch im neuesten Ordner `C:\Users\tobby\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
+- `mkvmerge.exe` wird automatisch im neuesten Ordner `%USERPROFILE%\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek ist links unten konfigurierbar und wird lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
