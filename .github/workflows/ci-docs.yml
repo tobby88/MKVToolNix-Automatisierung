@@ -18,10 +18,17 @@ concurrency:
 jobs:
   build-test-docs:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -54,7 +61,7 @@ jobs:
 
       - name: Upload docs artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: .\docs\_site
 
@@ -73,4 +80,4 @@ jobs:
     steps:
       - name: Deploy GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
