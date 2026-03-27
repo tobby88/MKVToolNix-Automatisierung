@@ -47,6 +47,15 @@ internal static class Program
         foreach (var line in muxConfig.Lines)
         {
             Console.WriteLine(line);
+            if (muxConfig.LineDelayMilliseconds > 0)
+            {
+                Thread.Sleep(muxConfig.LineDelayMilliseconds);
+            }
+        }
+
+        if (muxConfig.DelayBeforeExitMilliseconds > 0)
+        {
+            Thread.Sleep(muxConfig.DelayBeforeExitMilliseconds);
         }
 
         if (muxConfig.CreateOutput)
@@ -127,4 +136,8 @@ internal sealed class FakeMuxRunConfiguration
     public string OutputContent { get; init; } = "muxed by FakeMkvMerge";
 
     public List<string> Lines { get; init; } = [];
+
+    public int LineDelayMilliseconds { get; init; }
+
+    public int DelayBeforeExitMilliseconds { get; init; }
 }

@@ -150,7 +150,7 @@ public sealed class MkvMergeProbeService
             return cachedMetadata.Value;
         }
 
-        var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        using var trackDocument = await IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
         var tracks = GetTracksElement(trackDocument, inputFilePath);
         var trackMetadata = new List<ContainerTrackMetadata>();
 

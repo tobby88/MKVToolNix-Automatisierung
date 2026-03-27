@@ -55,6 +55,8 @@ internal static class FakeMkvMergeTestHelper
         int exitCode = 0,
         bool createOutput = true,
         string? outputContent = null,
+        int lineDelayMilliseconds = 0,
+        int delayBeforeExitMilliseconds = 0,
         params string[] lines)
     {
         WriteJsonFile(
@@ -64,6 +66,8 @@ internal static class FakeMkvMergeTestHelper
                 exitCode,
                 createOutput,
                 outputContent = outputContent ?? "muxed by FakeMkvMerge",
+                lineDelayMilliseconds,
+                delayBeforeExitMilliseconds,
                 lines = lines.Length == 0
                     ? new[]
                     {

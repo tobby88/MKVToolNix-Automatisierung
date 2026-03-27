@@ -86,7 +86,7 @@ public class MuxWorkflowCoordinator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return await _muxService.ExecuteAsync(plan, onOutput, onUpdate);
+            return await _muxService.ExecuteAsync(plan, onOutput, onUpdate, cancellationToken);
         }
         finally
         {

@@ -129,11 +129,13 @@ public sealed class SeriesEpisodeMuxService
     /// <param name="plan">Der auszuführende Mux-Plan.</param>
     /// <param name="onOutput">Optionaler Callback für rohe Prozessausgabe.</param>
     /// <param name="onUpdate">Optionaler Callback für strukturierten Fortschritt und Warnungen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Exitcode, Warnungsstatus und letzter bekannter Fortschritt des Prozesses.</returns>
     public async Task<MuxExecutionResult> ExecuteAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
-        Action<MuxExecutionUpdate>? onUpdate = null)
+        Action<MuxExecutionUpdate>? onUpdate = null,
+        CancellationToken cancellationToken = default)
     {
         var hadWarning = false;
         int? latestProgressPercent = null;
@@ -164,7 +166,8 @@ public sealed class SeriesEpisodeMuxService
                 }
 
                 onUpdate?.Invoke(new MuxExecutionUpdate(latestProgressPercent, hadWarning));
-            });
+            },
+            cancellationToken);
 
         return new MuxExecutionResult(exitCode, hadWarning, latestProgressPercent);
     }

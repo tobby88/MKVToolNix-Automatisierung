@@ -13,9 +13,16 @@ public sealed class MuxExecutionService
     /// <param name="mkvMergePath">Pfad zur auszuführenden mkvmerge-Executable.</param>
     /// <param name="arguments">Bereits aufgelöste Argumentliste des Plans.</param>
     /// <param name="onOutput">Optionaler Callback für Standardausgabe und Standardfehler.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal. Bei Abbruch wird der gestartete Prozess beendet.</param>
     /// <returns>Exitcode des Prozesses.</returns>
-    public async Task<int> ExecuteAsync(string mkvMergePath, IReadOnlyList<string> arguments, Action<string>? onOutput = null)
+    public async Task<int> ExecuteAsync(
+        string mkvMergePath,
+        IReadOnlyList<string> arguments,
+        Action<string>? onOutput = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var startInfo = new ProcessStartInfo
         {
             FileName = mkvMergePath,
@@ -32,6 +39,20 @@ public sealed class MuxExecutionService
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
+        using var registration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // Ein bereits beendeter Prozess darf den Abbruchpfad nicht stören.
+            }
+        });
 
         process.OutputDataReceived += (_, args) =>
         {
@@ -52,7 +73,7 @@ public sealed class MuxExecutionService
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        await process.WaitForExitAsync();
+        await process.WaitForExitAsync(cancellationToken);
         return process.ExitCode;
     }
 }

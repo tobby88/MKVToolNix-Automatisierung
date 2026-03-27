@@ -35,9 +35,12 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             exitCode: 0,
             createOutput: true,
             outputContent: "muxed episode",
-            "Progress: 12%",
-            "Warning: Zusatzspur nicht optimal.",
-            "Progress: 100%");
+            lines:
+            [
+                "Progress: 12%",
+                "Warning: Zusatzspur nicht optimal.",
+                "Progress: 100%"
+            ]);
 
         var muxService = CreateMuxService();
         var coordinator = new MuxWorkflowCoordinator(muxService, new FileCopyService(), new EpisodeCleanupService());
@@ -81,6 +84,62 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
         Assert.Contains(copyUpdates, update => update.ProgressPercent == 100);
         Assert.Contains(muxUpdates, update => update.ProgressPercent == 100 && update.HasWarning);
         Assert.Contains(outputLines, line => line.Contains("Warning:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ExecuteMuxAsync_CancellationStopsProcess_AndCleansTemporaryCopy()
+    {
+        var sourceVideoPath = CreateFile("cancel-source.mp4");
+        var outputPath = Path.Combine(_tempDirectory, "cancel", "Episode.mkv");
+        var workingCopySource = CreateFile("existing-cancel-archive.mkv", "archive");
+        var workingCopyDestination = Path.Combine(_tempDirectory, "cancel-work", "Episode - Arbeitskopie.mkv");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            sourceVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteMuxRunFile(
+            outputPath,
+            exitCode: 0,
+            createOutput: true,
+            outputContent: "should not be written",
+            delayBeforeExitMilliseconds: 5000,
+            lines: ["Progress: 5%"]);
+
+        var muxService = CreateMuxService();
+        var coordinator = new MuxWorkflowCoordinator(muxService, new FileCopyService(), new EpisodeCleanupService());
+        var plan = new SeriesEpisodeMuxPlan(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            outputPath,
+            "Episode",
+            [
+                new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - 1080p - H.264", IsDefaultTrack: true)
+            ],
+            sourceVideoPath,
+            1,
+            [1],
+            [],
+            includePrimarySourceAttachments: false,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            workingCopy: new FileCopyPlan(
+                workingCopySource,
+                workingCopyDestination,
+                new FileInfo(workingCopySource).Length,
+                File.GetLastWriteTimeUtc(workingCopySource)),
+            metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
+            notes: []);
+
+        await coordinator.PrepareWorkingCopyAsync(plan);
+
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.ExecuteMuxAsync(plan, cancellationToken: cancellationSource.Token));
+
+        Assert.False(File.Exists(outputPath));
+        Assert.False(File.Exists(workingCopyDestination));
     }
 
     public void Dispose()
