@@ -18,16 +18,29 @@ public sealed class EpisodeMetadataLookupService
         _tvdbClient = tvdbClient;
     }
 
+    /// <summary>
+    /// Lädt die aktuell gespeicherten TVDB- und Serien-Mapping-Einstellungen.
+    /// </summary>
+    /// <returns>Aktueller Metadaten-Einstellungssatz.</returns>
     public AppMetadataSettings LoadSettings()
     {
         return _store.Load();
     }
 
+    /// <summary>
+    /// Speichert TVDB-Zugangsdaten und lokale Serien-Mappings.
+    /// </summary>
+    /// <param name="settings">Zu speichernde Metadaten-Einstellungen.</param>
     public void SaveSettings(AppMetadataSettings settings)
     {
         _store.Save(settings);
     }
 
+    /// <summary>
+    /// Sucht ein gespeichertes TVDB-Mapping für einen lokal erkannten Seriennamen.
+    /// </summary>
+    /// <param name="localSeriesName">Serienname aus Dateiname oder Textmetadaten.</param>
+    /// <returns>Gespeichertes Mapping oder <see langword="null"/>.</returns>
     public SeriesMetadataMapping? FindSeriesMapping(string localSeriesName)
     {
         var normalized = NormalizeText(localSeriesName);
@@ -35,6 +48,12 @@ public sealed class EpisodeMetadataLookupService
             string.Equals(NormalizeText(mapping.LocalSeriesName), normalized, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Führt eine TVDB-Seriensuche mit den aktuell gespeicherten Zugangsdaten aus.
+    /// </summary>
+    /// <param name="query">Suchbegriff aus dem lokal erkannten Seriennamen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Gefundene TVDB-Serien.</returns>
     public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
         string query,
         CancellationToken cancellationToken = default)
@@ -42,6 +61,13 @@ public sealed class EpisodeMetadataLookupService
         return await SearchSeriesAsync(query, LoadSettings(), cancellationToken);
     }
 
+    /// <summary>
+    /// Führt eine TVDB-Seriensuche mit explizit übergebenen Zugangsdaten aus.
+    /// </summary>
+    /// <param name="query">Suchbegriff aus dem lokal erkannten Seriennamen.</param>
+    /// <param name="settings">Explizit zu verwendende TVDB-Einstellungen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Gefundene TVDB-Serien.</returns>
     public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
         string query,
         AppMetadataSettings settings,
@@ -68,6 +94,12 @@ public sealed class EpisodeMetadataLookupService
         return results;
     }
 
+    /// <summary>
+    /// Lädt alle TVDB-Episoden einer Serie mit den aktuell gespeicherten Zugangsdaten.
+    /// </summary>
+    /// <param name="seriesId">TVDB-Serien-ID.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Alle geladenen Episoden der Serie.</returns>
     public async Task<IReadOnlyList<TvdbEpisodeRecord>> LoadEpisodesAsync(
         int seriesId,
         CancellationToken cancellationToken = default)
@@ -75,6 +107,13 @@ public sealed class EpisodeMetadataLookupService
         return await LoadEpisodesAsync(seriesId, LoadSettings(), cancellationToken);
     }
 
+    /// <summary>
+    /// Lädt alle TVDB-Episoden einer Serie mit explizit übergebenen Zugangsdaten.
+    /// </summary>
+    /// <param name="seriesId">TVDB-Serien-ID.</param>
+    /// <param name="settings">Explizit zu verwendende TVDB-Einstellungen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Alle geladenen Episoden der Serie.</returns>
     public async Task<IReadOnlyList<TvdbEpisodeRecord>> LoadEpisodesAsync(
         int seriesId,
         AppMetadataSettings settings,
@@ -95,6 +134,12 @@ public sealed class EpisodeMetadataLookupService
         return episodes;
     }
 
+    /// <summary>
+    /// Bestimmt unter mehreren TVDB-Serientreffern den fachlich bevorzugten Kandidaten.
+    /// </summary>
+    /// <param name="guess">Lokal erkannte Serien- und Episodeninformation.</param>
+    /// <param name="seriesResults">Von TVDB zurückgelieferte Serienkandidaten.</param>
+    /// <returns>Bevorzugter Serienkandidat oder <see langword="null"/>.</returns>
     public TvdbSeriesSearchResult? FindPreferredSeriesResult(
         EpisodeMetadataGuess guess,
         IReadOnlyList<TvdbSeriesSearchResult> seriesResults)
@@ -113,6 +158,12 @@ public sealed class EpisodeMetadataLookupService
             .FirstOrDefault();
     }
 
+    /// <summary>
+    /// Versucht eine lokale Episodenerkennung automatisch gegen TVDB aufzulösen.
+    /// </summary>
+    /// <param name="guess">Lokal erkannte Serien-, Staffel-, Folgen- und Titeldaten.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Auflösungsergebnis inklusive möglicher Freigabepflicht.</returns>
     public async Task<EpisodeMetadataResolutionResult> ResolveAutomaticallyAsync(
         EpisodeMetadataGuess guess,
         CancellationToken cancellationToken = default)
@@ -191,6 +242,13 @@ public sealed class EpisodeMetadataLookupService
         }
     }
 
+    /// <summary>
+    /// Sucht innerhalb einer konkreten TVDB-Serie die am besten passende Episode.
+    /// </summary>
+    /// <param name="guess">Lokal erkannte Episodeninformation.</param>
+    /// <param name="series">Konkrete TVDB-Serie.</param>
+    /// <param name="episodes">Bereits geladene Episoden der Serie.</param>
+    /// <returns>Beste Episodenauswahl oder <see langword="null"/>.</returns>
     public TvdbEpisodeSelection? FindBestEpisodeMatch(
         EpisodeMetadataGuess guess,
         TvdbSeriesSearchResult series,
@@ -199,6 +257,11 @@ public sealed class EpisodeMetadataLookupService
         return FindBestEpisodeMatchCore(guess, series, episodes, seriesScore: 0)?.Selection;
     }
 
+    /// <summary>
+    /// Speichert oder aktualisiert das bevorzugte TVDB-Serien-Mapping für einen lokalen Seriennamen.
+    /// </summary>
+    /// <param name="localSeriesName">Lokal erkannter Serienname.</param>
+    /// <param name="series">Ausgewählte TVDB-Serie.</param>
     public void SaveSeriesMapping(string localSeriesName, TvdbSeriesSearchResult series)
     {
         var settings = LoadSettings();
@@ -228,6 +291,9 @@ public sealed class EpisodeMetadataLookupService
         _store.Save(settings);
     }
 
+    /// <summary>
+    /// Pfad der zugrunde liegenden portablen Settings-Datei.
+    /// </summary>
     public string SettingsFilePath => _store.SettingsFilePath;
 
     private async Task<ScoredAutomaticMatch?> FindBestAutomaticMatchAsync(

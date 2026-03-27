@@ -1,0 +1,6 @@
+- name: Start
+  href: index.md
+- name: Artikel
+  href: articles/toc.yml
+- name: API
+  href: api/toc.yml

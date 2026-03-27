@@ -1,0 +1,76 @@
+name: CI and Docs
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-docs:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore app
+        run: dotnet restore .\MkvToolnixAutomatisierung.csproj
+
+      - name: Restore unit tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj
+
+      - name: Restore integration tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj
+
+      - name: Restore DocFX tool
+        run: dotnet tool restore
+
+      - name: Build app
+        run: dotnet build .\MkvToolnixAutomatisierung.csproj --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj --configuration Release --no-restore
+
+      - name: Run integration tests
+        run: dotnet test .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Build docs
+        run: dotnet tool run docfx .\docs\docfx.json --warningsAsErrors
+
+      - name: Upload docs artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .\docs\_site
+
+  deploy-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build-test-docs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

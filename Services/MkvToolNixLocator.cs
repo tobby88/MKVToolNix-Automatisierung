@@ -20,6 +20,10 @@ public sealed class MkvToolNixLocator
         _toolPathStore = toolPathStore;
     }
 
+    /// <summary>
+    /// Ermittelt den Pfad zur verwendbaren <c>mkvmerge.exe</c> aus Settings oder Download-Ordnern.
+    /// </summary>
+    /// <returns>Vollständiger Pfad zur auszuführenden mkvmerge-Executable.</returns>
     public string FindMkvMergePath()
     {
         var configuredDirectory = _toolPathStore.Load().MkvToolNixDirectoryPath;

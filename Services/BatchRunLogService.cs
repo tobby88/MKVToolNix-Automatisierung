@@ -9,6 +9,17 @@ public sealed class BatchRunLogService
 {
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>
+    /// Schreibt Batch-Log und optionale Reportliste neuer Ausgabedateien in den portablen Log-Ordner.
+    /// </summary>
+    /// <param name="sourceDirectory">Verarbeiteter Quellordner.</param>
+    /// <param name="outputDirectory">Tatsächlicher Ausgabeordner des Batch-Laufs.</param>
+    /// <param name="logText">Gesamtes in der UI gesammeltes Batch-Protokoll.</param>
+    /// <param name="newOutputFiles">Während des Laufs neu erzeugte Ausgabedateien.</param>
+    /// <param name="successCount">Anzahl erfolgreicher Episoden.</param>
+    /// <param name="warningCount">Anzahl abgeschlossener Episoden mit Warnungen.</param>
+    /// <param name="errorCount">Anzahl fehlgeschlagener Episoden.</param>
+    /// <returns>Pfade zu den geschriebenen Artefakten inklusive normalisierter Liste neuer Dateien.</returns>
     public BatchRunLogSaveResult SaveBatchRunArtifacts(
         string sourceDirectory,
         string outputDirectory,

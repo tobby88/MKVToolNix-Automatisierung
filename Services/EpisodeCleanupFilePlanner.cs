@@ -12,6 +12,14 @@ public sealed class EpisodeCleanupFilePlanner
         _outputPaths = outputPaths;
     }
 
+    /// <summary>
+    /// Filtert eine Kandidatenliste auf die Dateien, die nach einem erfolgreichen Lauf gefahrlos verschoben werden dürfen.
+    /// </summary>
+    /// <param name="candidatePaths">Mögliche Quell- und Begleitdateien der Episode.</param>
+    /// <param name="outputPath">Zieldatei des aktuellen Mux-Laufs.</param>
+    /// <param name="workingCopyPath">Optionaler Pfad einer temporären Arbeitskopie, die nicht verschoben werden darf.</param>
+    /// <param name="sourceRoot">Optionaler Quellwurzelpfad, auf den die Kandidaten eingeschränkt werden.</param>
+    /// <returns>Bereinigte Liste der tatsächlich verschiebbaren Dateien.</returns>
     public List<string> BuildCleanupFileList(
         IEnumerable<string> candidatePaths,
         string outputPath,

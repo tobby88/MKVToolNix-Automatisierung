@@ -19,17 +19,28 @@ public class AppMetadataStore
         _settingsStore = settingsStore;
     }
 
+    /// <summary>
+    /// Lädt ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
+    /// </summary>
+    /// <returns>Aktuelle Metadaten-Einstellungen oder Standardwerte.</returns>
     public virtual AppMetadataSettings Load()
     {
         return _settingsStore.Load().Metadata?.Clone() ?? new AppMetadataSettings();
     }
 
+    /// <summary>
+    /// Speichert ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
+    /// </summary>
+    /// <param name="settings">Zu speichernde TVDB- und Mapping-Einstellungen.</param>
     public virtual void Save(AppMetadataSettings settings)
     {
         var normalizedSettings = settings?.Clone() ?? new AppMetadataSettings();
         _settingsStore.Update(combinedSettings => combinedSettings.Metadata = normalizedSettings.Clone());
     }
 
+    /// <summary>
+    /// Pfad der zugrunde liegenden portablen Settings-Datei.
+    /// </summary>
     public virtual string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
@@ -38,12 +49,25 @@ public class AppMetadataStore
 /// </summary>
 public sealed class AppMetadataSettings
 {
+    /// <summary>
+    /// TVDB-API-Key für die v4-API.
+    /// </summary>
     public string TvdbApiKey { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optionaler TVDB-PIN für persönliche Accounts.
+    /// </summary>
     public string TvdbPin { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Lokale Zuordnung zwischen Seriennamen aus Dateinamen und TVDB-Serien.
+    /// </summary>
     public List<SeriesMetadataMapping> SeriesMappings { get; set; } = [];
 
+    /// <summary>
+    /// Erzeugt eine tiefe Kopie der Metadaten-Einstellungen.
+    /// </summary>
+    /// <returns>Geklonter Einstellungssatz.</returns>
     public AppMetadataSettings Clone()
     {
         return new AppMetadataSettings
@@ -60,12 +84,25 @@ public sealed class AppMetadataSettings
 /// </summary>
 public sealed class SeriesMetadataMapping
 {
+    /// <summary>
+    /// Lokal erkannter Serienname.
+    /// </summary>
     public string LocalSeriesName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Eindeutige TVDB-Serien-ID.
+    /// </summary>
     public int TvdbSeriesId { get; set; }
 
+    /// <summary>
+    /// Anzeigename der gemappten TVDB-Serie.
+    /// </summary>
     public string TvdbSeriesName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Erzeugt eine Kopie eines einzelnen Mappings.
+    /// </summary>
+    /// <returns>Geklontes Serien-Mapping.</returns>
     public SeriesMetadataMapping Clone()
     {
         return new SeriesMetadataMapping

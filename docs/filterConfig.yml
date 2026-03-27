@@ -1,0 +1,16 @@
+apiRules:
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.(Views|ViewModels|Windows)(\.|$)
+      type: Namespace
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.(Views|ViewModels|Windows)\.
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.Program$
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.MainWindow$
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.MainWindowViewModel$
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.AppBootstrapper$
+  - exclude:
+      uidRegex: ^MkvToolnixAutomatisierung\.AppCompositionRoot$

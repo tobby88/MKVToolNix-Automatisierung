@@ -9,3 +9,5 @@ _probe-output.mkv
 _probe-output-fixed.mkv
 Data/
 Logs/
+docs/_site/
+docs/api/

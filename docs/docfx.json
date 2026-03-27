@@ -1,0 +1,49 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "..",
+          "files": [
+            "MkvToolnixAutomatisierung.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "filter": "filterConfig.yml",
+      "disableGitFeatures": true
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": [
+          "index.md",
+          "toc.yml",
+          "articles/**.md",
+          "articles/toc.yml",
+          "api/**.yml",
+          "api/**.md"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "files": [
+          "images/**"
+        ]
+      }
+    ],
+    "overwrite": [],
+    "dest": "_site",
+    "template": [
+      "default",
+      "modern"
+    ],
+    "globalMetadata": {
+      "_appTitle": "MKVToolNix-Automatisierung",
+      "_appFooter": "API- und Architektur-Dokumentation für die portable MKVToolNix-Automatisierung."
+    },
+    "disableGitFeatures": true
+  }
+}

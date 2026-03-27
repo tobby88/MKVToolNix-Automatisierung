@@ -104,6 +104,10 @@ public sealed class SeriesEpisodeMuxPlan
         return new SeriesEpisodeMuxPlan(mkvMergePath, outputFilePath, title, skipReason, notes);
     }
 
+    /// <summary>
+    /// Baut aus dem Plan die vollständige mkvmerge-Argumentliste für den echten Prozessaufruf.
+    /// </summary>
+    /// <returns>Argumentliste für <c>mkvmerge.exe</c>.</returns>
     public IReadOnlyList<string> BuildArguments()
     {
         if (SkipMux)
@@ -274,11 +278,19 @@ public sealed class SeriesEpisodeMuxPlan
         return filePath;
     }
 
+    /// <summary>
+    /// Liefert die Argumentliste als lesbare Vorschau mit einfachen Shell-Escapes.
+    /// </summary>
+    /// <returns>Mehrzeilige Darstellung der mkvmerge-Argumente.</returns>
     public string GetCommandLinePreview()
     {
         return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
     }
 
+    /// <summary>
+    /// Verdichtet den Plan zu einer kompakten Nutzungszusammenfassung für die GUI.
+    /// </summary>
+    /// <returns>Zusammenfassung von Archivaktion, Quellen und Zusatzspuren.</returns>
     public EpisodeUsageSummary BuildUsageSummary()
     {
         if (SkipMux)
@@ -319,6 +331,10 @@ public sealed class SeriesEpisodeMuxPlan
             BuildAttachmentPreview());
     }
 
+    /// <summary>
+    /// Liefert die Nutzungszusammenfassung als flachen mehrzeiligen Textblock.
+    /// </summary>
+    /// <returns>Kompakter Text für Vorschau- und Statusbereiche.</returns>
     public string BuildCompactSummaryText()
     {
         var summary = BuildUsageSummary();
@@ -334,6 +350,10 @@ public sealed class SeriesEpisodeMuxPlan
         ]);
     }
 
+    /// <summary>
+    /// Liefert alle im Plan referenzierten Eingabedateien ohne Ausgabe- und Hilfspfade.
+    /// </summary>
+    /// <returns>Deduplicierte Liste aller Eingabedateien des Plans.</returns>
     public IReadOnlyList<string> GetReferencedInputFiles()
     {
         if (SkipMux)
@@ -360,6 +380,10 @@ public sealed class SeriesEpisodeMuxPlan
             .ToList();
     }
 
+    /// <summary>
+    /// Erzeugt eine ausführliche menschenlesbare Vorschau des Plans inklusive Hinweise.
+    /// </summary>
+    /// <returns>Mehrzeiliger Vorschautext für die GUI.</returns>
     public string BuildPreviewText()
     {
         var builder = new StringBuilder();
@@ -447,6 +471,12 @@ public sealed record EpisodeUsageSummary(
     string Subtitles,
     string Attachments)
 {
+    /// <summary>
+    /// Erzeugt eine Platzhalterzusammenfassung für noch nicht berechnete Pläne.
+    /// </summary>
+    /// <param name="archiveAction">Text zur aktuellen Archivaktion.</param>
+    /// <param name="archiveDetails">Zusätzliche Details zum Archivstatus.</param>
+    /// <returns>Platzhalterzusammenfassung mit offenen Feldern.</returns>
     public static EpisodeUsageSummary CreatePending(string archiveAction, string archiveDetails)
     {
         return new EpisodeUsageSummary(

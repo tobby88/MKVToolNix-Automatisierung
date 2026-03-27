@@ -13,6 +13,10 @@ public sealed class AppSettingsStore
     private string? _cachedWarningMessage;
     private bool _isLoaded;
 
+    /// <summary>
+    /// Lädt die kombinierten App-Einstellungen aus dem portablen JSON-Speicher.
+    /// </summary>
+    /// <returns>Klon der aktuell geladenen Einstellungen.</returns>
     public CombinedAppSettings Load()
     {
         lock (_sync)
@@ -22,6 +26,10 @@ public sealed class AppSettingsStore
         }
     }
 
+    /// <summary>
+    /// Lädt die Einstellungen inklusive Diagnoseinformationen über Primär-, Backup- oder Fallback-Ladevorgänge.
+    /// </summary>
+    /// <returns>Einstellungen zusammen mit Ladequelle und möglicher Warnmeldung.</returns>
     public AppSettingsLoadResult LoadWithDiagnostics()
     {
         lock (_sync)
@@ -31,6 +39,10 @@ public sealed class AppSettingsStore
         }
     }
 
+    /// <summary>
+    /// Persistiert einen vollständigen Satz App-Einstellungen und aktualisiert den In-Memory-Cache.
+    /// </summary>
+    /// <param name="settings">Zu speichernder Gesamtsatz an Einstellungen.</param>
     public void Save(CombinedAppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -41,6 +53,10 @@ public sealed class AppSettingsStore
         }
     }
 
+    /// <summary>
+    /// Lädt die aktuellen Einstellungen, wendet eine Mutation an und speichert das Ergebnis atomar zurück.
+    /// </summary>
+    /// <param name="updateAction">Mutation, die auf einen geklonten Einstellungssatz angewendet wird.</param>
     public void Update(Action<CombinedAppSettings> updateAction)
     {
         ArgumentNullException.ThrowIfNull(updateAction);

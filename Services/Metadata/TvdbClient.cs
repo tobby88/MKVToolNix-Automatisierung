@@ -24,6 +24,14 @@ public class TvdbClient
     private string? _bearerToken;
     private DateTimeOffset _tokenValidUntilUtc;
 
+    /// <summary>
+    /// Sucht TVDB-Serien über die v4-API.
+    /// </summary>
+    /// <param name="apiKey">TVDB-API-Key.</param>
+    /// <param name="pin">Optionaler TVDB-PIN.</param>
+    /// <param name="query">Freitext-Suchbegriff.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Gefundene TVDB-Serien.</returns>
     public virtual async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
         string apiKey,
         string? pin,
@@ -71,6 +79,14 @@ public class TvdbClient
         return results;
     }
 
+    /// <summary>
+    /// Lädt alle Episoden einer TVDB-Serie über die v4-API und iteriert dabei automatisch über alle Seiten.
+    /// </summary>
+    /// <param name="apiKey">TVDB-API-Key.</param>
+    /// <param name="pin">Optionaler TVDB-PIN.</param>
+    /// <param name="seriesId">TVDB-Serien-ID.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Alle geladenen Episoden der Serie.</returns>
     public virtual async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
         string apiKey,
         string? pin,

@@ -21,11 +21,23 @@ public sealed class SeriesEpisodeMuxService
         _outputParser = outputParser;
     }
 
+    /// <summary>
+    /// Führt die Dateierkennung synchron für eine Hauptquelle aus.
+    /// </summary>
+    /// <param name="mainVideoPath">Pfad zur ausgewählten Hauptvideodatei.</param>
+    /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public AutoDetectedEpisodeFiles DetectFromMainVideo(string mainVideoPath)
     {
         return _planner.DetectFromMainVideo(mainVideoPath);
     }
 
+    /// <summary>
+    /// Führt die Dateierkennung auf einem STA-Thread aus, damit Shell- und WPF-nahe Aufrufer stabil bleiben.
+    /// </summary>
+    /// <param name="selectedVideoPath">Pfad zur vom Benutzer ausgewählten Videodatei.</param>
+    /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
+    /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
         Action<DetectionProgressUpdate>? onProgress = null,
@@ -34,6 +46,12 @@ public sealed class SeriesEpisodeMuxService
         return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
     }
 
+    /// <summary>
+    /// Erstellt aus einer UI-Anfrage einen vollständig aufgelösten Mux-Plan.
+    /// </summary>
+    /// <param name="request">Aktuelle Nutzereingaben für Video, Untertitel, AD und Zielpfad.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Der fertige Mux-Plan inklusive Archivintegration.</returns>
     public Task<SeriesEpisodeMuxPlan> CreatePlanAsync(
         SeriesEpisodeMuxRequest request,
         CancellationToken cancellationToken = default)
@@ -41,16 +59,28 @@ public sealed class SeriesEpisodeMuxService
         return _planner.CreatePlanAsync(request, cancellationToken);
     }
 
+    /// <summary>
+    /// Formatiert einen Mux-Plan als mehrzeiligen Vorschautext für die GUI.
+    /// </summary>
+    /// <param name="plan">Der zuvor berechnete Mux-Plan.</param>
+    /// <returns>Lesbare Zusammenfassung des geplanten Aufrufs.</returns>
     public string BuildPreviewText(SeriesEpisodeMuxPlan plan)
     {
         return plan.BuildPreviewText();
     }
 
+    /// <summary>
+    /// Verwirft zwischengespeicherte Erkennungsergebnisse des Planners.
+    /// </summary>
     public void InvalidatePlanningCaches()
     {
         _planner.InvalidatePlanningCaches();
     }
 
+    /// <summary>
+    /// Verwirft gecachte Probe-Ergebnisse für Ausgabedatei und optionale Arbeitskopie eines Plans.
+    /// </summary>
+    /// <param name="plan">Der Plan, dessen Ausgabepfade invalidiert werden sollen.</param>
     public void InvalidatePlanOutputs(SeriesEpisodeMuxPlan? plan)
     {
         if (plan is null)
@@ -65,6 +95,13 @@ public sealed class SeriesEpisodeMuxService
         ]);
     }
 
+    /// <summary>
+    /// Führt den eigentlichen mkvmerge-Prozess aus und übersetzt dessen Konsolenausgabe in Fortschrittsereignisse.
+    /// </summary>
+    /// <param name="plan">Der auszuführende Mux-Plan.</param>
+    /// <param name="onOutput">Optionaler Callback für rohe Prozessausgabe.</param>
+    /// <param name="onUpdate">Optionaler Callback für strukturierten Fortschritt und Warnungen.</param>
+    /// <returns>Exitcode, Warnungsstatus und letzter bekannter Fortschritt des Prozesses.</returns>
     public async Task<MuxExecutionResult> ExecuteAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,

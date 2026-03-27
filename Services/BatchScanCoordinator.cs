@@ -23,6 +23,11 @@ public sealed class BatchScanCoordinator
         _outputPaths = outputPaths;
     }
 
+    /// <summary>
+    /// Findet alle Hauptvideodateien eines Batch-Ordners und blendet AD-Dateien aus.
+    /// </summary>
+    /// <param name="sourceDirectory">Zu scannender Quellordner.</param>
+    /// <returns>Alphabetisch sortierte Liste der primären Videodateien.</returns>
     public IReadOnlyList<string> FindMainVideoFiles(string sourceDirectory)
     {
         return Directory.GetFiles(sourceDirectory, "*.mp4")
@@ -31,6 +36,14 @@ public sealed class BatchScanCoordinator
             .ToList();
     }
 
+    /// <summary>
+    /// Führt Erkennung, TVDB-Auflösung und finale Ausgabepfad-Bildung für eine einzelne Batch-Quelle aus.
+    /// </summary>
+    /// <param name="sourceFilePath">Pfad zur primären Videodatei.</param>
+    /// <param name="outputDirectory">Aktuelle Zielwurzel für die Ausgabedatei.</param>
+    /// <param name="onDetectionProgress">Optionaler Callback für Fortschrittsmeldungen der Dateierkennung.</param>
+    /// <param name="excludedSourcePaths">Optionaler Satz an Dateipfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <returns>Gesamtergebnis aus lokaler Erkennung, Metadatenauflösung und Ausgabepfad.</returns>
     public async Task<BatchScanCoordinatorResult> ScanAsync(
         string sourceFilePath,
         string outputDirectory,

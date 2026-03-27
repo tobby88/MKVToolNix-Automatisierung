@@ -7,11 +7,34 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public interface IEpisodePlanInput
 {
+    /// <summary>
+    /// Pfad zur primären Videodatei.
+    /// </summary>
     string MainVideoPath { get; }
+
+    /// <summary>
+    /// Optionaler Pfad zur AD-Datei.
+    /// </summary>
     string? AudioDescriptionPath { get; }
+
+    /// <summary>
+    /// Gewählte externe Untertiteldateien.
+    /// </summary>
     IReadOnlyList<string> SubtitlePaths { get; }
+
+    /// <summary>
+    /// Gewählte zusätzliche Dateianhänge.
+    /// </summary>
     IReadOnlyList<string> AttachmentPaths { get; }
+
+    /// <summary>
+    /// Vollständiger Zielpfad der Ausgabe-MKV.
+    /// </summary>
     string OutputPath { get; }
+
+    /// <summary>
+    /// Titel, der in den finalen mkvmerge-Aufruf übernommen werden soll.
+    /// </summary>
     string TitleForMux { get; }
 }
 
@@ -27,6 +50,12 @@ public sealed class EpisodePlanCoordinator
         _muxService = muxService;
     }
 
+    /// <summary>
+    /// Baut aus einer abstrahierten UI-Eingabe einen vollständigen Mux-Plan.
+    /// </summary>
+    /// <param name="input">Lesbare Eingabefläche des aufrufenden Moduls.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Der vollständige Mux-Plan für die aktuelle Episode.</returns>
     public Task<SeriesEpisodeMuxPlan> BuildPlanAsync(
         IEpisodePlanInput input,
         CancellationToken cancellationToken = default)

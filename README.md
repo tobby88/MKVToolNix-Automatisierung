@@ -111,6 +111,26 @@ im Projektordner:
 
 `<dein-projektordner>\mkvtoolnix-Automatisierung`
 
+## Entwicklerdokumentation
+
+Das Projekt ist zusätzlich mit XML-Dokumentationskommentaren und einer DocFX-Konfiguration versehen.
+
+Lokal erzeugen:
+
+```powershell
+dotnet tool restore
+.\scripts\build-docs.ps1
+```
+
+Lokale Vorschau im Browser:
+
+```powershell
+.\scripts\build-docs.ps1 -Serve
+```
+
+Die erzeugte Seite landet unter `.\docs\_site`.  
+Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
+
 ## Hinweise
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `%USERPROFILE%\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.

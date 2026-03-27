@@ -9,6 +9,9 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public static class AppSettingsFileLocator
 {
+    /// <summary>
+    /// Gemeinsame Serialisierungsoptionen für die portable Settings-Datei.
+    /// </summary>
     public static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
@@ -18,21 +21,37 @@ public static class AppSettingsFileLocator
 
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>
+    /// Liefert den Pfad der primären portablen Settings-Datei.
+    /// </summary>
+    /// <returns>Absoluter Pfad zu <c>Data\settings.json</c>.</returns>
     public static string GetSettingsFilePath()
     {
         return PortableAppStorage.SettingsFilePath;
     }
 
+    /// <summary>
+    /// Lädt die kombinierten Einstellungen ohne zusätzliche Diagnoseinformationen.
+    /// </summary>
+    /// <returns>Geladener oder auf Standardwerte normalisierter Einstellungssatz.</returns>
     public static CombinedAppSettings LoadCombinedSettings()
     {
         return LoadCombinedSettingsInternal(captureCorruptSnapshots: false).Settings;
     }
 
+    /// <summary>
+    /// Lädt die kombinierten Einstellungen samt Status- und Warninformationen.
+    /// </summary>
+    /// <returns>Ergebnisobjekt mit Einstellungen, Ladequelle und optionalen Warnungen.</returns>
     public static AppSettingsLoadResult LoadCombinedSettingsWithDiagnostics()
     {
         return LoadCombinedSettingsInternal(captureCorruptSnapshots: true);
     }
 
+    /// <summary>
+    /// Speichert die kombinierten Einstellungen atomar inklusive Backup der bisherigen Primärdatei.
+    /// </summary>
+    /// <param name="settings">Zu speichernder Einstellungssatz.</param>
     public static void SaveCombinedSettings(CombinedAppSettings settings)
     {
         var settingsPath = GetSettingsFilePath();
@@ -232,12 +251,25 @@ public static class AppSettingsFileLocator
 /// </summary>
 public sealed class CombinedAppSettings
 {
+    /// <summary>
+    /// Persistente TVDB-Zugangsdaten und Serien-Mappings.
+    /// </summary>
     public AppMetadataSettings? Metadata { get; set; } = new();
 
+    /// <summary>
+    /// Persistente Toolpfade für externe Abhängigkeiten.
+    /// </summary>
     public AppToolPathSettings? ToolPaths { get; set; } = new();
 
+    /// <summary>
+    /// Persistente Archiv-/Bibliothekseinstellungen.
+    /// </summary>
     public AppArchiveSettings? Archive { get; set; } = new();
 
+    /// <summary>
+    /// Erzeugt eine tiefe Kopie des kombinierten Einstellungssatzes.
+    /// </summary>
+    /// <returns>Neues Objekt mit geklonten Teilbereichen.</returns>
     public CombinedAppSettings Clone()
     {
         return new CombinedAppSettings
@@ -268,6 +300,9 @@ public sealed record AppSettingsLoadResult(
     AppSettingsLoadStatus Status,
     string? WarningMessage = null)
 {
+    /// <summary>
+    /// Kennzeichnet, ob zum Laden eine Warnung an den Aufrufer weitergegeben werden sollte.
+    /// </summary>
     public bool HasWarning => !string.IsNullOrWhiteSpace(WarningMessage);
 }
 

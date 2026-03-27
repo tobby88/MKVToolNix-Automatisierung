@@ -17,11 +17,19 @@ public sealed class AppArchiveSettingsStore
         _settingsStore = settingsStore;
     }
 
+    /// <summary>
+    /// Lädt ausschließlich den Archivteil der kombinierten Einstellungen.
+    /// </summary>
+    /// <returns>Aktuelle Archiv-Einstellungen oder Standardwerte.</returns>
     public AppArchiveSettings Load()
     {
         return _settingsStore.Load().Archive?.Clone() ?? new AppArchiveSettings();
     }
 
+    /// <summary>
+    /// Speichert ausschließlich den Archivteil der kombinierten Einstellungen.
+    /// </summary>
+    /// <param name="settings">Zu speichernde Archiv-Einstellungen.</param>
     public void Save(AppArchiveSettings settings)
     {
         var normalizedSettings = settings?.Clone() ?? new AppArchiveSettings();
@@ -34,8 +42,15 @@ public sealed class AppArchiveSettingsStore
 /// </summary>
 public sealed class AppArchiveSettings
 {
+    /// <summary>
+    /// Standardwurzel der Serienbibliothek.
+    /// </summary>
     public string DefaultSeriesArchiveRootPath { get; set; } = SeriesArchiveService.DefaultArchiveRootDirectory;
 
+    /// <summary>
+    /// Erzeugt eine Kopie der Archiv-Einstellungen.
+    /// </summary>
+    /// <returns>Geklonter Einstellungssatz.</returns>
     public AppArchiveSettings Clone()
     {
         return new AppArchiveSettings
