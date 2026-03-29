@@ -176,6 +176,55 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.Equal(alternateVideoPath, refreshedDetection.AdditionalVideoPaths[0]);
     }
 
+    [Fact]
+    public async Task CreatePlanAsync_RespectsExcludedSourcePaths_WhenDetectionIsRebuiltForPreviewOrMux()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-exclusions");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-exclusions");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var lowerQualityPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-a.mp4");
+        var preferredButRejectedPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-b.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-a.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-b.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            lowerQualityPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            preferredButRejectedPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            lowerQualityPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot",
+            ExcludedSourcePaths:
+            [
+                preferredButRejectedPath
+            ]));
+
+        Assert.False(plan.SkipMux);
+        Assert.Single(plan.VideoSources);
+        Assert.Equal(lowerQualityPath, plan.VideoSources[0].FilePath);
+        Assert.DoesNotContain(plan.VideoSources, source => string.Equals(source.FilePath, preferredButRejectedPath, StringComparison.OrdinalIgnoreCase));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

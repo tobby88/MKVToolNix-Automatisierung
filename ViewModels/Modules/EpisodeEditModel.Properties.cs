@@ -386,4 +386,6 @@ public partial class EpisodeEditModel
 
     string IEpisodePlanInput.TitleForMux => TitleForMux;
 
+    IReadOnlyCollection<string> IEpisodePlanInput.ExcludedSourcePaths => ExcludedSourcePaths;
+
 }

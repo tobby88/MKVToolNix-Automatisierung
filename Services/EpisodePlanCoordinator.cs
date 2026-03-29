@@ -36,6 +36,11 @@ public interface IEpisodePlanInput
     /// Titel, der in den finalen mkvmerge-Aufruf übernommen werden soll.
     /// </summary>
     string TitleForMux { get; }
+
+    /// <summary>
+    /// Optionaler Satz an Quellpfaden, die bei einer erneuten Detection nicht wiederverwendet werden dürfen.
+    /// </summary>
+    IReadOnlyCollection<string> ExcludedSourcePaths { get; }
 }
 
 /// <summary>
@@ -66,7 +71,8 @@ public sealed class EpisodePlanCoordinator
             input.SubtitlePaths,
             input.AttachmentPaths,
             input.OutputPath,
-            input.TitleForMux),
+            input.TitleForMux,
+            input.ExcludedSourcePaths),
             cancellationToken);
     }
 }

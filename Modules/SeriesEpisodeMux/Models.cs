@@ -9,7 +9,8 @@ public sealed record SeriesEpisodeMuxRequest(
     IReadOnlyList<string> SubtitlePaths,
     IReadOnlyList<string> AttachmentPaths,
     string OutputFilePath,
-    string Title);
+    string Title,
+    IReadOnlyCollection<string>? ExcludedSourcePaths = null);
 
 /// <summary>
 /// Ergebnis der automatischen Dateierkennung rund um eine Episode.
