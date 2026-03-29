@@ -136,6 +136,46 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.Equal(alternateVideoPath, plan.VideoSources[1].FilePath);
     }
 
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_DoesNotReuseStaleSingleFileCache()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-detect-refresh");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-detect-refresh");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            primaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var firstDetection = await service.DetectFromSelectedVideoAsync(primaryVideoPath);
+
+        Assert.Empty(firstDetection.AdditionalVideoPaths);
+
+        var alternateVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-2.txt",
+            "Sender: ARD\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            alternateVideoPath,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
+            CreateAudioTrack(1, "AAC"));
+
+        var refreshedDetection = await service.DetectFromSelectedVideoAsync(primaryVideoPath);
+
+        Assert.Single(refreshedDetection.AdditionalVideoPaths);
+        Assert.Equal(alternateVideoPath, refreshedDetection.AdditionalVideoPaths[0]);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

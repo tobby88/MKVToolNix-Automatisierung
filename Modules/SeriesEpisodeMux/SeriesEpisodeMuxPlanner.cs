@@ -19,9 +19,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         ".ttml"
     };
-    private readonly object _cacheSync = new();
-    private Dictionary<string, AutoDetectedEpisodeFiles> _autoDetectionCache = new(StringComparer.OrdinalIgnoreCase);
-
     private readonly MkvToolNixLocator _locator;
     private readonly MkvMergeProbeService _probeService;
     private readonly SeriesArchiveService _archiveService;
@@ -51,18 +48,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string mainVideoPath,
         DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null,
-        bool allowCachedResult = true)
+        IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
-        if (allowCachedResult
-            && directoryContext is null
-            && onProgress is null
-            && (excludedSourcePaths is null || excludedSourcePaths.Count == 0)
-            && _autoDetectionCache.TryGetValue(mainVideoPath, out var cachedDetection))
-        {
-            return cachedDetection;
-        }
-
         if (!File.Exists(mainVideoPath))
         {
             throw new FileNotFoundException($"Videodatei nicht gefunden: {mainVideoPath}");
@@ -78,25 +65,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet)
             : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet);
 
-        if (directoryContext is null
-            && onProgress is null
-            && (excludedSourcePaths is null || excludedSourcePaths.Count == 0))
-        {
-            lock (_cacheSync)
-            {
-                _autoDetectionCache[mainVideoPath] = detected;
-            }
-        }
-
         return detected;
     }
 
     public void InvalidatePlanningCaches()
     {
-        lock (_cacheSync)
-        {
-            _autoDetectionCache = new Dictionary<string, AutoDetectedEpisodeFiles>(StringComparer.OrdinalIgnoreCase);
-        }
+        // Bewusst leer: Erkennungsergebnisse werden nicht mehr global nach Dateipfad gecacht,
+        // damit nachträglich auftauchende Quellen oder Begleitdateien sofort sichtbar bleiben.
     }
 
     public void InvalidateProbeCaches(IEnumerable<string?> filePaths)

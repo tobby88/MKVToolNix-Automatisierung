@@ -278,7 +278,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var detected = DetectFromMainVideo(request.MainVideoPath, directoryContext: null, onProgress: null, excludedSourcePaths: null, allowCachedResult: false);
+        var detected = DetectFromMainVideo(request.MainVideoPath);
         cancellationToken.ThrowIfCancellationRequested();
         var subtitleFiles = request.SubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
