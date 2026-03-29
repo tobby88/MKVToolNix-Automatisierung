@@ -1,6 +1,5 @@
 using System.IO;
 using System.Text.Json;
-using FakeMkvMerge;
 
 namespace MkvToolnixAutomatisierung.IntegrationTests.TestInfrastructure;
 
@@ -8,30 +7,24 @@ internal static class FakeMkvMergeTestHelper
 {
     public static string ResolveExecutablePath()
     {
-        var assemblyPath = typeof(FakeMkvMergeMarker).Assembly.Location;
-        var copiedExePath = Path.Combine(
-            Path.GetDirectoryName(assemblyPath)!,
-            "FakeMkvMerge.exe");
-        if (File.Exists(copiedExePath))
+        foreach (var configuration in new[] { "Release", "Debug" })
         {
-            return copiedExePath;
-        }
-
-        var repoExePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..",
-            "..",
-            "..",
-            "..",
-            "TestTools",
-            "FakeMkvMerge",
-            "bin",
-            "Debug",
-            "net9.0",
-            "FakeMkvMerge.exe"));
-        if (File.Exists(repoExePath))
-        {
-            return repoExePath;
+            var repoExePath = Path.GetFullPath(Path.Combine(
+                AppContext.BaseDirectory,
+                "..",
+                "..",
+                "..",
+                "..",
+                "TestTools",
+                "FakeMkvMerge",
+                "bin",
+                configuration,
+                "net9.0",
+                "FakeMkvMerge.exe"));
+            if (File.Exists(repoExePath))
+            {
+                return repoExePath;
+            }
         }
 
         throw new FileNotFoundException("FakeMkvMerge.exe wurde nicht gefunden.");

@@ -21,6 +21,8 @@ Die Integrationstests verwenden `TestTools/FakeMkvMerge`. Das Hilfsprogramm simu
 
 Dadurch lassen sich Planung, Prozesssteuerung, Fortschrittsparsing und Cleanup reproduzierbar testen, ohne auf externe Binärdateien oder Live-Mediendateien angewiesen zu sein.
 
+Der Integrationstest-Build stößt den Build dieses Hilfsprogramms automatisch mit derselben Konfiguration an. Die Tests bleiben damit auch ohne direkte Projekt-Referenz auf das Tool reproduzierbar.
+
 ## Lokal ausführen
 
 ```powershell

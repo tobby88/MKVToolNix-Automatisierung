@@ -23,6 +23,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MkvToolnixAutomatisierung.csproj" />
-    <ProjectReference Include="..\TestTools\FakeMkvMerge\FakeMkvMerge.csproj" />
   </ItemGroup>
+
+  <Target Name="BuildFakeMkvMergeHelper" BeforeTargets="Build">
+    <MSBuild
+      Projects="..\TestTools\FakeMkvMerge\FakeMkvMerge.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)" />
+  </Target>
 </Project>
