@@ -21,6 +21,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
     private readonly UserDialogService _dialogService;
     private readonly BufferedTextStore _previewOutputBuffer;
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
+    private readonly EpisodePlanCache _planCache = new();
     private CancellationTokenSource? _planSummaryRefreshCts;
 
     private string _previewText = string.Empty;
@@ -302,7 +303,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
         if (propertyName is nameof(SeriesName) or nameof(SeasonNumber) or nameof(EpisodeNumber) or nameof(Title))
         {
-            _currentPlan = null;
+            InvalidateCurrentPlan();
             HandleManualMetadataOverride();
             UpdateSuggestedOutputPathIfAutomatic();
             SchedulePlanSummaryRefresh();

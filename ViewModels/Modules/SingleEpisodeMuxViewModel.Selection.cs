@@ -120,7 +120,7 @@ public sealed partial class SingleEpisodeMuxViewModel
 
             _lastSuggestedTitle = detected.SuggestedTitle;
             SetSuggestedOutputPath(BuildSuggestedOutputPath());
-            _currentPlan = null;
+            InvalidateCurrentPlan();
             RefreshOutputTargetStatus();
             PreviewText = BuildDetectionPreview(detected);
             SetStatus("Dateien erkannt", 100);
@@ -192,7 +192,7 @@ public sealed partial class SingleEpisodeMuxViewModel
     public override void SetAudioDescription(string? path)
     {
         base.SetAudioDescription(path);
-        _currentPlan = null;
+        InvalidateCurrentPlan();
         RefreshOutputTargetStatus();
         SchedulePlanSummaryRefresh();
     }
@@ -205,7 +205,7 @@ public sealed partial class SingleEpisodeMuxViewModel
     public override void SetSubtitles(IEnumerable<string> paths)
     {
         base.SetSubtitles(paths);
-        _currentPlan = null;
+        InvalidateCurrentPlan();
         SchedulePlanSummaryRefresh();
     }
 
@@ -217,7 +217,7 @@ public sealed partial class SingleEpisodeMuxViewModel
     public override void SetAttachments(IEnumerable<string> paths)
     {
         base.SetAttachments(paths);
-        _currentPlan = null;
+        InvalidateCurrentPlan();
         SchedulePlanSummaryRefresh();
     }
 
@@ -229,7 +229,7 @@ public sealed partial class SingleEpisodeMuxViewModel
     public override void SetOutputPath(string outputPath)
     {
         base.SetOutputPath(outputPath);
-        _currentPlan = null;
+        InvalidateCurrentPlan();
         RefreshOutputTargetStatus();
         SchedulePlanSummaryRefresh();
     }
@@ -253,7 +253,7 @@ public sealed partial class SingleEpisodeMuxViewModel
     public override void SetAutomaticOutputPath(string outputPath)
     {
         base.SetAutomaticOutputPath(outputPath);
-        _currentPlan = null;
+        InvalidateCurrentPlan();
         RefreshOutputTargetStatus();
         SchedulePlanSummaryRefresh();
     }
@@ -535,6 +535,12 @@ public sealed partial class SingleEpisodeMuxViewModel
         {
             _isApplyingSharedState = false;
         }
+    }
+
+    private void InvalidateCurrentPlan()
+    {
+        _currentPlan = null;
+        _planCache.Invalidate(this);
     }
 
 }

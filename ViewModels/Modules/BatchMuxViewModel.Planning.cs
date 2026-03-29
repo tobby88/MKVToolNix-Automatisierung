@@ -76,7 +76,7 @@ public sealed partial class BatchMuxViewModel
 
         try
         {
-            var plan = await BuildPlanForItemAsync(item);
+            var plan = await GetOrBuildPlanForItemAsync(item);
             item.SetPlanSummary(plan.BuildCompactSummaryText());
             item.SetUsageSummary(plan.BuildUsageSummary());
 
@@ -97,9 +97,25 @@ public sealed partial class BatchMuxViewModel
         }
     }
 
-    private async Task<SeriesEpisodeMuxPlan> BuildPlanForItemAsync(BatchEpisodeItemViewModel item)
+    private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanForItemAsync(
+        BatchEpisodeItemViewModel item,
+        CancellationToken cancellationToken = default)
     {
-        return await _services.EpisodePlans.BuildPlanAsync(item);
+        if (_planCache.TryGet(item, item, out var cachedPlan))
+        {
+            return cachedPlan!;
+        }
+
+        var plan = await BuildFreshPlanForItemAsync(item, cancellationToken);
+        _planCache.Store(item, item, plan);
+        return plan;
+    }
+
+    private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanForItemAsync(
+        BatchEpisodeItemViewModel item,
+        CancellationToken cancellationToken = default)
+    {
+        return await _services.EpisodePlans.BuildPlanAsync(item, cancellationToken);
     }
 
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(
@@ -116,7 +132,7 @@ public sealed partial class BatchMuxViewModel
 
             try
             {
-                var plan = await BuildPlanForItemAsync(item);
+                var plan = await GetOrBuildPlanForItemAsync(item);
                 if (plan.SkipMux)
                 {
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);

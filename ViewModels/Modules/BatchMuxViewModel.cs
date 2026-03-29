@@ -27,6 +27,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private readonly BatchEpisodeCollectionController _episodeCollection;
     private readonly BatchExecutionRunner _executionRunner;
+    private readonly EpisodePlanCache _planCache = new();
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -244,6 +245,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     private void ClearEpisodeItems()
     {
+        _planCache.Clear();
         _episodeCollection.Clear();
         SelectedEpisodeItem = null;
     }

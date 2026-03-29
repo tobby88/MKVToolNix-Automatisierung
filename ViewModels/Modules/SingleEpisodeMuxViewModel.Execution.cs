@@ -16,7 +16,7 @@ public sealed partial class SingleEpisodeMuxViewModel
         {
             SetBusy(true);
             SetStatus("Erzeuge Vorschau...", 0);
-            _currentPlan = await BuildPlanAsync();
+            _currentPlan = await GetOrBuildPlanAsync();
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
@@ -40,7 +40,7 @@ public sealed partial class SingleEpisodeMuxViewModel
         try
         {
             SetBusy(true);
-            _currentPlan ??= await BuildPlanAsync();
+            _currentPlan = await GetOrBuildPlanAsync();
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
@@ -117,12 +117,24 @@ public sealed partial class SingleEpisodeMuxViewModel
         }
     }
 
-    private async Task<SeriesEpisodeMuxPlan> BuildPlanAsync(CancellationToken cancellationToken = default)
+    private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(CancellationToken cancellationToken = default)
+    {
+        if (_planCache.TryGet(this, this, out var cachedPlan))
+        {
+            return _currentPlan = cachedPlan!;
+        }
+
+        return _currentPlan = await BuildFreshPlanAsync(cancellationToken);
+    }
+
+    private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanAsync(CancellationToken cancellationToken = default)
     {
         RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
         RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
         RequireValue(Title.Trim(), "Bitte einen Dateititel eingeben.");
-        return await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);
+        var plan = await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);
+        _planCache.Store(this, this, plan);
+        return plan;
     }
 
     private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
@@ -312,7 +324,7 @@ public sealed partial class SingleEpisodeMuxViewModel
 
         try
         {
-            var plan = await BuildPlanAsync(cancellationToken);
+            var plan = await GetOrBuildPlanAsync(cancellationToken);
             if (version != _planSummaryVersion || cancellationToken.IsCancellationRequested)
             {
                 return;
