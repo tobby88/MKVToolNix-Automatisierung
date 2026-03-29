@@ -3,7 +3,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Sucht eine benutzbare ffprobe.exe aus Settings oder naheliegenden Standardpfaden.
 /// </summary>
-public sealed class FfprobeLocator
+public sealed class FfprobeLocator : IFfprobeLocator
 {
     private const string DownloadsFolderName = "Downloads";
     private const string ExecutableName = "ffprobe.exe";

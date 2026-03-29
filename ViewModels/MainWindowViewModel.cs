@@ -16,12 +16,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly AppServices _services;
     private readonly UserDialogService _dialogService;
     private readonly AppToolPathStore _toolPathStore;
-    private readonly FfprobeLocator _ffprobeLocator;
-    private readonly MkvToolNixLocator _mkvToolNixLocator;
+    private readonly IFfprobeLocator _ffprobeLocator;
+    private readonly IMkvToolNixLocator _mkvToolNixLocator;
     private bool _isFfprobeAvailable;
     private string? _ffprobePath;
+    private string? _ffprobeStatusDetail;
     private bool _isMkvToolNixAvailable;
     private string? _mkvMergePath;
+    private string? _mkvToolNixStatusDetail;
     private bool _isArchiveAvailable;
     private string? _archiveRootDirectory;
 
@@ -30,8 +32,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         AppServices services,
         UserDialogService dialogService,
         AppToolPathStore toolPathStore,
-        FfprobeLocator ffprobeLocator,
-        MkvToolNixLocator mkvToolNixLocator)
+        IFfprobeLocator ffprobeLocator,
+        IMkvToolNixLocator mkvToolNixLocator)
     {
         _services = services;
         _dialogService = dialogService;
@@ -159,7 +161,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string MediaProbeStatusTooltip => IsFfprobeAvailable
         ? $"ffprobe gefunden und aktiv:{Environment.NewLine}{FfprobePath}"
-        : "ffprobe wurde nicht gefunden. Klicken, um ffprobe.exe auszuwählen. Bis dahin nutzt die App für Laufzeiten den Windows-Fallback.";
+        : string.IsNullOrWhiteSpace(FfprobePath)
+            ? "ffprobe wurde nicht gefunden. Klicken, um ffprobe.exe auszuwählen. Bis dahin nutzt die App für Laufzeiten den Windows-Fallback."
+            : $"ffprobe aktuell nicht verfügbar:{Environment.NewLine}{FfprobePath}{Environment.NewLine}{Environment.NewLine}{_ffprobeStatusDetail}";
 
     public string MkvToolNixStatusText => IsMkvToolNixAvailable
         ? "mkvmerge: bereit"
@@ -167,7 +171,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string MkvToolNixStatusTooltip => IsMkvToolNixAvailable
         ? $"mkvmerge gefunden:{Environment.NewLine}{MkvMergePath}"
-        : "mkvmerge wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen.";
+        : string.IsNullOrWhiteSpace(MkvMergePath)
+            ? "mkvmerge wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen."
+            : $"mkvmerge aktuell nicht verfügbar:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}{_mkvToolNixStatusDetail}";
 
     public string ArchiveStatusText => IsArchiveAvailable
         ? "Archiv: bereit"
@@ -288,33 +294,56 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private void RefreshToolStatus()
     {
         var settings = _toolPathStore.Load();
-        var ffprobePath = _ffprobeLocator.TryFindFfprobePath();
-        FfprobePath = ffprobePath;
-        IsFfprobeAvailable = !string.IsNullOrWhiteSpace(ffprobePath) && File.Exists(ffprobePath);
+        var detectedFfprobePath = _ffprobeLocator.TryFindFfprobePath();
+        var resolvedFfprobePath = !string.IsNullOrWhiteSpace(detectedFfprobePath)
+            ? detectedFfprobePath
+            : NormalizeConfiguredExecutablePath(settings.FfprobePath, "ffprobe.exe");
+        FfprobePath = resolvedFfprobePath;
+        IsFfprobeAvailable = !string.IsNullOrWhiteSpace(detectedFfprobePath) && File.Exists(detectedFfprobePath);
+        SetFfprobeStatusDetail(string.IsNullOrWhiteSpace(settings.FfprobePath)
+            ? "Klicken, um ffprobe.exe auszuwählen. Bis dahin nutzt die App für Laufzeiten den Windows-Fallback."
+            : "Der gespeicherte Pfad bleibt erhalten. Klicken, um ffprobe.exe neu auszuwählen oder den Windows-Fallback weiter zu nutzen.");
 
-        string? mkvMergePath;
+        string? detectedMkvMergePath = null;
+        Exception? mkvMergeError = null;
         try
         {
-            mkvMergePath = _mkvToolNixLocator.FindMkvMergePath();
+            detectedMkvMergePath = _mkvToolNixLocator.FindMkvMergePath();
         }
-        catch
+        catch (Exception ex)
         {
-            mkvMergePath = null;
+            mkvMergeError = ex;
         }
 
-        MkvMergePath = mkvMergePath;
-        IsMkvToolNixAvailable = !string.IsNullOrWhiteSpace(mkvMergePath) && File.Exists(mkvMergePath);
+        var resolvedMkvMergePath = !string.IsNullOrWhiteSpace(detectedMkvMergePath)
+            ? detectedMkvMergePath
+            : NormalizeConfiguredExecutablePath(settings.MkvToolNixDirectoryPath, "mkvmerge.exe");
+        MkvMergePath = resolvedMkvMergePath;
+        IsMkvToolNixAvailable = !string.IsNullOrWhiteSpace(detectedMkvMergePath) && File.Exists(detectedMkvMergePath);
+        SetMkvToolNixStatusDetail(string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
+            ? "Klicken, um den MKVToolNix-Ordner auszuwählen."
+            : $"Der gespeicherte Pfad bleibt erhalten. {mkvMergeError?.Message ?? "Klicken, um den MKVToolNix-Ordner neu auszuwählen."}");
 
-        var normalizedFfprobePath = ffprobePath ?? string.Empty;
-        var normalizedMkvToolPath = string.IsNullOrWhiteSpace(mkvMergePath)
-            ? string.Empty
-            : Path.GetDirectoryName(mkvMergePath) ?? mkvMergePath;
+        var normalizedFfprobePath = detectedFfprobePath;
+        var normalizedMkvToolPath = string.IsNullOrWhiteSpace(detectedMkvMergePath)
+            ? null
+            : Path.GetDirectoryName(detectedMkvMergePath) ?? detectedMkvMergePath;
 
-        if (!string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(settings.MkvToolNixDirectoryPath, normalizedMkvToolPath, StringComparison.OrdinalIgnoreCase))
+        if ((!string.IsNullOrWhiteSpace(normalizedFfprobePath)
+                && !string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(normalizedMkvToolPath)
+                && !string.Equals(settings.MkvToolNixDirectoryPath, normalizedMkvToolPath, StringComparison.OrdinalIgnoreCase)))
         {
-            settings.FfprobePath = normalizedFfprobePath;
-            settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
+            if (!string.IsNullOrWhiteSpace(normalizedFfprobePath))
+            {
+                settings.FfprobePath = normalizedFfprobePath;
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedMkvToolPath))
+            {
+                settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
+            }
+
             _toolPathStore.Save(settings);
         }
     }
@@ -344,6 +373,40 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads");
+    }
+
+    private void SetFfprobeStatusDetail(string detail)
+    {
+        if (string.Equals(_ffprobeStatusDetail, detail, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _ffprobeStatusDetail = detail;
+        OnPropertyChanged(nameof(MediaProbeStatusTooltip));
+    }
+
+    private void SetMkvToolNixStatusDetail(string detail)
+    {
+        if (string.Equals(_mkvToolNixStatusDetail, detail, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _mkvToolNixStatusDetail = detail;
+        OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
+    }
+
+    private static string? NormalizeConfiguredExecutablePath(string? configuredPath, string executableName)
+    {
+        if (string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return null;
+        }
+
+        return configuredPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? configuredPath
+            : Path.Combine(configuredPath, executableName);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

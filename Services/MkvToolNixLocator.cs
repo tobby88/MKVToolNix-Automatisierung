@@ -3,7 +3,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Findet die mkvmerge.exe aus den gespeicherten Toolpfaden.
 /// </summary>
-public sealed class MkvToolNixLocator
+public sealed class MkvToolNixLocator : IMkvToolNixLocator
 {
     private const string DownloadsFolderName = "Downloads";
     private const string DirectoryPrefix = "mkvtoolnix-64-bit-";
