@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using Xunit;
@@ -10,13 +9,7 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     [Fact]
     public void FindEpisodePattern_ParsesYearBasedSeasonNumbers()
     {
-        var method = typeof(SeriesEpisodeMuxPlanner).GetMethod(
-            "FindEpisodePattern",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-
-        var match = Assert.IsType<Match>(method!.Invoke(null, ["Beispieltitel (S2001 / E03)"]));
+        var match = Assert.IsType<Match>(SeriesEpisodeMuxPlanner.FindEpisodePattern("Beispieltitel (S2001 / E03)"));
         Assert.True(match.Success);
         Assert.Equal("2001", match.Groups["season"].Value);
         Assert.Equal("03", match.Groups["episode"].Value);
@@ -25,15 +18,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     [Fact]
     public void NormalizeEpisodeTitle_RemovesYearBasedSeasonMarker()
     {
-        var normalizedTitle = InvokePrivateStringMethod("NormalizeEpisodeTitle", "Beispieltitel (S2001 / E03)");
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Beispieltitel (S2001 / E03)");
         Assert.Equal("Beispieltitel", normalizedTitle);
     }
 
     [Fact]
     public void NormalizeEpisodeTitle_RemovesEditorialLabelsAndAudioDescription()
     {
-        var normalizedTitle = InvokePrivateStringMethod(
-            "NormalizeEpisodeTitle",
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(
             "Der Samstagskrimi - Beispieltitel - Neue Folge (Audiodeskription)");
 
         Assert.Equal("Beispieltitel", normalizedTitle);
@@ -43,7 +35,7 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     public void NormalizeSeparators_RepairsMojibakeAndUnicodeDashes()
     {
         var mojibake = "Stra\u00C3\u0178e \u2013 Teil 1";
-        var normalized = InvokePrivateStringMethod("NormalizeSeparators", mojibake);
+        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators(mojibake);
 
         Assert.Equal("Stra\u00DFe - Teil 1", normalized);
     }
@@ -51,18 +43,8 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     [Fact]
     public void NormalizeEpisodeTitle_RemovesTrailingPunctuationAfterCleanup()
     {
-        var normalizedTitle = InvokePrivateStringMethod("NormalizeEpisodeTitle", "Beispieltitel: ");
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Beispieltitel: ");
 
         Assert.Equal("Beispieltitel", normalizedTitle);
-    }
-
-    private static string InvokePrivateStringMethod(string methodName, string input)
-    {
-        var method = typeof(SeriesEpisodeMuxPlanner).GetMethod(
-            methodName,
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-        return Assert.IsType<string>(method!.Invoke(null, [input]));
     }
 }

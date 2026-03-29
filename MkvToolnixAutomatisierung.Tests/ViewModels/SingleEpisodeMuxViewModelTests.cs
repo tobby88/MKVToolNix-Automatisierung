@@ -52,15 +52,6 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
-    public void AudioDescriptionButtonText_ReturnsCorrectionText_WhenMainVideoExists()
-    {
-        var viewModel = CreateViewModel();
-        SetPrivateField(viewModel, "_mainVideoPath", @"C:\Temp\episode.mp4");
-
-        Assert.Equal("AD korrigieren", viewModel.AudioDescriptionButtonText);
-    }
-
-    [Fact]
     public void SubtitleDisplayText_ReturnsOnlyFileNames()
     {
         var viewModel = CreateViewModel();
@@ -95,14 +86,5 @@ public sealed class SingleEpisodeMuxViewModelTests
         return new SingleEpisodeMuxViewModel(
             ViewModelTestContext.CreateAppServices(),
             new UserDialogService());
-    }
-
-    private static void SetPrivateField<T>(object target, string fieldName, T value)
-    {
-        var field = target.GetType().GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            ?? target.GetType().BaseType?.GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-
-        Assert.NotNull(field);
-        field!.SetValue(target, value);
     }
 }

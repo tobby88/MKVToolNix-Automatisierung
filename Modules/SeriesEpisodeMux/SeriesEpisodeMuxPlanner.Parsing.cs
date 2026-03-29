@@ -78,7 +78,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return new TitleDetails(titlePart, seasonNumber, episodeNumber);
     }
 
-    private static Match? FindEpisodePattern(string? text)
+    internal static Match? FindEpisodePattern(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -128,7 +128,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return Regex.Replace(name, @"\s+", " ").Trim();
     }
 
-    private static string NormalizeEpisodeTitle(string? value)
+    internal static string NormalizeEpisodeTitle(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -155,7 +155,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return normalized.Trim();
     }
 
-    private static string NormalizeSeparators(string value)
+    internal static string NormalizeSeparators(string value)
     {
         var normalized = MojibakeRepair.NormalizeLikelyMojibake(value)
             .Replace("\u2013", "-")

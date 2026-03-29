@@ -11,7 +11,7 @@ public sealed class EpisodeReviewWorkflowTests
     public async Task ReviewManualSourceAsync_ReviewsAllPendingSourcesBeforeReturning()
     {
         var dialogService = new FakeDialogService(MessageBoxResult.Yes, MessageBoxResult.Yes);
-        var workflow = new EpisodeReviewWorkflow(dialogService, episodeMetadata: null!);
+        var workflow = new EpisodeReviewWorkflow(dialogService, CreateEpisodeMetadataService());
         var item = new FakeEpisodeReviewItem(
             @"C:\Temp\episode-1.mp4",
             @"C:\Temp\episode-2.mp4");
@@ -41,7 +41,7 @@ public sealed class EpisodeReviewWorkflowTests
     public async Task ReviewManualSourceAsync_RechecksAfterAlternativeSourceWasChosen()
     {
         var dialogService = new FakeDialogService(MessageBoxResult.No, MessageBoxResult.Yes);
-        var workflow = new EpisodeReviewWorkflow(dialogService, episodeMetadata: null!);
+        var workflow = new EpisodeReviewWorkflow(dialogService, CreateEpisodeMetadataService());
         var item = new FakeEpisodeReviewItem(@"C:\Temp\episode-alt-1.mp4");
         var alternativeWasTried = false;
 
@@ -71,6 +71,13 @@ public sealed class EpisodeReviewWorkflowTests
         ],
             dialogService.OpenedFilePaths);
         Assert.Contains(@"C:\Temp\episode-alt-1.mp4", item.ExcludedSourcePaths);
+    }
+
+    private static EpisodeMetadataLookupService CreateEpisodeMetadataService()
+    {
+        return new EpisodeMetadataLookupService(
+            new AppMetadataStore(new AppSettingsStore()),
+            new TvdbClient());
     }
 
     private sealed class FakeDialogService : IUserDialogService
