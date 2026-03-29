@@ -104,7 +104,8 @@ public sealed partial class BatchMuxViewModel
 
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(
         IReadOnlyList<BatchEpisodeItemViewModel> readyItems,
-        BatchRunProgressTracker progressTracker)
+        BatchRunProgressTracker progressTracker,
+        Action<string> appendBatchRunLog)
     {
         var executablePlans = new List<BatchExecutionWorkItem>();
 
@@ -119,7 +120,7 @@ public sealed partial class BatchMuxViewModel
                 if (plan.SkipMux)
                 {
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);
-                    AppendLog($"SKIP: {item.MainVideoFileName} -> {plan.SkipReason}");
+                    appendBatchRunLog($"SKIP: {item.MainVideoFileName} -> {plan.SkipReason}");
                     continue;
                 }
 
@@ -128,7 +129,7 @@ public sealed partial class BatchMuxViewModel
             catch (Exception ex)
             {
                 item.SetStatus(BatchEpisodeStatusKind.Error);
-                AppendLog($"PLAN-FEHLER: {item.MainVideoFileName} -> {ex.Message}");
+                appendBatchRunLog($"PLAN-FEHLER: {item.MainVideoFileName} -> {ex.Message}");
             }
         }
 

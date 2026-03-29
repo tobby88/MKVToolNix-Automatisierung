@@ -31,6 +31,13 @@ public sealed partial class BatchMuxViewModel
         try
         {
             SetBusy(true);
+            // Persistierte Batch-Logs sollen genau diesen Lauf enthalten, ohne ältere Scan-Einträge mitzuschleppen.
+            var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
+            void AppendBatchRunLog(string line)
+            {
+                AppendLog(line);
+                batchRunLogBuffer.AppendLine(line);
+            }
 
             var approved = await EnsurePendingChecksApprovedAsync(readyItems);
             if (!approved)
@@ -44,7 +51,7 @@ public sealed partial class BatchMuxViewModel
 
             SetStatus("Erstelle Mux-Pläne...", 0);
             var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
-            var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker);
+            var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker, AppendBatchRunLog);
 
             if (executablePlans.Count == 0)
             {
@@ -65,21 +72,22 @@ public sealed partial class BatchMuxViewModel
                 return;
             }
 
-            await _executionRunner.PrepareWorkingCopiesAsync(copyPreparation, progressTracker, AppendLog);
-            ResetLog();
+            await _executionRunner.PrepareWorkingCopiesAsync(copyPreparation, progressTracker, AppendBatchRunLog);
             var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
             var executionOutcome = await _executionRunner.ExecutePlansAsync(
                 executablePlans,
                 doneDirectory,
                 progressTracker,
-                AppendLog);
+                AppendBatchRunLog);
 
             await OfferBatchDoneCleanupAsync(doneDirectory, executionOutcome.MovedDoneFiles, progressTracker);
             var logSaveResult = PersistBatchRunArtifacts(
                 executionOutcome.NewOutputFiles,
                 executionOutcome.SuccessCount,
                 executionOutcome.WarningCount,
-                executionOutcome.ErrorCount);
+                executionOutcome.ErrorCount,
+                batchRunLogBuffer,
+                AppendBatchRunLog);
 
             SetStatus(
                 $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich, {executionOutcome.WarningCount} Warnung(en), {executionOutcome.ErrorCount} Fehler",
@@ -155,7 +163,9 @@ public sealed partial class BatchMuxViewModel
         IReadOnlyList<string> newOutputFiles,
         int successCount,
         int warningCount,
-        int errorCount)
+        int errorCount,
+        BufferedTextStore batchRunLogBuffer,
+        Action<string> appendBatchRunLog)
     {
         var files = newOutputFiles
             .Where(File.Exists)
@@ -165,16 +175,16 @@ public sealed partial class BatchMuxViewModel
 
         if (files.Count == 0)
         {
-            AppendLog(string.Empty);
-            AppendLog("NEU ERZEUGTE AUSGABEDATEIEN: keine");
+            appendBatchRunLog(string.Empty);
+            appendBatchRunLog("NEU ERZEUGTE AUSGABEDATEIEN: keine");
         }
         else
         {
-            AppendLog(string.Empty);
-            AppendLog("NEU ERZEUGTE AUSGABEDATEIEN:");
+            appendBatchRunLog(string.Empty);
+            appendBatchRunLog("NEU ERZEUGTE AUSGABEDATEIEN:");
             foreach (var file in files)
             {
-                AppendLog("  " + file);
+                appendBatchRunLog("  " + file);
             }
         }
 
@@ -183,7 +193,7 @@ public sealed partial class BatchMuxViewModel
             return _services.BatchLogs.SaveBatchRunArtifacts(
                 SourceDirectory,
                 OutputDirectory,
-                _logBuffer.GetTextSnapshot(),
+                batchRunLogBuffer.GetTextSnapshot(),
                 files,
                 successCount,
                 warningCount,
@@ -191,7 +201,7 @@ public sealed partial class BatchMuxViewModel
         }
         catch (Exception ex)
         {
-            AppendLog($"LOG-FEHLER: {ex.Message}");
+            appendBatchRunLog($"LOG-FEHLER: {ex.Message}");
             _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
             return null;
         }
