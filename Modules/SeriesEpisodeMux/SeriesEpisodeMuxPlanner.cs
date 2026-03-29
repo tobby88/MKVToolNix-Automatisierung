@@ -51,9 +51,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string mainVideoPath,
         DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        bool allowCachedResult = true)
     {
-        if (directoryContext is null
+        if (allowCachedResult
+            && directoryContext is null
             && onProgress is null
             && (excludedSourcePaths is null || excludedSourcePaths.Count == 0)
             && _autoDetectionCache.TryGetValue(mainVideoPath, out var cachedDetection))

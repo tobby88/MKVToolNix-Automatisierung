@@ -88,6 +88,54 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.Equal(new[] { alternateAttachmentPath, primaryAttachmentPath }, plan.AttachmentFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task CreatePlanAsync_RefreshesDetection_WhenAdditionalVideoAppearsAfterInitialScan()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-refresh");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-refresh");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            primaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var detected = await service.DetectFromSelectedVideoAsync(primaryVideoPath);
+
+        Assert.Empty(detected.AdditionalVideoPaths);
+
+        var alternateVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-2.txt",
+            "Sender: ARD\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            alternateVideoPath,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
+            CreateAudioTrack(1, "AAC"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            detected.MainVideoPath,
+            detected.AudioDescriptionPath,
+            detected.SubtitlePaths,
+            detected.AttachmentPaths,
+            outputPath,
+            detected.SuggestedTitle));
+
+        Assert.Equal(2, plan.VideoSources.Count);
+        Assert.Equal(primaryVideoPath, plan.VideoSources[0].FilePath);
+        Assert.Equal(alternateVideoPath, plan.VideoSources[1].FilePath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
