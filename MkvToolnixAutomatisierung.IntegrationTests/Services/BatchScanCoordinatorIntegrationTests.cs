@@ -64,7 +64,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void FindMainVideoFiles_FiltersAudioDescription_AndSortsAlphabetically()
+    public void CreateDirectoryContext_FiltersAudioDescription_AndSortsAlphabetically()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "batch-files");
         Directory.CreateDirectory(sourceDirectory);
@@ -75,7 +75,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
 
         var coordinator = CreateBatchScanCoordinator(Path.Combine(_tempDirectory, "archive"), new StubTvdbClient());
 
-        var files = coordinator.FindMainVideoFiles(sourceDirectory);
+        var files = coordinator.CreateDirectoryContext(sourceDirectory).MainVideoFiles;
 
         Assert.Equal(2, files.Count);
         Assert.EndsWith("Alpha - Pilot (S01_E01).mp4", files[0], StringComparison.OrdinalIgnoreCase);

@@ -152,17 +152,6 @@ public sealed partial class BatchMuxViewModel
         return executablePlans;
     }
 
-    private string BuildOutputPath(AutoDetectedEpisodeFiles detected)
-    {
-        var fallbackDirectory = Path.GetDirectoryName(detected.MainVideoPath) ?? SourceDirectory;
-        return BuildAutomaticOutputPath(
-            fallbackDirectory,
-            detected.SeriesName,
-            detected.SeasonNumber,
-            detected.EpisodeNumber,
-            detected.SuggestedTitle);
-    }
-
     private string BuildOutputPath(BatchEpisodeItemViewModel item)
     {
         var fallbackDirectory = Path.GetDirectoryName(item.MainVideoPath) ?? SourceDirectory;

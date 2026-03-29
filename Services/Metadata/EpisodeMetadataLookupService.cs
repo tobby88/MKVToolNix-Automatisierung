@@ -321,10 +321,8 @@ public sealed class EpisodeMetadataLookupService
                     match.Selection,
                     match.CombinedScore,
                     0,
-                    candidate.IsStoredFallback)
-                {
-                    SelectionMatch = match
-                };
+                    candidate.IsStoredFallback,
+                    match);
             }
             else
             {

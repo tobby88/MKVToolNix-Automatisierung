@@ -337,7 +337,8 @@ internal sealed record ScoredAutomaticMatch(
     TvdbEpisodeSelection Selection,
     int CombinedScore,
     int ScoreGap,
-    bool UsedStoredFallback)
+    bool UsedStoredFallback,
+    ScoredEpisodeMatch SelectionMatch)
 {
     public int TitleSimilarity => SelectionMatch.TitleSimilarity;
     public int BestTitleSimilarityCount => SelectionMatch.BestTitleSimilarityCount;
@@ -345,6 +346,4 @@ internal sealed record ScoredAutomaticMatch(
     public int StrongTitleMatchCount => SelectionMatch.StrongTitleMatchCount;
     public bool SeasonMatched => SelectionMatch.SeasonMatched;
     public bool EpisodeMatched => SelectionMatch.EpisodeMatched;
-
-    public ScoredEpisodeMatch SelectionMatch { get; init; } = null!;
 }

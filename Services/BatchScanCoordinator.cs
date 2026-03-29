@@ -23,19 +23,6 @@ public sealed class BatchScanCoordinator
     }
 
     /// <summary>
-    /// Findet alle Hauptvideodateien eines Batch-Ordners und blendet AD-Dateien aus.
-    /// </summary>
-    /// <param name="sourceDirectory">Zu scannender Quellordner.</param>
-    /// <returns>Alphabetisch sortierte Liste der primären Videodateien.</returns>
-    public IReadOnlyList<string> FindMainVideoFiles(string sourceDirectory)
-    {
-        return Directory.GetFiles(sourceDirectory, "*.mp4")
-            .Where(file => !EpisodeFileNameHelper.LooksLikeAudioDescription(file))
-            .OrderBy(file => Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    /// <summary>
     /// Bereitet einen Batch-Ordner einmalig für mehrere Einzelscans vor.
     /// </summary>
     /// <param name="sourceDirectory">Zu scannender Quellordner.</param>
