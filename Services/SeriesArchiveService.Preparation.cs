@@ -154,7 +154,12 @@ public sealed partial class SeriesArchiveService
                 outputPath,
                 entry.Kind!,
                 entry.Track.TrackId,
-                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!)))
+                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!))
+            {
+                Accessibility = entry.Track.IsHearingImpaired
+                    ? SubtitleAccessibility.HearingImpaired
+                    : SubtitleAccessibility.Standard
+            })
             .ToList();
 
         return new SubtitleReusePlan(externalSubtitlePlans, embeddedSubtitlePlans);

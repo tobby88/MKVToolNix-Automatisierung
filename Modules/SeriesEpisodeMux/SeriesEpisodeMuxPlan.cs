@@ -246,7 +246,7 @@ public sealed class SeriesEpisodeMuxPlan
                 "--default-track-flag",
                 "0:no",
                 "--hearing-impaired-flag",
-                "0:yes",
+                subtitle.IsHearingImpaired ? "0:yes" : "0:no",
                 "--original-flag",
                 "0:yes",
                 subtitle.FilePath

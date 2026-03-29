@@ -128,13 +128,31 @@ public sealed record EpisodeTrackMetadata(
     string AudioDescriptionTrackName);
 
 /// <summary>
+/// Barrierefreiheits-Markierung einer Untertitelspur.
+/// </summary>
+public enum SubtitleAccessibility
+{
+    Standard = 0,
+    HearingImpaired = 1
+}
+
+/// <summary>
 /// Externe oder eingebettete Untertitelquelle für den finalen Mux.
 /// </summary>
 public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null, string? SourceLabel = null)
 {
+    /// <summary>
+    /// Externe Untertitel werden derzeit standardmäßig als HI/SDH behandelt, bis eine sichere automatische Unterscheidung vorliegt.
+    /// </summary>
+    public SubtitleAccessibility Accessibility { get; init; } = SubtitleAccessibility.HearingImpaired;
+
     public bool IsEmbedded => EmbeddedTrackId is not null;
 
-    public string TrackName => $"Deutsch (hörgeschädigte) - {Kind.DisplayName}";
+    public bool IsHearingImpaired => Accessibility == SubtitleAccessibility.HearingImpaired;
+
+    public string TrackName => IsHearingImpaired
+        ? $"Deutsch (hörgeschädigte) - {Kind.DisplayName}"
+        : $"Deutsch - {Kind.DisplayName}";
 
     public string PreviewLabel => IsEmbedded
         ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, aus Zieldatei)"
