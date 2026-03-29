@@ -10,23 +10,10 @@
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <DefaultItemExcludes>$(DefaultItemExcludes);MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="MkvToolnixAutomatisierung.Tests\**\*.cs" />
-    <Compile Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*.cs" />
-    <Compile Remove="TestTools\**\*.cs" />
-    <EmbeddedResource Remove="MkvToolnixAutomatisierung.Tests\**\*" />
-    <EmbeddedResource Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
-    <EmbeddedResource Remove="TestTools\**\*" />
-    <None Remove="MkvToolnixAutomatisierung.Tests\**\*" />
-    <None Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
-    <None Remove="TestTools\**\*" />
-    <Page Remove="MkvToolnixAutomatisierung.Tests\**\*" />
-    <Page Remove="MkvToolnixAutomatisierung.IntegrationTests\**\*" />
-    <Page Remove="TestTools\**\*" />
   </ItemGroup>
   <ItemGroup>
     <None Update="README.md">
