@@ -501,17 +501,27 @@
                 </Border>
             </Expander>
 
-            <Expander Grid.Row="6" Header="Batch-Protokoll" Margin="0,6,0,0" IsExpanded="False">
-                <TextBox Margin="8"
-                         FontFamily="Consolas"
-                         AcceptsReturn="True"
-                         AcceptsTab="True"
-                         IsReadOnly="True"
-                         TextWrapping="NoWrap"
-                         HorizontalScrollBarVisibility="Auto"
-                         VerticalScrollBarVisibility="Auto"
-                         MinHeight="140"
-                         Text="{Binding LogText, Mode=OneWay}" />
+            <Expander Grid.Row="6"
+                      Header="Batch-Protokoll"
+                      Margin="0,6,0,0"
+                      IsExpanded="False"
+                      ToolTip="{Binding BatchLogInfoText, Mode=OneWay}">
+                <StackPanel>
+                    <TextBlock Margin="8,8,8,0"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Text="{Binding BatchLogInfoText, Mode=OneWay}" />
+                    <TextBox Margin="8"
+                             FontFamily="Consolas"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             IsReadOnly="True"
+                             TextWrapping="NoWrap"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Auto"
+                             MinHeight="140"
+                             Text="{Binding LogText, Mode=OneWay}" />
+                </StackPanel>
             </Expander>
         </Grid>
 

@@ -196,6 +196,8 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     public string RunBatchTooltip => "Startet das Muxing für alle ausgewählten Episoden. Offene Pflichtprüfungen werden vorher noch abgearbeitet.";
 
+    public string BatchLogInfoText => "Das sichtbare Protokoll zeigt Scan und Batch-Lauf dieser Sitzung. Die gespeicherte Logdatei enthält jeweils nur den aktuellen Batch-Lauf.";
+
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;
