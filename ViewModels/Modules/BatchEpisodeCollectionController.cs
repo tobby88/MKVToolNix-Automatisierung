@@ -70,7 +70,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         SortModes =
         [
             new(BatchEpisodeSortMode.FileName, "Dateiname"),
-            new(BatchEpisodeSortMode.PendingChecksFirst, "Pr\u00fcfung zuerst"),
+            new(BatchEpisodeSortMode.PendingChecksFirst, "Prüfung zuerst"),
             new(BatchEpisodeSortMode.StatusFirst, "Status zuerst"),
             new(BatchEpisodeSortMode.NewFirst, "Neu zuerst")
         ];

@@ -30,7 +30,7 @@ internal sealed class BatchRunProgressTracker
     {
         var ratio = total <= 0 ? 1d : current / (double)total;
         _reportStatus(
-            $"Erstelle Mux-Pl\u00E4ne... {current}/{Math.Max(total, 1)}",
+            $"Erstelle Mux-Pläne... {current}/{Math.Max(total, 1)}",
             MapPhase(PlanningStart, PlanningEnd, ratio));
     }
 
@@ -64,8 +64,8 @@ internal sealed class BatchRunProgressTracker
             : 0d;
 
         var statusText = itemProgressPercent is int
-            ? $"Batch l\u00E4uft... {currentItem}/{_totalItems} ({displayPercent}% in aktueller Episode)"
-            : $"Batch l\u00E4uft... {currentItem}/{_totalItems}";
+            ? $"Batch läuft... {currentItem}/{_totalItems} ({displayPercent}% in aktueller Episode)"
+            : $"Batch läuft... {currentItem}/{_totalItems}";
 
         if (hasWarning)
         {
@@ -82,21 +82,21 @@ internal sealed class BatchRunProgressTracker
             : MuxPhaseShare + ((currentFile / (double)totalFiles) * MovePhaseShare);
 
         _reportStatus(
-            $"Batch l\u00E4uft... {currentItem}/{_totalItems} (r\u00E4ume Quellen auf {currentFile}/{Math.Max(totalFiles, 1)})",
+            $"Batch läuft... {currentItem}/{_totalItems} (räume Quellen auf {currentFile}/{Math.Max(totalFiles, 1)})",
             MapExecutionProgress(currentItem, ratio));
     }
 
     public void ReportFinalizingItem(int currentItem)
     {
         _reportStatus(
-            $"Batch l\u00E4uft... {currentItem}/{_totalItems} (Episode wird abgeschlossen)",
+            $"Batch läuft... {currentItem}/{_totalItems} (Episode wird abgeschlossen)",
             MapExecutionProgress(currentItem, MuxPhaseShare + MovePhaseShare + FinalizePhaseShare / 2d));
     }
 
     public void ReportItemCompleted(int currentItem)
     {
         _reportStatus(
-            $"Batch l\u00E4uft... {currentItem}/{_totalItems}",
+            $"Batch läuft... {currentItem}/{_totalItems}",
             MapExecutionProgress(currentItem, 1d));
     }
 
@@ -104,7 +104,7 @@ internal sealed class BatchRunProgressTracker
     {
         var ratio = totalFiles <= 0 ? 1d : currentFile / (double)totalFiles;
         _reportStatus(
-            $"Batch l\u00E4uft... Done-Dateien werden in den Papierkorb verschoben {currentFile}/{Math.Max(totalFiles, 1)}",
+            $"Batch läuft... Done-Dateien werden in den Papierkorb verschoben {currentFile}/{Math.Max(totalFiles, 1)}",
             MapPhase(CleanupStart, CleanupEnd, ratio));
     }
 

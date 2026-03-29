@@ -14,7 +14,7 @@ public sealed partial class BatchMuxViewModel
         var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
         if (selectedItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Bitte mindestens eine Episode f\u00FCr den Batch ausw\u00E4hlen.");
+            _dialogService.ShowWarning("Hinweis", "Bitte mindestens eine Episode für den Batch auswählen.");
             return;
         }
 
@@ -24,7 +24,7 @@ public sealed partial class BatchMuxViewModel
 
         if (readyItems.Count == 0)
         {
-            _dialogService.ShowWarning("Hinweis", "Es gibt keine g\u00FCltigen Episoden f\u00FCr den Batch.");
+            _dialogService.ShowWarning("Hinweis", "Es gibt keine gültigen Episoden für den Batch.");
             return;
         }
 
@@ -37,19 +37,19 @@ public sealed partial class BatchMuxViewModel
             {
                 _dialogService.ShowWarning(
                     "Hinweis",
-                    "Der Batch wurde abgebrochen, weil nicht alle pr\u00FCfpflichtigen Quellen freigegeben wurden.");
+                    "Der Batch wurde abgebrochen, weil nicht alle prüfpflichtigen Quellen freigegeben wurden.");
                 SetStatus("Batch abgebrochen", 0);
                 return;
             }
 
-            SetStatus("Erstelle Mux-Pl\u00E4ne...", 0);
+            SetStatus("Erstelle Mux-Pläne...", 0);
             var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
             var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker);
 
             if (executablePlans.Count == 0)
             {
-                SetStatus("Keine weiteren Mux-Vorg\u00E4nge n\u00F6tig", 100);
-                _dialogService.ShowInfo("Hinweis", "Alle ausgew\u00E4hlten Episoden sind bereits vollst\u00E4ndig oder wurden wegen Fehlern \u00FCbersprungen.");
+                SetStatus("Keine weiteren Mux-Vorgänge nötig", 100);
+                _dialogService.ShowInfo("Hinweis", "Alle ausgewählten Episoden sind bereits vollständig oder wurden wegen Fehlern übersprungen.");
                 return;
             }
 
