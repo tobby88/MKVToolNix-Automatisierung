@@ -496,14 +496,12 @@ public sealed partial class SingleEpisodeMuxViewModel
 
     private bool ShouldPreserveManualTitle(string selectedVideoPath)
     {
-        if (string.IsNullOrWhiteSpace(Title)
-            || string.Equals(Title, _lastSuggestedTitle, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        return PathComparisonHelper.AreSamePath(selectedVideoPath, DetectionSeedPath)
-            || PathComparisonHelper.AreSamePath(selectedVideoPath, MainVideoPath);
+        return SingleEpisodeManualTitlePolicy.ShouldPreserve(
+            Title,
+            _lastSuggestedTitle,
+            DetectionSeedPath,
+            MainVideoPath,
+            selectedVideoPath);
     }
 
     public override void ApproveMetadataReview(string statusText)
