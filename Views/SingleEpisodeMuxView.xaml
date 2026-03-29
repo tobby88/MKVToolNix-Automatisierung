@@ -260,7 +260,7 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serienname" />
-                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=LostFocus}" />
                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" ToolTip="{Binding MetadataActionButtonTooltip, Mode=OneWay}" Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
@@ -278,19 +278,19 @@
                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
                                  PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
                                  DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
-                                 Text="{Binding SeasonNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                 Text="{Binding SeasonNumber, UpdateSourceTrigger=LostFocus}" />
                         <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
                         <TextBox Grid.Column="4"
                                  Tag="Folge fehlt oder ist noch ungültig."
                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
                                  PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
                                  DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
-                                 Text="{Binding EpisodeNumber, UpdateSourceTrigger=PropertyChanged}" />
+                                 Text="{Binding EpisodeNumber, UpdateSourceTrigger=LostFocus}" />
                     </Grid>
                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" ToolTip="{Binding RescanButtonTooltip, Mode=OneWay}" Content="Auto-Erkennung neu" />
 
                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Episodentitel" />
-                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding Title, UpdateSourceTrigger=LostFocus}" />
 
                     <Border Grid.Row="3"
                             Grid.Column="0"

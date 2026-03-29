@@ -310,7 +310,7 @@
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serienname" />
-                                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.SeriesName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.SeriesName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
                                     <Grid Grid.Row="1" Grid.Column="1" Margin="0,4,12,4">
@@ -327,18 +327,18 @@
                                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
                                                  PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
                                                  DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
-                                                 Text="{Binding SelectedEpisodeItem.SeasonNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                 Text="{Binding SelectedEpisodeItem.SeasonNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
                                         <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
                                         <TextBox Grid.Column="4"
                                                  Tag="Folge fehlt oder ist noch ungültig."
                                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
                                                  PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
                                                  DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
-                                                 Text="{Binding SelectedEpisodeItem.EpisodeNumber, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                 Text="{Binding SelectedEpisodeItem.EpisodeNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
                                     </Grid>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Episodentitel" />
-                                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.TitleForMux, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SelectedEpisodeItem.TitleForMux, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="TVDB-Status" />
                                     <StackPanel Grid.Row="3" Grid.Column="1">
