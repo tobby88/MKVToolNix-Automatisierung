@@ -81,13 +81,26 @@ public sealed partial class BatchMuxViewModel
                 AppendBatchRunLog);
 
             await OfferBatchDoneCleanupAsync(doneDirectory, executionOutcome.MovedDoneFiles, progressTracker);
-            var logSaveResult = PersistBatchRunArtifacts(
-                executionOutcome.NewOutputFiles,
-                executionOutcome.SuccessCount,
-                executionOutcome.WarningCount,
-                executionOutcome.ErrorCount,
-                batchRunLogBuffer,
-                AppendBatchRunLog);
+            BatchRunLogSaveResult? logSaveResult;
+            try
+            {
+                logSaveResult = BatchRunArtifactPersistence.Persist(
+                    _services.BatchLogs,
+                    SourceDirectory,
+                    OutputDirectory,
+                    executionOutcome.NewOutputFiles,
+                    executionOutcome.SuccessCount,
+                    executionOutcome.WarningCount,
+                    executionOutcome.ErrorCount,
+                    batchRunLogBuffer,
+                    AppendBatchRunLog);
+            }
+            catch (Exception ex)
+            {
+                AppendBatchRunLog($"LOG-FEHLER: {ex.Message}");
+                _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
+                logSaveResult = null;
+            }
 
             SetStatus(
                 $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich, {executionOutcome.WarningCount} Warnung(en), {executionOutcome.ErrorCount} Fehler",
@@ -156,54 +169,6 @@ public sealed partial class BatchMuxViewModel
         if (_dialogService.AskOpenDoneDirectory(doneDirectory))
         {
             _dialogService.OpenPathWithDefaultApp(doneDirectory);
-        }
-    }
-
-    private BatchRunLogSaveResult? PersistBatchRunArtifacts(
-        IReadOnlyList<string> newOutputFiles,
-        int successCount,
-        int warningCount,
-        int errorCount,
-        BufferedTextStore batchRunLogBuffer,
-        Action<string> appendBatchRunLog)
-    {
-        var files = newOutputFiles
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (files.Count == 0)
-        {
-            appendBatchRunLog(string.Empty);
-            appendBatchRunLog("NEU ERZEUGTE AUSGABEDATEIEN: keine");
-        }
-        else
-        {
-            appendBatchRunLog(string.Empty);
-            appendBatchRunLog("NEU ERZEUGTE AUSGABEDATEIEN:");
-            foreach (var file in files)
-            {
-                appendBatchRunLog("  " + file);
-            }
-        }
-
-        try
-        {
-            return _services.BatchLogs.SaveBatchRunArtifacts(
-                SourceDirectory,
-                OutputDirectory,
-                batchRunLogBuffer.GetTextSnapshot(),
-                files,
-                successCount,
-                warningCount,
-                errorCount);
-        }
-        catch (Exception ex)
-        {
-            appendBatchRunLog($"LOG-FEHLER: {ex.Message}");
-            _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
-            return null;
         }
     }
 
