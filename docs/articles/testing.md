@@ -6,6 +6,7 @@ Das Projekt verwendet jetzt drei Testebenen:
 
 - Unit-Tests in `MkvToolnixAutomatisierung.Tests`
   - fokussieren einzelne Services, Parser und ViewModel-Regeln
+  - sichern auch kleine, zentralisierte Heuristiken wie Textnormalisierung und Encoding-Reparatur gezielt ab
 - Integrationstests in `MkvToolnixAutomatisierung.IntegrationTests`
   - prüfen mehrere Services zusammen über echte Temp-Dateien und einen kontrollierten Fake-`mkvmerge`
   - decken auch Batch-Scans mit vorbereitetem `BatchScanDirectoryContext` über mehrere Einzeldateien hinweg ab

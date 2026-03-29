@@ -157,7 +157,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static string NormalizeSeparators(string value)
     {
-        var normalized = RepairMojibake(value)
+        var normalized = MojibakeRepair.NormalizeLikelyMojibake(value)
             .Replace("\u2013", "-")
             .Replace("\u2014", "-")
             .Replace("\u2212", "-");
@@ -241,20 +241,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         var bytes = File.ReadAllBytes(filePath);
         var utf8 = DecodeText(bytes, Encoding.UTF8);
-        if (!LooksLikeMojibake(utf8))
+        var normalizedUtf8 = MojibakeRepair.NormalizeLikelyMojibake(utf8);
+        if (!MojibakeRepair.LooksLikeMojibake(normalizedUtf8))
         {
-            return utf8;
-        }
-
-        var repairedUtf8 = RepairMojibake(utf8);
-        if (!LooksLikeMojibake(repairedUtf8))
-        {
-            return repairedUtf8;
+            return normalizedUtf8;
         }
 
         var latin1 = DecodeText(bytes, Encoding.Latin1);
-        var repairedLatin1 = RepairMojibake(latin1);
-        return string.IsNullOrWhiteSpace(repairedLatin1) ? latin1 : repairedLatin1;
+        var normalizedLatin1 = MojibakeRepair.NormalizeLikelyMojibake(latin1);
+        return string.IsNullOrWhiteSpace(normalizedLatin1) ? latin1 : normalizedLatin1;
     }
 
     private static string DecodeText(byte[] bytes, Encoding encoding)
@@ -267,84 +262,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         {
             return string.Empty;
         }
-    }
-
-    private static string RepairMojibake(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || !LooksLikeMojibake(value))
-        {
-            return value;
-        }
-
-        var repairedCommonSequences = RepairCommonMojibakeSequences(value);
-        if (!LooksLikeMojibake(repairedCommonSequences))
-        {
-            return repairedCommonSequences;
-        }
-
-        try
-        {
-            var repaired = TryRepairMojibakeWithEncoding(value, TryGetWindows1252Encoding())
-                ?? TryRepairMojibakeWithEncoding(value, Encoding.Latin1);
-            if (string.IsNullOrWhiteSpace(repaired))
-            {
-                return repairedCommonSequences;
-            }
-
-            return LooksLikeMojibake(repaired) && !LooksLikeMojibake(repairedCommonSequences)
-                ? repairedCommonSequences
-                : repaired;
-        }
-        catch
-        {
-            return repairedCommonSequences;
-        }
-    }
-
-    private static string RepairCommonMojibakeSequences(string value)
-    {
-        return value
-            .Replace("\u00C3\u00A4", "\u00E4", StringComparison.Ordinal)
-            .Replace("\u00C3\u00B6", "\u00F6", StringComparison.Ordinal)
-            .Replace("\u00C3\u00BC", "\u00FC", StringComparison.Ordinal)
-            .Replace("\u00C3\u0084", "\u00C4", StringComparison.Ordinal)
-            .Replace("\u00C3\u0096", "\u00D6", StringComparison.Ordinal)
-            .Replace("\u00C3\u009C", "\u00DC", StringComparison.Ordinal)
-            .Replace("\u00C3\u0178", "\u00DF", StringComparison.Ordinal)
-            .Replace("\u00C3\u009F", "\u00DF", StringComparison.Ordinal);
-    }
-
-    private static string? TryRepairMojibakeWithEncoding(string value, Encoding? encoding)
-    {
-        if (encoding is null)
-        {
-            return null;
-        }
-
-        var repaired = Encoding.UTF8.GetString(encoding.GetBytes(value));
-        return string.IsNullOrWhiteSpace(repaired) ? null : repaired;
-    }
-
-    private static Encoding? TryGetWindows1252Encoding()
-    {
-        try
-        {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return Encoding.GetEncoding(1252);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool LooksLikeMojibake(string value)
-    {
-        return !string.IsNullOrWhiteSpace(value)
-            && (value.Contains("\u00C3", StringComparison.Ordinal)
-                || value.Contains("\u00E2", StringComparison.Ordinal)
-                || value.Contains("\u00C2", StringComparison.Ordinal)
-                || value.Contains('\uFFFD'));
     }
 
     private static string? ReadLabeledValue(string content, string label)

@@ -11,7 +11,6 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed class MkvMergeProbeService
 {
-    private static readonly char[] MojibakeMarkers = [(char)0x00C3, (char)0x00E2];
     private readonly ConcurrentDictionary<string, CachedFileValue<MediaTrackMetadata>> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<AudioTrackMetadata>> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<ContainerMetadata>> _containerCache = new(StringComparer.OrdinalIgnoreCase);
@@ -295,44 +294,7 @@ public sealed class MkvMergeProbeService
             return string.Empty;
         }
 
-        var repairedCommonSequences = RepairCommonMojibakeSequences(value);
-        if (!ContainsPotentialMojibakeMarker(repairedCommonSequences))
-        {
-            return repairedCommonSequences;
-        }
-
-        if (!ContainsPotentialMojibakeMarker(value))
-        {
-            return value;
-        }
-
-        try
-        {
-            var repaired = Encoding.UTF8.GetString(Encoding.Latin1.GetBytes(repairedCommonSequences));
-            return string.IsNullOrWhiteSpace(repaired) ? repairedCommonSequences : repaired;
-        }
-        catch
-        {
-            return repairedCommonSequences;
-        }
-    }
-
-    private static string RepairCommonMojibakeSequences(string value)
-    {
-        return value
-            .Replace("\u00C3\u00A4", "\u00E4", StringComparison.Ordinal)
-            .Replace("\u00C3\u00B6", "\u00F6", StringComparison.Ordinal)
-            .Replace("\u00C3\u00BC", "\u00FC", StringComparison.Ordinal)
-            .Replace("\u00C3\u0084", "\u00C4", StringComparison.Ordinal)
-            .Replace("\u00C3\u0096", "\u00D6", StringComparison.Ordinal)
-            .Replace("\u00C3\u009C", "\u00DC", StringComparison.Ordinal)
-            .Replace("\u00C3\u0178", "\u00DF", StringComparison.Ordinal)
-            .Replace("\u00C3\u009F", "\u00DF", StringComparison.Ordinal);
-    }
-
-    private static bool ContainsPotentialMojibakeMarker(string value)
-    {
-        return value.IndexOfAny(MojibakeMarkers) >= 0;
+        return MojibakeRepair.NormalizeLikelyMojibake(value);
     }
 
     private static bool ReadBooleanProperty(JsonElement properties, string propertyName)

@@ -10,6 +10,7 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
   - erkennt Episodenquellen, erzeugt Mux-Pläne und kapselt die mkvmerge-spezifische Argumentlogik
 - `Services`
   - enthält Archivintegration, Pfadbildung, Dateicopy/Cleanup, Logpersistenz und Settings-Zugriffe
+  - bündelt außerdem gemeinsame technische Heuristiken wie die Text-/Mojibake-Normalisierung, damit Parser und Probe-Service nicht auseinanderlaufen
 - `Services/Metadata`
   - kapselt TVDB-Zugriff, Caching und lokale Serien-Zuordnungen
 - `ViewModels/Modules`
