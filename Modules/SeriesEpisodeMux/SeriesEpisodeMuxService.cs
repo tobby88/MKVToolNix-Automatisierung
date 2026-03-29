@@ -98,14 +98,6 @@ public sealed class SeriesEpisodeMuxService
     }
 
     /// <summary>
-    /// Verwirft zwischengespeicherte Erkennungsergebnisse des Planners.
-    /// </summary>
-    public void InvalidatePlanningCaches()
-    {
-        _planner.InvalidatePlanningCaches();
-    }
-
-    /// <summary>
     /// Verwirft gecachte Probe-Ergebnisse für Ausgabedatei und optionale Arbeitskopie eines Plans.
     /// </summary>
     /// <param name="plan">Der Plan, dessen Ausgabepfade invalidiert werden sollen.</param>

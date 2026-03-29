@@ -248,7 +248,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var settings = _toolPathStore.Load();
         settings.FfprobePath = selectedPath;
         _toolPathStore.Save(settings);
-        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
         RefreshToolStatus();
     }
 
@@ -267,7 +266,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var settings = _toolPathStore.Load();
         settings.MkvToolNixDirectoryPath = selectedDirectory;
         _toolPathStore.Save(settings);
-        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
         RefreshToolStatus();
     }
 
@@ -284,7 +282,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         _services.Archive.ConfigureArchiveRootDirectory(selectedDirectory);
-        _services.SeriesEpisodeMux.InvalidatePlanningCaches();
         RefreshArchiveStatus();
     }
 

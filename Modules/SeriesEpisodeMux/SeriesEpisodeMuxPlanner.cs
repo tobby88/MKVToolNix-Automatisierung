@@ -68,12 +68,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return detected;
     }
 
-    public void InvalidatePlanningCaches()
-    {
-        // Bewusst leer: Erkennungsergebnisse werden nicht mehr global nach Dateipfad gecacht,
-        // damit nachträglich auftauchende Quellen oder Begleitdateien sofort sichtbar bleiben.
-    }
-
     public void InvalidateProbeCaches(IEnumerable<string?> filePaths)
     {
         _probeService.Invalidate(filePaths);
