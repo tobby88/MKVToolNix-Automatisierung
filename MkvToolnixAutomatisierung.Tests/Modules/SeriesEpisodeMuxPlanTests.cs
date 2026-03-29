@@ -54,6 +54,7 @@ public sealed class SeriesEpisodeMuxPlanTests
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
             includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
             subtitleFiles: subtitleFiles,

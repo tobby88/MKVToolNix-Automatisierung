@@ -225,6 +225,179 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.DoesNotContain(plan.VideoSources, source => string.Equals(source.FilePath, preferredButRejectedPath, StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task CreatePlanAsync_ReplacingArchivePrimary_PreservesArchiveAttachments_AlongsideReusedArchiveTracks()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-attachments");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-attachments");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var newPrimaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            newPrimaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("cover.jpg"), CreateAttachment("notes.txt")],
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Audiodeskription", isVisualImpaired: true),
+            CreateSubtitleTrack(3, "SubRip/SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            newPrimaryVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.NotNull(plan.WorkingCopy);
+        Assert.Equal(outputPath, plan.AttachmentSourcePath);
+        Assert.Equal(new[] { "cover.jpg", "notes.txt" }, plan.PreservedAttachmentNames);
+        Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
+        Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
+        Assert.Contains("cover.jpg (aus Zieldatei)", plan.BuildUsageSummary().Attachments, StringComparison.Ordinal);
+
+        var arguments = plan.BuildArguments();
+        var runtimeArchivePath = plan.WorkingCopy!.DestinationFilePath;
+        AssertContainsSequence(arguments, "--no-video", "--no-audio", "--no-subtitles", runtimeArchivePath);
+        Assert.Equal(3, arguments.Count(argument => string.Equals(argument, runtimeArchivePath, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task PrepareAsync_KeepingArchivePrimary_RetainsBetterSameCodecAdditionalVideo()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-upgrade");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-upgrade");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var manualPrimaryPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-1.mp4");
+        var betterAdditionalPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            manualPrimaryPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            betterAdditionalPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var archiveService = CreateArchiveService(archiveDirectory);
+
+        var decision = await archiveService.PrepareAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            new SeriesEpisodeMuxRequest(
+                manualPrimaryPath,
+                AudioDescriptionPath: null,
+                SubtitlePaths: [],
+                AttachmentPaths: [],
+                outputPath,
+                Title: "Pilot"),
+            [manualPrimaryPath, betterAdditionalPath]);
+
+        Assert.Equal(outputPath, decision.PrimarySourcePath);
+        Assert.Contains(betterAdditionalPath, decision.AdditionalVideoPaths);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_DoesNotSuppressRequestedExternalSubtitles_WhenArchiveAlreadyContainsSameKind()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-subtitles");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-subtitles");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var externalSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(3, "SubRip/SRT"));
+
+        var archiveService = CreateArchiveService(archiveDirectory);
+
+        var decision = await archiveService.PrepareAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            new SeriesEpisodeMuxRequest(
+                mainVideoPath,
+                AudioDescriptionPath: null,
+                SubtitlePaths: [externalSubtitlePath],
+                AttachmentPaths: [],
+                outputPath,
+                Title: "Pilot"),
+            [mainVideoPath]);
+
+        Assert.Contains(decision.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, externalSubtitlePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_DeduplicatesSubtitleKinds_AcrossSelectedVideoSources()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-dedup");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-dedup");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var alternateVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
+        var primarySubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle-primary");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.srt", "subtitle-alternate");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-2.txt",
+            "Sender: ARD\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            primaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            alternateVideoPath,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(primaryVideoPath);
+
+        Assert.Single(detected.SubtitlePaths);
+        Assert.Equal(primarySubtitlePath, detected.SubtitlePaths[0]);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -235,12 +408,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
 
     private SeriesEpisodeMuxService CreateMuxService(string archiveDirectory)
     {
-        var settingsStore = new AppSettingsStore();
-        new AppToolPathStore(settingsStore).Save(new AppToolPathSettings
-        {
-            MkvToolNixDirectoryPath = FakeMkvMergeTestHelper.ResolveExecutablePath()
-        });
-
+        var settingsStore = CreateSettingsStore();
         var probeService = new MkvMergeProbeService();
         var archiveService = new SeriesArchiveService(probeService, new AppArchiveSettingsStore(settingsStore));
         archiveService.ConfigureArchiveRootDirectory(archiveDirectory);
@@ -253,6 +421,24 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
                 new NullDurationProbe()),
             new MuxExecutionService(),
             new MkvMergeOutputParser());
+    }
+
+    private SeriesArchiveService CreateArchiveService(string archiveDirectory)
+    {
+        var settingsStore = CreateSettingsStore();
+        var service = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore));
+        service.ConfigureArchiveRootDirectory(archiveDirectory);
+        return service;
+    }
+
+    private static AppSettingsStore CreateSettingsStore()
+    {
+        var settingsStore = new AppSettingsStore();
+        new AppToolPathStore(settingsStore).Save(new AppToolPathSettings
+        {
+            MkvToolNixDirectoryPath = FakeMkvMergeTestHelper.ResolveExecutablePath()
+        });
+        return settingsStore;
     }
 
     private string CreateFile(string directory, string fileName, string content = "data")
@@ -278,7 +464,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         };
     }
 
-    private static object CreateAudioTrack(int id, string codec)
+    private static object CreateAudioTrack(int id, string codec, string trackName = "", bool isVisualImpaired = false)
     {
         return new
         {
@@ -287,9 +473,58 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             codec,
             properties = new
             {
-                language_ietf = "de"
+                language_ietf = "de",
+                track_name = trackName,
+                flag_visual_impaired = isVisualImpaired
             }
         };
+    }
+
+    private static object CreateSubtitleTrack(int id, string codec, string trackName = "", bool isHearingImpaired = false)
+    {
+        return new
+        {
+            id,
+            type = "subtitles",
+            codec,
+            properties = new
+            {
+                language_ietf = "de",
+                track_name = trackName,
+                flag_hearing_impaired = isHearingImpaired
+            }
+        };
+    }
+
+    private static object CreateAttachment(string fileName)
+    {
+        return new
+        {
+            file_name = fileName
+        };
+    }
+
+    private static void AssertContainsSequence(IReadOnlyList<string> values, params string[] expectedSequence)
+    {
+        for (var index = 0; index <= values.Count - expectedSequence.Length; index++)
+        {
+            var matches = true;
+            for (var offset = 0; offset < expectedSequence.Length; offset++)
+            {
+                if (!string.Equals(values[index + offset], expectedSequence[offset], StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Sequenz '{string.Join("', '", expectedSequence)}' wurde nicht gefunden.");
     }
 
     private sealed class NullDurationProbe : IMediaDurationProbe

@@ -34,12 +34,20 @@ internal static class FakeMkvMergeTestHelper
         string mediaFilePath,
         params object[] tracks)
     {
+        WriteProbeFileWithAttachments(mediaFilePath, [], tracks);
+    }
+
+    public static void WriteProbeFileWithAttachments(
+        string mediaFilePath,
+        IReadOnlyList<object> attachments,
+        params object[] tracks)
+    {
         WriteJsonFile(
             mediaFilePath + ".mkvmerge.json",
             new
             {
                 tracks,
-                attachments = Array.Empty<object>()
+                attachments
             });
     }
 

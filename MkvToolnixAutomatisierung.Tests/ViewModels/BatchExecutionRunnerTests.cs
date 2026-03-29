@@ -241,6 +241,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
             includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
             subtitleFiles: [],

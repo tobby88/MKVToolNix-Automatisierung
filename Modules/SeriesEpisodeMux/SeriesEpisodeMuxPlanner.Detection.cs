@@ -126,7 +126,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var episodeIdentity = SelectPreferredEpisodeIdentity(normalCandidates, selectedIdentity);
         var primaryVideoCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, primaryVideoCandidate);
-        var subtitlePaths = CollectSubtitlePaths(allNormalCandidates, primaryVideoCandidate);
+        var subtitlePaths = CollectSubtitlePaths(selectedVideoCandidates, primaryVideoCandidate);
         var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName);
 
         var audioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
@@ -389,6 +389,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.PrimaryAudioTrackIds,
             archiveDecision.PrimarySubtitleTrackIds,
             archiveDecision.IncludePrimaryAttachments,
+            archiveDecision.AttachmentSourcePath,
             audioDescriptionPath,
             audioDescriptionMetadata?.TrackId,
             subtitleFilesForPlan,
@@ -610,14 +611,30 @@ public sealed partial class SeriesEpisodeMuxPlanner
     }
 
     private static List<string> CollectSubtitlePaths(
-        IReadOnlyList<NormalVideoCandidate> allCandidates,
+        IReadOnlyList<NormalVideoCandidate> selectedVideoCandidates,
         NormalVideoCandidate primaryVideoCandidate)
     {
-        return FilterByDuration(allCandidates, primaryVideoCandidate.DurationSeconds)
-            .SelectMany(candidate => candidate.SubtitlePaths)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var subtitlePaths = new List<string>();
+        var coveredKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var candidate in FilterByDuration(selectedVideoCandidates, primaryVideoCandidate.DurationSeconds))
+        {
+            foreach (var subtitlePath in candidate.SubtitlePaths
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                var subtitleKind = SubtitleKind.FromExtension(Path.GetExtension(subtitlePath));
+                if (!coveredKinds.Add(subtitleKind.DisplayName))
+                {
+                    continue;
+                }
+
+                subtitlePaths.Add(subtitlePath);
+            }
+        }
+
+        return subtitlePaths;
     }
 
     private static string BuildVideoTrackName(MediaTrackMetadata metadata)

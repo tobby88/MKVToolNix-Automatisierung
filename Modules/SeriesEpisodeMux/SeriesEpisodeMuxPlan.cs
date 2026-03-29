@@ -17,6 +17,7 @@ public sealed class SeriesEpisodeMuxPlan
         IReadOnlyList<int>? primarySourceAudioTrackIds,
         IReadOnlyList<int>? primarySourceSubtitleTrackIds,
         bool includePrimarySourceAttachments,
+        string? attachmentSourcePath,
         string? audioDescriptionFilePath,
         int? audioDescriptionTrackId,
         IReadOnlyList<SubtitleFile> subtitleFiles,
@@ -40,6 +41,7 @@ public sealed class SeriesEpisodeMuxPlan
         PrimarySourceAudioTrackIds = primarySourceAudioTrackIds;
         PrimarySourceSubtitleTrackIds = primarySourceSubtitleTrackIds;
         IncludePrimarySourceAttachments = includePrimarySourceAttachments;
+        AttachmentSourcePath = attachmentSourcePath;
         AudioDescriptionFilePath = audioDescriptionFilePath;
         AudioDescriptionTrackId = audioDescriptionTrackId;
         SubtitleFiles = subtitleFiles;
@@ -67,6 +69,7 @@ public sealed class SeriesEpisodeMuxPlan
         PrimarySourceAudioTrackIds = null;
         PrimarySourceSubtitleTrackIds = null;
         IncludePrimarySourceAttachments = false;
+        AttachmentSourcePath = null;
         SubtitleFiles = [];
         AttachmentFilePaths = [];
         PreservedAttachmentNames = [];
@@ -85,6 +88,7 @@ public sealed class SeriesEpisodeMuxPlan
     public IReadOnlyList<int>? PrimarySourceAudioTrackIds { get; }
     public IReadOnlyList<int>? PrimarySourceSubtitleTrackIds { get; }
     public bool IncludePrimarySourceAttachments { get; }
+    public string? AttachmentSourcePath { get; }
     public string? AudioDescriptionFilePath { get; }
     public int? AudioDescriptionTrackId { get; }
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
@@ -253,6 +257,17 @@ public sealed class SeriesEpisodeMuxPlan
             ]);
         }
 
+        if (!string.IsNullOrWhiteSpace(AttachmentSourcePath))
+        {
+            arguments.AddRange(
+            [
+                "--no-video",
+                "--no-audio",
+                "--no-subtitles",
+                ResolveRuntimeFilePath(AttachmentSourcePath)
+            ]);
+        }
+
         foreach (var attachmentFilePath in AttachmentFilePaths)
         {
             arguments.AddRange(
@@ -369,6 +384,12 @@ public sealed class SeriesEpisodeMuxPlan
             filePaths.Add(AudioDescriptionFilePath);
         }
 
+        if (!string.IsNullOrWhiteSpace(AttachmentSourcePath)
+            && !string.Equals(AttachmentSourcePath, OutputFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            filePaths.Add(AttachmentSourcePath);
+        }
+
         filePaths.AddRange(SubtitleFiles
             .Where(subtitle => !subtitle.IsEmbedded)
             .Select(subtitle => subtitle.FilePath));
@@ -444,7 +465,8 @@ public sealed class SeriesEpisodeMuxPlan
     {
         var parts = new List<string>();
 
-        if (IncludePrimarySourceAttachments && PreservedAttachmentNames.Count > 0)
+        if ((IncludePrimarySourceAttachments || !string.IsNullOrWhiteSpace(AttachmentSourcePath))
+            && PreservedAttachmentNames.Count > 0)
         {
             parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (aus Zieldatei)"));
         }

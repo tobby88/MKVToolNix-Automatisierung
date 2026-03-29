@@ -57,6 +57,7 @@ public sealed partial class SeriesArchiveService
                 request,
                 additionalVideoPaths,
                 subtitlePlan,
+                existingArchive,
                 bestExistingVideo,
                 newPrimaryVideo,
                 existingAudioDescription,
@@ -117,7 +118,7 @@ public sealed partial class SeriesArchiveService
         var newPrimaryVideo = plannedVideos.First();
         return plannedVideos
             .Where(video => !string.Equals(video.FilePath, newPrimaryVideo.FilePath, StringComparison.OrdinalIgnoreCase))
-            .Where(video => existingVideoTracks.All(track => !string.Equals(track.CodecLabel, video.Metadata.VideoCodecLabel, StringComparison.OrdinalIgnoreCase)))
+            .Where(video => ShouldKeepAdditionalVideo(video.Metadata, existingVideoTracks))
             .Select(video => video.FilePath)
             .ToList();
     }
@@ -127,18 +128,15 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<string> requestSubtitlePaths,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks)
     {
-        var existingSubtitleKinds = existingSubtitleTracks
-            .Select(track => SubtitleKind.FromExistingCodec(track.CodecLabel))
-            .Where(kind => kind is not null)
-            .Cast<SubtitleKind>()
-            .ToList();
-
         var externalSubtitlePlans = requestSubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
-            .Where(plan => existingSubtitleKinds.All(kind => !string.Equals(kind.DisplayName, plan.Kind.DisplayName, StringComparison.OrdinalIgnoreCase)))
             .ToList();
+
+        var externalCoverage = externalSubtitlePlans
+            .Select(BuildSubtitleCoverageKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var embeddedSubtitlePlans = existingSubtitleTracks
             .Select(track => new
@@ -147,7 +145,7 @@ public sealed partial class SeriesArchiveService
                 Kind = SubtitleKind.FromExistingCodec(track.CodecLabel)
             })
             .Where(entry => entry.Kind is not null)
-            .Where(entry => externalSubtitlePlans.All(plan => !string.Equals(plan.Kind.DisplayName, entry.Kind!.DisplayName, StringComparison.OrdinalIgnoreCase)))
+            .Where(entry => !externalCoverage.Contains(BuildSubtitleCoverageKey(entry.Kind!, entry.Track.IsHearingImpaired)))
             .OrderBy(entry => entry.Kind!.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
             .Select(entry => new SubtitleFile(
@@ -206,6 +204,7 @@ public sealed partial class SeriesArchiveService
             PrimaryAudioTrackIds: primaryAudioTrack is null ? null : [primaryAudioTrack.TrackId],
             PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 ? [] : null,
             IncludePrimaryAttachments: true,
+            AttachmentSourcePath: null,
             AdditionalVideoPaths: additionalVideoPaths,
             AudioDescriptionFilePath: existingAudioDescription is null
                 ? request.AudioDescriptionPath
@@ -229,6 +228,7 @@ public sealed partial class SeriesArchiveService
         SeriesEpisodeMuxRequest request,
         IReadOnlyList<string> additionalVideoPaths,
         SubtitleReusePlan subtitlePlan,
+        ExistingArchiveState existingArchive,
         ContainerTrackMetadata? bestExistingVideo,
         PreparedVideoSource newPrimaryVideo,
         ContainerTrackMetadata? existingAudioDescription,
@@ -236,6 +236,9 @@ public sealed partial class SeriesArchiveService
     {
         var needsExistingCopy = (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
             || subtitlePlan.EmbeddedPlans.Count > 0;
+        var preservedAttachmentNames = needsExistingCopy
+            ? existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList()
+            : [];
 
         return new ArchiveIntegrationDecision(
             OutputFilePath: outputPath,
@@ -246,6 +249,7 @@ public sealed partial class SeriesArchiveService
             PrimaryAudioTrackIds: null,
             PrimarySubtitleTrackIds: null,
             IncludePrimaryAttachments: false,
+            AttachmentSourcePath: preservedAttachmentNames.Count > 0 ? outputPath : null,
             AdditionalVideoPaths: additionalVideoPaths,
             AudioDescriptionFilePath: !string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
                 ? request.AudioDescriptionPath
@@ -258,7 +262,7 @@ public sealed partial class SeriesArchiveService
             SubtitleFiles: subtitlePlan.FinalPlans,
             AttachmentFilePaths: request.AttachmentPaths,
             FallbackToRequestAttachments: true,
-            PreservedAttachmentNames: [],
+            PreservedAttachmentNames: preservedAttachmentNames,
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",
@@ -279,6 +283,20 @@ public sealed partial class SeriesArchiveService
             < MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(existingVideo.CodecLabel);
     }
 
+    private static bool ShouldKeepAdditionalVideo(
+        MediaTrackMetadata candidate,
+        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
+    {
+        var bestExistingWithSameCodec = existingVideoTracks
+            .Where(track => string.Equals(track.CodecLabel, candidate.VideoCodecLabel, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(track => track.VideoWidth)
+            .ThenBy(track => track.TrackId)
+            .FirstOrDefault();
+
+        return bestExistingWithSameCodec is null
+            || candidate.VideoWidth > bestExistingWithSameCodec.VideoWidth;
+    }
+
     private static IReadOnlyList<string> BuildAttachmentPathsForUsedVideos(IEnumerable<string> usedVideoPaths)
     {
         return usedVideoPaths
@@ -296,6 +314,16 @@ public sealed partial class SeriesArchiveService
         }
 
         return $"Archiv-Untertitel {kind.DisplayName}";
+    }
+
+    private static string BuildSubtitleCoverageKey(SubtitleFile subtitle)
+    {
+        return BuildSubtitleCoverageKey(subtitle.Kind, subtitle.IsHearingImpaired);
+    }
+
+    private static string BuildSubtitleCoverageKey(SubtitleKind kind, bool isHearingImpaired)
+    {
+        return $"{kind.DisplayName}|{(isHearingImpaired ? "hi" : "std")}";
     }
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)
