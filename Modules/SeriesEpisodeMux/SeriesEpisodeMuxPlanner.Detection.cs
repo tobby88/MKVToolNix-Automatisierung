@@ -372,7 +372,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Concat(archiveDecision.Notes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (audioDescriptionPath is not null && IsSrfSender(ReadTextMetadata(Path.ChangeExtension(audioDescriptionPath, ".txt")).Sender))
+        if (audioDescriptionPath is not null && IsSrfSender(CompanionTextMetadataReader.ReadForMediaFile(audioDescriptionPath).Sender))
         {
             notes.Add("Die ausgewählte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }

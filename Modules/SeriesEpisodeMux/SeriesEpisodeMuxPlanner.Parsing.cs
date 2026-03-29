@@ -7,7 +7,7 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 // Dieser Partial enthält alle string- und metadatenbasierten Heuristiken für Dateinamen, TXT-Begleitdateien und Mojibake-Reparatur.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
-    private EpisodeIdentity ParseEpisodeIdentity(string filePath, TextMetadata textMetadata)
+    private EpisodeIdentity ParseEpisodeIdentity(string filePath, CompanionTextMetadata textMetadata)
     {
         var fileNameParts = ParseEpisodeName(filePath);
         var txtTitleParts = ParseTitleDetails(textMetadata.Title);
@@ -220,56 +220,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return (int)Math.Round(duration.Value.TotalSeconds);
     }
 
-    private static TextMetadata ReadTextMetadata(string? filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
-        {
-            return TextMetadata.Empty;
-        }
-
-        var content = ReadTextWithFallback(filePath);
-        var sender = ReadLabeledValue(content, "Sender");
-        var topic = ReadLabeledValue(content, "Thema");
-        var title = ReadLabeledValue(content, "Titel");
-        var durationText = ReadLabeledValue(content, "Dauer");
-        var duration = TimeSpan.TryParse(durationText, out var parsedDuration) ? (TimeSpan?)parsedDuration : null;
-
-        return new TextMetadata(sender, topic, title, duration);
-    }
-
-    private static string ReadTextWithFallback(string filePath)
-    {
-        var bytes = File.ReadAllBytes(filePath);
-        var utf8 = DecodeText(bytes, Encoding.UTF8);
-        var normalizedUtf8 = MojibakeRepair.NormalizeLikelyMojibake(utf8);
-        if (!MojibakeRepair.LooksLikeMojibake(normalizedUtf8))
-        {
-            return normalizedUtf8;
-        }
-
-        var latin1 = DecodeText(bytes, Encoding.Latin1);
-        var normalizedLatin1 = MojibakeRepair.NormalizeLikelyMojibake(latin1);
-        return string.IsNullOrWhiteSpace(normalizedLatin1) ? latin1 : normalizedLatin1;
-    }
-
-    private static string DecodeText(byte[] bytes, Encoding encoding)
-    {
-        try
-        {
-            return encoding.GetString(bytes);
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
-
-    private static string? ReadLabeledValue(string content, string label)
-    {
-        var match = Regex.Match(content, $@"^{Regex.Escape(label)}\s*:\s*(.+)$", RegexOptions.Multiline);
-        return match.Success ? match.Groups[1].Value.Trim() : null;
-    }
-
     private sealed record EpisodeDetectionContext(
         string Directory,
         EpisodeIdentity EpisodeIdentity,
@@ -280,15 +230,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<string> RelatedFilePaths,
         IReadOnlyList<AudioDescriptionCandidate> AudioDescriptionCandidates);
 
-    internal sealed record TextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration)
-    {
-        public static TextMetadata Empty { get; } = new(null, null, null, null);
-    }
-
     internal sealed record CandidateSeed(
         string FilePath,
         string? AttachmentPath,
-        TextMetadata TextMetadata,
+        CompanionTextMetadata TextMetadata,
         EpisodeIdentity Identity);
 
     internal sealed record EpisodeSeedCollection(

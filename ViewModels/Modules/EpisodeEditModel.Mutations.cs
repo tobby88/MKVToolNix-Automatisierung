@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -109,18 +110,9 @@ public partial class EpisodeEditModel
 
     public virtual void SetAudioDescription(string? path)
     {
+        var previousAudioDescriptionPath = AudioDescriptionPath;
         AudioDescriptionPath = string.IsNullOrWhiteSpace(path) ? string.Empty : path;
-        _approvedReviewPaths.Clear();
-        OnPropertyChanged(nameof(CurrentReviewTargetPath));
-        OnPropertyChanged(nameof(IsManualCheckApproved));
-        OnPropertyChanged(nameof(ManualCheckText));
-        OnPropertyChanged(nameof(HasPendingManualCheck));
-        OnPropertyChanged(nameof(ReviewState));
-        OnPropertyChanged(nameof(ReviewHint));
-        OnPropertyChanged(nameof(ReviewHintTooltip));
-        OnPropertyChanged(nameof(ReviewBadgeBackground));
-        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-        OnPropertyChanged(nameof(HasPendingChecks));
+        RefreshManualCheckStateForAudioDescription(previousAudioDescriptionPath);
     }
 
     public virtual void SetSubtitles(IEnumerable<string> paths)
@@ -308,6 +300,28 @@ public partial class EpisodeEditModel
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
+    }
+
+    private void RefreshManualCheckStateForAudioDescription(string? previousAudioDescriptionPath)
+    {
+        var updatedFilePaths = _manualCheckFilePaths
+            .Where(path => !PathComparisonHelper.AreSamePath(path, previousAudioDescriptionPath))
+            .ToList();
+
+        if (RequiresManualCheckForAudioDescription(AudioDescriptionPath))
+        {
+            updatedFilePaths.Add(AudioDescriptionPath);
+        }
+
+        SetManualCheckFiles(updatedFilePaths.Count > 0, updatedFilePaths);
+    }
+
+    private static bool RequiresManualCheckForAudioDescription(string? audioDescriptionPath)
+    {
+        return string.Equals(
+            CompanionTextMetadataReader.ReadForMediaFile(audioDescriptionPath).Sender?.Trim(),
+            "SRF",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     protected void SetRequestedSourcePaths(IEnumerable<string> paths)

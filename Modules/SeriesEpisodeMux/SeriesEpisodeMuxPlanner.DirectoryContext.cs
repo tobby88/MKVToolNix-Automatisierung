@@ -34,7 +34,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? Path.ChangeExtension(filePath, ".txt")
             : null;
 
-        var textMetadata = ReadTextMetadata(attachmentPath);
+        var textMetadata = CompanionTextMetadataReader.Read(attachmentPath);
         var identity = ParseEpisodeIdentity(filePath, textMetadata);
         return new CandidateSeed(filePath, attachmentPath, textMetadata, identity);
     }
