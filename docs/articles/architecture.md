@@ -21,6 +21,7 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
 1. Eine Quelle wird ausgewählt oder ein Ordner wird gescannt.
 2. `SeriesEpisodeMuxPlanner` erkennt zugehörige Video-, AD-, Untertitel- und TXT-Dateien.
    - Für Batch-Ordner kann dafür einmalig ein `DirectoryDetectionContext` vorbereitet und für mehrere Einzelscans wiederverwendet werden.
+   - TXT-Begleitdateien werden dabei projektweit über denselben Reader und dieselben Encoding-Heuristiken ausgewertet, damit Erkennung, Review und spätere Planerstellung nicht auseinanderlaufen.
 3. `EpisodeMetadataLookupService` kann die lokale Erkennung mit TVDB-Daten anreichern.
    - Die fachlichen Matching-Heuristiken sind bewusst von Caching und TVDB-I/O getrennt, damit Bewertungsregeln unabhängig wartbar bleiben.
 4. `SeriesArchiveService` entscheidet, ob direkt neu gemuxt wird, ob eine bestehende Archivdatei wiederverwendet wird oder ob eine Arbeitskopie nötig ist.
@@ -28,6 +29,7 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
 5. `SeriesEpisodeMuxPlan` beschreibt den vollständigen mkvmerge-Aufruf.
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
 7. `BatchRunLogService` schreibt bei Batch-Läufen Log- und Reportdateien in `.\Logs`.
+   - Der persistierte Log sammelt gezielt den aktuellen Batch-Lauf, damit Planung, Arbeitskopien und Mux-Ausführung zusammen diagnostizierbar bleiben.
 
 ## Warum DocFX
 

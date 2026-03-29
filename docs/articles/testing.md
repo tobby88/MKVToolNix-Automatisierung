@@ -10,6 +10,7 @@ Das Projekt verwendet jetzt drei Testebenen:
 - Integrationstests in `MkvToolnixAutomatisierung.IntegrationTests`
   - prüfen mehrere Services zusammen über echte Temp-Dateien und einen kontrollierten Fake-`mkvmerge`
   - decken auch Batch-Scans mit vorbereitetem `BatchScanDirectoryContext` über mehrere Einzeldateien hinweg ab
+  - sichern zusätzlich Regressionen ab, bei denen sich Dateierkennung, Archivintegration oder Fake-`mkvmerge` zwischen zwei Schritten unterschiedlich verhalten würden
 - manuelle GUI-Prüfung
   - bleibt für Dialoge, WPF-Bindings und visuelle Usability weiterhin sinnvoll
 
