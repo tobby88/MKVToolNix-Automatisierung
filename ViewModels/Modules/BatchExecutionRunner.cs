@@ -9,11 +9,18 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class BatchExecutionRunner
 {
-    private readonly AppServices _services;
+    private readonly FileCopyService _fileCopyService;
+    private readonly MuxWorkflowCoordinator _muxWorkflow;
+    private readonly EpisodeCleanupService _cleanupService;
 
-    public BatchExecutionRunner(AppServices services)
+    public BatchExecutionRunner(
+        FileCopyService fileCopyService,
+        MuxWorkflowCoordinator muxWorkflow,
+        EpisodeCleanupService cleanupService)
     {
-        _services = services;
+        _fileCopyService = fileCopyService;
+        _muxWorkflow = muxWorkflow;
+        _cleanupService = cleanupService;
     }
 
     public BatchCopyPreparation BuildCopyPreparation(IReadOnlyList<BatchExecutionWorkItem> executablePlans)
@@ -27,7 +34,7 @@ internal sealed class BatchExecutionRunner
             .ToList();
 
         var copyPlansToExecute = copyPlans
-            .Where(_services.FileCopy.NeedsCopy)
+            .Where(_fileCopyService.NeedsCopy)
             .ToList();
 
         var totalCopyBytes = copyPlansToExecute.Sum(plan => plan.FileSizeBytes);
@@ -57,7 +64,7 @@ internal sealed class BatchExecutionRunner
             var copyPlan = copyPreparation.CopyPlansToExecute[index];
             appendLog($"KOPIERE: {Path.GetFileName(copyPlan.SourceFilePath)}");
 
-            await _services.FileCopy.CopyAsync(
+            await _fileCopyService.CopyAsync(
                 copyPlan,
                 (copiedBytes, _) =>
                 {
@@ -103,7 +110,7 @@ internal sealed class BatchExecutionRunner
 
             try
             {
-                var result = await _services.MuxWorkflow.ExecuteMuxAsync(
+                var result = await _muxWorkflow.ExecuteMuxAsync(
                     plan,
                     line => appendLog($"  {line}"),
                     update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning));
@@ -175,7 +182,7 @@ internal sealed class BatchExecutionRunner
             return [];
         }
 
-        var moveResult = await _services.Cleanup.MoveFilesToDirectoryAsync(
+        var moveResult = await _cleanupService.MoveFilesToDirectoryAsync(
             cleanupFiles,
             doneDirectory,
             (current, total, _filePath) =>

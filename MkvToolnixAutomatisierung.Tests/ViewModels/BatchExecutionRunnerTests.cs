@@ -2,6 +2,7 @@ using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
@@ -29,16 +30,17 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             NeedsCopyOverride = plan => string.Equals(plan.SourceFilePath, sourceA, StringComparison.OrdinalIgnoreCase)
         };
-        var runner = new BatchExecutionRunner(CreateServices(fileCopy, new StubCleanupService(), new StubMuxWorkflowCoordinator()));
+        var runner = new BatchExecutionRunner(fileCopy, new StubMuxWorkflowCoordinator(), new StubCleanupService());
         var planA1 = CreatePlan(Path.Combine(_tempDirectory, "out-a1.mkv"), CreateCopyPlan(sourceA, destinationA, 10));
         var planA2 = CreatePlan(Path.Combine(_tempDirectory, "out-a2.mkv"), CreateCopyPlan(sourceA, destinationA, 10));
         var planB = CreatePlan(Path.Combine(_tempDirectory, "out-b.mkv"), CreateCopyPlan(sourceB, destinationB, 20));
+        var item = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "out.mkv"));
 
         var preparation = runner.BuildCopyPreparation(
         [
-            new BatchExecutionWorkItem(null!, planA1, []),
-            new BatchExecutionWorkItem(null!, planA2, []),
-            new BatchExecutionWorkItem(null!, planB, [])
+            new BatchExecutionWorkItem(item, planA1, []),
+            new BatchExecutionWorkItem(item, planA2, []),
+            new BatchExecutionWorkItem(item, planB, [])
         ]);
 
         Assert.Equal(2, preparation.CopyPlans.Count);
@@ -56,10 +58,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             NeedsCopyOverride = _ => false
         };
-        var runner = new BatchExecutionRunner(CreateServices(fileCopy, new StubCleanupService(), new StubMuxWorkflowCoordinator()));
+        var runner = new BatchExecutionRunner(fileCopy, new StubMuxWorkflowCoordinator(), new StubCleanupService());
+        var item = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "out.mkv"));
         var preparation = runner.BuildCopyPreparation(
         [
-            new BatchExecutionWorkItem(null!, CreatePlan(Path.Combine(_tempDirectory, "out.mkv"), CreateCopyPlan(source, destination, 10)), [])
+            new BatchExecutionWorkItem(item, CreatePlan(Path.Combine(_tempDirectory, "out.mkv"), CreateCopyPlan(source, destination, 10)), [])
         ]);
         var logLines = new List<string>();
 
@@ -91,7 +94,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             MoveResult = new FileMoveResult([movedDoneFile], [])
         };
-        var runner = new BatchExecutionRunner(CreateServices(new StubFileCopyService(), cleanup, muxWorkflow));
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, cleanup);
         var item = CreateBatchEpisodeItem(outputPath);
         var logs = new List<string>();
 
@@ -130,7 +133,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
                 return Task.FromResult(new MuxExecutionResult(1, HasWarning: false, LastProgressPercent: 100));
             }
         };
-        var runner = new BatchExecutionRunner(CreateServices(new StubFileCopyService(), new StubCleanupService(), muxWorkflow));
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
         var item = CreateBatchEpisodeItem(outputPath);
 
         var outcome = await runner.ExecutePlansAsync(
@@ -157,7 +160,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             ExecuteMuxOverride = _ => throw new InvalidOperationException("boom")
         };
-        var runner = new BatchExecutionRunner(CreateServices(new StubFileCopyService(), new StubCleanupService(), muxWorkflow));
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
         var item = CreateBatchEpisodeItem(outputPath);
         var logs = new List<string>();
 
@@ -182,25 +185,6 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             Directory.Delete(_tempDirectory, recursive: true);
         }
-    }
-
-    private AppServices CreateServices(
-        FileCopyService fileCopy,
-        EpisodeCleanupService cleanup,
-        MuxWorkflowCoordinator muxWorkflow)
-    {
-        return new AppServices(
-            SeriesEpisodeMux: null!,
-            EpisodePlans: null!,
-            BatchScan: null!,
-            Archive: null!,
-            OutputPaths: null!,
-            CleanupFiles: null!,
-            EpisodeMetadata: null!,
-            FileCopy: fileCopy,
-            Cleanup: cleanup,
-            MuxWorkflow: muxWorkflow,
-            BatchLogs: new BatchRunLogService());
     }
 
     private BatchEpisodeItemViewModel CreateBatchEpisodeItem(string outputPath)
@@ -320,7 +304,10 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     private sealed class StubMuxWorkflowCoordinator : MuxWorkflowCoordinator
     {
         public StubMuxWorkflowCoordinator()
-            : base(null!, null!, null!)
+            : base(
+                ViewModelTestContext.CreateAppServices().SeriesEpisodeMux,
+                new FileCopyService(),
+                new EpisodeCleanupService())
         {
         }
 

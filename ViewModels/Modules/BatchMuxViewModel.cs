@@ -44,7 +44,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
         _dialogService = dialogService;
         _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _episodeCollection = new BatchEpisodeCollectionController();
-        _executionRunner = new BatchExecutionRunner(services);
+        _executionRunner = new BatchExecutionRunner(services.FileCopy, services.MuxWorkflow, services.Cleanup);
         _logBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => LogText = text);
