@@ -152,7 +152,8 @@ public sealed partial class SeriesArchiveService
                 outputPath,
                 entry.Kind!,
                 entry.Track.TrackId,
-                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!))
+                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!),
+                MediaLanguageHelper.NormalizeMuxLanguageCode(entry.Track.Language))
             {
                 Accessibility = entry.Track.IsHearingImpaired
                     ? SubtitleAccessibility.HearingImpaired

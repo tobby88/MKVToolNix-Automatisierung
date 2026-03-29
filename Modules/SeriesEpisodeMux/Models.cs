@@ -1,4 +1,6 @@
-﻿namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
+
+namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
 /// Vom UI zusammengestellte Eingabe für einen konkreten Mux-Vorgang.
@@ -119,14 +121,17 @@ public sealed record VideoSourcePlan(
     string FilePath,
     int TrackId,
     string TrackName,
-    bool IsDefaultTrack);
+    bool IsDefaultTrack,
+    string LanguageCode = "de");
 
 /// <summary>
-/// Zielnamen für automatisch erzeugte Audio- und AD-Trackbezeichnungen.
+/// Zielnamen und Sprachcodes für automatisch erzeugte Audio- und AD-Trackbezeichnungen.
 /// </summary>
 public sealed record EpisodeTrackMetadata(
     string AudioTrackName,
-    string AudioDescriptionTrackName);
+    string AudioDescriptionTrackName,
+    string AudioLanguageCode = "de",
+    string AudioDescriptionLanguageCode = "de");
 
 /// <summary>
 /// Barrierefreiheits-Markierung einer Untertitelspur.
@@ -140,7 +145,12 @@ public enum SubtitleAccessibility
 /// <summary>
 /// Externe oder eingebettete Untertitelquelle für den finalen Mux.
 /// </summary>
-public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? EmbeddedTrackId = null, string? SourceLabel = null)
+public sealed record SubtitleFile(
+    string FilePath,
+    SubtitleKind Kind,
+    int? EmbeddedTrackId = null,
+    string? SourceLabel = null,
+    string LanguageCode = "de")
 {
     /// <summary>
     /// Externe Untertitel werden derzeit standardmäßig als HI/SDH behandelt, bis eine sichere automatische Unterscheidung vorliegt.
@@ -152,8 +162,8 @@ public sealed record SubtitleFile(string FilePath, SubtitleKind Kind, int? Embed
     public bool IsHearingImpaired => Accessibility == SubtitleAccessibility.HearingImpaired;
 
     public string TrackName => IsHearingImpaired
-        ? $"Deutsch (hörgeschädigte) - {Kind.DisplayName}"
-        : $"Deutsch - {Kind.DisplayName}";
+        ? $"{MediaLanguageHelper.GetLanguageDisplayName(LanguageCode)} (hörgeschädigte) - {Kind.DisplayName}"
+        : $"{MediaLanguageHelper.GetLanguageDisplayName(LanguageCode)} - {Kind.DisplayName}";
 
     public string PreviewLabel => IsEmbedded
         ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, aus Zieldatei)"

@@ -41,11 +41,12 @@
                     Content="Speichern" />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
-            <TextBox Grid.Row="1"
-                     Grid.Column="1"
-                     Margin="0,4,12,4"
-                     Text="{Binding Pin, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="Nur eintragen, wenn TVDB zus&#228;tzlich eine PIN verlangt." />
+            <PasswordBox x:Name="PinPasswordBox"
+                         Grid.Row="1"
+                         Grid.Column="1"
+                         Margin="0,4,12,4"
+                         PasswordChanged="PinPasswordBox_PasswordChanged"
+                         ToolTip="Nur eintragen, wenn TVDB zus&#228;tzlich eine PIN verlangt." />
         </Grid>
 
         <Grid Grid.Row="1" IsEnabled="{Binding IsInteractive}">
@@ -136,7 +137,7 @@
                              Grid.Column="0"
                              Margin="0,0,0,8"
                              Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Episodenliste der gew&#228;hlten Serie filtern." />
+                             ToolTip="Episodenliste der gew&#228;hlten Serie filtern, z. B. nach Titel oder S01E02." />
 
                     <ListBox Grid.Row="1"
                              Grid.Column="0"

@@ -324,6 +324,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string? primaryAudioFilePath = null;
         var primaryAudioTrackId = 0;
         var primaryAudioCodecLabel = "Audio";
+        var primaryAudioLanguage = "de";
 
         var effectiveVideoPaths = new[] { effectivePrimarySourcePath }
             .Concat(additionalVideoPaths)
@@ -336,13 +337,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var videoPath = effectiveVideoPaths[index];
             var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
             var trackName = BuildVideoTrackName(metadata);
-            videoSources.Add(new VideoSourcePlan(videoPath, metadata.VideoTrackId, trackName, IsDefaultTrack: index == 0));
+            videoSources.Add(new VideoSourcePlan(
+                videoPath,
+                metadata.VideoTrackId,
+                trackName,
+                IsDefaultTrack: index == 0,
+                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.VideoLanguage)));
 
             if (index == 0)
             {
                 primaryAudioFilePath = videoPath;
                 primaryAudioTrackId = metadata.AudioTrackId;
                 primaryAudioCodecLabel = metadata.AudioCodecLabel;
+                primaryAudioLanguage = metadata.AudioLanguage;
             }
         }
 
@@ -357,12 +364,25 @@ public sealed partial class SeriesEpisodeMuxPlanner
         AudioTrackMetadata? audioDescriptionMetadata = audioDescriptionPath is null
             ? null
             : archiveDecision.AudioDescriptionTrackId is int trackId
-                ? new AudioTrackMetadata(trackId, "Audio", "de", string.Empty, IsVisualImpaired: true)
+                ? new AudioTrackMetadata(
+                    trackId,
+                    "Audio",
+                    MediaLanguageHelper.NormalizeMuxLanguageCode(primaryAudioLanguage),
+                    string.Empty,
+                    IsVisualImpaired: true)
                 : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
 
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
             ? archiveDecision.SubtitleFiles
             : subtitleFiles;
+        subtitleFilesForPlan = subtitleFilesForPlan
+            .Select(subtitle => subtitle.IsEmbedded
+                ? subtitle
+                : subtitle with
+                {
+                    LanguageCode = MediaLanguageHelper.NormalizeMuxLanguageCode(primaryAudioLanguage)
+                })
+            .ToList();
 
         var attachmentFilePaths = archiveDecision.AttachmentFilePaths.Count > 0
             ? archiveDecision.AttachmentFilePaths
@@ -396,7 +416,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             attachmentFilePaths,
             archiveDecision.PreservedAttachmentNames,
             archiveDecision.WorkingCopy,
-            BuildTrackMetadata(primaryAudioCodecLabel, audioDescriptionMetadata),
+            BuildTrackMetadata(primaryAudioCodecLabel, primaryAudioLanguage, audioDescriptionMetadata),
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 
@@ -639,14 +659,24 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static string BuildVideoTrackName(MediaTrackMetadata metadata)
     {
-        return $"Deutsch - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(metadata.VideoLanguage)} - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
     }
 
-    private static EpisodeTrackMetadata BuildTrackMetadata(string primaryAudioCodecLabel, AudioTrackMetadata? audioDescriptionMetadata)
+    private static EpisodeTrackMetadata BuildTrackMetadata(
+        string primaryAudioCodecLabel,
+        string primaryAudioLanguage,
+        AudioTrackMetadata? audioDescriptionMetadata)
     {
+        var normalizedAudioLanguage = MediaLanguageHelper.NormalizeMuxLanguageCode(primaryAudioLanguage);
+        var audioDisplayName = MediaLanguageHelper.GetLanguageDisplayName(primaryAudioLanguage);
+        var normalizedAudioDescriptionLanguage = MediaLanguageHelper.NormalizeMuxLanguageCode(audioDescriptionMetadata?.Language ?? primaryAudioLanguage);
+        var audioDescriptionDisplayName = MediaLanguageHelper.GetLanguageDisplayName(audioDescriptionMetadata?.Language ?? primaryAudioLanguage);
+
         return new EpisodeTrackMetadata(
-            AudioTrackName: $"Deutsch - {primaryAudioCodecLabel}",
-            AudioDescriptionTrackName: $"Deutsch (sehbehinderte) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}");
+            AudioTrackName: $"{audioDisplayName} - {primaryAudioCodecLabel}",
+            AudioDescriptionTrackName: $"{audioDescriptionDisplayName} (sehbehinderte) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}",
+            AudioLanguageCode: normalizedAudioLanguage,
+            AudioDescriptionLanguageCode: normalizedAudioDescriptionLanguage);
     }
 
 }

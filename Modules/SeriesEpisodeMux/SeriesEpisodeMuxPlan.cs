@@ -154,7 +154,7 @@ public sealed class SeriesEpisodeMuxPlan
         arguments.AddRange(
         [
             "--language",
-            $"{primaryVideoTrackId}:de",
+            $"{primaryVideoTrackId}:{primaryVideo.LanguageCode}",
             "--track-name",
             $"{primaryVideoTrackId}:{primaryVideo.TrackName}",
             "--default-track-flag",
@@ -165,7 +165,7 @@ public sealed class SeriesEpisodeMuxPlan
             $"{primaryVideoTrackId}:yes",
 
             "--language",
-            $"{primaryAudioTrackId}:de",
+            $"{primaryAudioTrackId}:{Metadata.AudioLanguageCode}",
             "--track-name",
             $"{primaryAudioTrackId}:{Metadata.AudioTrackName}",
             "--default-track-flag",
@@ -186,7 +186,7 @@ public sealed class SeriesEpisodeMuxPlan
                 "--no-subtitles",
                 "--no-attachments",
                 "--language",
-                $"{trackId}:de",
+                $"{trackId}:{videoSource.LanguageCode}",
                 "--track-name",
                 $"{trackId}:{videoSource.TrackName}",
                 "--default-track-flag",
@@ -211,7 +211,7 @@ public sealed class SeriesEpisodeMuxPlan
                 "--audio-tracks",
                 adTrackId,
                 "--language",
-                $"{adTrackId}:de",
+                $"{adTrackId}:{Metadata.AudioDescriptionLanguageCode}",
                 "--track-name",
                 $"{adTrackId}:{Metadata.AudioDescriptionTrackName}",
                 "--default-track-flag",
@@ -244,7 +244,7 @@ public sealed class SeriesEpisodeMuxPlan
             arguments.AddRange(
             [
                 "--language",
-                "0:de",
+                $"0:{subtitle.LanguageCode}",
                 "--track-name",
                 $"0:{subtitle.TrackName}",
                 "--default-track-flag",

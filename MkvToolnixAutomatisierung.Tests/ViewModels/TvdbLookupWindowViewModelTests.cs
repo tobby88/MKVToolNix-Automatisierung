@@ -60,6 +60,26 @@ public sealed class TvdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public async Task EpisodeSearchText_FiltersEpisodesByEpisodeCode()
+    {
+        var service = CreateServiceWithEpisodes(
+            episodes:
+            [
+                new TvdbEpisodeRecord(100, "Pilot", 1, 1, "2024-01-01"),
+                new TvdbEpisodeRecord(101, "Finale", 1, 2, "2024-01-08")
+            ]);
+        var viewModel = new TvdbLookupWindowViewModel(
+            service,
+            new EpisodeMetadataGuess("Beispielserie", "Pilot", "01", "01"));
+
+        await viewModel.SearchSeriesAsync(autoLoadEpisodes: true);
+        viewModel.EpisodeSearchText = "S01E02";
+
+        Assert.Single(viewModel.EpisodeResults);
+        Assert.Equal(101, viewModel.EpisodeResults[0].Episode.Id);
+    }
+
+    [Fact]
     public async Task TryBuildSelection_SavesMappingAndReturnsSelection()
     {
         var store = new FakeMetadataStore(new AppMetadataSettings

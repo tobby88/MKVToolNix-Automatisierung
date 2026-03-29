@@ -18,6 +18,7 @@ public partial class TvdbLookupWindow : Window
         InitializeComponent();
         _viewModel = new TvdbLookupWindowViewModel(lookupService, guess);
         DataContext = _viewModel;
+        PinPasswordBox.Password = _viewModel.Pin;
         Loaded += TvdbLookupWindow_Loaded;
     }
 
@@ -101,6 +102,11 @@ public partial class TvdbLookupWindow : Window
     private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         await RunUiActionAsync(() => _viewModel.HandleSelectedSeriesSelectionChangedAsync(), "TVDB-Fehler");
+    }
+
+    private void PinPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        _viewModel.Pin = PinPasswordBox.Password;
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string errorTitle)

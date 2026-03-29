@@ -416,10 +416,11 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     private void ApplyEpisodeFilter(bool autoSelectBest)
     {
         var searchText = EpisodeSearchText.Trim();
+        var normalizedSearchText = NormalizeTextForSearch(searchText);
         var filteredEpisodes = string.IsNullOrWhiteSpace(searchText)
             ? _episodes.ToList()
             : _episodes
-                .Where(episode => episode.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                .Where(episode => EpisodeMatchesSearch(episode, searchText, normalizedSearchText))
                 .ToList();
 
         var items = filteredEpisodes
@@ -458,6 +459,39 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         UpdateComparisonSummary();
+    }
+
+    private static bool EpisodeMatchesSearch(TvdbEpisodeRecord episode, string rawSearchText, string normalizedSearchText)
+    {
+        if (episode.Name.Contains(rawSearchText, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedSearchText))
+        {
+            return false;
+        }
+
+        return BuildEpisodeSearchTokens(episode).Any(token =>
+            NormalizeTextForSearch(token).Contains(normalizedSearchText, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<string> BuildEpisodeSearchTokens(TvdbEpisodeRecord episode)
+    {
+        var seasonNumber = FormatNumber(episode.SeasonNumber);
+        var episodeNumber = FormatNumber(episode.EpisodeNumber);
+
+        yield return $"s{seasonNumber}e{episodeNumber}";
+        yield return $"{seasonNumber}x{episodeNumber}";
+        yield return $"staffel {seasonNumber} folge {episodeNumber}";
+    }
+
+    private static string NormalizeTextForSearch(string value)
+    {
+        return string.Concat(value
+            .Where(character => char.IsLetterOrDigit(character))
+            .Select(char.ToLowerInvariant));
     }
 
     private AppMetadataSettings BuildTransientSettings()
