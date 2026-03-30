@@ -245,13 +245,7 @@ public partial class EpisodeEditModel
 
             _requiresMetadataReview = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(HasPendingMetadataReview));
-            OnPropertyChanged(nameof(ReviewState));
-            OnPropertyChanged(nameof(ReviewHint));
-            OnPropertyChanged(nameof(ReviewHintTooltip));
-            OnPropertyChanged(nameof(ReviewBadgeBackground));
-            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-            OnPropertyChanged(nameof(HasPendingChecks));
+            NotifyMetadataReviewStatePropertiesChanged();
         }
     }
 
@@ -267,13 +261,7 @@ public partial class EpisodeEditModel
 
             _isMetadataReviewApproved = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(HasPendingMetadataReview));
-            OnPropertyChanged(nameof(ReviewState));
-            OnPropertyChanged(nameof(ReviewHint));
-            OnPropertyChanged(nameof(ReviewHintTooltip));
-            OnPropertyChanged(nameof(ReviewBadgeBackground));
-            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-            OnPropertyChanged(nameof(HasPendingChecks));
+            NotifyMetadataReviewStatePropertiesChanged();
         }
     }
 
@@ -289,14 +277,7 @@ public partial class EpisodeEditModel
 
             _requiresManualCheck = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(ManualCheckText));
-            OnPropertyChanged(nameof(HasPendingManualCheck));
-            OnPropertyChanged(nameof(ReviewState));
-            OnPropertyChanged(nameof(ReviewHint));
-            OnPropertyChanged(nameof(ReviewHintTooltip));
-            OnPropertyChanged(nameof(ReviewBadgeBackground));
-            OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-            OnPropertyChanged(nameof(HasPendingChecks));
+            NotifyManualCheckStatePropertiesChanged(includeCurrentReviewTarget: false);
         }
     }
 

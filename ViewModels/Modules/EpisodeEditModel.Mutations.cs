@@ -40,72 +40,25 @@ public partial class EpisodeEditModel
         string outputPath,
         string? titleOverride = null)
     {
-        _requestedMainVideoPath = requestedMainVideoPath;
-        _detectionSeedPath = requestedMainVideoPath;
-        _requestedSourcePaths = [requestedMainVideoPath];
-        _localSeriesName = localGuess.SeriesName;
-        _localSeasonNumber = localGuess.SeasonNumber;
-        _localEpisodeNumber = localGuess.EpisodeNumber;
-        _localTitle = localGuess.EpisodeTitle;
+        SetRequestedMainVideoPath(requestedMainVideoPath);
+        SetDetectionSeedPath(requestedMainVideoPath);
+        SetRequestedSourcePaths([requestedMainVideoPath]);
+        SetLocalMetadataGuess(localGuess);
         MainVideoPath = detected.MainVideoPath;
         SeriesName = detected.SeriesName;
         SeasonNumber = detected.SeasonNumber;
         EpisodeNumber = detected.EpisodeNumber;
-        _additionalVideoPaths = detected.AdditionalVideoPaths.ToList();
+        SetAdditionalVideoPaths(detected.AdditionalVideoPaths);
         AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
-        _subtitlePaths = detected.SubtitlePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
-        _attachmentPaths = detected.AttachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
-        _hasManualAttachmentOverride = false;
-        _relatedEpisodeFilePaths = detected.RelatedFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        SetSubtitles(detected.SubtitlePaths);
+        SetDetectedAttachmentPaths(detected.AttachmentPaths);
+        SetRelatedEpisodeFilePaths(detected.RelatedFilePaths);
         _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
         Title = string.IsNullOrWhiteSpace(titleOverride) ? detected.SuggestedTitle : titleOverride;
-        MetadataStatusText = metadataResolution.StatusText;
-        RequiresMetadataReview = metadataResolution.RequiresReview;
-        IsMetadataReviewApproved = DetermineAutomaticMetadataApproval(metadataResolution);
-        RequiresManualCheck = detected.RequiresManualCheck;
-        _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        if (!RequiresManualCheck)
-        {
-            _approvedReviewPaths.Clear();
-        }
-        else
-        {
-            _approvedReviewPaths.IntersectWith(_manualCheckFilePaths);
-        }
-
-        _notes = detected.Notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-
-        OnPropertyChanged(nameof(RequestedMainVideoPath));
-        OnPropertyChanged(nameof(RequestedSourcePaths));
-        OnPropertyChanged(nameof(RequestedSourcesDisplayText));
-        OnPropertyChanged(nameof(LocalSeriesName));
-        OnPropertyChanged(nameof(LocalSeasonNumber));
-        OnPropertyChanged(nameof(LocalEpisodeNumber));
-        OnPropertyChanged(nameof(LocalTitle));
-        OnPropertyChanged(nameof(AdditionalVideoPaths));
-        OnPropertyChanged(nameof(AdditionalVideosDisplayText));
-        OnPropertyChanged(nameof(SubtitlePaths));
-        OnPropertyChanged(nameof(SubtitleDisplayText));
-        OnPropertyChanged(nameof(AttachmentPaths));
-        OnPropertyChanged(nameof(AttachmentDisplayText));
-        OnPropertyChanged(nameof(MetadataStatusText));
-        OnPropertyChanged(nameof(IsMetadataReviewApproved));
-        OnPropertyChanged(nameof(ManualCheckFilePaths));
-        OnPropertyChanged(nameof(CurrentReviewTargetPath));
-        OnPropertyChanged(nameof(IsManualCheckApproved));
-        OnPropertyChanged(nameof(HasPendingMetadataReview));
-        OnPropertyChanged(nameof(HasPendingManualCheck));
-        OnPropertyChanged(nameof(ReviewState));
-        OnPropertyChanged(nameof(ReviewHint));
-        OnPropertyChanged(nameof(ReviewHintTooltip));
-        OnPropertyChanged(nameof(ReviewBadgeBackground));
-        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-        OnPropertyChanged(nameof(HasPendingChecks));
-        OnPropertyChanged(nameof(Notes));
-        OnPropertyChanged(nameof(NotesDisplayText));
-        OnPropertyChanged(nameof(SourceFilePaths));
-        OnPropertyChanged(nameof(ManualCheckText));
+        SetMetadataResolutionState(metadataResolution);
+        SetManualCheckFiles(detected.RequiresManualCheck, detected.ManualCheckFilePaths);
+        SetNotes(detected.Notes);
         OnPropertyChanged(nameof(UsesAutomaticOutputPath));
     }
 
@@ -130,16 +83,8 @@ public partial class EpisodeEditModel
 
     public virtual void SetAttachments(IEnumerable<string> paths)
     {
-        _attachmentPaths = paths
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
         _hasManualAttachmentOverride = true;
-
-        OnPropertyChanged(nameof(AttachmentPaths));
-        OnPropertyChanged(nameof(ManualAttachmentPaths));
-        OnPropertyChanged(nameof(AttachmentDisplayText));
+        SetAttachmentPaths(paths);
     }
 
     public virtual void SetOutputPath(string outputPath)
@@ -184,16 +129,7 @@ public partial class EpisodeEditModel
             _approvedReviewPaths.Add(CurrentReviewTargetPath);
         }
 
-        OnPropertyChanged(nameof(CurrentReviewTargetPath));
-        OnPropertyChanged(nameof(IsManualCheckApproved));
-        OnPropertyChanged(nameof(ManualCheckText));
-        OnPropertyChanged(nameof(HasPendingManualCheck));
-        OnPropertyChanged(nameof(ReviewState));
-        OnPropertyChanged(nameof(ReviewHint));
-        OnPropertyChanged(nameof(ReviewHintTooltip));
-        OnPropertyChanged(nameof(ReviewBadgeBackground));
-        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-        OnPropertyChanged(nameof(HasPendingChecks));
+        NotifyManualCheckStatePropertiesChanged(includeCurrentReviewTarget: true);
     }
 
     public virtual void ApplyTvdbSelection(TvdbEpisodeSelection selection)
@@ -293,16 +229,7 @@ public partial class EpisodeEditModel
         }
 
         OnPropertyChanged(nameof(ManualCheckFilePaths));
-        OnPropertyChanged(nameof(CurrentReviewTargetPath));
-        OnPropertyChanged(nameof(IsManualCheckApproved));
-        OnPropertyChanged(nameof(ManualCheckText));
-        OnPropertyChanged(nameof(HasPendingManualCheck));
-        OnPropertyChanged(nameof(ReviewState));
-        OnPropertyChanged(nameof(ReviewHint));
-        OnPropertyChanged(nameof(ReviewHintTooltip));
-        OnPropertyChanged(nameof(ReviewBadgeBackground));
-        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
-        OnPropertyChanged(nameof(HasPendingChecks));
+        NotifyManualCheckStatePropertiesChanged(includeCurrentReviewTarget: true);
     }
 
     private void RefreshManualCheckStateForAudioDescription(string? previousAudioDescriptionPath)
@@ -353,12 +280,7 @@ public partial class EpisodeEditModel
         }
 
         _archiveState = archiveState;
-        OnPropertyChanged(nameof(ArchiveState));
-        OnPropertyChanged(nameof(ArchiveStateText));
-        OnPropertyChanged(nameof(ArchiveStateTooltip));
-        OnPropertyChanged(nameof(ArchiveBadgeBackground));
-        OnPropertyChanged(nameof(ArchiveBadgeBorderBrush));
-        OnPropertyChanged(nameof(ArchiveSortKey));
+        NotifyArchiveStatePropertiesChanged();
     }
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -391,5 +313,65 @@ public partial class EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Setzt automatisch erkannte Anhänge und hebt dabei bewusst einen eventuell früheren manuellen Override auf.
+    /// </summary>
+    private void SetDetectedAttachmentPaths(IEnumerable<string> paths)
+    {
+        _hasManualAttachmentOverride = false;
+        SetAttachmentPaths(paths);
+    }
+
+    private void SetAttachmentPaths(IEnumerable<string> paths)
+    {
+        _attachmentPaths = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        OnPropertyChanged(nameof(AttachmentPaths));
+        OnPropertyChanged(nameof(ManualAttachmentPaths));
+        OnPropertyChanged(nameof(AttachmentDisplayText));
+    }
+
+    private void NotifyArchiveStatePropertiesChanged()
+    {
+        OnPropertyChanged(nameof(ArchiveState));
+        OnPropertyChanged(nameof(ArchiveStateText));
+        OnPropertyChanged(nameof(ArchiveStateTooltip));
+        OnPropertyChanged(nameof(ArchiveBadgeBackground));
+        OnPropertyChanged(nameof(ArchiveBadgeBorderBrush));
+        OnPropertyChanged(nameof(ArchiveSortKey));
+    }
+
+    private void NotifyMetadataReviewStatePropertiesChanged()
+    {
+        OnPropertyChanged(nameof(HasPendingMetadataReview));
+        NotifyReviewStatePropertiesChanged();
+    }
+
+    private void NotifyManualCheckStatePropertiesChanged(bool includeCurrentReviewTarget)
+    {
+        if (includeCurrentReviewTarget)
+        {
+            OnPropertyChanged(nameof(CurrentReviewTargetPath));
+            OnPropertyChanged(nameof(IsManualCheckApproved));
+        }
+
+        OnPropertyChanged(nameof(ManualCheckText));
+        OnPropertyChanged(nameof(HasPendingManualCheck));
+        NotifyReviewStatePropertiesChanged();
+    }
+
+    private void NotifyReviewStatePropertiesChanged()
+    {
+        OnPropertyChanged(nameof(ReviewState));
+        OnPropertyChanged(nameof(ReviewHint));
+        OnPropertyChanged(nameof(ReviewHintTooltip));
+        OnPropertyChanged(nameof(ReviewBadgeBackground));
+        OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
+        OnPropertyChanged(nameof(HasPendingChecks));
+    }
 
 }
