@@ -23,6 +23,7 @@ public sealed class SeriesEpisodeMuxPlan
         IReadOnlyList<SubtitleFile> subtitleFiles,
         IReadOnlyList<string> attachmentFilePaths,
         IReadOnlyList<string> preservedAttachmentNames,
+        ArchiveUsageComparison usageComparison,
         FileCopyPlan? workingCopy,
         EpisodeTrackMetadata metadata,
         IReadOnlyList<string> notes)
@@ -47,6 +48,7 @@ public sealed class SeriesEpisodeMuxPlan
         SubtitleFiles = subtitleFiles;
         AttachmentFilePaths = attachmentFilePaths;
         PreservedAttachmentNames = preservedAttachmentNames;
+        UsageComparison = usageComparison;
         WorkingCopy = workingCopy;
         Metadata = metadata;
         Notes = notes;
@@ -73,6 +75,7 @@ public sealed class SeriesEpisodeMuxPlan
         SubtitleFiles = [];
         AttachmentFilePaths = [];
         PreservedAttachmentNames = [];
+        UsageComparison = ArchiveUsageComparison.Empty;
         Metadata = new EpisodeTrackMetadata("Deutsch - Audio", "Deutsch (sehbehinderte) - Audio");
         Notes = notes;
     }
@@ -94,6 +97,7 @@ public sealed class SeriesEpisodeMuxPlan
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
     public IReadOnlyList<string> AttachmentFilePaths { get; }
     public IReadOnlyList<string> PreservedAttachmentNames { get; }
+    public ArchiveUsageComparison UsageComparison { get; }
     public FileCopyPlan? WorkingCopy { get; }
     public EpisodeTrackMetadata Metadata { get; }
     public IReadOnlyList<string> Notes { get; }
@@ -335,16 +339,22 @@ public sealed class SeriesEpisodeMuxPlan
         return new EpisodeUsageSummary(
             archiveAction,
             archiveDetails,
-            Path.GetFileName(VideoSources[0].FilePath),
-            VideoSources.Count > 1
-                ? string.Join(Environment.NewLine, VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath)))
-                : "(keine)",
-            Path.GetFileName(PrimaryAudioFilePath),
-            string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "(keine)" : Path.GetFileName(AudioDescriptionFilePath),
-            SubtitleFiles.Count == 0
-                ? "(keine)"
-                : string.Join(Environment.NewLine, SubtitleFiles.Select(file => file.PreviewLabel)),
-            BuildAttachmentPreview());
+            CreateUsageEntry(Path.GetFileName(VideoSources[0].FilePath), UsageComparison.MainVideo),
+            CreateUsageEntry(
+                VideoSources.Count > 1
+                    ? string.Join(Environment.NewLine, VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath)))
+                    : "(keine)",
+                UsageComparison.AdditionalVideos),
+            CreateUsageEntry(Path.GetFileName(PrimaryAudioFilePath), UsageComparison.Audio),
+            CreateUsageEntry(
+                string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "(keine)" : Path.GetFileName(AudioDescriptionFilePath),
+                UsageComparison.AudioDescription),
+            CreateUsageEntry(
+                SubtitleFiles.Count == 0
+                    ? "(keine)"
+                    : string.Join(Environment.NewLine, SubtitleFiles.Select(file => file.PreviewLabel)),
+                UsageComparison.Subtitles),
+            CreateUsageEntry(BuildAttachmentPreview(), UsageComparison.Attachments));
     }
 
     /// <summary>
@@ -357,12 +367,12 @@ public sealed class SeriesEpisodeMuxPlan
         return string.Join(Environment.NewLine,
         [
             $"{summary.ArchiveAction}: {summary.ArchiveDetails}",
-            $"Hauptvideo: {summary.MainVideo}",
-            $"Weitere Videos: {summary.AdditionalVideos}",
-            $"Audio: {summary.Audio}",
-            $"AD: {summary.AudioDescription}",
-            $"Untertitel: {summary.Subtitles}",
-            $"Anhänge: {summary.Attachments}"
+            $"Hauptvideo: {summary.MainVideo.CurrentText}",
+            $"Weitere Videos: {summary.AdditionalVideos.CurrentText}",
+            $"Audio: {summary.Audio.CurrentText}",
+            $"AD: {summary.AudioDescription.CurrentText}",
+            $"Untertitel: {summary.Subtitles.CurrentText}",
+            $"Anhänge: {summary.Attachments.CurrentText}"
         ]);
     }
 
@@ -462,6 +472,14 @@ public sealed class SeriesEpisodeMuxPlan
         return argument.Contains(' ') ? $"\"{argument}\"" : argument;
     }
 
+    private static EpisodeUsageEntry CreateUsageEntry(string currentText, ArchiveUsageChange? removedChange)
+    {
+        return new EpisodeUsageEntry(
+            CurrentText: currentText,
+            RemovedText: removedChange?.RemovedText,
+            RemovedReason: removedChange?.Reason);
+    }
+
     private string BuildAttachmentPreview()
     {
         var parts = new List<string>();
@@ -488,12 +506,12 @@ public sealed class SeriesEpisodeMuxPlan
 public sealed record EpisodeUsageSummary(
     string ArchiveAction,
     string ArchiveDetails,
-    string MainVideo,
-    string AdditionalVideos,
-    string Audio,
-    string AudioDescription,
-    string Subtitles,
-    string Attachments)
+    EpisodeUsageEntry MainVideo,
+    EpisodeUsageEntry AdditionalVideos,
+    EpisodeUsageEntry Audio,
+    EpisodeUsageEntry AudioDescription,
+    EpisodeUsageEntry Subtitles,
+    EpisodeUsageEntry Attachments)
 {
     /// <summary>
     /// Erzeugt eine Platzhalterzusammenfassung für noch nicht berechnete Pläne.
@@ -506,12 +524,27 @@ public sealed record EpisodeUsageSummary(
         return new EpisodeUsageSummary(
             archiveAction,
             archiveDetails,
-            "(wird berechnet)",
-            "(wird berechnet)",
-            "(wird berechnet)",
-            "(wird berechnet)",
-            "(wird berechnet)",
-            "(wird berechnet)");
+            EpisodeUsageEntry.Pending,
+            EpisodeUsageEntry.Pending,
+            EpisodeUsageEntry.Pending,
+            EpisodeUsageEntry.Pending,
+            EpisodeUsageEntry.Pending,
+            EpisodeUsageEntry.Pending);
     }
+}
+
+/// <summary>
+/// Eine einzelne Zeile der Nutzungsübersicht inklusive optionaler Altteile, die entfallen oder ersetzt werden.
+/// </summary>
+public sealed record EpisodeUsageEntry(
+    string CurrentText,
+    string? RemovedText,
+    string? RemovedReason)
+{
+    public static EpisodeUsageEntry Pending { get; } = new("(wird berechnet)", null, null);
+
+    public bool HasRemoved => !string.IsNullOrWhiteSpace(RemovedText);
+
+    public bool HasRemovedReason => !string.IsNullOrWhiteSpace(RemovedReason);
 }
 

@@ -283,6 +283,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: workingCopy,
             metadata: new EpisodeTrackMetadata("Deutsch - Audio", "Deutsch (sehbehinderte) - Audio"),
             notes: []);

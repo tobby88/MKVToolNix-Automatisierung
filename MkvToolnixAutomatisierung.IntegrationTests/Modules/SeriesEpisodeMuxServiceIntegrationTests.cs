@@ -355,7 +355,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task PrepareAsync_DoesNotSuppressRequestedExternalSubtitles_WhenArchiveAlreadyContainsSameKind()
+    public async Task PrepareAsync_PrefersExistingEmbeddedSubtitle_WhenArchiveAlreadyContainsSameKind()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-subtitles");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-subtitles");
@@ -390,7 +390,8 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
                 Title: "Pilot"),
             [mainVideoPath]);
 
-        Assert.Contains(decision.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, externalSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(decision.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, externalSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(decision.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
     }
 
     [Fact]
@@ -585,6 +586,101 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             Path.Combine("Der Kroatien-Krimi", "Season 1", "Der Kroatien-Krimi - S01E02 - Pilot.mkv"),
             detected.SuggestedOutputFilePath,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_ReplacingArchivePrimary_UsageSummary_ShowsRemovedArchiveParts_WithReasons()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-usage-replace");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-usage-replace");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4");
+        var subtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var manualAttachmentPath = CreateFile(sourceDirectory, "Zusatzinfos.txt", "attachment");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("bestehend.txt")],
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [subtitlePath],
+            AttachmentPaths: [manualAttachmentPath],
+            outputPath,
+            Title: "Pilot"));
+
+        var summary = plan.BuildUsageSummary();
+
+        Assert.True(summary.MainVideo.HasRemoved);
+        Assert.Contains("höhere Qualität", summary.MainVideo.RemovedReason, StringComparison.Ordinal);
+        Assert.True(summary.Audio.HasRemoved);
+        Assert.Contains("Tonspur", summary.Audio.RemovedReason, StringComparison.Ordinal);
+        Assert.True(summary.AudioDescription.HasRemoved);
+        Assert.Contains("AD", summary.AudioDescription.RemovedReason, StringComparison.Ordinal);
+        Assert.False(summary.Subtitles.HasRemoved);
+        Assert.True(summary.Attachments.HasRemoved);
+        Assert.Contains("Anhänge", summary.Attachments.RemovedReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_UsageSummary_KeepsExistingSrt_AndAddsMissingAss()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-usage-keep");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-usage-keep");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var subtitleSrtPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle-srt");
+        var subtitleAssPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).ass", "subtitle-ass");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [subtitleAssPath, subtitleSrtPath],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        var summary = plan.BuildUsageSummary();
+
+        Assert.False(summary.MainVideo.HasRemoved);
+        Assert.False(summary.Subtitles.HasRemoved);
+        Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
+        Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
     }
 
     public void Dispose()

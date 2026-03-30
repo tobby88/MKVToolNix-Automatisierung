@@ -73,6 +73,7 @@ public sealed class SeriesEpisodeMuxPlanTests
             ],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
             metadata: new EpisodeTrackMetadata(
                 "Englisch - AC-3",
@@ -109,6 +110,7 @@ public sealed class SeriesEpisodeMuxPlanTests
             subtitleFiles: subtitleFiles,
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
             metadata: new EpisodeTrackMetadata("Deutsch - AC-3", "Deutsch (sehbehinderte) - AC-3"),
             notes: []);

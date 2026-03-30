@@ -151,6 +151,7 @@ public sealed record ArchiveIntegrationDecision(
     IReadOnlyList<string> AttachmentFilePaths,
     bool FallbackToRequestAttachments,
     IReadOnlyList<string> PreservedAttachmentNames,
+    ArchiveUsageComparison UsageComparison,
     IReadOnlyList<string> Notes)
 {
     /// <summary>
@@ -177,6 +178,7 @@ public sealed record ArchiveIntegrationDecision(
             AttachmentFilePaths: [],
             FallbackToRequestAttachments: true,
             PreservedAttachmentNames: [],
+            UsageComparison: ArchiveUsageComparison.Empty,
             Notes: []);
     }
 
@@ -206,6 +208,7 @@ public sealed record ArchiveIntegrationDecision(
             AttachmentFilePaths: [],
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: [],
+            UsageComparison: ArchiveUsageComparison.Empty,
             Notes: notes);
     }
 }

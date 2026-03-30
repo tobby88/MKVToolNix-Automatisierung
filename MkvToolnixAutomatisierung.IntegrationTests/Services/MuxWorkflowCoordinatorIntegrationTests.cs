@@ -63,6 +63,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: new FileCopyPlan(
                 workingCopySource,
                 workingCopyDestination,
@@ -117,6 +118,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
             metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
             notes: []);
@@ -169,6 +171,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: new FileCopyPlan(
                 workingCopySource,
                 workingCopyDestination,

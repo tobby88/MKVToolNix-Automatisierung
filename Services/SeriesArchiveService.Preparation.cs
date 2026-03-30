@@ -42,6 +42,7 @@ public sealed partial class SeriesArchiveService
         var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
         var existingAudioDescription = FindExistingAudioDescription(existingArchive.AudioTracks);
         var workingCopyPlan = BuildWorkingCopyPlan(outputPath, Path.GetDirectoryName(request.MainVideoPath)!);
+        var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
 
         return keepExistingPrimary
             ? BuildDecisionUsingExistingPrimary(
@@ -49,6 +50,7 @@ public sealed partial class SeriesArchiveService
                 request,
                 additionalVideoPaths,
                 subtitlePlan,
+                replacedSubtitleTracks,
                 existingArchive,
                 bestExistingVideo,
                 existingAudioDescription,
@@ -58,6 +60,7 @@ public sealed partial class SeriesArchiveService
                 request,
                 additionalVideoPaths,
                 subtitlePlan,
+                replacedSubtitleTracks,
                 existingArchive,
                 bestExistingVideo,
                 newPrimaryVideo,
@@ -129,18 +132,6 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<string> requestSubtitlePaths,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks)
     {
-        var externalSubtitlePlans = requestSubtitlePaths
-            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
-            .ToList();
-
-        var externalCoverage = externalSubtitlePlans
-            .Select(BuildSubtitleCoverageKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // Archiv-Untertitel werden nur dann wiederverwendet, wenn kein externer Untertitel denselben fachlichen Slot belegt.
-        // Dabei unterscheiden wir bewusst Typ, HI/Standard und die projektweit unterstützte Sprache, nicht aber Tracknamen.
         var embeddedSubtitlePlans = existingSubtitleTracks
             .Select(track => new
             {
@@ -148,10 +139,6 @@ public sealed partial class SeriesArchiveService
                 Kind = SubtitleKind.FromExistingCodec(track.CodecLabel)
             })
             .Where(entry => entry.Kind is not null)
-            .Where(entry => !externalCoverage.Contains(BuildSubtitleCoverageKey(
-                entry.Kind!,
-                entry.Track.IsHearingImpaired,
-                entry.Track.Language)))
             .OrderBy(entry => entry.Kind!.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
             .Select(entry => new SubtitleFile(
@@ -165,6 +152,19 @@ public sealed partial class SeriesArchiveService
                     ? SubtitleAccessibility.HearingImpaired
                     : SubtitleAccessibility.Standard
             })
+            .ToList();
+
+        var embeddedCoverage = embeddedSubtitlePlans
+            .Select(BuildSubtitleCoverageKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Vorhandene Untertitel in der Ziel-MKV bleiben für denselben fachlichen Slot erhalten.
+        // Ergänzt werden nur fehlende Slots, z. B. ASS zusätzlich zu vorhandenem SRT.
+        var externalSubtitlePlans = requestSubtitlePaths
+            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
+            .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleCoverageKey(subtitle)))
             .ToList();
 
         return new SubtitleReusePlan(externalSubtitlePlans, embeddedSubtitlePlans);
@@ -183,6 +183,7 @@ public sealed partial class SeriesArchiveService
         SeriesEpisodeMuxRequest request,
         IReadOnlyList<string> additionalVideoPaths,
         SubtitleReusePlan subtitlePlan,
+        IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
         ExistingArchiveState existingArchive,
         ContainerTrackMetadata? bestExistingVideo,
         ContainerTrackMetadata? existingAudioDescription,
@@ -207,6 +208,14 @@ public sealed partial class SeriesArchiveService
                 ["Zieldatei bereits vollständig. Kein erneutes Muxen nötig."]);
         }
 
+        var usageComparison = new ArchiveUsageComparison(
+            MainVideo: null,
+            AdditionalVideos: null,
+            Audio: null,
+            AudioDescription: null,
+            Subtitles: BuildRemovedSubtitleChange(outputPath, replacedSubtitleTracks),
+            Attachments: null);
+
         return new ArchiveIntegrationDecision(
             OutputFilePath: outputPath,
             SkipMux: false,
@@ -227,6 +236,7 @@ public sealed partial class SeriesArchiveService
             AttachmentFilePaths: attachmentFilePaths,
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList(),
+            UsageComparison: usageComparison,
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Vor dem Muxen wird eine lokale Arbeitskopie verwendet.",
@@ -241,6 +251,7 @@ public sealed partial class SeriesArchiveService
         SeriesEpisodeMuxRequest request,
         IReadOnlyList<string> additionalVideoPaths,
         SubtitleReusePlan subtitlePlan,
+        IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
         ExistingArchiveState existingArchive,
         ContainerTrackMetadata? bestExistingVideo,
         PreparedVideoSource newPrimaryVideo,
@@ -253,6 +264,32 @@ public sealed partial class SeriesArchiveService
         var preservedAttachmentNames = needsExistingCopy
             ? existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList()
             : [];
+        var removedAdditionalVideoTracks = existingArchive.VideoTracks
+            .Where(track => bestExistingVideo is null || track.TrackId != bestExistingVideo.TrackId)
+            .ToList();
+        var removedPrimaryAudio = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
+            ?? existingArchive.AudioTracks.FirstOrDefault();
+        var usageComparison = new ArchiveUsageComparison(
+            MainVideo: bestExistingVideo is null
+                ? null
+                : new ArchiveUsageChange(
+                    BuildVideoTrackLabel(outputPath, bestExistingVideo),
+                    $"Neue Videospur hat höhere Qualität: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel}."),
+            AdditionalVideos: BuildRemovedAdditionalVideoChange(outputPath, removedAdditionalVideoTracks),
+            Audio: removedPrimaryAudio is null
+                ? null
+                : new ArchiveUsageChange(
+                    BuildAudioTrackLabel(outputPath, removedPrimaryAudio),
+                    "Die bisherige Tonspur entfällt, weil die Hauptquelle ausgetauscht wird."),
+            AudioDescription: BuildRemovedAudioDescriptionChange(
+                outputPath,
+                existingAudioDescription,
+                request.AudioDescriptionPath),
+            Subtitles: BuildRemovedSubtitleChange(outputPath, replacedSubtitleTracks),
+            Attachments: BuildRemovedAttachmentChange(
+                existingArchive.Container.Attachments,
+                preservedAttachmentNames,
+                request.AttachmentPaths.Count > 0));
 
         return new ArchiveIntegrationDecision(
             OutputFilePath: outputPath,
@@ -277,6 +314,7 @@ public sealed partial class SeriesArchiveService
             AttachmentFilePaths: request.AttachmentPaths,
             FallbackToRequestAttachments: true,
             PreservedAttachmentNames: preservedAttachmentNames,
+            UsageComparison: usageComparison,
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",
@@ -329,6 +367,121 @@ public sealed partial class SeriesArchiveService
         }
 
         return $"Archiv-Untertitel {kind.DisplayName}";
+    }
+
+    private static IReadOnlyList<ContainerTrackMetadata> GetRemovedSubtitleTracks(
+        IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
+        IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
+    {
+        if (existingSubtitleTracks.Count == 0)
+        {
+            return [];
+        }
+
+        var keptTrackIds = embeddedSubtitlePlans
+            .Where(plan => plan.EmbeddedTrackId is not null)
+            .Select(plan => plan.EmbeddedTrackId!.Value)
+            .ToHashSet();
+
+        return existingSubtitleTracks
+            .Where(track => !keptTrackIds.Contains(track.TrackId))
+            .ToList();
+    }
+
+    private static ArchiveUsageChange? BuildRemovedAdditionalVideoChange(
+        string outputPath,
+        IReadOnlyList<ContainerTrackMetadata> removedAdditionalVideoTracks)
+    {
+        if (removedAdditionalVideoTracks.Count == 0)
+        {
+            return null;
+        }
+
+        return new ArchiveUsageChange(
+            string.Join(Environment.NewLine, removedAdditionalVideoTracks.Select(track => BuildVideoTrackLabel(outputPath, track))),
+            "Zusätzliche bisherige Videospuren werden nicht übernommen.");
+    }
+
+    private static ArchiveUsageChange? BuildRemovedAudioDescriptionChange(
+        string outputPath,
+        ContainerTrackMetadata? existingAudioDescription,
+        string? requestedAudioDescriptionPath)
+    {
+        if (existingAudioDescription is null || string.IsNullOrWhiteSpace(requestedAudioDescriptionPath))
+        {
+            return null;
+        }
+
+        return new ArchiveUsageChange(
+            BuildAudioTrackLabel(outputPath, existingAudioDescription),
+            "Die bisherige AD-Spur wird durch die neu ausgewählte AD-Datei ersetzt.");
+    }
+
+    private static ArchiveUsageChange? BuildRemovedSubtitleChange(
+        string outputPath,
+        IReadOnlyList<ContainerTrackMetadata> removedSubtitleTracks)
+    {
+        if (removedSubtitleTracks.Count == 0)
+        {
+            return null;
+        }
+
+        return new ArchiveUsageChange(
+            string.Join(Environment.NewLine, removedSubtitleTracks.Select(track => BuildSubtitleTrackLabel(outputPath, track))),
+            "Diese Untertitel werden nicht übernommen, weil neue oder passendere Untertitel denselben Slot belegen.");
+    }
+
+    private static ArchiveUsageChange? BuildRemovedAttachmentChange(
+        IReadOnlyList<ContainerAttachmentMetadata> existingAttachments,
+        IReadOnlyList<string> preservedAttachmentNames,
+        bool hasNewManualAttachments)
+    {
+        if (existingAttachments.Count == 0)
+        {
+            return null;
+        }
+
+        var removedNames = existingAttachments
+            .Select(attachment => attachment.FileName)
+            .Where(name => !preservedAttachmentNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (removedNames.Count == 0)
+        {
+            return null;
+        }
+
+        return new ArchiveUsageChange(
+            string.Join(Environment.NewLine, removedNames),
+            hasNewManualAttachments
+                ? "Vorhandene Anhänge werden durch neu ausgewählte Anhänge ersetzt."
+                : "Vorhandene Anhänge entfallen, weil die Hauptquelle ausgetauscht wird.");
+    }
+
+    private static string BuildVideoTrackLabel(string outputPath, ContainerTrackMetadata track)
+    {
+        var baseText = string.IsNullOrWhiteSpace(track.TrackName)
+            ? $"{track.VideoWidth}px / {track.CodecLabel}"
+            : $"{track.TrackName} - {track.VideoWidth}px / {track.CodecLabel}";
+        return $"{Path.GetFileName(outputPath)} -> {baseText}";
+    }
+
+    private static string BuildAudioTrackLabel(string outputPath, ContainerTrackMetadata track)
+    {
+        var baseText = string.IsNullOrWhiteSpace(track.TrackName)
+            ? $"{MediaLanguageHelper.GetLanguageDisplayName(track.Language)} - {track.CodecLabel}"
+            : track.TrackName;
+        return $"{Path.GetFileName(outputPath)} -> {baseText}";
+    }
+
+    private static string BuildSubtitleTrackLabel(string outputPath, ContainerTrackMetadata track)
+    {
+        var kind = SubtitleKind.FromExistingCodec(track.CodecLabel);
+        var label = kind is null
+            ? (string.IsNullOrWhiteSpace(track.TrackName) ? track.CodecLabel : track.TrackName)
+            : BuildEmbeddedSubtitleLabel(track, kind);
+        return $"{Path.GetFileName(outputPath)} -> {label}";
     }
 
     private static string BuildSubtitleCoverageKey(SubtitleFile subtitle)

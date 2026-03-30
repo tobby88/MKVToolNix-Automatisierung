@@ -415,6 +415,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             subtitleFilesForPlan,
             attachmentFilePaths,
             archiveDecision.PreservedAttachmentNames,
+            archiveDecision.UsageComparison,
             archiveDecision.WorkingCopy,
             BuildTrackMetadata(primaryAudioCodecLabel, primaryAudioLanguage, audioDescriptionMetadata),
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());

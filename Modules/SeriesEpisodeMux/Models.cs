@@ -115,6 +115,33 @@ public sealed record ContainerMetadata(
     IReadOnlyList<ContainerAttachmentMetadata> Attachments);
 
 /// <summary>
+/// Beschreibt Bestandteile der bisherigen Zieldatei, die durch die neue Planung entfallen oder ersetzt werden.
+/// </summary>
+public sealed record ArchiveUsageChange(
+    string RemovedText,
+    string Reason);
+
+/// <summary>
+/// Vergleich zwischen vorhandener Zieldatei und geplanter Verwendung für die GUI-Zusammenfassung.
+/// </summary>
+public sealed record ArchiveUsageComparison(
+    ArchiveUsageChange? MainVideo,
+    ArchiveUsageChange? AdditionalVideos,
+    ArchiveUsageChange? Audio,
+    ArchiveUsageChange? AudioDescription,
+    ArchiveUsageChange? Subtitles,
+    ArchiveUsageChange? Attachments)
+{
+    public static ArchiveUsageComparison Empty { get; } = new(
+        MainVideo: null,
+        AdditionalVideos: null,
+        Audio: null,
+        AudioDescription: null,
+        Subtitles: null,
+        Attachments: null);
+}
+
+/// <summary>
 /// Beschreibt eine einzubindende Videospur im finalen Mux-Plan.
 /// </summary>
 public sealed record VideoSourcePlan(
