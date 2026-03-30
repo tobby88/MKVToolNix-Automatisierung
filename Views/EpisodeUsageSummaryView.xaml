@@ -1,0 +1,141 @@
+<UserControl x:Class="MkvToolnixAutomatisierung.Views.EpisodeUsageSummaryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <!-- Ausgeblendete "Bisher"-Zeilen werden an allen Track-Gruppen identisch gesteuert. -->
+        <Style x:Key="RemovedUsageRowStyle" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasRemoved, Mode=OneWay}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Die Übersicht ist rein lesend; sie erwartet EpisodeUsageSummary als DataContext. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="118" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Serienbibliothek" />
+        <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,2,0,2" TextWrapping="Wrap">
+            <TextBlock.ToolTip>
+                <StackPanel>
+                    <TextBlock Text="{Binding ArchiveAction, Mode=OneWay}" />
+                    <TextBlock Text="{Binding ArchiveDetails, Mode=OneWay}" />
+                </StackPanel>
+            </TextBlock.ToolTip>
+            <Run Text="{Binding ArchiveAction, Mode=OneWay}" />
+            <Run Text=": " />
+            <Run Text="{Binding ArchiveDetails, Mode=OneWay}" />
+        </TextBlock>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Hauptvideo" />
+        <StackPanel Grid.Row="1"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding MainVideo, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Weitere Videos" />
+        <StackPanel Grid.Row="2"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding AdditionalVideos, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio" />
+        <StackPanel Grid.Row="3"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding Audio, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="AD" />
+        <StackPanel Grid.Row="4"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding AudioDescription, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Untertitel" />
+        <StackPanel Grid.Row="5"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding Subtitles, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+
+        <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Anhänge" />
+        <StackPanel Grid.Row="6"
+                    Grid.Column="1"
+                    Margin="0,2,0,2"
+                    DataContext="{Binding Attachments, Mode=OneWay}">
+            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
+                <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
+                    <Run Text="Bisher: " />
+                    <Run Text="{Binding RemovedText, Mode=OneWay}" TextDecorations="Strikethrough" />
+                    <Run Text=" - " />
+                    <Run Text="{Binding RemovedReason, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>
