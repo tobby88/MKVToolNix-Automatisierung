@@ -28,6 +28,11 @@ public interface IEpisodePlanInput
     IReadOnlyList<string> AttachmentPaths { get; }
 
     /// <summary>
+    /// Explizit manuell gewählte Dateianhänge. Automatisch erkannte TXT-Anhänge der Videoquellen sind hier nicht enthalten.
+    /// </summary>
+    IReadOnlyList<string> ManualAttachmentPaths { get; }
+
+    /// <summary>
     /// Vollständiger Zielpfad der Ausgabe-MKV.
     /// </summary>
     string OutputPath { get; }
@@ -72,7 +77,8 @@ public sealed class EpisodePlanCoordinator
             input.AttachmentPaths,
             input.OutputPath,
             input.TitleForMux,
-            input.ExcludedSourcePaths),
+            input.ExcludedSourcePaths,
+            input.ManualAttachmentPaths),
             cancellationToken);
     }
 }

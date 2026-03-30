@@ -55,6 +55,7 @@ public partial class EpisodeEditModel
         AudioDescriptionPath = detected.AudioDescriptionPath ?? string.Empty;
         _subtitlePaths = detected.SubtitlePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _attachmentPaths = detected.AttachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
+        _hasManualAttachmentOverride = false;
         _relatedEpisodeFilePaths = detected.RelatedFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
@@ -134,8 +135,10 @@ public partial class EpisodeEditModel
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        _hasManualAttachmentOverride = true;
 
         OnPropertyChanged(nameof(AttachmentPaths));
+        OnPropertyChanged(nameof(ManualAttachmentPaths));
         OnPropertyChanged(nameof(AttachmentDisplayText));
     }
 

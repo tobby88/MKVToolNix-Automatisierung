@@ -303,7 +303,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.Equal(new[] { "cover.jpg", "notes.txt" }, plan.PreservedAttachmentNames);
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
-        Assert.Contains("cover.jpg (aus Zieldatei)", plan.BuildUsageSummary().Attachments, StringComparison.Ordinal);
+        Assert.Contains("cover.jpg (aus Zieldatei)", plan.BuildUsageSummary().Attachments.CurrentText, StringComparison.Ordinal);
 
         var arguments = plan.BuildArguments();
         var runtimeArchivePath = plan.WorkingCopy!.DestinationFilePath;
@@ -425,12 +425,65 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             SubtitlePaths: [],
             AttachmentPaths: [manualAttachmentPath],
             outputPath,
-            Title: "Pilot"));
+            Title: "Pilot",
+            ManualAttachmentPaths: [manualAttachmentPath]));
 
         Assert.False(plan.SkipMux);
         Assert.Equal(outputPath, plan.VideoSources[0].FilePath);
         Assert.Contains(manualAttachmentPath, plan.AttachmentFilePaths);
         AssertContainsSequence(plan.BuildArguments(), "--attachment-mime-type", "text/plain", "--attach-file", manualAttachmentPath);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_DoesNotCarryOverAutoDetectedAttachment_FromUnusedFreshPrimary()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-auto-attachments");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-auto-attachments");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var sourceAttachmentPath = CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        var subtitleAssPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).ass", "subtitle-ass");
+        var subtitleSrtPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle-srt");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("bestehend.txt")],
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+        var detected = await service.DetectFromSelectedVideoAsync(mainVideoPath);
+
+        Assert.Contains(sourceAttachmentPath, detected.AttachmentPaths);
+        Assert.Equal(new[] { subtitleAssPath, subtitleSrtPath }, detected.SubtitlePaths);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            detected.MainVideoPath,
+            detected.AudioDescriptionPath,
+            detected.SubtitlePaths,
+            detected.AttachmentPaths,
+            outputPath,
+            detected.SuggestedTitle));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(outputPath, plan.VideoSources[0].FilePath);
+        Assert.DoesNotContain(sourceAttachmentPath, plan.AttachmentFilePaths, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("bestehend.txt", plan.PreservedAttachmentNames);
+        Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
+        Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -119,6 +119,10 @@ public partial class EpisodeEditModel
 
     public IReadOnlyList<string> AttachmentPaths => _attachmentPaths;
 
+    public IReadOnlyList<string> ManualAttachmentPaths => _hasManualAttachmentOverride
+        ? _attachmentPaths
+        : [];
+
     public IReadOnlyList<string> RelatedEpisodeFilePaths => _relatedEpisodeFilePaths;
 
     public string OutputPath
@@ -381,6 +385,8 @@ public partial class EpisodeEditModel
     IReadOnlyList<string> IEpisodePlanInput.SubtitlePaths => SubtitlePaths;
 
     IReadOnlyList<string> IEpisodePlanInput.AttachmentPaths => AttachmentPaths;
+
+    IReadOnlyList<string> IEpisodePlanInput.ManualAttachmentPaths => ManualAttachmentPaths;
 
     string IEpisodePlanInput.OutputPath => OutputPath;
 

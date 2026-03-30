@@ -73,6 +73,7 @@ public sealed class EpisodePlanCache
         AppendFileValue(builder, input.AudioDescriptionPath);
         AppendFileValues(builder, input.SubtitlePaths);
         AppendFileValues(builder, input.AttachmentPaths);
+        AppendFileValues(builder, input.ManualAttachmentPaths);
         AppendFileValue(builder, input.OutputPath);
         AppendValue(builder, input.TitleForMux);
         AppendValues(builder, input.ExcludedSourcePaths);

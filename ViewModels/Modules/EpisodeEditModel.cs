@@ -34,6 +34,7 @@ public partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInpu
     private string _audioDescriptionPath = string.Empty;
     private List<string> _subtitlePaths = [];
     private List<string> _attachmentPaths = [];
+    private bool _hasManualAttachmentOverride;
     private List<string> _relatedEpisodeFilePaths = [];
     private string _outputPath = string.Empty;
     private string _title = string.Empty;

@@ -191,14 +191,15 @@ public sealed partial class SeriesArchiveService
     {
         var primaryAudioTrack = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
             ?? existingArchive.AudioTracks.FirstOrDefault();
+        var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
         var needsSubtitleSupplement = subtitlePlan.FinalPlans.Count > 0;
         var needsAdditionalVideo = additionalVideoPaths.Count > 0;
         var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(additionalVideoPaths)
-            .Concat(request.AttachmentPaths)
+            .Concat(manualAttachmentPaths)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var needsManualAttachments = attachmentFilePaths.Count > 0;
+        var needsManualAttachments = manualAttachmentPaths.Count > 0;
 
         if (!needsAudioDescription && !needsSubtitleSupplement && !needsAdditionalVideo && !needsManualAttachments)
         {
@@ -260,6 +261,7 @@ public sealed partial class SeriesArchiveService
     {
         var needsExistingCopy = (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
             || subtitlePlan.EmbeddedPlans.Count > 0;
+        var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         // Sobald Tracks oder Anhänge aus der bestehenden Archivdatei weiterverwendet werden, muss sie als separate Quelle erhalten bleiben.
         var preservedAttachmentNames = needsExistingCopy
             ? existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList()
@@ -289,7 +291,7 @@ public sealed partial class SeriesArchiveService
             Attachments: BuildRemovedAttachmentChange(
                 existingArchive.Container.Attachments,
                 preservedAttachmentNames,
-                request.AttachmentPaths.Count > 0));
+                manualAttachmentPaths.Count > 0));
 
         return new ArchiveIntegrationDecision(
             OutputFilePath: outputPath,
