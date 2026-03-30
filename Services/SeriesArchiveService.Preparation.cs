@@ -155,7 +155,14 @@ public sealed partial class SeriesArchiveService
             .ToList();
 
         var embeddedCoverage = embeddedSubtitlePlans
-            .Select(BuildSubtitleCoverageKey)
+            // Externe Untertitel werden projektweit weiterhin vorsichtig als HI/SDH markiert,
+            // solange keine sichere Unterscheidung vorliegt. Diese konservative Anzeige darf im
+            // Archivabgleich aber nicht dazu führen, dass dieselbe Sprache und derselbe Typ noch
+            // einmal extern angehängt werden, obwohl die Ziel-MKV den fachlichen Slot bereits
+            // belegt. Für die Wiederverwendungsentscheidung zählt deshalb bewusst nur
+            // Typ + Sprache; die genaue Accessibility-Markierung des vorhandenen Archivtracks
+            // bleibt für Track-Metadaten und GUI sichtbar, steuert hier aber keine Duplikate.
+            .Select(BuildSubtitleReuseCoverageKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Vorhandene Untertitel in der Ziel-MKV bleiben für denselben fachlichen Slot erhalten.
@@ -164,7 +171,7 @@ public sealed partial class SeriesArchiveService
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
-            .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleCoverageKey(subtitle)))
+            .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();
 
         return new SubtitleReusePlan(externalSubtitlePlans, embeddedSubtitlePlans);
@@ -489,6 +496,16 @@ public sealed partial class SeriesArchiveService
     private static string BuildSubtitleCoverageKey(SubtitleFile subtitle)
     {
         return BuildSubtitleCoverageKey(subtitle.Kind, subtitle.IsHearingImpaired, subtitle.LanguageCode);
+    }
+
+    private static string BuildSubtitleReuseCoverageKey(SubtitleFile subtitle)
+    {
+        return BuildSubtitleReuseCoverageKey(subtitle.Kind, subtitle.LanguageCode);
+    }
+
+    private static string BuildSubtitleReuseCoverageKey(SubtitleKind kind, string? languageCode)
+    {
+        return $"{kind.DisplayName}|{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}";
     }
 
     private static string BuildSubtitleCoverageKey(SubtitleKind kind, bool isHearingImpaired, string? languageCode)
