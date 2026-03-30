@@ -320,15 +320,7 @@ public sealed class MkvMergeProbeService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = mkvMergePath,
-            Arguments = $"--identify --identification-format json \"{inputFilePath}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var startInfo = CreateIdentifyStartInfo(mkvMergePath, inputFilePath);
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
@@ -351,32 +343,28 @@ public sealed class MkvMergeProbeService
         await process.WaitForExitAsync(cancellationToken);
         var standardOutput = await standardOutputTask;
         var standardError = await standardErrorTask;
-
-        if (!string.IsNullOrWhiteSpace(standardOutput))
-        {
-            try
-            {
-                return JsonDocument.Parse(standardOutput);
-            }
-            catch (JsonException)
-            {
-                if (process.ExitCode == 0)
-                {
-                    throw;
-                }
-            }
-        }
-
-        var details = string.IsNullOrWhiteSpace(standardError)
-            ? "Es wurde keine gültige JSON-Antwort geliefert."
-            : standardError.Trim();
-
-        throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen: {details}");
+        return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
     }
 
     private JsonDocument Identify(string mkvMergePath, string inputFilePath)
     {
-        var startInfo = new ProcessStartInfo
+        var startInfo = CreateIdentifyStartInfo(mkvMergePath, inputFilePath);
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
+
+        var standardOutput = process.StandardOutput.ReadToEnd();
+        var standardError = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
+    }
+
+    /// <summary>
+    /// Baut die gemeinsame mkvmerge-Identify-Konfiguration für synchrone und asynchrone Probe-Aufrufe.
+    /// </summary>
+    private static ProcessStartInfo CreateIdentifyStartInfo(string mkvMergePath, string inputFilePath)
+    {
+        return new ProcessStartInfo
         {
             FileName = mkvMergePath,
             Arguments = $"--identify --identification-format json \"{inputFilePath}\"",
@@ -385,14 +373,13 @@ public sealed class MkvMergeProbeService
             UseShellExecute = false,
             CreateNoWindow = true
         };
+    }
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
-
-        var standardOutput = process.StandardOutput.ReadToEnd();
-        var standardError = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
+    /// <summary>
+    /// Parst die JSON-Antwort von mkvmerge und erzeugt bei Fehlern konsistente Fehlermeldungen.
+    /// </summary>
+    private static JsonDocument ParseIdentifyResult(string standardOutput, string standardError, int exitCode)
+    {
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
             try
@@ -401,7 +388,7 @@ public sealed class MkvMergeProbeService
             }
             catch (JsonException)
             {
-                if (process.ExitCode == 0)
+                if (exitCode == 0)
                 {
                     throw;
                 }
