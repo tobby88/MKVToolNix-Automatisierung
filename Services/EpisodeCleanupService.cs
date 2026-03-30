@@ -10,10 +10,12 @@ public class EpisodeCleanupService
     public virtual async Task<FileMoveResult> MoveFilesToDirectoryAsync(
         IReadOnlyList<string> sourceFilePaths,
         string targetDirectory,
-        Action<int, int, string>? onProgress = null)
+        Action<int, int, string>? onProgress = null,
+        CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(targetDirectory);
 
             var movedFiles = new List<string>();
@@ -25,6 +27,7 @@ public class EpisodeCleanupService
 
             for (var index = 0; index < files.Count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var sourceFilePath = files[index];
                 onProgress?.Invoke(index + 1, files.Count, sourceFilePath);
 
@@ -41,15 +44,17 @@ public class EpisodeCleanupService
             }
 
             return new FileMoveResult(movedFiles, failedFiles);
-        });
+        }, cancellationToken);
     }
 
     public virtual async Task<FileRecycleResult> RecycleFilesAsync(
         IReadOnlyList<string> filePaths,
-        Action<int, int, string>? onProgress = null)
+        Action<int, int, string>? onProgress = null,
+        CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var recycledFiles = new List<string>();
             var failedFiles = new List<string>();
             var files = filePaths
@@ -59,6 +64,7 @@ public class EpisodeCleanupService
 
             for (var index = 0; index < files.Count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var filePath = files[index];
                 onProgress?.Invoke(index + 1, files.Count, filePath);
 
@@ -77,7 +83,7 @@ public class EpisodeCleanupService
             }
 
             return new FileRecycleResult(recycledFiles, failedFiles);
-        });
+        }, cancellationToken);
     }
 
     public virtual void DeleteTemporaryFile(string? filePath)

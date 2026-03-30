@@ -129,6 +129,43 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             secondResult.OutputPath);
     }
 
+    [Fact]
+    public async Task ScanAsync_CanBeCancelled_DuringMetadataLookup()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "cancelled-scan");
+        var archiveDirectory = Path.Combine(_tempDirectory, "cancelled-scan-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var searchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var coordinator = CreateBatchScanCoordinator(archiveDirectory, new StubTvdbClient
+        {
+            SearchSeriesAsyncOverride = async cancellationToken =>
+            {
+                searchStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return [];
+            }
+        });
+        using var cancellationSource = new CancellationTokenSource();
+
+        var scanTask = coordinator.ScanAsync(mainVideoPath, archiveDirectory, cancellationToken: cancellationSource.Token);
+        await searchStarted.Task;
+        cancellationSource.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scanTask);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -219,12 +256,21 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
 
         public IReadOnlyList<TvdbEpisodeRecord> Episodes { get; init; } = [];
 
+        public Func<CancellationToken, Task<IReadOnlyList<TvdbSeriesSearchResult>>>? SearchSeriesAsyncOverride { get; init; }
+
+        public Func<CancellationToken, Task<IReadOnlyList<TvdbEpisodeRecord>>>? GetSeriesEpisodesAsyncOverride { get; init; }
+
         public override Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
             string query,
             CancellationToken cancellationToken = default)
         {
+            if (SearchSeriesAsyncOverride is not null)
+            {
+                return SearchSeriesAsyncOverride(cancellationToken);
+            }
+
             return Task.FromResult(SearchResults);
         }
 
@@ -234,6 +280,11 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             int seriesId,
             CancellationToken cancellationToken = default)
         {
+            if (GetSeriesEpisodesAsyncOverride is not null)
+            {
+                return GetSeriesEpisodesAsyncOverride(cancellationToken);
+            }
+
             return Task.FromResult(Episodes);
         }
     }

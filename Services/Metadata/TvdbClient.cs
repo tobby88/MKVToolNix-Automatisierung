@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -53,10 +54,10 @@ public class TvdbClient : IDisposable
             return [];
         }
 
-        await EnsureAuthenticatedAsync(apiKey, pin, cancellationToken);
-
-        using var response = await _httpClient.GetAsync(
-            BuildRequestUri($"search?query={Uri.EscapeDataString(query)}&type=series&limit=20"),
+        using var response = await SendAuthorizedGetAsync(
+            apiKey,
+            pin,
+            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20",
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -103,15 +104,15 @@ public class TvdbClient : IDisposable
         int seriesId,
         CancellationToken cancellationToken = default)
     {
-        await EnsureAuthenticatedAsync(apiKey, pin, cancellationToken);
-
         var results = new List<TvdbEpisodeRecord>();
         var page = 0;
 
         while (true)
         {
-            using var response = await _httpClient.GetAsync(
-                BuildRequestUri($"series/{seriesId}/episodes/default?page={page}"),
+            using var response = await SendAuthorizedGetAsync(
+                apiKey,
+                pin,
+                $"series/{seriesId}/episodes/default?page={page}",
                 cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -168,43 +169,91 @@ public class TvdbClient : IDisposable
                 return;
             }
 
-            var payload = new Dictionary<string, string>
-            {
-                ["apikey"] = apiKey
-            };
-
-            if (!string.IsNullOrWhiteSpace(pin))
-            {
-                payload["pin"] = pin;
-            }
-
-            using var response = await _httpClient.PostAsJsonAsync(BuildRequestUri("login"), payload, cancellationToken);
-            response.EnsureSuccessStatusCode();
-
-            using var document = await JsonDocument.ParseAsync(
-                await response.Content.ReadAsStreamAsync(cancellationToken),
-                cancellationToken: cancellationToken);
-
-            var token = document.RootElement
-                .GetProperty("data")
-                .GetProperty("token")
-                .GetString();
-
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                throw new InvalidOperationException("TVDB hat kein Bearer-Token geliefert.");
-            }
-
-            _currentApiKey = apiKey;
-            _currentPin = pin;
-            _bearerToken = token;
-            _tokenValidUntilUtc = DateTimeOffset.UtcNow.AddDays(30);
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            await AuthenticateAsync(apiKey, pin, cancellationToken);
         }
         finally
         {
             _authSync.Release();
         }
+    }
+
+    private async Task ReauthenticateAsync(string apiKey, string? pin, CancellationToken cancellationToken)
+    {
+        await _authSync.WaitAsync(cancellationToken);
+        try
+        {
+            InvalidateAuthenticationState();
+            await AuthenticateAsync(apiKey, pin, cancellationToken);
+        }
+        finally
+        {
+            _authSync.Release();
+        }
+    }
+
+    private async Task AuthenticateAsync(string apiKey, string? pin, CancellationToken cancellationToken)
+    {
+        var payload = new Dictionary<string, string>
+        {
+            ["apikey"] = apiKey
+        };
+
+        if (!string.IsNullOrWhiteSpace(pin))
+        {
+            payload["pin"] = pin;
+        }
+
+        using var response = await _httpClient.PostAsJsonAsync(BuildRequestUri("login"), payload, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+
+        var token = document.RootElement
+            .GetProperty("data")
+            .GetProperty("token")
+            .GetString();
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("TVDB hat kein Bearer-Token geliefert.");
+        }
+
+        _currentApiKey = apiKey;
+        _currentPin = pin;
+        _bearerToken = token;
+        _tokenValidUntilUtc = DateTimeOffset.UtcNow.AddDays(30);
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    private async Task<HttpResponseMessage> SendAuthorizedGetAsync(
+        string apiKey,
+        string? pin,
+        string relativePath,
+        CancellationToken cancellationToken)
+    {
+        await EnsureAuthenticatedAsync(apiKey, pin, cancellationToken);
+
+        var requestUri = BuildRequestUri(relativePath);
+        var response = await _httpClient.GetAsync(requestUri, cancellationToken);
+        if (!ShouldRetryWithFreshAuthentication(response.StatusCode))
+        {
+            return response;
+        }
+
+        response.Dispose();
+        await ReauthenticateAsync(apiKey, pin, cancellationToken);
+        return await _httpClient.GetAsync(requestUri, cancellationToken);
+    }
+
+    private void InvalidateAuthenticationState()
+    {
+        _currentApiKey = null;
+        _currentPin = null;
+        _bearerToken = null;
+        _tokenValidUntilUtc = DateTimeOffset.MinValue;
+        _httpClient.DefaultRequestHeaders.Authorization = null;
     }
 
     public void Dispose()
@@ -222,6 +271,11 @@ public class TvdbClient : IDisposable
             && _tokenValidUntilUtc > DateTimeOffset.UtcNow.AddMinutes(5)
             && string.Equals(_currentApiKey, apiKey, StringComparison.Ordinal)
             && string.Equals(_currentPin ?? string.Empty, pin ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    private static bool ShouldRetryWithFreshAuthentication(HttpStatusCode statusCode)
+    {
+        return statusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
     }
 
     private static bool HasNextPage(JsonElement rootElement)

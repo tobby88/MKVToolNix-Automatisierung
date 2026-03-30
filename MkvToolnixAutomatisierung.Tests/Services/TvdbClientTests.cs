@@ -30,6 +30,59 @@ public sealed class TvdbClientTests
     }
 
     [Fact]
+    public async Task SearchSeriesAsync_ReauthenticatesOnce_WhenSearchRequestReturnsUnauthorized()
+    {
+        var requests = new List<(string Path, string? Token)>();
+        var loginCount = 0;
+        var searchCount = 0;
+
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request =>
+            {
+                requests.Add((request.RequestUri!.AbsolutePath, request.Headers.Authorization?.Parameter));
+
+                return request.RequestUri!.AbsolutePath switch
+                {
+                    "/v4/login" => JsonResponse($@"{{""data"":{{""token"":""token-{++loginCount}""}}}}"),
+                    "/v4/search" when ++searchCount == 1 => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+                    "/v4/search" => JsonResponse("""{"data":[{"tvdb_id":42,"name":"Beispielserie"}]}"""),
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                };
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var results = await client.SearchSeriesAsync("key", pin: null, "Beispielserie");
+
+        Assert.Single(results);
+        Assert.Equal(2, loginCount);
+        Assert.Equal(2, searchCount);
+        Assert.Collection(
+            requests,
+            entry =>
+            {
+                Assert.Equal("/v4/login", entry.Path);
+                Assert.Null(entry.Token);
+            },
+            entry =>
+            {
+                Assert.Equal("/v4/search", entry.Path);
+                Assert.Equal("token-1", entry.Token);
+            },
+            entry =>
+            {
+                Assert.Equal("/v4/login", entry.Path);
+                Assert.Null(entry.Token);
+            },
+            entry =>
+            {
+                Assert.Equal("/v4/search", entry.Path);
+                Assert.Equal("token-2", entry.Token);
+            });
+    }
+
+    [Fact]
     public void Dispose_DoesNotDispose_InjectedHttpClient()
     {
         var handler = new StubHttpMessageHandler();

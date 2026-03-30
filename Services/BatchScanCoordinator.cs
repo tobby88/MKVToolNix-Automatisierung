@@ -40,12 +40,14 @@ public sealed class BatchScanCoordinator
     /// <param name="outputDirectory">Aktuelle Zielwurzel für die Ausgabedatei.</param>
     /// <param name="onDetectionProgress">Optionaler Callback für Fortschrittsmeldungen der Dateierkennung.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz an Dateipfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Gesamtergebnis aus lokaler Erkennung, Metadatenauflösung und Ausgabepfad.</returns>
     public async Task<BatchScanCoordinatorResult> ScanAsync(
         string sourceFilePath,
         string outputDirectory,
         Action<DetectionProgressUpdate>? onDetectionProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
         var sourceDirectory = Path.GetDirectoryName(sourceFilePath)
             ?? throw new InvalidOperationException("Der Ordner der Batch-Quelle konnte nicht bestimmt werden.");
@@ -54,7 +56,8 @@ public sealed class BatchScanCoordinator
             sourceFilePath,
             outputDirectory,
             onDetectionProgress,
-            excludedSourcePaths);
+            excludedSourcePaths,
+            cancellationToken);
     }
 
     /// <summary>
@@ -65,26 +68,30 @@ public sealed class BatchScanCoordinator
     /// <param name="outputDirectory">Aktuelle Zielwurzel für die Ausgabedatei.</param>
     /// <param name="onDetectionProgress">Optionaler Callback für Fortschrittsmeldungen der Dateierkennung.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz an Dateipfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Gesamtergebnis aus lokaler Erkennung, Metadatenauflösung und Ausgabepfad.</returns>
     public async Task<BatchScanCoordinatorResult> ScanAsync(
         BatchScanDirectoryContext directoryContext,
         string sourceFilePath,
         string outputDirectory,
         Action<DetectionProgressUpdate>? onDetectionProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
         var detected = await _muxService.DetectFromSelectedVideoAsync(
             sourceFilePath,
             directoryContext.DetectionContext,
             onDetectionProgress,
-            excludedSourcePaths);
+            excludedSourcePaths,
+            cancellationToken);
         var localGuess = new EpisodeMetadataGuess(
             detected.SeriesName,
             detected.SuggestedTitle,
             detected.SeasonNumber,
             detected.EpisodeNumber);
 
-        var metadataResolution = await _episodeMetadata.ResolveAutomaticallyAsync(localGuess);
+        cancellationToken.ThrowIfCancellationRequested();
+        var metadataResolution = await _episodeMetadata.ResolveAutomaticallyAsync(localGuess, cancellationToken);
         if (metadataResolution.Selection is not null)
         {
             detected = EpisodeMetadataMergeHelper.ApplySelection(detected, metadataResolution.Selection);

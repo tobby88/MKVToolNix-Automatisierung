@@ -37,13 +37,18 @@ public sealed class SeriesEpisodeMuxService
     /// <param name="selectedVideoPath">Pfad zur vom Benutzer ausgewählten Videodatei.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal fuer den aufrufenden Task.</param>
     /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
-        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, onProgress, excludedSourcePaths));
+        var progressCallback = CreateCancelableProgressCallback(onProgress, cancellationToken);
+        return RunOnStaThreadAsync(
+            () => _planner.DetectFromMainVideo(selectedVideoPath, progressCallback, excludedSourcePaths),
+            cancellationToken);
     }
 
     /// <summary>
@@ -53,15 +58,20 @@ public sealed class SeriesEpisodeMuxService
     /// <param name="directoryContext">Vorbereiteter Ordnerkontext derselben Quelle für wiederholte Scans.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal fuer den aufrufenden Task.</param>
     /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
         SeriesEpisodeMuxPlanner.DirectoryDetectionContext directoryContext,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(directoryContext);
-        return RunOnStaThreadAsync(() => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, onProgress, excludedSourcePaths));
+        var progressCallback = CreateCancelableProgressCallback(onProgress, cancellationToken);
+        return RunOnStaThreadAsync(
+            () => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, progressCallback, excludedSourcePaths),
+            cancellationToken);
     }
 
     /// <summary>
@@ -164,19 +174,61 @@ public sealed class SeriesEpisodeMuxService
         return new MuxExecutionResult(exitCode, hadWarning, latestProgressPercent);
     }
 
-    private static Task<T> RunOnStaThreadAsync<T>(Func<T> action)
+    private static Action<DetectionProgressUpdate>? CreateCancelableProgressCallback(
+        Action<DetectionProgressUpdate>? onProgress,
+        CancellationToken cancellationToken)
     {
+        if (onProgress is null)
+        {
+            return null;
+        }
+
+        return update =>
+        {
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                onProgress(update);
+            }
+        };
+    }
+
+    private static Task<T> RunOnStaThreadAsync<T>(Func<T> action, CancellationToken cancellationToken = default)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<T>(cancellationToken);
+        }
+
         var completionSource = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationTokenRegistration cancellationRegistration = default;
+        if (cancellationToken.CanBeCanceled)
+        {
+            cancellationRegistration = cancellationToken.Register(() => completionSource.TrySetCanceled(cancellationToken));
+        }
 
         var thread = new Thread(() =>
         {
             try
             {
-                completionSource.SetResult(action());
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    completionSource.TrySetCanceled(cancellationToken);
+                    return;
+                }
+
+                completionSource.TrySetResult(action());
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                completionSource.TrySetCanceled(cancellationToken);
             }
             catch (Exception ex)
             {
-                completionSource.SetException(ex);
+                completionSource.TrySetException(ex);
+            }
+            finally
+            {
+                cancellationRegistration.Dispose();
             }
         });
 

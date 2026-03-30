@@ -222,6 +222,10 @@ public sealed class EpisodeMetadataLookupService
                 QueryWasAttempted: true,
                 QuerySucceeded: true);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return new EpisodeMetadataResolutionResult(

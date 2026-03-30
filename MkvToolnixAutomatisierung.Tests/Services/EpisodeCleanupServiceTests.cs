@@ -59,6 +59,19 @@ public sealed class EpisodeCleanupServiceTests : IDisposable
         Assert.True(Directory.Exists(nonEmptyDirectory));
     }
 
+    [Fact]
+    public async Task MoveFilesToDirectoryAsync_ThrowsWhenCancellationAlreadyRequested()
+    {
+        var service = new EpisodeCleanupService();
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.MoveFilesToDirectoryAsync(
+            [CreateFile("cancel.txt", "data")],
+            Path.Combine(_tempDirectory, "done"),
+            cancellationToken: cancellationSource.Token));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
