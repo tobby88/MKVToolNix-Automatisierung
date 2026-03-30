@@ -14,7 +14,7 @@ internal sealed class AppCompositionRoot
     public AppComposition Create()
     {
         var settingsStore = new AppSettingsStore();
-        var dialogService = new UserDialogService();
+        IUserDialogService dialogService = new UserDialogService();
         var settingsLoadResult = settingsStore.LoadWithDiagnostics();
         var toolPathStore = new AppToolPathStore(settingsStore);
         var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
@@ -81,7 +81,7 @@ internal sealed class AppCompositionRoot
 /// Bündelt das Ergebnis des Bootstrap-Vorgangs, damit Startcode und Fenstererzeugung nicht jede Abhängigkeit einzeln tragen müssen.
 /// </summary>
 internal sealed record AppComposition(
-    UserDialogService DialogService,
+    IUserDialogService DialogService,
     AppSettingsLoadResult SettingsLoadResult,
     MainWindowViewModel MainWindowViewModel,
     AppServices Services);

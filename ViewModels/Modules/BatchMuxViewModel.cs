@@ -22,7 +22,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly AppServices _services;
-    private readonly UserDialogService _dialogService;
+    private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _logBuffer;
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private readonly BatchEpisodeCollectionController _episodeCollection;
@@ -40,7 +40,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     private int _selectedPlanSummaryVersion;
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
 
-    public BatchMuxViewModel(AppServices services, UserDialogService dialogService)
+    public BatchMuxViewModel(AppServices services, IUserDialogService dialogService)
     {
         _services = services;
         _dialogService = dialogService;

@@ -14,7 +14,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
     private readonly AppServices _services;
-    private readonly UserDialogService _dialogService;
+    private readonly IUserDialogService _dialogService;
     private readonly AppToolPathStore _toolPathStore;
     private readonly IFfprobeLocator _ffprobeLocator;
     private readonly IMkvToolNixLocator _mkvToolNixLocator;
@@ -30,7 +30,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public MainWindowViewModel(
         IReadOnlyList<ModuleNavigationItem> modules,
         AppServices services,
-        UserDialogService dialogService,
+        IUserDialogService dialogService,
         AppToolPathStore toolPathStore,
         IFfprobeLocator ffprobeLocator,
         IMkvToolNixLocator mkvToolNixLocator)

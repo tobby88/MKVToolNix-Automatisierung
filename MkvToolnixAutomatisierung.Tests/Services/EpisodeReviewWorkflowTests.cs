@@ -129,17 +129,57 @@ public sealed class EpisodeReviewWorkflowTests
 
         public int ReviewPromptCallCount { get; private set; }
 
+        public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
+
+        public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
+
+        public string[]? SelectAttachments(string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectOutput(string initialDirectory, string fileName) => throw new NotSupportedException();
+
+        public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
+
+        public MessageBoxResult AskAudioDescriptionChoice() => throw new NotSupportedException();
+
+        public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();
+
+        public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();
+
+        public bool ConfirmMuxStart() => throw new NotSupportedException();
+
+        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
+
+        public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan) => throw new NotSupportedException();
+
+        public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();
+
+        public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => throw new NotSupportedException();
+
+        public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
+
         public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
         {
             OpenedFilePaths.AddRange(filePaths);
             return CanOpenFiles;
         }
 
+        public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
+
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)
         {
             ReviewPromptCallCount++;
             return _reviewResults.Dequeue();
         }
+
+        public void ShowInfo(string title, string message) => throw new NotSupportedException();
+
+        public void ShowWarning(string title, string message) => throw new NotSupportedException();
+
+        public void ShowError(string message) => throw new NotSupportedException();
     }
 
     private sealed class FakeEpisodeReviewItem : IEpisodeReviewItem

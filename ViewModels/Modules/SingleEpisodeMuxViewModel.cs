@@ -18,7 +18,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchi
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly AppServices _services;
-    private readonly UserDialogService _dialogService;
+    private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _previewOutputBuffer;
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private readonly EpisodePlanCache _planCache = new();
@@ -35,7 +35,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchi
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _planSummaryVersion;
 
-    public SingleEpisodeMuxViewModel(AppServices services, UserDialogService dialogService)
+    public SingleEpisodeMuxViewModel(AppServices services, IUserDialogService dialogService)
     {
         _services = services;
         _dialogService = dialogService;
