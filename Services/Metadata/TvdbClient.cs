@@ -8,21 +8,31 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Schlanker TVDB-v4-Client mit gemeinsamem Auth-Token und Seiteniteration für Serien-/Episodenabfragen.
 /// </summary>
-public class TvdbClient
+public class TvdbClient : IDisposable
 {
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
 
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = BaseAddress,
-        Timeout = TimeSpan.FromSeconds(30)
-    };
+    private readonly HttpClient _httpClient;
+    private readonly bool _ownsHttpClient;
     private readonly SemaphoreSlim _authSync = new(1, 1);
 
     private string? _currentApiKey;
     private string? _currentPin;
     private string? _bearerToken;
     private DateTimeOffset _tokenValidUntilUtc;
+
+    /// <summary>
+    /// Erstellt den TVDB-Client optional auf Basis eines bereits vorhandenen <see cref="HttpClient"/>.
+    /// </summary>
+    /// <param name="httpClient">Optionaler externer HTTP-Client; ohne Angabe wird intern ein eigener Client erzeugt.</param>
+    public TvdbClient(HttpClient? httpClient = null)
+    {
+        _ownsHttpClient = httpClient is null;
+        _httpClient = httpClient ?? new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+    }
 
     /// <summary>
     /// Sucht TVDB-Serien über die v4-API.
@@ -46,7 +56,7 @@ public class TvdbClient
         await EnsureAuthenticatedAsync(apiKey, pin, cancellationToken);
 
         using var response = await _httpClient.GetAsync(
-            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20",
+            BuildRequestUri($"search?query={Uri.EscapeDataString(query)}&type=series&limit=20"),
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -101,7 +111,7 @@ public class TvdbClient
         while (true)
         {
             using var response = await _httpClient.GetAsync(
-                $"series/{seriesId}/episodes/default?page={page}",
+                BuildRequestUri($"series/{seriesId}/episodes/default?page={page}"),
                 cancellationToken);
             response.EnsureSuccessStatusCode();
 
@@ -168,7 +178,7 @@ public class TvdbClient
                 payload["pin"] = pin;
             }
 
-            using var response = await _httpClient.PostAsJsonAsync("login", payload, cancellationToken);
+            using var response = await _httpClient.PostAsJsonAsync(BuildRequestUri("login"), payload, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             using var document = await JsonDocument.ParseAsync(
@@ -194,6 +204,15 @@ public class TvdbClient
         finally
         {
             _authSync.Release();
+        }
+    }
+
+    public void Dispose()
+    {
+        _authSync.Dispose();
+        if (_ownsHttpClient)
+        {
+            _httpClient.Dispose();
         }
     }
 
@@ -253,5 +272,10 @@ public class TvdbClient
         }
 
         return null;
+    }
+
+    private static Uri BuildRequestUri(string relativePath)
+    {
+        return new(BaseAddress, relativePath);
     }
 }
