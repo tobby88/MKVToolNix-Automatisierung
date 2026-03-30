@@ -95,6 +95,7 @@ public sealed class EpisodeEditModelManualCheckTests : IDisposable
                 isMetadataReviewApproved: true,
                 planSummaryText: string.Empty,
                 usageSummary: null,
+                initialArchiveState: null,
                 requiresManualCheck: requiresManualCheck,
                 manualCheckFilePaths: manualCheckFilePaths,
                 notes: [])

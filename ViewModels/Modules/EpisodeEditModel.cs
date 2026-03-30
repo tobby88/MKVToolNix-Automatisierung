@@ -78,6 +78,7 @@ public partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInpu
         bool isMetadataReviewApproved,
         string planSummaryText,
         EpisodeUsageSummary? usageSummary,
+        EpisodeArchiveState? initialArchiveState,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
         IReadOnlyList<string> notes)
@@ -98,7 +99,7 @@ public partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanInpu
         _attachmentPaths = attachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _relatedEpisodeFilePaths = relatedEpisodeFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPath = outputPath;
-        _archiveState = ResolveArchiveState(outputPath);
+        _archiveState = initialArchiveState ?? ResolveArchiveState(outputPath);
         _title = title;
         _metadataStatusText = metadataStatusText;
         _planSummaryText = planSummaryText;

@@ -47,6 +47,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         BatchEpisodeStatusKind statusKind,
         string planSummaryText,
         EpisodeUsageSummary? usageSummary,
+        EpisodeArchiveState archiveState,
         bool isSelected,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
@@ -73,6 +74,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             isMetadataReviewApproved,
             planSummaryText,
             usageSummary,
+            archiveState,
             requiresManualCheck,
             manualCheckFilePaths,
             notes)
@@ -161,6 +163,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         bool isSelected)
     {
         var outputExists = File.Exists(outputPath);
+        var archiveState = outputExists ? EpisodeArchiveState.Existing : EpisodeArchiveState.New;
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             detected.MainVideoPath,
@@ -188,6 +191,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             EpisodeUsageSummary.CreatePending(
                 outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
                 outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"),
+            archiveState,
             isSelected,
             detected.RequiresManualCheck,
             detected.ManualCheckFilePaths,
@@ -219,6 +223,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             BatchEpisodeStatusKind.Error,
             "Keine Plan-Zusammenfassung verfügbar.",
             EpisodeUsageSummary.CreatePending("Fehler", "Keine Plan-Zusammenfassung verfügbar."),
+            EpisodeArchiveState.New,
             isSelected: false,
             requiresManualCheck: false,
             manualCheckFilePaths: [],
@@ -239,7 +244,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             detected,
             metadataResolution,
             outputPath);
-        ApplyArchiveState(statusKind);
+        ApplyArchiveState(statusKind, refreshArchiveState: false);
         IsSelected = true;
     }
 
@@ -264,7 +269,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     public override void SetOutputPath(string outputPath)
     {
         base.SetOutputPath(outputPath);
-        ApplyArchiveState();
+        ApplyArchiveState(refreshArchiveState: false);
         IsSelected = true;
     }
 
@@ -274,7 +279,7 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         base.SetAutomaticOutputPath(outputPath);
         if (!string.Equals(previousOutputPath, OutputPath, StringComparison.OrdinalIgnoreCase))
         {
-            ApplyArchiveState();
+            ApplyArchiveState(refreshArchiveState: false);
         }
     }
 
@@ -309,9 +314,14 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     private void ApplyArchiveState(
         BatchEpisodeStatusKind? statusOverride = null,
-        bool preservePlanSummary = false)
+        bool preservePlanSummary = false,
+        bool refreshArchiveState = true)
     {
-        RefreshArchiveState();
+        if (refreshArchiveState)
+        {
+            RefreshArchiveState();
+        }
+
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         SetStatus(statusOverride ?? (outputExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
         if (!preservePlanSummary)

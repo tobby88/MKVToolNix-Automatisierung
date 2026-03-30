@@ -266,7 +266,9 @@ public sealed partial class SingleEpisodeMuxViewModel
             return;
         }
 
-        if (File.Exists(OutputPath))
+        // Die Basisklasse hält den Archivzustand bereits beim Setzen des Zielpfads aktuell. Das vermeidet,
+        // dass diese rein UI-nahe Statusberechnung denselben Pfad bei jeder Aktualisierung erneut anfasst.
+        if (ArchiveState == EpisodeArchiveState.Existing)
         {
             OutputTargetStatusText = _services.OutputPaths.IsArchivePath(OutputPath)
                 ? "Am Ziel liegt bereits eine MKV. Bei Vorschau oder Mux wird geprüft, ob etwas fehlt oder ersetzt werden muss."
