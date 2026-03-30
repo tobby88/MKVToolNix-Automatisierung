@@ -13,7 +13,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zentrales ViewModel des Einzelmodus; die Partial-Dateien trennen Auswahl/Erkennung und Ausführung.
 /// </summary>
-public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
+public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchiveConfigurationAwareModule
 {
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
@@ -129,13 +129,16 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
     public bool HasMetadataStatus => !string.IsNullOrWhiteSpace(MetadataStatusText);
 
-    public string MetadataActionButtonText => HasPendingMetadataReview
-        ? "TVDB prüfen"
-        : "TVDB anpassen";
+    public string MetadataActionButtonText => MetadataBadgeState switch
+    {
+        MetadataBadgeState.Pending => "TVDB prüfen",
+        MetadataBadgeState.Approved => "TVDB anpassen",
+        _ => "TVDB öffnen"
+    };
 
-    public MetadataBadgeState MetadataBadgeState => HasPendingMetadataReview
-        ? MetadataBadgeState.Pending
-        : HasMetadataStatus ? MetadataBadgeState.Approved : MetadataBadgeState.Open;
+    public MetadataBadgeState MetadataBadgeState => EpisodeUiStateResolver.ResolveMetadataBadgeState(
+        HasPendingMetadataReview,
+        IsMetadataReviewApproved);
 
     public string MetadataBadgeText => EpisodeEditTextBuilder.BuildMetadataBadgeText(MetadataBadgeState);
 
@@ -145,9 +148,12 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel
 
     public string MetadataBadgeTooltip => EpisodeEditTextBuilder.BuildMetadataBadgeTooltip(MetadataBadgeState);
 
-    public string MetadataActionButtonTooltip => HasPendingMetadataReview
-        ? "Öffnet den TVDB-Dialog, um Serie und Episode zu prüfen und freizugeben."
-        : "Öffnet den TVDB-Dialog, um die Zuordnung bei Bedarf manuell anzupassen.";
+    public string MetadataActionButtonTooltip => MetadataBadgeState switch
+    {
+        MetadataBadgeState.Pending => "Öffnet den TVDB-Dialog, um Serie und Episode zu prüfen und freizugeben.",
+        MetadataBadgeState.Approved => "Öffnet den TVDB-Dialog, um die Zuordnung bei Bedarf manuell anzupassen.",
+        _ => "Öffnet den TVDB-Dialog, um Zugangsdaten zu speichern oder eine Zuordnung manuell festzulegen."
+    };
 
     public string OutputTargetStatusText
     {

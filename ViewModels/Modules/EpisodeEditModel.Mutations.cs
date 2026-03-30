@@ -61,7 +61,7 @@ public partial class EpisodeEditModel
         Title = string.IsNullOrWhiteSpace(titleOverride) ? detected.SuggestedTitle : titleOverride;
         MetadataStatusText = metadataResolution.StatusText;
         RequiresMetadataReview = metadataResolution.RequiresReview;
-        IsMetadataReviewApproved = !metadataResolution.RequiresReview;
+        IsMetadataReviewApproved = DetermineAutomaticMetadataApproval(metadataResolution);
         RequiresManualCheck = detected.RequiresManualCheck;
         _manualCheckFilePaths = detected.ManualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (!RequiresManualCheck)
@@ -228,7 +228,7 @@ public partial class EpisodeEditModel
     {
         MetadataStatusText = resolution.StatusText;
         RequiresMetadataReview = resolution.RequiresReview;
-        IsMetadataReviewApproved = !resolution.RequiresReview;
+        IsMetadataReviewApproved = DetermineAutomaticMetadataApproval(resolution);
     }
 
     protected void SetNotes(IEnumerable<string> notes)
@@ -322,6 +322,12 @@ public partial class EpisodeEditModel
             CompanionTextMetadataReader.ReadForMediaFile(audioDescriptionPath).Sender?.Trim(),
             "SRF",
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool DetermineAutomaticMetadataApproval(EpisodeMetadataResolutionResult resolution)
+    {
+        // Eine übersprungene oder fehlgeschlagene Automatik soll im UI nicht wie eine freigegebene TVDB-Zuordnung wirken.
+        return resolution.QueryWasAttempted && !resolution.RequiresReview;
     }
 
     protected void SetRequestedSourcePaths(IEnumerable<string> paths)

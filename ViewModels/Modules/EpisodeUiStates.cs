@@ -32,6 +32,32 @@ public enum MetadataBadgeState
 }
 
 /// <summary>
+/// Bestimmt fachliche Badge-Zustände unabhängig von konkreten Farben oder Texten.
+/// </summary>
+public static class EpisodeUiStateResolver
+{
+    /// <summary>
+    /// Leitet den sichtbaren TVDB-Badge-Zustand aus Reviewpflicht und tatsächlicher Freigabe ab.
+    /// </summary>
+    /// <param name="hasPendingMetadataReview">Gibt an, ob noch eine explizite TVDB-Prüfung offen ist.</param>
+    /// <param name="isMetadataReviewApproved">Gibt an, ob die aktuelle Zuordnung wirklich freigegeben wurde.</param>
+    /// <returns>Passender Badge-Zustand für die Einzelansicht.</returns>
+    public static MetadataBadgeState ResolveMetadataBadgeState(
+        bool hasPendingMetadataReview,
+        bool isMetadataReviewApproved)
+    {
+        if (hasPendingMetadataReview)
+        {
+            return MetadataBadgeState.Pending;
+        }
+
+        return isMetadataReviewApproved
+            ? MetadataBadgeState.Approved
+            : MetadataBadgeState.Open;
+    }
+}
+
+/// <summary>
 /// Visuelle Einordnung des Ausgabepfads relativ zur Bibliothek.
 /// </summary>
 public enum OutputTargetBadgeState

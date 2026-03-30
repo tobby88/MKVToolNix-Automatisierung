@@ -242,7 +242,7 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     public bool CanApply => SelectedSeriesItem is not null && SelectedEpisodeItem is not null;
 
     /// <summary>
-    /// Lädt beim ersten Öffnen direkt die vorbefüllte TVDB-Suche.
+    /// Lädt beim ersten Öffnen direkt die vorbefüllte TVDB-Suche, sofern bereits ein API-Key vorhanden ist.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -265,6 +265,14 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
         {
             SetBusy(true, "Suche Serie bei TVDB...");
             var currentSettings = BuildTransientSettings();
+            if (string.IsNullOrWhiteSpace(currentSettings.TvdbApiKey))
+            {
+                ClearLoadedResults();
+                StatusText = "TVDB-API-Key fehlt. Bitte zuerst eintragen und dann suchen.";
+                UpdateComparisonSummary();
+                return;
+            }
+
             var results = await _lookupService.SearchSeriesAsync(SeriesSearchText.Trim(), currentSettings);
 
             _seriesResults.Clear();
@@ -340,6 +348,18 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     public void RememberLocalDetectionChoice()
     {
         _lookupService.SaveSettings(BuildTransientSettings());
+    }
+
+    private void ClearLoadedResults()
+    {
+        _seriesResults.Clear();
+        _episodes.Clear();
+        _suppressSeriesSelectionChanged = true;
+        SelectedSeriesItem = null;
+        _suppressSeriesSelectionChanged = false;
+        SelectedEpisodeItem = null;
+        ReplaceItems(SeriesResults, []);
+        ReplaceItems(EpisodeResults, []);
     }
 
     /// <summary>

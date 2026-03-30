@@ -7,6 +7,26 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 public sealed class TvdbLookupWindowViewModelTests
 {
     [Fact]
+    public async Task InitializeAsync_DoesNotSearchWithoutApiKey_AndShowsSetupStatus()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var client = new FakeTvdbClient();
+        var service = new EpisodeMetadataLookupService(store, client);
+        var viewModel = new TvdbLookupWindowViewModel(
+            service,
+            new EpisodeMetadataGuess("Beispielserie", "Pilot", "01", "01"));
+
+        await viewModel.InitializeAsync();
+
+        Assert.Empty(viewModel.SeriesResults);
+        Assert.Empty(viewModel.EpisodeResults);
+        Assert.Null(viewModel.SelectedSeriesItem);
+        Assert.Null(viewModel.SelectedEpisodeItem);
+        Assert.Contains("TVDB-API-Key fehlt", viewModel.StatusText);
+        Assert.Equal(0, client.SearchSeriesCallCount);
+    }
+
+    [Fact]
     public async Task SearchSeriesAsync_AutoSelectsPreferredSeriesAndEpisode()
     {
         var store = new FakeMetadataStore(new AppMetadataSettings
@@ -144,6 +164,10 @@ public sealed class TvdbLookupWindowViewModelTests
 
     private sealed class FakeTvdbClient : TvdbClient
     {
+        public int SearchSeriesCallCount { get; private set; }
+
+        public int GetSeriesEpisodesCallCount { get; private set; }
+
         public Func<string, IReadOnlyList<TvdbSeriesSearchResult>>? SearchSeriesResultFactory { get; init; }
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
@@ -154,6 +178,7 @@ public sealed class TvdbLookupWindowViewModelTests
             string query,
             CancellationToken cancellationToken = default)
         {
+            SearchSeriesCallCount++;
             IReadOnlyList<TvdbSeriesSearchResult> results = SearchSeriesResultFactory?.Invoke(query) ?? [];
             return Task.FromResult(results);
         }
@@ -164,6 +189,7 @@ public sealed class TvdbLookupWindowViewModelTests
             int seriesId,
             CancellationToken cancellationToken = default)
         {
+            GetSeriesEpisodesCallCount++;
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
         }

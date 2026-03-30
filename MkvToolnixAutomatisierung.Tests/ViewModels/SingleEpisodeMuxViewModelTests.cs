@@ -52,6 +52,26 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void ResolveMetadataBadgeState_ReturnsOpen_WhenAutomaticLookupWasSkipped()
+    {
+        var badgeState = EpisodeUiStateResolver.ResolveMetadataBadgeState(
+            hasPendingMetadataReview: false,
+            isMetadataReviewApproved: false);
+
+        Assert.Equal(MetadataBadgeState.Open, badgeState);
+    }
+
+    [Fact]
+    public void ResolveMetadataBadgeState_ReturnsApproved_WhenMetadataWasFreigegeben()
+    {
+        var badgeState = EpisodeUiStateResolver.ResolveMetadataBadgeState(
+            hasPendingMetadataReview: false,
+            isMetadataReviewApproved: true);
+
+        Assert.Equal(MetadataBadgeState.Approved, badgeState);
+    }
+
+    [Fact]
     public void SubtitleDisplayText_ReturnsOnlyFileNames()
     {
         var viewModel = CreateViewModel();

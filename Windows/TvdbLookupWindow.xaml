@@ -100,7 +100,7 @@
                              Grid.Column="0"
                              Margin="0,0,12,8"
                              Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Seriennamen suchen oder anpassen. Beim &#214;ffnen wird bereits automatisch gesucht." />
+                             ToolTip="Seriennamen suchen oder anpassen. Wenn bereits ein API-Key hinterlegt ist, startet die Suche beim &#214;ffnen automatisch." />
                     <Button Grid.Row="0"
                             Grid.Column="1"
                             Padding="10,6"
