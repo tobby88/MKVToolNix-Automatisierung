@@ -63,6 +63,56 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
             outputPath);
     }
 
+    [Fact]
+    public void BuildOutputRootOverrideHint_ReturnsMessage_WhenArchiveIsUnavailableAndOverrideIsSet()
+    {
+        var overrideRoot = Path.Combine(_tempDirectory, "custom-output");
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(Path.Combine(_tempDirectory, "missing-archive"));
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var hint = service.BuildOutputRootOverrideHint(overrideRoot);
+
+        Assert.NotNull(hint);
+        Assert.Contains("bewusst flach", hint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildOutputRootOverrideHint_ReturnsNull_WhenArchiveIsAvailable()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var overrideRoot = Path.Combine(_tempDirectory, "custom-output");
+        Directory.CreateDirectory(archiveRoot);
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var hint = service.BuildOutputRootOverrideHint(overrideRoot);
+
+        Assert.Null(hint);
+    }
+
+    [Fact]
+    public void BuildOutputPath_SanitizesReservedSeriesFolderNames()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        Directory.CreateDirectory(archiveRoot);
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var outputPath = service.BuildOutputPath(
+            Path.Combine(_tempDirectory, "fallback"),
+            "CON.",
+            "01",
+            "01",
+            "Pilot");
+
+        Assert.Equal(
+            Path.Combine(archiveRoot, "CON_", "Season 1", "CON. - S01E01 - Pilot.mkv"),
+            outputPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

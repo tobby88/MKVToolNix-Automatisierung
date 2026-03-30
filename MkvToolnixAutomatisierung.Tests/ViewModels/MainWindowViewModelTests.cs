@@ -2,6 +2,7 @@ using System.IO;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels;
+using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.ViewModels;
@@ -78,6 +79,25 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(Path.GetDirectoryName(mkvMergePath), savedSettings.MkvToolNixDirectoryPath);
     }
 
+    [Fact]
+    public void UpdateArchiveRootDirectory_RefreshesArchiveStatus_AndNotifiesArchiveAwareModules()
+    {
+        var archiveAwareModule = new StubArchiveConfigurationAwareModule();
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-ready");
+        Directory.CreateDirectory(archiveRoot);
+        var viewModel = CreateViewModel(
+            CreateToolPathStore(),
+            new StubFfprobeLocator(null),
+            new StubMkvToolNixLocator(new FileNotFoundException("Probe fehlgeschlagen.")),
+            [new ModuleNavigationItem("Einzelepisode", "Erkennen", archiveAwareModule)]);
+
+        viewModel.UpdateArchiveRootDirectory(archiveRoot);
+
+        Assert.Equal(archiveRoot, viewModel.ArchiveRootDirectory);
+        Assert.True(viewModel.IsArchiveAvailable);
+        Assert.Equal(1, archiveAwareModule.CallCount);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -94,15 +114,14 @@ public sealed class MainWindowViewModelTests : IDisposable
     private MainWindowViewModel CreateViewModel(
         AppToolPathStore toolPathStore,
         IFfprobeLocator ffprobeLocator,
-        IMkvToolNixLocator mkvToolNixLocator)
+        IMkvToolNixLocator mkvToolNixLocator,
+        IReadOnlyList<ModuleNavigationItem>? modules = null)
     {
         var services = ViewModelTestContext.CreateAppServices();
         services.Archive.ConfigureArchiveRootDirectory(_tempDirectory);
 
         return new MainWindowViewModel(
-            [
-                new ModuleNavigationItem("Einzelepisode", "Erkennen", new object())
-            ],
+            modules ?? [new ModuleNavigationItem("Einzelepisode", "Erkennen", new object())],
             services,
             new UserDialogService(),
             toolPathStore,
@@ -141,6 +160,16 @@ public sealed class MainWindowViewModelTests : IDisposable
             }
 
             return resolvedPath ?? throw new InvalidOperationException("Kein mkvmerge-Pfad gesetzt.");
+        }
+    }
+
+    private sealed class StubArchiveConfigurationAwareModule : IArchiveConfigurationAwareModule
+    {
+        public int CallCount { get; private set; }
+
+        public void HandleArchiveConfigurationChanged()
+        {
+            CallCount++;
         }
     }
 }

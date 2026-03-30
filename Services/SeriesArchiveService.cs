@@ -127,7 +127,7 @@ public sealed partial class SeriesArchiveService
 
     private static string SanitizePathPart(string value)
     {
-        return string.Concat(value.Select(character => Path.GetInvalidPathChars().Contains(character) || character == ':' ? '_' : character)).Trim();
+        return EpisodeFileNameHelper.SanitizePathSegment(value);
     }
 }
 

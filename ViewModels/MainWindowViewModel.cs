@@ -287,8 +287,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        _services.Archive.ConfigureArchiveRootDirectory(selectedDirectory);
+        UpdateArchiveRootDirectory(selectedDirectory);
+    }
+
+    /// <summary>
+    /// Übernimmt eine neue globale Archivwurzel und stößt alle betroffenen Module zu einer Aktualisierung an.
+    /// </summary>
+    /// <param name="archiveRootDirectory">Neu ausgewählter Standardpfad der Serienbibliothek.</param>
+    public void UpdateArchiveRootDirectory(string archiveRootDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(archiveRootDirectory))
+        {
+            return;
+        }
+
+        _services.Archive.ConfigureArchiveRootDirectory(archiveRootDirectory);
         RefreshArchiveStatus();
+        NotifyArchiveConfigurationChanged();
     }
 
     private void RefreshToolStatus()
@@ -354,6 +369,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         ArchiveRootDirectory = _services.Archive.ArchiveRootDirectory;
         IsArchiveAvailable = _services.Archive.IsArchiveAvailable();
+    }
+
+    private void NotifyArchiveConfigurationChanged()
+    {
+        foreach (var module in Modules)
+        {
+            if (module.ContentViewModel is IArchiveConfigurationAwareModule archiveAwareModule)
+            {
+                archiveAwareModule.HandleArchiveConfigurationChanged();
+            }
+        }
     }
 
     private static string GetInitialDirectory(string? filePath)

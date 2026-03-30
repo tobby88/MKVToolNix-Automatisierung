@@ -69,14 +69,28 @@ public sealed class EpisodePlanCache
     private static string BuildCacheKey(IEpisodePlanInput input)
     {
         var builder = new StringBuilder();
-        AppendValue(builder, input.MainVideoPath);
-        AppendValue(builder, input.AudioDescriptionPath);
-        AppendValues(builder, input.SubtitlePaths);
-        AppendValues(builder, input.AttachmentPaths);
-        AppendValue(builder, input.OutputPath);
+        AppendFileValue(builder, input.MainVideoPath);
+        AppendFileValue(builder, input.AudioDescriptionPath);
+        AppendFileValues(builder, input.SubtitlePaths);
+        AppendFileValues(builder, input.AttachmentPaths);
+        AppendFileValue(builder, input.OutputPath);
         AppendValue(builder, input.TitleForMux);
         AppendValues(builder, input.ExcludedSourcePaths);
         return builder.ToString();
+    }
+
+    private static void AppendFileValues(StringBuilder builder, IEnumerable<string> values)
+    {
+        builder.Append('[');
+        foreach (var value in values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
+        {
+            AppendFileValue(builder, value);
+        }
+
+        builder.Append(']');
     }
 
     private static void AppendValues(StringBuilder builder, IEnumerable<string> values)
@@ -94,10 +108,53 @@ public sealed class EpisodePlanCache
         builder.Append(']');
     }
 
+    private static void AppendFileValue(StringBuilder builder, string? value)
+    {
+        AppendValue(builder, value);
+        AppendFileState(builder, value);
+    }
+
     private static void AppendValue(StringBuilder builder, string? value)
     {
         // Trennzeichen außerhalb normaler Dateipfade hält den Schlüssel stabil, ohne zusätzliche Escaping-Logik.
         builder.Append(value?.Trim() ?? string.Empty);
+        builder.Append('\u001F');
+    }
+
+    private static void AppendFileState(StringBuilder builder, string? path)
+    {
+        // Der UI-nahe Cache soll sich selbst verwerfen, sobald eine relevante Eingabedatei oder das Ziel
+        // außerhalb der App verändert wurde.
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            builder.Append("none");
+            builder.Append('\u001F');
+            return;
+        }
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                builder.Append("missing");
+                builder.Append('\u001F');
+                return;
+            }
+
+            var fileInfo = new FileInfo(path);
+            builder.Append(fileInfo.Length);
+            builder.Append('|');
+            builder.Append(fileInfo.LastWriteTimeUtc.Ticks);
+        }
+        catch (IOException)
+        {
+            builder.Append("unavailable");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            builder.Append("unavailable");
+        }
+
         builder.Append('\u001F');
     }
 

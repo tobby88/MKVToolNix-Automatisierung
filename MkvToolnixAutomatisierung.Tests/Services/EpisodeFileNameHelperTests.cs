@@ -30,4 +30,20 @@ public sealed class EpisodeFileNameHelperTests
 
         Assert.Equal("Serie_Test - S01E02 - Pilot_.mkv", fileName);
     }
+
+    [Fact]
+    public void SanitizeFileName_NormalizesReservedNames_AndTrailingSeparators()
+    {
+        var fileName = EpisodeFileNameHelper.SanitizeFileName("CON .txt");
+
+        Assert.Equal("CON_.txt", fileName);
+    }
+
+    [Fact]
+    public void BuildEpisodeFileName_RemovesTrailingDotsAndSpaces_FromTitleStem()
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "01", "02", "Pilot. ");
+
+        Assert.Equal("Serie - S01E02 - Pilot.mkv", fileName);
+    }
 }

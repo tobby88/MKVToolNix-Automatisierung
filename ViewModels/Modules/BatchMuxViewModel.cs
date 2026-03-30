@@ -15,7 +15,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zentrales ViewModel des Batch-Moduls; die Teil-Dateien trennen Scan, Planung, Review und Ausführung.
 /// </summary>
-public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
+public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
 {
     private const string DoneFolderName = "done";
     private const int AutomaticCompareProgressStart = 80;
@@ -112,6 +112,8 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
         {
             _outputDirectory = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(OutputDirectoryHintText));
+            OnPropertyChanged(nameof(HasOutputDirectoryHint));
         }
     }
 
@@ -199,6 +201,10 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
 
     public string BatchLogInfoText => "Das sichtbare Protokoll zeigt Scan und Batch-Lauf dieser Sitzung. Die gespeicherte Logdatei enthält jeweils nur den aktuellen Batch-Lauf.";
 
+    public string OutputDirectoryHintText => _services.OutputPaths.BuildOutputRootOverrideHint(OutputDirectory) ?? string.Empty;
+
+    public bool HasOutputDirectoryHint => !string.IsNullOrWhiteSpace(OutputDirectoryHintText);
+
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;
@@ -215,6 +221,34 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged
             RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
         }
+    }
+
+    public void HandleArchiveConfigurationChanged()
+    {
+        _planCache.Clear();
+
+        using (EpisodeItemsView.DeferRefresh())
+        {
+            foreach (var item in EpisodeItems)
+            {
+                if (item.UsesAutomaticOutputPath)
+                {
+                    item.SetAutomaticOutputPath(BuildOutputPath(item));
+                }
+
+                item.RefreshArchivePresence();
+            }
+        }
+
+        OnPropertyChanged(nameof(OutputDirectoryHintText));
+        OnPropertyChanged(nameof(HasOutputDirectoryHint));
+
+        if (SelectedEpisodeItem is not null)
+        {
+            ScheduleSelectedItemPlanSummaryRefresh();
+        }
+
+        RefreshCommands();
     }
 
     private void SetBusy(bool isBusy)

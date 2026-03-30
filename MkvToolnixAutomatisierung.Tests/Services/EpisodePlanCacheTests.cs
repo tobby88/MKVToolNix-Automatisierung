@@ -1,11 +1,20 @@
+using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
 
-public sealed class EpisodePlanCacheTests
+public sealed class EpisodePlanCacheTests : IDisposable
 {
+    private readonly string _tempDirectory;
+
+    public EpisodePlanCacheTests()
+    {
+        _tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-plan-cache-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_tempDirectory);
+    }
+
     [Fact]
     public void TryGet_ReturnsStoredPlan_WhenInputsAreUnchanged()
     {
@@ -62,6 +71,45 @@ public sealed class EpisodePlanCacheTests
         Assert.True(found);
     }
 
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenMainVideoFileChangedOnDisk()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        File.AppendAllText(input.MainVideoPath, "changed");
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenOutputFileAppearsAfterCaching()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        File.Delete(input.OutputPath);
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        File.WriteAllText(input.OutputPath, "new output");
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_tempDirectory))
+        {
+            Directory.Delete(_tempDirectory, recursive: true);
+        }
+    }
+
     private static SeriesEpisodeMuxPlan CreatePlan(string title)
     {
         return SeriesEpisodeMuxPlan.CreateSkip(
@@ -70,6 +118,32 @@ public sealed class EpisodePlanCacheTests
             title: title,
             skipReason: "skip",
             notes: []);
+    }
+
+    private StubPlanInput CreateFileBackedInput()
+    {
+        var mainVideoPath = CreateFile("episode.mp4", "video");
+        var audioDescriptionPath = CreateFile("episode-ad.mp4", "ad");
+        var subtitlePath = CreateFile("episode.srt", "subtitle");
+        var attachmentPath = CreateFile("episode.txt", "attachment");
+        var outputPath = CreateFile("output.mkv", "output");
+
+        return new StubPlanInput
+        {
+            MainVideoPath = mainVideoPath,
+            AudioDescriptionPath = audioDescriptionPath,
+            SubtitlePaths = [subtitlePath],
+            AttachmentPaths = [attachmentPath],
+            OutputPath = outputPath,
+            ExcludedSourcePaths = [CreateFile("alt.mp4", "alt")]
+        };
+    }
+
+    private string CreateFile(string fileName, string content)
+    {
+        var path = Path.Combine(_tempDirectory, fileName);
+        File.WriteAllText(path, content);
+        return path;
     }
 
     private sealed class StubPlanInput : IEpisodePlanInput

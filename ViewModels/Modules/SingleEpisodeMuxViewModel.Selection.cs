@@ -511,6 +511,19 @@ public sealed partial class SingleEpisodeMuxViewModel
         SchedulePlanSummaryRefresh();
     }
 
+    public void HandleArchiveConfigurationChanged()
+    {
+        InvalidateCurrentPlan();
+        if (UsesAutomaticOutputPath)
+        {
+            UpdateSuggestedOutputPathIfAutomatic();
+            return;
+        }
+
+        RefreshOutputTargetStatus();
+        SchedulePlanSummaryRefresh();
+    }
+
     private void HandleManualMetadataOverride()
     {
         if (_isApplyingSharedState)

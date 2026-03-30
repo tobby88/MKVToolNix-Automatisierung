@@ -60,6 +60,24 @@ public sealed class EpisodeOutputPathService
     }
 
     /// <summary>
+    /// Liefert optional einen UI-Hinweistext, wenn ein alternativer Zielordner wegen nicht erreichbarer Bibliothek
+    /// nur eine flache Dateiliste statt der Serien-/Staffelstruktur aufnehmen kann.
+    /// </summary>
+    /// <param name="outputRootOverride">Aktuell gewählte alternative Zielwurzel.</param>
+    /// <returns>Hinweistext für die GUI oder <see langword="null"/>, wenn kein zusätzlicher Hinweis nötig ist.</returns>
+    public string? BuildOutputRootOverrideHint(string? outputRootOverride)
+    {
+        if (string.IsNullOrWhiteSpace(outputRootOverride)
+            || _archiveService.IsArchiveAvailable()
+            || PathComparisonHelper.AreSamePath(outputRootOverride, _archiveService.ArchiveRootDirectory))
+        {
+            return null;
+        }
+
+        return "Hinweis: Solange die Serienbibliothek nicht erreichbar ist, werden neue Ziele unter diesem Ordner bewusst flach als einzelne MKV-Dateien abgelegt.";
+    }
+
+    /// <summary>
     /// Prüft, ob ein Pfad innerhalb der konfigurierten Archivwurzel liegt.
     /// </summary>
     /// <param name="path">Zu prüfender Pfad.</param>
