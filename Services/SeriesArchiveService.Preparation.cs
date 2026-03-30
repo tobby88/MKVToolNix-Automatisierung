@@ -35,6 +35,7 @@ public sealed partial class SeriesArchiveService
         }
 
         var bestExistingVideo = SelectBestExistingVideo(existingArchive.VideoTracks);
+        // Die Archivdatei bleibt nur dann Hauptquelle, wenn die neue Quelle nicht klar besser ist.
         var keepExistingPrimary = bestExistingVideo is not null
             && !IsNewVideoClearlyBetter(newPrimaryVideo.Metadata, bestExistingVideo);
         var additionalVideoPaths = BuildAdditionalVideoPaths(plannedVideos, plannedVideoPaths, existingArchive.VideoTracks, keepExistingPrimary);
@@ -138,6 +139,8 @@ public sealed partial class SeriesArchiveService
             .Select(BuildSubtitleCoverageKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // Archiv-Untertitel werden nur dann wiederverwendet, wenn kein externer Untertitel denselben fachlichen Slot belegt.
+        // Dabei unterscheiden wir bewusst nur Typ und HI/Standard, nicht Sprache oder Tracknamen.
         var embeddedSubtitlePlans = existingSubtitleTracks
             .Select(track => new
             {
@@ -237,6 +240,7 @@ public sealed partial class SeriesArchiveService
     {
         var needsExistingCopy = (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
             || subtitlePlan.EmbeddedPlans.Count > 0;
+        // Sobald Tracks oder Anhänge aus der bestehenden Archivdatei weiterverwendet werden, muss sie als separate Quelle erhalten bleiben.
         var preservedAttachmentNames = needsExistingCopy
             ? existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList()
             : [];
@@ -288,6 +292,7 @@ public sealed partial class SeriesArchiveService
         MediaTrackMetadata candidate,
         IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
     {
+        // Gleicher Codec allein ist kein Ausschluss mehr; nur gleich- oder höherwertige Archivspuren desselben Codecs verdrängen die neue Spur.
         var bestExistingWithSameCodec = existingVideoTracks
             .Where(track => string.Equals(track.CodecLabel, candidate.VideoCodecLabel, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(track => track.VideoWidth)

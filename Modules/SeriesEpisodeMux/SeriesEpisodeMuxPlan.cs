@@ -259,6 +259,7 @@ public sealed class SeriesEpisodeMuxPlan
 
         if (!string.IsNullOrWhiteSpace(AttachmentSourcePath))
         {
+            // Separate Attachment-Quelle hält vorhandene TXT-Anhänge am Leben, auch wenn die Hauptquelle ausgetauscht wurde.
             arguments.AddRange(
             [
                 "--no-video",
@@ -468,6 +469,7 @@ public sealed class SeriesEpisodeMuxPlan
         if ((IncludePrimarySourceAttachments || !string.IsNullOrWhiteSpace(AttachmentSourcePath))
             && PreservedAttachmentNames.Count > 0)
         {
+            // GUI-Vorschau soll sichtbar machen, dass diese Anhänge nicht aus neuen Dateien, sondern aus der Ziel-MKV stammen.
             parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (aus Zieldatei)"));
         }
 

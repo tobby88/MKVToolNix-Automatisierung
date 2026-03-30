@@ -82,6 +82,7 @@ public sealed class EpisodePlanCache
     private static void AppendValues(StringBuilder builder, IEnumerable<string> values)
     {
         builder.Append('[');
+        // Reihenfolge aus der UI soll Cache-Treffer nicht zerstören, solange dieselben Dateien gewählt sind.
         foreach (var value in values
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -95,6 +96,7 @@ public sealed class EpisodePlanCache
 
     private static void AppendValue(StringBuilder builder, string? value)
     {
+        // Trennzeichen außerhalb normaler Dateipfade hält den Schlüssel stabil, ohne zusätzliche Escaping-Logik.
         builder.Append(value?.Trim() ?? string.Empty);
         builder.Append('\u001F');
     }

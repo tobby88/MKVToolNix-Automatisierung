@@ -295,6 +295,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         var settings = _toolPathStore.Load();
         var detectedFfprobePath = _ffprobeLocator.TryFindFfprobePath();
+        // Fehlgeschlagene Auto-Erkennung darf den zuletzt gespeicherten Pfad nicht aus den Settings entfernen.
         var resolvedFfprobePath = !string.IsNullOrWhiteSpace(detectedFfprobePath)
             ? detectedFfprobePath
             : NormalizeConfiguredExecutablePath(settings.FfprobePath, "ffprobe.exe");
@@ -329,6 +330,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ? null
             : Path.GetDirectoryName(detectedMkvMergePath) ?? detectedMkvMergePath;
 
+        // Persistiert wird nur eine tatsächlich funktionierende Auflösung, nicht ein vorübergehender Fehlerzustand.
         if ((!string.IsNullOrWhiteSpace(normalizedFfprobePath)
                 && !string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase))
             || (!string.IsNullOrWhiteSpace(normalizedMkvToolPath)

@@ -473,6 +473,7 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
             return false;
         }
 
+        // Zusätzliche Tokens decken typische Suchmuster wie S01E02 oder 01x02 ab, ohne die eigentliche Titelsuche zu verdrängen.
         return BuildEpisodeSearchTokens(episode).Any(token =>
             NormalizeTextForSearch(token).Contains(normalizedSearchText, StringComparison.OrdinalIgnoreCase));
     }
@@ -489,6 +490,7 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
 
     private static string NormalizeTextForSearch(string value)
     {
+        // Vereinheitlicht Eingaben wie "S01-E02" oder "Staffel 1, Folge 2" auf einen robust vergleichbaren Kern.
         return string.Concat(value
             .Where(character => char.IsLetterOrDigit(character))
             .Select(char.ToLowerInvariant));
