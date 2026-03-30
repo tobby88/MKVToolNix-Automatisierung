@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -29,6 +30,8 @@ public sealed class MuxExecutionService
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             CreateNoWindow = true
         };
 
@@ -58,7 +61,7 @@ public sealed class MuxExecutionService
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                onOutput?.Invoke(args.Data);
+                onOutput?.Invoke(MojibakeRepair.NormalizeLikelyMojibake(args.Data));
             }
         };
 
@@ -66,7 +69,7 @@ public sealed class MuxExecutionService
         {
             if (!string.IsNullOrWhiteSpace(args.Data))
             {
-                onOutput?.Invoke(args.Data);
+                onOutput?.Invoke(MojibakeRepair.NormalizeLikelyMojibake(args.Data));
             }
         };
 

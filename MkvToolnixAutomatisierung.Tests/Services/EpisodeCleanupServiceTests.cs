@@ -60,6 +60,25 @@ public sealed class EpisodeCleanupServiceTests : IDisposable
     }
 
     [Fact]
+    public void DeleteEmptyParentDirectories_RemovesNestedEmptyFolders_WithinRootOnly()
+    {
+        var service = new EpisodeCleanupService();
+        var sourceRoot = Path.Combine(_tempDirectory, "source");
+        var seriesDirectory = Path.Combine(sourceRoot, "Serie");
+        var episodeDirectory = Path.Combine(seriesDirectory, "Episode");
+        Directory.CreateDirectory(episodeDirectory);
+        var movedSourceFile = Path.Combine(episodeDirectory, "episode.mp4");
+        File.WriteAllText(movedSourceFile, "data");
+        File.Delete(movedSourceFile);
+
+        service.DeleteEmptyParentDirectories([movedSourceFile], sourceRoot);
+
+        Assert.False(Directory.Exists(episodeDirectory));
+        Assert.False(Directory.Exists(seriesDirectory));
+        Assert.True(Directory.Exists(sourceRoot));
+    }
+
+    [Fact]
     public async Task MoveFilesToDirectoryAsync_ThrowsWhenCancellationAlreadyRequested()
     {
         var service = new EpisodeCleanupService();

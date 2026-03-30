@@ -118,6 +118,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Contains(logs, line => line.StartsWith("STARTE:", StringComparison.Ordinal));
         Assert.Contains(logs, line => line.StartsWith("DONE:", StringComparison.Ordinal));
         Assert.Equal(cleanupSource, Assert.Single(cleanup.LastMoveSourceFiles));
+        Assert.Equal(_tempDirectory, cleanup.LastDeleteEmptyParentRoot);
     }
 
     [Fact]
@@ -213,6 +214,34 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executionTask);
         Assert.Equal(BatchEpisodeStatusKind.Cancelled, item.StatusKind);
         Assert.Contains(logs, line => line.Contains("ABGEBROCHEN", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RefreshArchivePresence_PreservesExistingUsageSummary_DuringStatusChanges()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "existing", "Episode.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "existing");
+        var item = CreateBatchEpisodeItem(outputPath);
+        var usageSummary = new EpisodeUsageSummary(
+            "In Serienbibliothek vorhanden",
+            "Vergleich fertig",
+            new EpisodeUsageEntry("Video alt", null, null),
+            new EpisodeUsageEntry("(keine)", null, null),
+            new EpisodeUsageEntry("Audio alt", null, null),
+            new EpisodeUsageEntry("(keine)", null, null),
+            new EpisodeUsageEntry("SRT alt", null, null),
+            new EpisodeUsageEntry("Anhang alt", null, null));
+
+        item.SetPlanSummary("Letzte berechnete Planung");
+        item.SetUsageSummary(usageSummary);
+
+        item.RefreshArchivePresence(BatchEpisodeStatusKind.Running);
+
+        Assert.Equal(BatchEpisodeStatusKind.Running, item.StatusKind);
+        Assert.Equal("Letzte berechnete Planung", item.PlanSummaryText);
+        Assert.Same(usageSummary, item.UsageSummary);
+        Assert.Equal("Video alt", item.UsageSummary!.MainVideo.CurrentText);
     }
 
     public void Dispose()
@@ -334,6 +363,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         public FileMoveResult MoveResult { get; init; } = new FileMoveResult([], []);
 
         public IReadOnlyList<string> LastMoveSourceFiles { get; private set; } = [];
+        public string? LastDeleteEmptyParentRoot { get; private set; }
 
         public override Task<FileMoveResult> MoveFilesToDirectoryAsync(
             IReadOnlyList<string> sourceFilePaths,
@@ -343,6 +373,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             LastMoveSourceFiles = sourceFilePaths.ToList();
             return Task.FromResult(MoveResult);
+        }
+
+        public override void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
+        {
+            LastDeleteEmptyParentRoot = stopAtRoot;
         }
     }
 

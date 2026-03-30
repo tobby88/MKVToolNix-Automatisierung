@@ -165,6 +165,7 @@ public sealed partial class BatchMuxViewModel
         if (doneFiles.Count == 0)
         {
             _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
+            _services.Cleanup.DeleteDirectoryIfEmpty(SourceDirectory);
             return;
         }
 
@@ -190,6 +191,7 @@ public sealed partial class BatchMuxViewModel
             }
 
             _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
+            _services.Cleanup.DeleteDirectoryIfEmpty(SourceDirectory);
             return;
         }
 

@@ -82,6 +82,27 @@ public sealed class BatchRunLogServiceTests
         Assert.Contains("(leer)", batchLogText);
     }
 
+    [Fact]
+    public void SaveBatchRunArtifacts_RepairsMojibakeInPersistedLogText()
+    {
+        var service = new BatchRunLogService();
+        var outputDirectory = CreateDirectory("output");
+        var sourceDirectory = CreateDirectory("source");
+
+        var result = service.SaveBatchRunArtifacts(
+            sourceDirectory,
+            outputDirectory,
+            "WARNUNG: Deutsch (hÃ¶rgeschÃ¤digte) - WebVTT",
+            [],
+            successCount: 0,
+            warningCount: 1,
+            errorCount: 0);
+
+        var batchLogText = File.ReadAllText(result.BatchLogPath);
+        Assert.Contains("Deutsch (hörgeschädigte) - WebVTT", batchLogText);
+        Assert.DoesNotContain("hÃ¶rgeschÃ¤digte", batchLogText, StringComparison.Ordinal);
+    }
+
     private static string CreateDirectory(string name)
     {
         var path = Path.Combine(Path.GetTempPath(), "mkv-auto-tests", Guid.NewGuid().ToString("N"), name);

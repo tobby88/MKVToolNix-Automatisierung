@@ -307,6 +307,14 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
 
         var arguments = plan.BuildArguments();
         var runtimeArchivePath = plan.WorkingCopy!.DestinationFilePath;
+        AssertContainsSequence(
+            arguments,
+            "--audio-tracks",
+            "2",
+            "--language",
+            "2:de",
+            "--track-name",
+            "2:Deutsch (sehbehinderte) - AAC");
         AssertContainsSequence(arguments, "--no-video", "--no-audio", "--no-subtitles", runtimeArchivePath);
         Assert.Equal(3, arguments.Count(argument => string.Equals(argument, runtimeArchivePath, StringComparison.OrdinalIgnoreCase)));
     }
@@ -731,9 +739,26 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
 
         Assert.False(summary.MainVideo.HasRemoved);
         Assert.False(summary.Subtitles.HasRemoved);
+        Assert.Contains("Deutsch (hörgeschädigte) - SRT (aus Zieldatei)", summary.Subtitles.CurrentText, StringComparison.Ordinal);
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(
+            arguments,
+            "--subtitle-tracks",
+            "3",
+            "--language",
+            "3:de",
+            "--track-name",
+            "3:Deutsch (hörgeschädigte) - SRT",
+            "--default-track-flag",
+            "3:no",
+            "--hearing-impaired-flag",
+            "3:yes",
+            "--original-flag",
+            "3:yes");
     }
 
     public void Dispose()

@@ -156,6 +156,8 @@ public sealed class EpisodePlanCacheTests : IDisposable
 
         public IReadOnlyList<string> AttachmentPaths { get; set; } = [@"C:\Temp\episode.txt"];
 
+        public IReadOnlyList<string> ManualAttachmentPaths { get; set; } = [];
+
         public string OutputPath { get; init; } = @"C:\Temp\output.mkv";
 
         public string TitleForMux { get; set; } = "Pilot";

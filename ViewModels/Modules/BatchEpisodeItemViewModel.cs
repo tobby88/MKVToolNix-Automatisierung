@@ -304,20 +304,25 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null)
     {
-        ApplyArchiveState(statusOverride);
+        ApplyArchiveState(statusOverride, preservePlanSummary: true);
     }
 
-    private void ApplyArchiveState(BatchEpisodeStatusKind? statusOverride = null)
+    private void ApplyArchiveState(
+        BatchEpisodeStatusKind? statusOverride = null,
+        bool preservePlanSummary = false)
     {
         RefreshArchiveState();
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         SetStatus(statusOverride ?? (outputExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
-        SetPlanSummary(outputExists
-            ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
-            : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.");
-        SetUsageSummary(EpisodeUsageSummary.CreatePending(
-            outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
-            outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
+        if (!preservePlanSummary)
+        {
+            SetPlanSummary(outputExists
+                ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
+                : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.");
+            SetUsageSummary(EpisodeUsageSummary.CreatePending(
+                outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
+                outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
+        }
     }
 
 }

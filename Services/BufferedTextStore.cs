@@ -21,6 +21,7 @@ public sealed class BufferedTextStore
 
     public void Reset(string initialText = "")
     {
+        initialText = MojibakeRepair.NormalizeLikelyMojibake(initialText);
         lock (_sync)
         {
             _buffer.Clear();
@@ -33,6 +34,7 @@ public sealed class BufferedTextStore
 
     public void AppendLine(string line)
     {
+        line = MojibakeRepair.NormalizeLikelyMojibake(line);
         lock (_sync)
         {
             _buffer.AppendLine(line);

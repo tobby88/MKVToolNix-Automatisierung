@@ -123,6 +123,48 @@ public class EpisodeCleanupService
         }
     }
 
+    public virtual void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
+    {
+        if (string.IsNullOrWhiteSpace(stopAtRoot) || !Directory.Exists(stopAtRoot))
+        {
+            return;
+        }
+
+        var parentDirectories = sourceFilePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetDirectoryName(path))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Cast<string>()
+            .Where(path => PathComparisonHelper.IsPathWithinRoot(path, stopAtRoot))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(path => path.Length)
+            .ToList();
+
+        foreach (var parentDirectory in parentDirectories)
+        {
+            var currentDirectory = parentDirectory;
+            while (!string.IsNullOrWhiteSpace(currentDirectory)
+                && PathComparisonHelper.IsPathWithinRoot(currentDirectory, stopAtRoot)
+                && !PathComparisonHelper.AreSamePath(currentDirectory, stopAtRoot))
+            {
+                try
+                {
+                    if (!Directory.Exists(currentDirectory) || Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+                    {
+                        break;
+                    }
+
+                    Directory.Delete(currentDirectory, recursive: false);
+                    currentDirectory = Path.GetDirectoryName(currentDirectory);
+                }
+                catch
+                {
+                    break;
+                }
+            }
+        }
+    }
+
     private static string BuildUniqueTargetPath(string targetDirectory, string fileName)
     {
         var destinationPath = Path.Combine(targetDirectory, fileName);

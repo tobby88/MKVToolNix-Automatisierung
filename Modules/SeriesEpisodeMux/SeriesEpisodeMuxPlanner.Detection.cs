@@ -364,12 +364,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         AudioTrackMetadata? audioDescriptionMetadata = audioDescriptionPath is null
             ? null
             : archiveDecision.AudioDescriptionTrackId is int trackId
-                ? new AudioTrackMetadata(
+                ? await ReadEmbeddedAudioTrackMetadataAsync(
+                    mkvMergePath,
+                    audioDescriptionPath,
                     trackId,
-                    "Audio",
-                    MediaLanguageHelper.NormalizeMuxLanguageCode(primaryAudioLanguage),
-                    string.Empty,
-                    IsVisualImpaired: true)
+                    primaryAudioLanguage,
+                    cancellationToken)
                 : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
 
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
@@ -681,6 +681,36 @@ public sealed partial class SeriesEpisodeMuxPlanner
             AudioDescriptionTrackName: $"{audioDescriptionDisplayName} (sehbehinderte) - {audioDescriptionMetadata?.CodecLabel ?? primaryAudioCodecLabel}",
             AudioLanguageCode: normalizedAudioLanguage,
             AudioDescriptionLanguageCode: normalizedAudioDescriptionLanguage);
+    }
+
+    private async Task<AudioTrackMetadata> ReadEmbeddedAudioTrackMetadataAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        int trackId,
+        string fallbackLanguage,
+        CancellationToken cancellationToken)
+    {
+        var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, inputFilePath, cancellationToken);
+        var matchingTrack = container.Tracks.FirstOrDefault(track =>
+            string.Equals(track.Type, "audio", StringComparison.OrdinalIgnoreCase)
+            && track.TrackId == trackId);
+
+        if (matchingTrack is null)
+        {
+            return new AudioTrackMetadata(
+                trackId,
+                "Audio",
+                MediaLanguageHelper.NormalizeMuxLanguageCode(fallbackLanguage),
+                string.Empty,
+                IsVisualImpaired: true);
+        }
+
+        return new AudioTrackMetadata(
+            matchingTrack.TrackId,
+            matchingTrack.CodecLabel,
+            MediaLanguageHelper.NormalizeMuxLanguageCode(matchingTrack.Language),
+            matchingTrack.TrackName,
+            matchingTrack.IsVisualImpaired);
     }
 
 }

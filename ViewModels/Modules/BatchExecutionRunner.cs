@@ -226,6 +226,8 @@ internal sealed class BatchExecutionRunner
             appendLog("  NICHT VERSCHOBEN: " + string.Join(", ", moveResult.FailedFiles.Select(Path.GetFileName)));
         }
 
+        _cleanupService.DeleteEmptyParentDirectories(cleanupFiles, Path.GetDirectoryName(doneDirectory));
+
         return moveResult.MovedFiles;
     }
 }

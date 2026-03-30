@@ -194,7 +194,7 @@ public sealed record SubtitleFile(
         : $"{MediaLanguageHelper.GetLanguageDisplayName(LanguageCode)} - {Kind.DisplayName}";
 
     public string PreviewLabel => IsEmbedded
-        ? $"{(string.IsNullOrWhiteSpace(SourceLabel) ? Path.GetFileName(FilePath) : SourceLabel)} ({Kind.DisplayName}, aus Zieldatei)"
+        ? $"{TrackName} (aus Zieldatei)"
         : Path.GetFileName(FilePath);
 }
 

@@ -232,6 +232,7 @@ public sealed class SeriesEpisodeMuxPlan
         {
             if (subtitle.IsEmbedded && subtitle.EmbeddedTrackId is int embeddedTrackId)
             {
+                var embeddedTrackIdText = embeddedTrackId.ToString();
                 var runtimeSubtitleFilePath = ResolveRuntimeFilePath(subtitle.FilePath);
                 arguments.AddRange(
                 [
@@ -239,7 +240,17 @@ public sealed class SeriesEpisodeMuxPlan
                     "--no-audio",
                     "--no-attachments",
                     "--subtitle-tracks",
-                    embeddedTrackId.ToString(),
+                    embeddedTrackIdText,
+                    "--language",
+                    $"{embeddedTrackIdText}:{subtitle.LanguageCode}",
+                    "--track-name",
+                    $"{embeddedTrackIdText}:{subtitle.TrackName}",
+                    "--default-track-flag",
+                    $"{embeddedTrackIdText}:no",
+                    "--hearing-impaired-flag",
+                    subtitle.IsHearingImpaired ? $"{embeddedTrackIdText}:yes" : $"{embeddedTrackIdText}:no",
+                    "--original-flag",
+                    $"{embeddedTrackIdText}:yes",
                     runtimeSubtitleFilePath
                 ]);
                 continue;
