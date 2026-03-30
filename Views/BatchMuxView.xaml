@@ -545,12 +545,32 @@
             </Expander>
         </Grid>
 
-        <WrapPanel Grid.Row="2" Margin="0,12,0,0" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
-            <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" ToolTip="{Binding ScanDirectoryTooltip, Mode=OneWay}" Content="Ordner scannen" />
-            <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
-            <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />
-            <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" ToolTip="{Binding ReviewPendingSourcesTooltip, Mode=OneWay}" Content="Pflichtchecks starten" />
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" ToolTip="{Binding RunBatchTooltip, Mode=OneWay}" Content="Batch starten" />
-        </WrapPanel>
+        <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
+            <Button DockPanel.Dock="Right"
+                    MinWidth="150"
+                    Padding="10,6"
+                    Command="{Binding CancelBatchOperationCommand}"
+                    ToolTip="{Binding CancelBatchOperationTooltip, Mode=OneWay}"
+                    Content="{Binding CancelBatchOperationText, Mode=OneWay}">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CanCancelBatchOperation, Mode=OneWay}" Value="False">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+
+            <WrapPanel Margin="0,0,12,0" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+                <Button Width="150" Margin="0,0,12,0" Padding="10,6" Command="{Binding ScanDirectoryCommand}" ToolTip="{Binding ScanDirectoryTooltip, Mode=OneWay}" Content="Ordner scannen" />
+                <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
+                <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />
+                <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" ToolTip="{Binding ReviewPendingSourcesTooltip, Mode=OneWay}" Content="Pflichtchecks starten" />
+                <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" ToolTip="{Binding RunBatchTooltip, Mode=OneWay}" Content="Batch starten" />
+            </WrapPanel>
+        </DockPanel>
     </Grid>
 </UserControl>

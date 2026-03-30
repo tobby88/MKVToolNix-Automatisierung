@@ -28,18 +28,22 @@ public sealed partial class BatchMuxViewModel
             return;
         }
 
+        var cancellationToken = CancellationToken.None;
+        Action<string>? appendBatchRunLog = null;
         try
         {
             SetBusy(true);
+            cancellationToken = BeginBatchOperation(BatchOperationKind.Execution);
             // Persistierte Batch-Logs sollen genau diesen Lauf enthalten, ohne ältere Scan-Einträge mitzuschleppen.
             var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
-            void AppendBatchRunLog(string line)
+            void AppendBatchRunLogCore(string line)
             {
                 AppendLog(line);
                 batchRunLogBuffer.AppendLine(line);
             }
+            appendBatchRunLog = AppendBatchRunLogCore;
 
-            var approved = await EnsurePendingChecksApprovedAsync(readyItems);
+            var approved = await EnsurePendingChecksApprovedAsync(readyItems, cancellationToken);
             if (!approved)
             {
                 _dialogService.ShowWarning(
@@ -51,7 +55,11 @@ public sealed partial class BatchMuxViewModel
 
             SetStatus("Erstelle Mux-Pläne...", 0);
             var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
-            var executablePlans = await BuildExecutionWorkItemsAsync(readyItems, planningTracker, AppendBatchRunLog);
+            var executablePlans = await BuildExecutionWorkItemsAsync(
+                readyItems,
+                planningTracker,
+                AppendBatchRunLogCore,
+                cancellationToken);
 
             if (executablePlans.Count == 0)
             {
@@ -60,6 +68,7 @@ public sealed partial class BatchMuxViewModel
                 return;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatus);
             var copyPreparation = _executionRunner.BuildCopyPreparation(executablePlans);
 
@@ -72,15 +81,24 @@ public sealed partial class BatchMuxViewModel
                 return;
             }
 
-            await _executionRunner.PrepareWorkingCopiesAsync(copyPreparation, progressTracker, AppendBatchRunLog);
+            await _executionRunner.PrepareWorkingCopiesAsync(
+                copyPreparation,
+                progressTracker,
+                AppendBatchRunLogCore,
+                cancellationToken);
             var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
             var executionOutcome = await _executionRunner.ExecutePlansAsync(
                 executablePlans,
                 doneDirectory,
                 progressTracker,
-                AppendBatchRunLog);
+                AppendBatchRunLogCore,
+                cancellationToken);
 
-            await OfferBatchDoneCleanupAsync(doneDirectory, executionOutcome.MovedDoneFiles, progressTracker);
+            await OfferBatchDoneCleanupAsync(
+                doneDirectory,
+                executionOutcome.MovedDoneFiles,
+                progressTracker,
+                cancellationToken);
             BatchRunLogSaveResult? logSaveResult;
             try
             {
@@ -93,11 +111,11 @@ public sealed partial class BatchMuxViewModel
                     executionOutcome.WarningCount,
                     executionOutcome.ErrorCount,
                     batchRunLogBuffer,
-                    AppendBatchRunLog);
+                    AppendBatchRunLogCore);
             }
             catch (Exception ex)
             {
-                AppendBatchRunLog($"LOG-FEHLER: {ex.Message}");
+                AppendBatchRunLogCore($"LOG-FEHLER: {ex.Message}");
                 _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
                 logSaveResult = null;
             }
@@ -111,8 +129,14 @@ public sealed partial class BatchMuxViewModel
                 ShowBatchRunArtifactInfo(logSaveResult);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            appendBatchRunLog?.Invoke("ABGEBROCHEN: Batch-Lauf durch Benutzer abgebrochen.");
+            SetStatus("Batch abgebrochen", ProgressValue);
+        }
         finally
         {
+            CompleteBatchOperation(BatchOperationKind.Execution);
             SetBusy(false);
         }
     }
@@ -129,8 +153,10 @@ public sealed partial class BatchMuxViewModel
     private async Task OfferBatchDoneCleanupAsync(
         string doneDirectory,
         IReadOnlyList<string> movedDoneFiles,
-        BatchRunProgressTracker progressTracker)
+        BatchRunProgressTracker progressTracker,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var doneFiles = movedDoneFiles
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -152,7 +178,8 @@ public sealed partial class BatchMuxViewModel
                     {
                         progressTracker.ReportRecycleProgress(current, total);
                     });
-                });
+                },
+                cancellationToken);
 
             if (recycleResult.FailedFiles.Count > 0)
             {

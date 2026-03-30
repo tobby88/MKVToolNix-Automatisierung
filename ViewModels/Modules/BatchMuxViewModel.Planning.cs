@@ -11,7 +11,8 @@ public sealed partial class BatchMuxViewModel
 {
     private async Task RefreshComparisonPlansAsync(
         IReadOnlyList<BatchEpisodeItemViewModel> items,
-        bool automatic)
+        bool automatic,
+        CancellationToken cancellationToken = default)
     {
         if (items.Count == 0)
         {
@@ -29,6 +30,7 @@ public sealed partial class BatchMuxViewModel
 
             for (var index = 0; index < items.Count; index++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var item = items[index];
                 item.SetStatus(BatchEpisodeStatusKind.Running);
                 SetStatus(
@@ -39,7 +41,15 @@ public sealed partial class BatchMuxViewModel
                         ? ScaleProgress(CalculatePercent(index + 1, items.Count), AutomaticCompareProgressStart, 100)
                         : CalculatePercent(index + 1, items.Count));
 
-                await RefreshComparisonForItemAsync(item);
+                try
+                {
+                    await RefreshComparisonForItemAsync(item, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    item.RefreshArchivePresence();
+                    throw;
+                }
             }
 
             SetStatus(
@@ -131,18 +141,20 @@ public sealed partial class BatchMuxViewModel
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(
         IReadOnlyList<BatchEpisodeItemViewModel> readyItems,
         BatchRunProgressTracker progressTracker,
-        Action<string> appendBatchRunLog)
+        Action<string> appendBatchRunLog,
+        CancellationToken cancellationToken = default)
     {
         var executablePlans = new List<BatchExecutionWorkItem>();
 
         for (var index = 0; index < readyItems.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = readyItems[index];
             progressTracker.ReportPlanning(index + 1, readyItems.Count);
 
             try
             {
-                var plan = await GetOrBuildPlanForItemAsync(item);
+                var plan = await GetOrBuildPlanForItemAsync(item, cancellationToken);
                 if (plan.SkipMux)
                 {
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);
@@ -151,6 +163,10 @@ public sealed partial class BatchMuxViewModel
                 }
 
                 executablePlans.Add(new BatchExecutionWorkItem(item, plan, BuildBatchCleanupFileList(item, plan)));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

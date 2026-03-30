@@ -83,7 +83,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         var movedDoneFile = Path.Combine(_tempDirectory, "done", "cleanup.txt");
         var muxWorkflow = new StubMuxWorkflowCoordinator
         {
-            ExecuteMuxOverride = plan =>
+            ExecuteMuxOverride = (plan, _) =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(plan.OutputFilePath)!);
                 File.WriteAllText(plan.OutputFilePath, "muxed");
@@ -126,7 +126,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         var outputPath = Path.Combine(_tempDirectory, "warning", "Episode.mkv");
         var muxWorkflow = new StubMuxWorkflowCoordinator
         {
-            ExecuteMuxOverride = plan =>
+            ExecuteMuxOverride = (plan, _) =>
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(plan.OutputFilePath)!);
                 File.WriteAllText(plan.OutputFilePath, "muxed with warning");
@@ -158,7 +158,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         var outputPath = Path.Combine(_tempDirectory, "error", "Episode.mkv");
         var muxWorkflow = new StubMuxWorkflowCoordinator
         {
-            ExecuteMuxOverride = _ => throw new InvalidOperationException("boom")
+            ExecuteMuxOverride = (_, _) => throw new InvalidOperationException("boom")
         };
         var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
         var item = CreateBatchEpisodeItem(outputPath);
@@ -177,6 +177,42 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal(1, outcome.ErrorCount);
         Assert.Equal(BatchEpisodeStatusKind.Error, item.StatusKind);
         Assert.Contains(logs, line => line.Contains("FEHLER: boom", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecutePlansAsync_MarksCurrentItemCancelled_WhenUserCancelsRun()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "cancelled", "Episode.mkv");
+        var executionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var muxWorkflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = async (_, cancellationToken) =>
+            {
+                executionStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return new MuxExecutionResult(0, HasWarning: false, LastProgressPercent: 0);
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
+        var item = CreateBatchEpisodeItem(outputPath);
+        var logs = new List<string>();
+        using var cancellationSource = new CancellationTokenSource();
+
+        var executionTask = runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(item, CreatePlan(outputPath), [])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            logs.Add,
+            cancellationSource.Token);
+
+        await executionStarted.Task;
+        cancellationSource.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executionTask);
+        Assert.Equal(BatchEpisodeStatusKind.Cancelled, item.StatusKind);
+        Assert.Contains(logs, line => line.Contains("ABGEBROCHEN", StringComparison.Ordinal));
     }
 
     public void Dispose()
@@ -268,6 +304,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     private sealed class StubFileCopyService : FileCopyService
     {
         public Func<FileCopyPlan, bool>? NeedsCopyOverride { get; init; }
+        public Func<FileCopyPlan, CancellationToken, Task>? CopyOverride { get; init; }
 
         public List<FileCopyPlan> CopiedPlans { get; } = [];
 
@@ -282,6 +319,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             CopiedPlans.Add(copyPlan);
+            if (CopyOverride is not null)
+            {
+                return CopyOverride(copyPlan, cancellationToken);
+            }
+
             return Task.CompletedTask;
         }
     }
@@ -295,7 +337,8 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         public override Task<FileMoveResult> MoveFilesToDirectoryAsync(
             IReadOnlyList<string> sourceFilePaths,
             string targetDirectory,
-            Action<int, int, string>? onProgress = null)
+            Action<int, int, string>? onProgress = null,
+            CancellationToken cancellationToken = default)
         {
             LastMoveSourceFiles = sourceFilePaths.ToList();
             return Task.FromResult(MoveResult);
@@ -312,7 +355,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
         }
 
-        public Func<SeriesEpisodeMuxPlan, Task<MuxExecutionResult>>? ExecuteMuxOverride { get; init; }
+        public Func<SeriesEpisodeMuxPlan, CancellationToken, Task<MuxExecutionResult>>? ExecuteMuxOverride { get; init; }
 
         public override Task<MuxExecutionResult> ExecuteMuxAsync(
             SeriesEpisodeMuxPlan plan,
@@ -325,7 +368,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
                 return Task.FromResult(new MuxExecutionResult(0, HasWarning: false, LastProgressPercent: 100));
             }
 
-            return ExecuteMuxOverride(plan);
+            return ExecuteMuxOverride(plan, cancellationToken);
         }
     }
 }

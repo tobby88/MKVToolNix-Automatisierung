@@ -80,17 +80,22 @@ public sealed partial class BatchMuxViewModel
         int total,
         SemaphoreSlim throttler,
         BatchScanResult[] target,
+        CancellationToken cancellationToken,
         Func<int> getCompletedCount,
         Action onCompleted)
     {
-        await throttler.WaitAsync();
+        var acquiredThrottler = false;
+        var finished = false;
+        await throttler.WaitAsync(cancellationToken);
+        acquiredThrottler = true;
         try
         {
             var result = await _services.BatchScan.ScanAsync(
                 directoryContext,
                 file,
                 OutputDirectory,
-                update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update));
+                update => HandleBatchDetectionProgress(getCompletedCount() + 1, total, file, update, cancellationToken),
+                cancellationToken: cancellationToken);
 
             target[index] = new BatchScanResult(
                 index,
@@ -100,6 +105,11 @@ public sealed partial class BatchMuxViewModel
                 result.MetadataResolution,
                 result.OutputPath,
                 null);
+            finished = true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -111,11 +121,19 @@ public sealed partial class BatchMuxViewModel
                 null,
                 null,
                 ex.Message);
+            finished = true;
         }
         finally
         {
-            onCompleted();
-            throttler.Release();
+            if (finished)
+            {
+                onCompleted();
+            }
+
+            if (acquiredThrottler)
+            {
+                throttler.Release();
+            }
         }
     }
 
@@ -133,10 +151,16 @@ public sealed partial class BatchMuxViewModel
         int currentItem,
         int totalItems,
         string currentFilePath,
-        DetectionProgressUpdate update)
+        DetectionProgressUpdate update,
+        CancellationToken cancellationToken = default)
     {
         void ApplyUpdate()
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             var baseProgress = totalItems <= 0
                 ? 0
                 : ((currentItem - 1) + (update.ProgressPercent / 100d)) / totalItems * 100d;
@@ -145,6 +169,11 @@ public sealed partial class BatchMuxViewModel
             SetStatus(
                 $"Scanne Ordner... {currentItem}/{totalItems} - {Path.GetFileName(currentFilePath)} - {update.StatusText}",
                 Math.Max(ProgressValue, scaledProgress));
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
         }
 
         if (Application.Current.Dispatcher.CheckAccess())

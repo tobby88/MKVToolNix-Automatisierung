@@ -146,6 +146,7 @@ internal static class EpisodeEditTextBuilder
         {
             BatchEpisodeStatusKind.Warning => "Warnung",
             BatchEpisodeStatusKind.Running => "Läuft",
+            BatchEpisodeStatusKind.Cancelled => "Abgebrochen",
             BatchEpisodeStatusKind.ComparisonPending => "Vergleich offen",
             BatchEpisodeStatusKind.Ready => "Bereit",
             BatchEpisodeStatusKind.UpToDate => "Ziel aktuell",
@@ -160,6 +161,7 @@ internal static class EpisodeEditTextBuilder
         {
             BatchEpisodeStatusKind.Warning => "Der Eintrag wurde verarbeitet, aber es gab Warnungen. Details oder Protokoll prüfen.",
             BatchEpisodeStatusKind.Running => "Dieser Eintrag wird gerade geplant, kopiert oder gemuxt.",
+            BatchEpisodeStatusKind.Cancelled => "Dieser Eintrag wurde durch Benutzerabbruch nicht vollständig verarbeitet und kann erneut gestartet werden.",
             BatchEpisodeStatusKind.ComparisonPending => "Für eine bereits vorhandene Bibliotheksdatei fehlt noch der aktuelle Vergleich.",
             BatchEpisodeStatusKind.Ready => "Der Eintrag ist bereit für den Batch-Lauf.",
             BatchEpisodeStatusKind.UpToDate => "Die Zieldatei ist bereits vollständig vorhanden. Ein neuer Lauf ist normalerweise nicht nötig.",

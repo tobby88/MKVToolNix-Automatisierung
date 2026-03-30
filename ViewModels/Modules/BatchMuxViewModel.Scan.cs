@@ -58,15 +58,17 @@ public sealed partial class BatchMuxViewModel
 
     private async Task ScanDirectoryAsync()
     {
+        var cancellationToken = CancellationToken.None;
         try
         {
             SetBusy(true);
+            cancellationToken = BeginBatchOperation(BatchOperationKind.Scan);
             ClearEpisodeItems();
             ResetLog();
             SetStatus("Bereite Batch-Scan vor...", 0);
 
             var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
-            var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory));
+            var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory), cancellationToken);
             var mainVideoFiles = directoryContext.MainVideoFiles;
 
             var total = mainVideoFiles.Count;
@@ -89,6 +91,7 @@ public sealed partial class BatchMuxViewModel
                 total,
                 throttler,
                 scanResults,
+                cancellationToken,
                 () => Volatile.Read(ref completedCount),
                 () =>
                 {
@@ -100,6 +103,7 @@ public sealed partial class BatchMuxViewModel
                 }));
 
             await Task.WhenAll(scanTasks);
+            cancellationToken.ThrowIfCancellationRequested();
             await FlushPendingScanUiUpdatesAsync();
             SetStatus("Verarbeite Scanergebnisse...", AutomaticCompareProgressStart);
 
@@ -153,12 +157,19 @@ public sealed partial class BatchMuxViewModel
                 AutomaticCompareProgressStart);
             await RefreshComparisonPlansAsync(
                 EpisodeItems.Where(item => item.ArchiveState == EpisodeArchiveState.Existing).ToList(),
-                automatic: true);
+                automatic: true,
+                cancellationToken);
             SetStatus(StatusText, 100);
             RefreshCommands();
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AppendLog("ABGEBROCHEN: Batch-Scan durch Benutzer abgebrochen.");
+            SetStatus("Scan abgebrochen", ProgressValue);
+        }
         finally
         {
+            CompleteBatchOperation(BatchOperationKind.Scan);
             SetBusy(false);
         }
     }

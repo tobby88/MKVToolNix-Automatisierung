@@ -27,6 +27,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     private readonly EpisodeReviewWorkflow _reviewWorkflow;
     private readonly BatchEpisodeCollectionController _episodeCollection;
     private readonly BatchExecutionRunner _executionRunner;
+    private readonly BatchOperationController _operationController = new();
     private readonly EpisodePlanCache _planCache = new();
 
     private string _sourceDirectory = string.Empty;
@@ -70,6 +71,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
         EditSelectedAttachmentsCommand = new RelayCommand(EditSelectedAttachments, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedOutputCommand = new RelayCommand(EditSelectedOutput, () => !_isBusy && SelectedEpisodeItem is not null);
         RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
+        CancelBatchOperationCommand = new RelayCommand(CancelCurrentBatchOperation, () => CanCancelBatchOperation);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -89,6 +91,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     public RelayCommand EditSelectedAttachmentsCommand { get; }
     public RelayCommand EditSelectedOutputCommand { get; }
     public AsyncRelayCommand RunBatchCommand { get; }
+    public RelayCommand CancelBatchOperationCommand { get; }
 
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems => _episodeCollection.Items;
     public ICollectionView EpisodeItemsView => _episodeCollection.View;
@@ -199,11 +202,22 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
 
     public string RunBatchTooltip => "Startet das Muxing für alle ausgewählten Episoden. Offene Pflichtprüfungen werden vorher noch abgearbeitet.";
 
+    public string CancelBatchOperationTooltip => _operationController.CurrentOperationKind switch
+    {
+        BatchOperationKind.Scan => "Bricht den laufenden Batch-Scan und die anschliessenden automatischen Vergleiche ab.",
+        BatchOperationKind.Execution => "Bricht den laufenden Batch inklusive Arbeitskopien, Mux und Done-Cleanup kontrolliert ab.",
+        _ => "Bricht den aktuell laufenden Batch-Vorgang ab."
+    };
+
     public string BatchLogInfoText => "Das sichtbare Protokoll zeigt Scan und Batch-Lauf dieser Sitzung. Die gespeicherte Logdatei enthält jeweils nur den aktuellen Batch-Lauf.";
 
     public string OutputDirectoryHintText => _services.OutputPaths.BuildOutputRootOverrideHint(OutputDirectory) ?? string.Empty;
 
     public bool HasOutputDirectoryHint => !string.IsNullOrWhiteSpace(OutputDirectoryHintText);
+
+    public bool CanCancelBatchOperation => _operationController.CanCancelCurrentOperation;
+
+    public string CancelBatchOperationText => _operationController.CancelButtonText;
 
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
@@ -275,6 +289,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
         EditSelectedAttachmentsCommand.RaiseCanExecuteChanged();
         EditSelectedOutputCommand.RaiseCanExecuteChanged();
         RunBatchCommand.RaiseCanExecuteChanged();
+        CancelBatchOperationCommand.RaiseCanExecuteChanged();
     }
 
     private void ClearEpisodeItems()
@@ -296,6 +311,44 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
         OnPropertyChanged(nameof(SelectedEpisodeCount));
         OnPropertyChanged(nameof(ExistingArchiveCount));
         OnPropertyChanged(nameof(PendingCheckCount));
+    }
+
+    private CancellationToken BeginBatchOperation(BatchOperationKind operationKind)
+    {
+        var token = _operationController.Begin(operationKind);
+        NotifyBatchOperationStateChanged();
+        return token;
+    }
+
+    private void CompleteBatchOperation(BatchOperationKind operationKind)
+    {
+        _operationController.Complete(operationKind);
+        NotifyBatchOperationStateChanged();
+    }
+
+    private void CancelCurrentBatchOperation()
+    {
+        if (!_operationController.CancelCurrentOperation())
+        {
+            return;
+        }
+
+        StatusText = _operationController.CurrentOperationKind switch
+        {
+            BatchOperationKind.Scan => "Batch-Scan wird abgebrochen...",
+            BatchOperationKind.Execution => "Batch-Lauf wird abgebrochen...",
+            _ => "Vorgang wird abgebrochen..."
+        };
+
+        NotifyBatchOperationStateChanged();
+    }
+
+    private void NotifyBatchOperationStateChanged()
+    {
+        OnPropertyChanged(nameof(CancelBatchOperationText));
+        OnPropertyChanged(nameof(CanCancelBatchOperation));
+        OnPropertyChanged(nameof(CancelBatchOperationTooltip));
+        RefreshCommands();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

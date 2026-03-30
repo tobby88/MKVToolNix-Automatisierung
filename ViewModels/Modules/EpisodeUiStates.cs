@@ -76,8 +76,9 @@ public enum BatchEpisodeStatusKind
     Error = 0,
     Warning = 1,
     Running = 2,
-    ComparisonPending = 3,
-    Ready = 4,
-    UpToDate = 5,
-    Success = 6
+    Cancelled = 3,
+    ComparisonPending = 4,
+    Ready = 5,
+    UpToDate = 6,
+    Success = 7
 }

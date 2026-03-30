@@ -92,7 +92,9 @@ public sealed partial class BatchMuxViewModel
         return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.HasPendingChecks);
     }
 
-    private async Task<bool> EnsurePendingChecksApprovedAsync(IReadOnlyList<BatchEpisodeItemViewModel> readyItems)
+    private async Task<bool> EnsurePendingChecksApprovedAsync(
+        IReadOnlyList<BatchEpisodeItemViewModel> readyItems,
+        CancellationToken cancellationToken = default)
     {
         var pendingSourceItems = readyItems
             .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
@@ -112,6 +114,7 @@ public sealed partial class BatchMuxViewModel
 
         foreach (var item in pendingSourceItems)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             SelectedEpisodeItem = item;
             var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
             if (!approved)
@@ -122,6 +125,7 @@ public sealed partial class BatchMuxViewModel
 
         foreach (var item in pendingMetadataItems)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             SelectedEpisodeItem = item;
             var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true);
             if (!approved)

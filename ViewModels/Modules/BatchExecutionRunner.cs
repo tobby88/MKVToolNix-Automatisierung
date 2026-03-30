@@ -44,8 +44,11 @@ internal sealed class BatchExecutionRunner
     public async Task PrepareWorkingCopiesAsync(
         BatchCopyPreparation copyPreparation,
         BatchRunProgressTracker progressTracker,
-        Action<string> appendLog)
+        Action<string> appendLog,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (copyPreparation.CopyPlansToExecute.Count == 0)
         {
             progressTracker.ReportCopyCompleted(reusedExistingCopies: copyPreparation.CopyPlans.Count > 0);
@@ -61,6 +64,7 @@ internal sealed class BatchExecutionRunner
 
         for (var index = 0; index < copyPreparation.CopyPlansToExecute.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var copyPlan = copyPreparation.CopyPlansToExecute[index];
             appendLog($"KOPIERE: {Path.GetFileName(copyPlan.SourceFilePath)}");
 
@@ -78,7 +82,8 @@ internal sealed class BatchExecutionRunner
                             combinedCopiedBytes,
                             copyPreparation.TotalCopyBytes);
                     });
-                });
+                },
+                cancellationToken);
 
             copiedBeforeCurrentFile += copyPlan.FileSizeBytes;
         }
@@ -90,7 +95,8 @@ internal sealed class BatchExecutionRunner
         IReadOnlyList<BatchExecutionWorkItem> executablePlans,
         string doneDirectory,
         BatchRunProgressTracker progressTracker,
-        Action<string> appendLog)
+        Action<string> appendLog,
+        CancellationToken cancellationToken = default)
     {
         var successCount = 0;
         var warningCount = 0;
@@ -100,6 +106,7 @@ internal sealed class BatchExecutionRunner
 
         for (var index = 0; index < executablePlans.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var workItem = executablePlans[index];
             var item = workItem.Item;
             var plan = workItem.Plan;
@@ -113,7 +120,8 @@ internal sealed class BatchExecutionRunner
                 var result = await _muxWorkflow.ExecuteMuxAsync(
                     plan,
                     line => appendLog($"  {line}"),
-                    update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning));
+                    update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning),
+                    cancellationToken);
 
                 if (result.ExitCode == 0 && !result.HasWarning)
                 {
@@ -125,7 +133,13 @@ internal sealed class BatchExecutionRunner
                         newOutputFiles.Add(item.OutputPath);
                     }
 
-                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(workItem, doneDirectory, index + 1, progressTracker, appendLog));
+                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                        workItem,
+                        doneDirectory,
+                        index + 1,
+                        progressTracker,
+                        appendLog,
+                        cancellationToken));
                 }
                 else if ((result.ExitCode == 0 && result.HasWarning)
                     || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
@@ -138,13 +152,25 @@ internal sealed class BatchExecutionRunner
                         newOutputFiles.Add(item.OutputPath);
                     }
 
-                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(workItem, doneDirectory, index + 1, progressTracker, appendLog));
+                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                        workItem,
+                        doneDirectory,
+                        index + 1,
+                        progressTracker,
+                        appendLog,
+                        cancellationToken));
                 }
                 else
                 {
                     item.SetStatus(BatchEpisodeStatusKind.Error, $"Fehler ({result.ExitCode})");
                     errorCount++;
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                item.SetStatus(BatchEpisodeStatusKind.Cancelled);
+                appendLog($"  ABGEBROCHEN: {item.MainVideoFileName}");
+                throw;
             }
             catch (Exception ex)
             {
@@ -173,7 +199,8 @@ internal sealed class BatchExecutionRunner
         string doneDirectory,
         int currentItemIndex,
         BatchRunProgressTracker progressTracker,
-        Action<string> appendLog)
+        Action<string> appendLog,
+        CancellationToken cancellationToken = default)
     {
         var item = workItem.Item;
         var cleanupFiles = workItem.CleanupFiles;
@@ -189,7 +216,8 @@ internal sealed class BatchExecutionRunner
             {
                 _ = Application.Current.Dispatcher.BeginInvoke(() =>
                     progressTracker.ReportMoveToDone(currentItemIndex, current, total));
-            });
+            },
+            cancellationToken);
 
         appendLog($"DONE: {item.MainVideoFileName} -> {moveResult.MovedFiles.Count} Datei(en) verschoben.");
 

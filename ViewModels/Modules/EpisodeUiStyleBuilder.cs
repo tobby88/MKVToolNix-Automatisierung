@@ -41,6 +41,7 @@ internal static class EpisodeUiStyleBuilder
         {
             BatchEpisodeStatusKind.Error => "#FCE8E8",
             BatchEpisodeStatusKind.Warning or BatchEpisodeStatusKind.Running => "#FFF4D6",
+            BatchEpisodeStatusKind.Cancelled => "#F3F6FA",
             BatchEpisodeStatusKind.ComparisonPending => "#E8F3FF",
             BatchEpisodeStatusKind.Ready or BatchEpisodeStatusKind.UpToDate or BatchEpisodeStatusKind.Success => "#EEF6E8",
             _ => "#F3F6FA"
@@ -53,6 +54,7 @@ internal static class EpisodeUiStyleBuilder
         {
             BatchEpisodeStatusKind.Error => "#D28A8A",
             BatchEpisodeStatusKind.Warning or BatchEpisodeStatusKind.Running => "#D8B46A",
+            BatchEpisodeStatusKind.Cancelled => "#C7D1DC",
             BatchEpisodeStatusKind.ComparisonPending => "#8CB4D8",
             BatchEpisodeStatusKind.Ready or BatchEpisodeStatusKind.UpToDate or BatchEpisodeStatusKind.Success => "#88B06E",
             _ => "#C7D1DC"
