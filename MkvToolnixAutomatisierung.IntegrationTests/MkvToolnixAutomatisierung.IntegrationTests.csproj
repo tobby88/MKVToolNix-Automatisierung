@@ -25,6 +25,15 @@
     <ProjectReference Include="..\MkvToolnixAutomatisierung.csproj" />
   </ItemGroup>
 
+  <!-- Der Helper wird nur per MSBuild-Target gebaut und muss daher beim separaten Restore der Integrationstests
+       explizit mit wiederhergestellt werden, damit spätere --no-restore-Testläufe in CI nicht an project.assets.json scheitern. -->
+  <Target Name="RestoreFakeMkvMergeHelper" BeforeTargets="Restore">
+    <MSBuild
+      Projects="..\TestTools\FakeMkvMerge\FakeMkvMerge.csproj"
+      Targets="Restore"
+      Properties="Configuration=$(Configuration)" />
+  </Target>
+
   <Target Name="BuildFakeMkvMergeHelper" BeforeTargets="Build">
     <MSBuild
       Projects="..\TestTools\FakeMkvMerge\FakeMkvMerge.csproj"
