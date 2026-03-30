@@ -430,6 +430,7 @@ public sealed partial class SingleEpisodeMuxViewModel
             ProgressValue,
             "Prüfe Quelle...",
             "Quellenprüfung abgebrochen",
+            "Quellenprüfung konnte nicht geöffnet werden",
             "Quelle freigegeben",
             "Auf alternative Quelle umgestellt",
             async tentativeExclusions =>

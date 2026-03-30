@@ -51,6 +51,7 @@ public sealed class EpisodeReviewWorkflow
         int currentProgress,
         string reviewStatusText,
         string cancelledStatusText,
+        string openFailedStatusText,
         string approvedStatusText,
         string alternativeStatusText,
         Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync)
@@ -59,7 +60,11 @@ public sealed class EpisodeReviewWorkflow
         {
             var reviewTargetPath = item.CurrentReviewTargetPath!;
             reportStatus(reviewStatusText, currentProgress);
-            _dialogService.OpenFilesWithDefaultApp([reviewTargetPath]);
+            if (!_dialogService.TryOpenFilesWithDefaultApp([reviewTargetPath]))
+            {
+                reportStatus(openFailedStatusText, currentProgress);
+                return false;
+            }
 
             var result = _dialogService.AskSourceReviewResult(
                 Path.GetFileName(reviewTargetPath),

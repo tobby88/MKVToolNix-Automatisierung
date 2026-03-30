@@ -22,6 +22,7 @@ public sealed class EpisodeReviewWorkflowTests
             currentProgress: 50,
             reviewStatusText: "Prüfe Quelle...",
             cancelledStatusText: "Abgebrochen",
+            openFailedStatusText: "Öffnen fehlgeschlagen",
             approvedStatusText: "Freigegeben",
             alternativeStatusText: "Alternative gewählt",
             _ => Task.FromResult(false));
@@ -51,6 +52,7 @@ public sealed class EpisodeReviewWorkflowTests
             currentProgress: 50,
             reviewStatusText: "Prüfe Quelle...",
             cancelledStatusText: "Abgebrochen",
+            openFailedStatusText: "Öffnen fehlgeschlagen",
             approvedStatusText: "Freigegeben",
             alternativeStatusText: "Alternative gewählt",
             tentativeExclusions =>
@@ -73,6 +75,32 @@ public sealed class EpisodeReviewWorkflowTests
         Assert.Contains(@"C:\Temp\episode-alt-1.mp4", item.ExcludedSourcePaths);
     }
 
+    [Fact]
+    public async Task ReviewManualSourceAsync_StopsWhenReviewFileCouldNotBeOpened()
+    {
+        var dialogService = new FakeDialogService(canOpenFiles: false, MessageBoxResult.Yes);
+        var workflow = new EpisodeReviewWorkflow(dialogService, CreateEpisodeMetadataService());
+        var item = new FakeEpisodeReviewItem(@"C:\Temp\episode-open-fail.mp4");
+        var reportedStates = new List<string>();
+
+        var approved = await workflow.ReviewManualSourceAsync(
+            item,
+            (status, _) => reportedStates.Add(status),
+            currentProgress: 50,
+            reviewStatusText: "Prüfe Quelle...",
+            cancelledStatusText: "Abgebrochen",
+            openFailedStatusText: "Öffnen fehlgeschlagen",
+            approvedStatusText: "Freigegeben",
+            alternativeStatusText: "Alternative gewählt",
+            _ => Task.FromResult(false));
+
+        Assert.False(approved);
+        Assert.False(item.IsManualCheckApproved);
+        Assert.Single(dialogService.OpenedFilePaths);
+        Assert.Equal(0, dialogService.ReviewPromptCallCount);
+        Assert.Equal(["Prüfe Quelle...", "Öffnen fehlgeschlagen"], reportedStates);
+    }
+
     private static EpisodeMetadataLookupService CreateEpisodeMetadataService()
     {
         return new EpisodeMetadataLookupService(
@@ -85,17 +113,26 @@ public sealed class EpisodeReviewWorkflowTests
         private readonly Queue<MessageBoxResult> _reviewResults;
 
         public FakeDialogService(params MessageBoxResult[] reviewResults)
+            : this(canOpenFiles: true, reviewResults)
         {
+        }
+
+        public FakeDialogService(bool canOpenFiles, params MessageBoxResult[] reviewResults)
+        {
+            CanOpenFiles = canOpenFiles;
             _reviewResults = new Queue<MessageBoxResult>(reviewResults);
         }
+
+        public bool CanOpenFiles { get; }
 
         public List<string> OpenedFilePaths { get; } = [];
 
         public int ReviewPromptCallCount { get; private set; }
 
-        public void OpenFilesWithDefaultApp(IEnumerable<string> filePaths)
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
         {
             OpenedFilePaths.AddRange(filePaths);
+            return CanOpenFiles;
         }
 
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)

@@ -232,7 +232,15 @@ public sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
-    public void OpenFilesWithDefaultApp(IEnumerable<string> filePaths)
+    /// <summary>
+    /// Öffnet Prüfdokumente mit der registrierten Standardanwendung und meldet Shell-Fehler direkt.
+    /// </summary>
+    /// <remarks>
+    /// Der Review-Workflow fragt nur dann nach einer fachlichen Freigabe, wenn mindestens eine Datei
+    /// erfolgreich geöffnet werden konnte. So werden kaputte Shell-Zuordnungen oder blockierte Pfade
+    /// nicht fälschlich wie erfolgreich geprüfte Quellen behandelt.
+    /// </remarks>
+    public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
     {
         var files = filePaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -243,17 +251,21 @@ public sealed class UserDialogService : IUserDialogService
         if (files.Count == 0)
         {
             ShowWarning("Hinweis", "Es wurden keine prüfbaren Quelldateien gefunden.");
-            return;
+            return false;
         }
 
         foreach (var filePath in files)
         {
-            Process.Start(new ProcessStartInfo
+            if (!TryOpenShellPath(
+                    filePath,
+                    "Hinweis",
+                    $"Die Datei konnte nicht mit der Standardanwendung geöffnet werden:{Environment.NewLine}{filePath}"))
             {
-                FileName = filePath,
-                UseShellExecute = true
-            });
+                return false;
+            }
         }
+
+        return true;
     }
 
     public void OpenPathWithDefaultApp(string path)
@@ -264,11 +276,10 @@ public sealed class UserDialogService : IUserDialogService
             return;
         }
 
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = path,
-            UseShellExecute = true
-        });
+        TryOpenShellPath(
+            path,
+            "Hinweis",
+            $"Der Pfad konnte nicht geöffnet werden:{Environment.NewLine}{path}");
     }
 
     public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative)
@@ -304,6 +315,34 @@ public sealed class UserDialogService : IUserDialogService
     {
         return Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
             ?? Application.Current?.MainWindow;
+    }
+
+    /// <summary>
+    /// Führt Shell-Öffnungen an einer Stelle aus, damit Fehlerbehandlung und Benutzerhinweise konsistent bleiben.
+    /// </summary>
+    private bool TryOpenShellPath(string path, string title, string failureMessage)
+    {
+        try
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true
+            });
+
+            if (process is not null)
+            {
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowWarning(title, $"{failureMessage}{Environment.NewLine}{Environment.NewLine}Technische Details: {ex.Message}");
+            return false;
+        }
+
+        ShowWarning(title, failureMessage);
+        return false;
     }
 
     private static string FormatFileSize(long bytes)

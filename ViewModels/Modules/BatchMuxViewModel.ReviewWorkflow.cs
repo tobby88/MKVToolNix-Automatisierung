@@ -46,6 +46,9 @@ public sealed partial class BatchMuxViewModel
                 : "Prüfe Quelle...",
             "Quellenprüfung abgebrochen",
             isBatchPreparation
+                ? $"Quellenprüfung für '{item.Title}' konnte nicht geöffnet werden"
+                : "Quellenprüfung konnte nicht geöffnet werden",
+            isBatchPreparation
                 ? $"Quelle für '{item.Title}' freigegeben"
                 : "Quelle freigegeben",
             isBatchPreparation

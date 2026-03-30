@@ -7,7 +7,14 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public interface IUserDialogService
 {
-    void OpenFilesWithDefaultApp(IEnumerable<string> filePaths);
+    /// <summary>
+    /// Versucht die angegebenen Dateien mit der Standardanwendung zu öffnen.
+    /// </summary>
+    /// <remarks>
+    /// Der Rückgabewert erlaubt dem Review-Workflow, die Prüfung sauber abzubrechen, wenn das
+    /// eigentliche Öffnen fehlschlägt und der Benutzer deshalb nichts verifizieren konnte.
+    /// </remarks>
+    bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths);
 
     MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative);
 }
