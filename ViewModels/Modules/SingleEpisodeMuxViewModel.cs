@@ -42,7 +42,8 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchi
         _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _previewOutputBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
-            text => PreviewText = text);
+            text => PreviewText = text,
+            text => PreviewText += text);
 
         SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy);
         SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy);

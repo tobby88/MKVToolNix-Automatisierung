@@ -49,7 +49,8 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
         _executionRunner = new BatchExecutionRunner(services.FileCopy, services.MuxWorkflow, services.Cleanup);
         _logBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
-            text => LogText = text);
+            text => LogText = text,
+            text => LogText += text);
 
         _episodeCollection.CommandsChanged += RefreshCommands;
         _episodeCollection.OverviewChanged += RefreshOverview;
