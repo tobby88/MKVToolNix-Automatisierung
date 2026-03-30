@@ -54,8 +54,12 @@ public sealed partial class BatchMuxViewModel
         }
     }
 
-    private async Task RefreshComparisonForItemAsync(BatchEpisodeItemViewModel item)
+    private async Task RefreshComparisonForItemAsync(
+        BatchEpisodeItemViewModel item,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(item.MainVideoPath)
             || string.IsNullOrWhiteSpace(item.OutputPath)
             || string.IsNullOrWhiteSpace(item.TitleForMux))
@@ -76,7 +80,9 @@ public sealed partial class BatchMuxViewModel
 
         try
         {
-            var plan = await GetOrBuildPlanForItemAsync(item);
+            cancellationToken.ThrowIfCancellationRequested();
+            var plan = await GetOrBuildPlanForItemAsync(item, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             item.SetPlanSummary(plan.BuildCompactSummaryText());
             item.SetUsageSummary(plan.BuildUsageSummary());
 
@@ -88,6 +94,10 @@ public sealed partial class BatchMuxViewModel
             {
                 item.SetStatus(BatchEpisodeStatusKind.Ready);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -228,14 +238,14 @@ public sealed partial class BatchMuxViewModel
         try
         {
             await Task.Delay(200, cancellationToken);
-            await RefreshSelectedItemPlanSummaryAsync();
+            await RefreshSelectedItemPlanSummaryAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
         }
     }
 
-    private async Task RefreshSelectedItemPlanSummaryAsync()
+    private async Task RefreshSelectedItemPlanSummaryAsync(CancellationToken cancellationToken = default)
     {
         var item = SelectedEpisodeItem;
         var version = Interlocked.Increment(ref _selectedPlanSummaryVersion);
@@ -254,7 +264,8 @@ public sealed partial class BatchMuxViewModel
 
         try
         {
-            await RefreshComparisonForItemAsync(item);
+            cancellationToken.ThrowIfCancellationRequested();
+            await RefreshComparisonForItemAsync(item, cancellationToken);
             if (version != _selectedPlanSummaryVersion || !ReferenceEquals(SelectedEpisodeItem, item))
             {
                 return;

@@ -1,3 +1,4 @@
+using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -86,6 +87,8 @@ public class MuxWorkflowCoordinator
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            EnsureOutputDirectoryExists(plan);
+            cancellationToken.ThrowIfCancellationRequested();
             return await _muxService.ExecuteAsync(plan, onOutput, onUpdate, cancellationToken);
         }
         finally
@@ -93,6 +96,19 @@ public class MuxWorkflowCoordinator
             _muxService.InvalidatePlanOutputs(plan);
             _cleanupService.DeleteTemporaryFile(plan.WorkingCopy?.DestinationFilePath);
         }
+    }
+
+    private static void EnsureOutputDirectoryExists(SeriesEpisodeMuxPlan plan)
+    {
+        var outputDirectory = Path.GetDirectoryName(plan.OutputFilePath);
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            throw new DirectoryNotFoundException($"Ausgabeziel konnte nicht bestimmt werden: {plan.OutputFilePath}");
+        }
+
+        // Zielordner erst unmittelbar vor dem echten mkvmerge-Lauf anlegen,
+        // damit Vorschau und Planaktualisierung keine Dateisystem-Seiteneffekte auslösen.
+        Directory.CreateDirectory(outputDirectory);
     }
 }
 

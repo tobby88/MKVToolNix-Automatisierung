@@ -448,13 +448,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
             }
         }
 
-        var outputDirectory = Path.GetDirectoryName(request.OutputFilePath);
+        ValidateOutputPath(request.OutputFilePath);
+    }
+
+    private static void ValidateOutputPath(string outputFilePath)
+    {
+        var outputDirectory = Path.GetDirectoryName(outputFilePath);
         if (string.IsNullOrWhiteSpace(outputDirectory))
         {
-            throw new DirectoryNotFoundException($"Ausgabeziel nicht gefunden: {outputDirectory}");
+            throw new DirectoryNotFoundException($"Ausgabeziel konnte nicht bestimmt werden: {outputFilePath}");
         }
-
-        Directory.CreateDirectory(outputDirectory);
     }
 
     private NormalVideoCandidate BuildNormalVideoCandidate(

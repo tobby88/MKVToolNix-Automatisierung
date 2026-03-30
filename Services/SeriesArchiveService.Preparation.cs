@@ -140,7 +140,7 @@ public sealed partial class SeriesArchiveService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Archiv-Untertitel werden nur dann wiederverwendet, wenn kein externer Untertitel denselben fachlichen Slot belegt.
-        // Dabei unterscheiden wir bewusst nur Typ und HI/Standard, nicht Sprache oder Tracknamen.
+        // Dabei unterscheiden wir bewusst Typ, HI/Standard und die projektweit unterstützte Sprache, nicht aber Tracknamen.
         var embeddedSubtitlePlans = existingSubtitleTracks
             .Select(track => new
             {
@@ -148,7 +148,10 @@ public sealed partial class SeriesArchiveService
                 Kind = SubtitleKind.FromExistingCodec(track.CodecLabel)
             })
             .Where(entry => entry.Kind is not null)
-            .Where(entry => !externalCoverage.Contains(BuildSubtitleCoverageKey(entry.Kind!, entry.Track.IsHearingImpaired)))
+            .Where(entry => !externalCoverage.Contains(BuildSubtitleCoverageKey(
+                entry.Kind!,
+                entry.Track.IsHearingImpaired,
+                entry.Track.Language)))
             .OrderBy(entry => entry.Kind!.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
             .Select(entry => new SubtitleFile(
@@ -190,8 +193,13 @@ public sealed partial class SeriesArchiveService
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
         var needsSubtitleSupplement = subtitlePlan.FinalPlans.Count > 0;
         var needsAdditionalVideo = additionalVideoPaths.Count > 0;
+        var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(additionalVideoPaths)
+            .Concat(request.AttachmentPaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var needsManualAttachments = attachmentFilePaths.Count > 0;
 
-        if (!needsAudioDescription && !needsSubtitleSupplement && !needsAdditionalVideo)
+        if (!needsAudioDescription && !needsSubtitleSupplement && !needsAdditionalVideo && !needsManualAttachments)
         {
             return ArchiveIntegrationDecision.CreateSkip(
                 outputPath,
@@ -215,7 +223,8 @@ public sealed partial class SeriesArchiveService
                 : outputPath,
             AudioDescriptionTrackId: existingAudioDescription?.TrackId,
             SubtitleFiles: subtitlePlan.FinalPlans,
-            AttachmentFilePaths: BuildAttachmentPathsForUsedVideos(additionalVideoPaths),
+            // Manuell gewählte TXT-Anhänge dürfen auch beim Beibehalten der Archiv-Hauptquelle nicht verschwinden.
+            AttachmentFilePaths: attachmentFilePaths,
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList(),
             Notes:
@@ -324,12 +333,12 @@ public sealed partial class SeriesArchiveService
 
     private static string BuildSubtitleCoverageKey(SubtitleFile subtitle)
     {
-        return BuildSubtitleCoverageKey(subtitle.Kind, subtitle.IsHearingImpaired);
+        return BuildSubtitleCoverageKey(subtitle.Kind, subtitle.IsHearingImpaired, subtitle.LanguageCode);
     }
 
-    private static string BuildSubtitleCoverageKey(SubtitleKind kind, bool isHearingImpaired)
+    private static string BuildSubtitleCoverageKey(SubtitleKind kind, bool isHearingImpaired, string? languageCode)
     {
-        return $"{kind.DisplayName}|{(isHearingImpaired ? "hi" : "std")}";
+        return $"{kind.DisplayName}|{(isHearingImpaired ? "hi" : "std")}|{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}";
     }
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)

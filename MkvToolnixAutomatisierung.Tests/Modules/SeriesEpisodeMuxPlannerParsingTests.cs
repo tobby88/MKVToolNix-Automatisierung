@@ -41,6 +41,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeSeparators_PreservesInternalHyphensWithinWords()
+    {
+        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators("Der Kroatien-Krimi - Teil 1");
+
+        Assert.Equal("Der Kroatien-Krimi - Teil 1", normalized);
+    }
+
+    [Fact]
     public void NormalizeEpisodeTitle_RemovesTrailingPunctuationAfterCleanup()
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Beispieltitel: ");

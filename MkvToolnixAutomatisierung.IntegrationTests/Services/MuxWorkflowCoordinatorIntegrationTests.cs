@@ -88,6 +88,49 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteMuxAsync_CreatesMissingOutputDirectory_OnlyWhenExecutionStarts()
+    {
+        var sourceVideoPath = CreateFile("missing-output-dir-source.mp4");
+        var outputPath = Path.Combine(_tempDirectory, "missing-output-dir", "Episode.mkv");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            sourceVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var muxService = CreateMuxService();
+        var coordinator = new MuxWorkflowCoordinator(muxService, new FileCopyService(), new EpisodeCleanupService());
+        var plan = new SeriesEpisodeMuxPlan(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            outputPath,
+            "Episode",
+            [
+                new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - 1080p - H.264", IsDefaultTrack: true)
+            ],
+            sourceVideoPath,
+            1,
+            [1],
+            [],
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            workingCopy: null,
+            metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
+            notes: []);
+
+        Assert.False(Directory.Exists(Path.GetDirectoryName(outputPath)!));
+
+        var result = await coordinator.ExecuteMuxAsync(plan);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(Directory.Exists(Path.GetDirectoryName(outputPath)!));
+        Assert.True(File.Exists(outputPath));
+    }
+
+    [Fact]
     public async Task ExecuteMuxAsync_CancellationStopsProcess_AndCleansTemporaryCopy()
     {
         var sourceVideoPath = CreateFile("cancel-source.mp4");

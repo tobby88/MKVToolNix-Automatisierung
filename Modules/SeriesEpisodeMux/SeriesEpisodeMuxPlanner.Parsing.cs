@@ -35,21 +35,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
             seriesName,
             title,
             seasonNumber,
-            episodeNumber,
-            BuildIdentityKey(seriesName, title));
+            episodeNumber);
     }
 
     private static EpisodeNameParts ParseEpisodeName(string filePath)
     {
-        var normalizedName = NormalizeNameForParsing(Path.GetFileNameWithoutExtension(filePath));
+        var normalizedName = StripPresentationMarkers(Path.GetFileNameWithoutExtension(filePath));
         var splitIndex = normalizedName.IndexOf(" - ", StringComparison.Ordinal);
 
         if (splitIndex < 0)
         {
-            return new EpisodeNameParts("Unbekannte Serie", normalizedName, "xx", "xx");
+            return new EpisodeNameParts("Unbekannte Serie", NormalizeNameForParsing(normalizedName), "xx", "xx");
         }
 
-        var seriesName = normalizedName[..splitIndex].Trim();
+        var seriesName = NormalizeSeriesName(normalizedName[..splitIndex]);
         var titleDetails = ParseTitleDetails(normalizedName[(splitIndex + 3)..]);
         return new EpisodeNameParts(seriesName, titleDetails.Title, titleDetails.SeasonNumber, titleDetails.EpisodeNumber);
     }
@@ -104,27 +103,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return null;
     }
 
-    private static string BuildIdentityKey(string seriesName, string title)
-    {
-        var key = $"{NormalizeSeparators(seriesName)} - {NormalizeEpisodeTitle(title)}";
-        key = Regex.Replace(key, @"\s+", " ").Trim();
-        return key.ToLowerInvariant();
-    }
-
     private static string NormalizeNameForParsing(string name)
     {
+        name = StripPresentationMarkers(name);
+        name = NormalizeSeparators(name);
+        return Regex.Replace(name, @"\s+", " ").Trim();
+    }
+
+    private static string StripPresentationMarkers(string name)
+    {
+        name = NormalizeDashCharacters(name);
         name = Regex.Replace(name, @"-\d+$", string.Empty);
         name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAD\b", string.Empty, RegexOptions.IgnoreCase);
-        name = NormalizeSeparators(name);
-
-        var firstHyphenIndex = name.IndexOf('-', StringComparison.Ordinal);
-        if (firstHyphenIndex >= 0)
-        {
-            name = name[..firstHyphenIndex] + " - " + name[(firstHyphenIndex + 1)..];
-        }
-
         return Regex.Replace(name, @"\s+", " ").Trim();
     }
 
@@ -157,15 +149,31 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     internal static string NormalizeSeparators(string value)
     {
-        var normalized = MojibakeRepair.NormalizeLikelyMojibake(value)
-            .Replace("\u2013", "-")
-            .Replace("\u2014", "-")
-            .Replace("\u2212", "-");
+        var normalized = NormalizeDashCharacters(value);
 
-        normalized = Regex.Replace(normalized, @"\s*-\s*", " - ");
+        // Nur echte Trenner mit angrenzendem Leerraum werden vereinheitlicht; Bindestriche innerhalb von Namen bleiben erhalten.
+        normalized = Regex.Replace(normalized, @"(?:(?<=\S)\s+-\s*(?=\S)|(?<=\S)\s*-\s+(?=\S))", " - ");
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);
         return normalized;
+    }
+
+    private static string NormalizeDashCharacters(string value)
+    {
+        return MojibakeRepair.NormalizeLikelyMojibake(value)
+            .Replace("\u2013", "-")
+            .Replace("\u2014", "-")
+            .Replace("\u2212", "-");
+    }
+
+    private static string BuildSeriesIdentityKey(string seriesName)
+    {
+        return Regex.Replace(NormalizeSeparators(seriesName), @"\s+", " ").Trim().ToLowerInvariant();
+    }
+
+    private static string BuildTitleIdentityKey(string title)
+    {
+        return Regex.Replace(NormalizeEpisodeTitle(title), @"\s+", " ").Trim().ToLowerInvariant();
     }
 
     private static string NormalizeSender(string? sender)
@@ -241,7 +249,32 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<CandidateSeed> NormalVideoSeeds,
         IReadOnlyList<CandidateSeed> AudioDescriptionSeeds);
 
-    internal sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber, string Key);
+    internal sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber)
+    {
+        public bool Matches(EpisodeIdentity other)
+        {
+            if (!string.Equals(
+                    SeriesEpisodeMuxPlanner.BuildSeriesIdentityKey(SeriesName),
+                    SeriesEpisodeMuxPlanner.BuildSeriesIdentityKey(other.SeriesName),
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (HasKnownEpisodeCode && other.HasKnownEpisodeCode)
+            {
+                return string.Equals(SeasonNumber, other.SeasonNumber, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(EpisodeNumber, other.EpisodeNumber, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return string.Equals(
+                SeriesEpisodeMuxPlanner.BuildTitleIdentityKey(Title),
+                SeriesEpisodeMuxPlanner.BuildTitleIdentityKey(other.Title),
+                StringComparison.Ordinal);
+        }
+
+        private bool HasKnownEpisodeCode => SeasonNumber != "xx" && EpisodeNumber != "xx";
+    }
     internal sealed record TitleDetails(string Title, string SeasonNumber, string EpisodeNumber);
     internal sealed record EpisodeNameParts(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber);
 

@@ -102,7 +102,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         private readonly SeriesEpisodeMuxPlanner _owner;
         private readonly Dictionary<string, IReadOnlyList<string>> _companionFilesByBaseName;
         private readonly Dictionary<string, CandidateSeed> _candidateSeedsByPath;
-        private readonly Dictionary<string, EpisodeSeedCollection> _episodeSeedsByKey;
+        private readonly IReadOnlyList<CandidateSeed> _candidateSeeds;
         private readonly ConcurrentDictionary<string, Lazy<NormalVideoCandidate>> _normalVideoCandidates;
         private readonly ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>> _audioDescriptionCandidates;
 
@@ -119,19 +119,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 pair => pair.Value,
                 StringComparer.OrdinalIgnoreCase);
             _candidateSeedsByPath = candidateSeeds.ToDictionary(seed => seed.FilePath, seed => seed, StringComparer.OrdinalIgnoreCase);
-            _episodeSeedsByKey = candidateSeeds
-                .GroupBy(seed => seed.Identity.Key, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group =>
-                    {
-                        var seeds = group.ToList();
-                        return new EpisodeSeedCollection(
-                            seeds,
-                            seeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
-                            seeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList());
-                    },
-                    StringComparer.OrdinalIgnoreCase);
+            _candidateSeeds = candidateSeeds.ToList();
             _normalVideoCandidates = new ConcurrentDictionary<string, Lazy<NormalVideoCandidate>>(StringComparer.OrdinalIgnoreCase);
             _audioDescriptionCandidates = new ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>>(StringComparer.OrdinalIgnoreCase);
             MainVideoFiles = candidateSeeds
@@ -162,9 +150,21 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         internal EpisodeSeedCollection GetEpisodeSeeds(CandidateSeed selectedSeed)
         {
-            if (_episodeSeedsByKey.TryGetValue(selectedSeed.Identity.Key, out var episodeSeeds))
+            var matchingSeeds = _candidateSeeds
+                .Where(seed => selectedSeed.Identity.Matches(seed.Identity))
+                .ToList();
+
+            if (matchingSeeds.Count > 0)
             {
-                return episodeSeeds;
+                if (!matchingSeeds.Any(seed => PathComparisonHelper.AreSamePath(seed.FilePath, selectedSeed.FilePath)))
+                {
+                    matchingSeeds.Insert(0, selectedSeed);
+                }
+
+                return new EpisodeSeedCollection(
+                    matchingSeeds,
+                    matchingSeeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
+                    matchingSeeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList());
             }
 
             return new EpisodeSeedCollection(
