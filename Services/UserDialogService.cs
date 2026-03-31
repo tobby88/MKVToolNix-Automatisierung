@@ -108,32 +108,29 @@ public sealed class UserDialogService : IUserDialogService
 
     public MessageBoxResult AskAudioDescriptionChoice()
     {
-        return MessageBox.Show(
-            GetOwner(),
-            "Ja = AD-Datei manuell wählen, Nein = AD-Datei leeren, Abbrechen = nichts ändern.",
-            "AD-Datei korrigieren",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
+        return AskSelectionOrClearChoice(
+            title: "AD-Datei korrigieren",
+            subject: "AD-Datei",
+            selectActionText: "AD-Datei manuell wählen",
+            clearActionText: "AD-Datei leeren");
     }
 
     public MessageBoxResult AskSubtitlesChoice()
     {
-        return MessageBox.Show(
-            GetOwner(),
-            "Ja = Untertitel manuell wählen, Nein = Untertitel leeren, Abbrechen = nichts ändern.",
-            "Untertitel korrigieren",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
+        return AskSelectionOrClearChoice(
+            title: "Untertitel korrigieren",
+            subject: "Untertitel",
+            selectActionText: "Untertitel manuell wählen",
+            clearActionText: "Untertitel leeren");
     }
 
     public MessageBoxResult AskAttachmentChoice()
     {
-        return MessageBox.Show(
-            GetOwner(),
-            "Ja = Anhänge manuell wählen, Nein = Anhänge leeren, Abbrechen = nichts ändern.",
-            "Anhänge korrigieren",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
+        return AskSelectionOrClearChoice(
+            title: "Anhänge korrigieren",
+            subject: "Anhänge",
+            selectActionText: "Anhänge manuell wählen",
+            clearActionText: "Anhänge leeren");
     }
 
     public bool ConfirmMuxStart()
@@ -343,6 +340,32 @@ public sealed class UserDialogService : IUserDialogService
 
         ShowWarning(title, failureMessage);
         return false;
+    }
+
+    /// <summary>
+    /// Baut die wiederkehrende Drei-Wege-Entscheidung "wählen / leeren / unverändert lassen" konsistent auf.
+    /// </summary>
+    private static MessageBoxResult AskSelectionOrClearChoice(
+        string title,
+        string subject,
+        string selectActionText,
+        string clearActionText)
+    {
+        var lines = new[]
+        {
+            $"{subject} anpassen:",
+            string.Empty,
+            $"Ja: {selectActionText}",
+            $"Nein: {clearActionText}",
+            "Abbrechen: nichts ändern"
+        };
+
+        return MessageBox.Show(
+            GetOwner(),
+            string.Join(Environment.NewLine, lines),
+            title,
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
     }
 
     private static string FormatFileSize(long bytes)
