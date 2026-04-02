@@ -29,18 +29,24 @@ public sealed partial class SeriesArchiveService
 
         var existingArchive = await ReadExistingArchiveStateAsync(mkvMergePath, outputPath, cancellationToken);
         var plannedVideos = await ReadPlannedVideoSourcesAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
-        var bestExistingVideo = SelectBestExistingVideo(existingArchive.VideoTracks);
+        var preferredExistingVideoTracks = SelectBestExistingVideoTracks(existingArchive.VideoTracks);
+        var bestExistingVideo = preferredExistingVideoTracks.FirstOrDefault();
         var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
         var existingAudioDescription = FindExistingAudioDescription(existingArchive.AudioTracks);
         var workingCopyPlan = BuildWorkingCopyPlan(outputPath, ResolveWorkingDirectory(request, outputPath));
         var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
+        var videoPlan = BuildFinalVideoSelectionPlan(
+            outputPath,
+            plannedVideos,
+            preferredExistingVideoTracks,
+            existingArchive.VideoTracks);
 
         if (plannedVideos.Count == 0)
         {
             return BuildDecisionUsingExistingPrimary(
                 outputPath,
                 request,
-                additionalVideoPaths: [],
+                videoPlan,
                 subtitlePlan,
                 replacedSubtitleTracks,
                 existingArchive,
@@ -49,17 +55,18 @@ public sealed partial class SeriesArchiveService
                 workingCopyPlan);
         }
 
-        var newPrimaryVideo = plannedVideos[0];
-        // Die Archivdatei bleibt nur dann Hauptquelle, wenn die neue Quelle nicht klar besser ist.
-        var keepExistingPrimary = bestExistingVideo is not null
-            && !IsNewVideoClearlyBetter(newPrimaryVideo.Metadata, bestExistingVideo);
-        var additionalVideoPaths = BuildAdditionalVideoPaths(plannedVideos, plannedVideoPaths, existingArchive.VideoTracks, keepExistingPrimary);
+        var selectedPrimaryVideo = videoPlan.VideoSelections.FirstOrDefault()
+            ?? throw new InvalidOperationException("Es konnte keine fachlich gültige Videospurauswahl für den Archivabgleich bestimmt werden.");
+        var keepExistingPrimary = string.Equals(selectedPrimaryVideo.FilePath, outputPath, StringComparison.OrdinalIgnoreCase);
+        var newPrimaryVideo = keepExistingPrimary
+            ? null
+            : plannedVideos.FirstOrDefault(video => string.Equals(video.FilePath, selectedPrimaryVideo.FilePath, StringComparison.OrdinalIgnoreCase));
 
         return keepExistingPrimary
             ? BuildDecisionUsingExistingPrimary(
                 outputPath,
                 request,
-                additionalVideoPaths,
+                videoPlan,
                 subtitlePlan,
                 replacedSubtitleTracks,
                 existingArchive,
@@ -69,12 +76,12 @@ public sealed partial class SeriesArchiveService
             : BuildDecisionReplacingExistingPrimary(
                 outputPath,
                 request,
-                additionalVideoPaths,
+                videoPlan,
                 subtitlePlan,
                 replacedSubtitleTracks,
                 existingArchive,
                 bestExistingVideo,
-                newPrimaryVideo,
+                newPrimaryVideo ?? throw new InvalidOperationException("Die ausgewählte neue Hauptvideospur konnte nicht mehr einer frischen Quelle zugeordnet werden."),
                 existingAudioDescription,
                 workingCopyPlan);
     }
@@ -104,38 +111,153 @@ public sealed partial class SeriesArchiveService
             cancellationToken.ThrowIfCancellationRequested();
             plannedVideos.Add(new PreparedVideoSource(
                 videoPath,
-                await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken)));
+                await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken),
+                new FileInfo(videoPath).Length));
         }
 
         return plannedVideos;
     }
 
-    private static ContainerTrackMetadata? SelectBestExistingVideo(IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
+    private static IReadOnlyList<ContainerTrackMetadata> SelectBestExistingVideoTracks(IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
     {
         return existingVideoTracks
-            .OrderByDescending(track => track.VideoWidth)
+            .GroupBy(track => BuildVideoSlotKey(track.Language, track.CodecLabel), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(track => track.VideoWidth)
+                .ThenBy(track => track.IsDefaultTrack ? 0 : 1)
+                .ThenBy(track => track.TrackId)
+                .First())
+            .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
             .ThenBy(track => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(track.CodecLabel))
+            .ThenByDescending(track => track.VideoWidth)
             .ThenBy(track => track.TrackId)
-            .FirstOrDefault();
+            .ToList();
     }
 
-    private static List<string> BuildAdditionalVideoPaths(
+    private static FinalVideoSelectionPlan BuildFinalVideoSelectionPlan(
+        string outputPath,
         IReadOnlyList<PreparedVideoSource> plannedVideos,
-        IReadOnlyList<string> plannedVideoPaths,
-        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks,
-        bool keepExistingPrimary)
+        IReadOnlyList<ContainerTrackMetadata> preferredExistingVideoTracks,
+        IReadOnlyList<ContainerTrackMetadata> allExistingVideoTracks)
     {
-        if (!keepExistingPrimary)
+        var freshBySlot = plannedVideos
+            .GroupBy(video => BuildVideoSlotKey(video.Metadata.VideoLanguage, video.Metadata.VideoCodecLabel), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(video => video.Metadata.VideoWidth)
+                    .ThenByDescending(video => video.FileSizeBytes)
+                    .ThenBy(video => video.FilePath, StringComparer.OrdinalIgnoreCase)
+                    .First(),
+                StringComparer.OrdinalIgnoreCase);
+        var existingBySlot = preferredExistingVideoTracks.ToDictionary(
+            track => BuildVideoSlotKey(track.Language, track.CodecLabel),
+            track => track,
+            StringComparer.OrdinalIgnoreCase);
+
+        var selectedVideos = new List<VideoTrackSelection>();
+        var retainedExistingTrackIds = new HashSet<int>();
+
+        foreach (var slot in freshBySlot.Keys
+                     .Concat(existingBySlot.Keys)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(slot => MediaLanguageHelper.GetLanguageSortRank(GetLanguageCodeFromSlotKey(slot)))
+                     .ThenBy(slot => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(GetCodecLabelFromSlotKey(slot)))
+                     .ThenBy(slot => slot, StringComparer.OrdinalIgnoreCase))
         {
-            return plannedVideoPaths.Skip(1).ToList();
+            if (freshBySlot.TryGetValue(slot, out var freshVideo)
+                && existingBySlot.TryGetValue(slot, out var existingVideo))
+            {
+                if (ShouldReplaceExistingVideoForSameSlot(freshVideo.Metadata, existingVideo))
+                {
+                    selectedVideos.Add(CreateVideoTrackSelection(freshVideo));
+                }
+                else
+                {
+                    selectedVideos.Add(CreateVideoTrackSelection(outputPath, existingVideo));
+                    retainedExistingTrackIds.Add(existingVideo.TrackId);
+                }
+
+                continue;
+            }
+
+            if (freshBySlot.TryGetValue(slot, out freshVideo))
+            {
+                selectedVideos.Add(CreateVideoTrackSelection(freshVideo));
+                continue;
+            }
+
+            if (existingBySlot.TryGetValue(slot, out var retainedExistingVideo))
+            {
+                selectedVideos.Add(CreateVideoTrackSelection(outputPath, retainedExistingVideo));
+                retainedExistingTrackIds.Add(retainedExistingVideo.TrackId);
+            }
         }
 
-        var newPrimaryVideo = plannedVideos.First();
-        return plannedVideos
-            .Where(video => !string.Equals(video.FilePath, newPrimaryVideo.FilePath, StringComparison.OrdinalIgnoreCase))
-            .Where(video => ShouldKeepAdditionalVideo(video.Metadata, existingVideoTracks))
-            .Select(video => video.FilePath)
+        var selectedVideoOrder = selectedVideos
+            .Where(selection => string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select((selection, index) => new { selection.TrackId, Index = index })
+            .ToDictionary(entry => entry.TrackId, entry => entry.Index);
+        var retainedExistingTracks = allExistingVideoTracks
+            .Where(track => retainedExistingTrackIds.Contains(track.TrackId))
+            .OrderBy(track => selectedVideoOrder[track.TrackId])
             .ToList();
+        var removedExistingTracks = allExistingVideoTracks
+            .Where(track => !retainedExistingTrackIds.Contains(track.TrackId))
+            .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
+            .ThenBy(track => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(track.CodecLabel))
+            .ThenByDescending(track => track.VideoWidth)
+            .ThenBy(track => track.TrackId)
+            .ToList();
+
+        return new FinalVideoSelectionPlan(selectedVideos, retainedExistingTracks, removedExistingTracks);
+    }
+
+    private static VideoTrackSelection CreateVideoTrackSelection(PreparedVideoSource video)
+    {
+        return new VideoTrackSelection(
+            video.FilePath,
+            video.Metadata.VideoTrackId,
+            video.Metadata.VideoWidth,
+            video.Metadata.VideoCodecLabel,
+            MediaLanguageHelper.NormalizeMuxLanguageCode(video.Metadata.VideoLanguage));
+    }
+
+    private static VideoTrackSelection CreateVideoTrackSelection(string outputPath, ContainerTrackMetadata track)
+    {
+        return new VideoTrackSelection(
+            outputPath,
+            track.TrackId,
+            track.VideoWidth,
+            track.CodecLabel,
+            MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language));
+    }
+
+    private static bool ShouldReplaceExistingVideoForSameSlot(MediaTrackMetadata newVideo, ContainerTrackMetadata existingVideo)
+    {
+        if (newVideo.VideoWidth != existingVideo.VideoWidth)
+        {
+            return newVideo.VideoWidth > existingVideo.VideoWidth;
+        }
+
+        return MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(newVideo.VideoCodecLabel)
+            < MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(existingVideo.CodecLabel);
+    }
+
+    private static string BuildVideoSlotKey(string? languageCode, string codecLabel)
+    {
+        return $"{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}|{codecLabel.Trim().ToUpperInvariant()}";
+    }
+
+    private static string GetLanguageCodeFromSlotKey(string slotKey)
+    {
+        return slotKey.Split('|', 2)[0];
+    }
+
+    private static string GetCodecLabelFromSlotKey(string slotKey)
+    {
+        var parts = slotKey.Split('|', 2);
+        return parts.Length == 2 ? parts[1] : slotKey;
     }
 
     private static SubtitleReusePlan BuildSubtitleReusePlan(
@@ -200,7 +322,7 @@ public sealed partial class SeriesArchiveService
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
         string outputPath,
         SeriesEpisodeMuxRequest request,
-        IReadOnlyList<string> additionalVideoPaths,
+        FinalVideoSelectionPlan videoPlan,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
         ExistingArchiveState existingArchive,
@@ -215,14 +337,21 @@ public sealed partial class SeriesArchiveService
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
         // Ein echter Zusatzbedarf liegt nur vor, wenn neue externe Untertitel dazukommen.
         var needsSubtitleSupplement = subtitlePlan.ExternalPlans.Count > 0;
-        var needsAdditionalVideo = additionalVideoPaths.Count > 0;
-        var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(additionalVideoPaths)
+        var attachmentReusePlan = BuildAttachmentReusePlan(outputPath, existingArchive.Container.Attachments, existingArchive.VideoTracks, videoPlan.VideoSelections);
+        var freshVideoPaths = videoPlan.VideoSelections
+            .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select(selection => selection.FilePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var needsAdditionalVideo = freshVideoPaths.Count > 0;
+        var needsVideoCleanup = videoPlan.RemovedExistingTracks.Count > 0;
+        var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(freshVideoPaths)
             .Concat(manualAttachmentPaths)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var needsManualAttachments = manualAttachmentPaths.Count > 0;
         var requiresRelevantTrackNameNormalization = RequiresRelevantTrackNameNormalization(
-            bestExistingVideo,
+            videoPlan.RetainedExistingTracks,
             primaryAudioTrack,
             existingAudioDescription,
             existingArchive.SubtitleTracks,
@@ -231,6 +360,7 @@ public sealed partial class SeriesArchiveService
         if (!needsAudioDescription
             && !needsSubtitleSupplement
             && !needsAdditionalVideo
+            && !needsVideoCleanup
             && !needsManualAttachments
             && !requiresRelevantTrackNameNormalization)
         {
@@ -239,21 +369,24 @@ public sealed partial class SeriesArchiveService
                 "Die vorhandene MKV in der Serienbibliothek enthält bereits alle benötigten Inhalte; ein erneutes Muxen ist nicht nötig.",
                 BuildReuseOnlySkipUsageSummary(
                     outputPath,
-                    existingArchive,
-                    bestExistingVideo,
+                    videoPlan.RetainedExistingTracks,
                     primaryAudioTrack,
                     existingAudioDescription,
-                    subtitlePlan),
+                    subtitlePlan,
+                    attachmentReusePlan.PreservedAttachmentNames),
                 ["Zieldatei bereits vollständig. Alle relevanten Spurnamen sind bereits konsistent. Kein erneutes Muxen nötig."]);
         }
 
         var usageComparison = new ArchiveUsageComparison(
             MainVideo: null,
-            AdditionalVideos: null,
+            AdditionalVideos: BuildRemovedAdditionalVideoChange(outputPath, videoPlan.RemovedExistingTracks),
             Audio: null,
             AudioDescription: null,
             Subtitles: BuildRemovedSubtitleChange(outputPath, replacedSubtitleTracks),
-            Attachments: null);
+            Attachments: BuildRemovedAttachmentChange(
+                existingArchive.Container.Attachments,
+                attachmentReusePlan.PreservedAttachmentNames,
+                manualAttachmentPaths.Count > 0));
 
         return new ArchiveIntegrationDecision(
             OutputFilePath: outputPath,
@@ -261,11 +394,14 @@ public sealed partial class SeriesArchiveService
             SkipReason: null,
             WorkingCopy: workingCopyPlan,
             PrimarySourcePath: outputPath,
+            VideoSelections: videoPlan.VideoSelections,
             PrimaryAudioTrackIds: primaryAudioTrack is null ? null : [primaryAudioTrack.TrackId],
             PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 ? [] : null,
-            IncludePrimaryAttachments: true,
-            AttachmentSourcePath: null,
-            AdditionalVideoPaths: additionalVideoPaths,
+            PrimarySourceAttachmentIds: attachmentReusePlan.PrimarySourceAttachmentIds,
+            IncludePrimaryAttachments: attachmentReusePlan.IncludePrimarySourceAttachments,
+            AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
+            AttachmentSourceAttachmentIds: attachmentReusePlan.AttachmentSourceAttachmentIds,
+            AdditionalVideoPaths: freshVideoPaths,
             AudioDescriptionFilePath: existingAudioDescription is null
                 ? request.AudioDescriptionPath
                 : outputPath,
@@ -274,7 +410,7 @@ public sealed partial class SeriesArchiveService
             // Manuell gewählte TXT-Anhänge dürfen auch beim Beibehalten der Archiv-Hauptquelle nicht verschwinden.
             AttachmentFilePaths: attachmentFilePaths,
             FallbackToRequestAttachments: false,
-            PreservedAttachmentNames: existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList(),
+            PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
             SkipUsageSummary: null,
             Notes: BuildKeepExistingPrimaryNotes(
@@ -282,6 +418,7 @@ public sealed partial class SeriesArchiveService
                 needsAudioDescription,
                 needsSubtitleSupplement,
                 needsAdditionalVideo,
+                needsVideoCleanup,
                 needsManualAttachments,
                 requiresRelevantTrackNameNormalization));
     }
@@ -291,6 +428,7 @@ public sealed partial class SeriesArchiveService
         bool needsAudioDescription,
         bool needsSubtitleSupplement,
         bool needsAdditionalVideo,
+        bool needsVideoCleanup,
         bool needsManualAttachments,
         bool requiresRelevantTrackNameNormalization)
     {
@@ -302,9 +440,15 @@ public sealed partial class SeriesArchiveService
                 : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
         };
 
+        if (needsVideoCleanup)
+        {
+            notes.Add("Vorhandene Videospuren werden auf die projektweit bevorzugten Sprach-/Codec-Slots bereinigt.");
+        }
+
         if (!needsAudioDescription
             && !needsSubtitleSupplement
             && !needsAdditionalVideo
+            && !needsVideoCleanup
             && !needsManualAttachments
             && requiresRelevantTrackNameNormalization)
         {
@@ -320,7 +464,7 @@ public sealed partial class SeriesArchiveService
     private static ArchiveIntegrationDecision BuildDecisionReplacingExistingPrimary(
         string outputPath,
         SeriesEpisodeMuxRequest request,
-        IReadOnlyList<string> additionalVideoPaths,
+        FinalVideoSelectionPlan videoPlan,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
         ExistingArchiveState existingArchive,
@@ -329,14 +473,13 @@ public sealed partial class SeriesArchiveService
         ContainerTrackMetadata? existingAudioDescription,
         FileCopyPlan workingCopyPlan)
     {
-        var needsExistingCopy = (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
-            || subtitlePlan.EmbeddedPlans.Count > 0;
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
-        // Sobald Tracks oder Anhänge aus der bestehenden Archivdatei weiterverwendet werden, muss sie als separate Quelle erhalten bleiben.
-        var preservedAttachmentNames = needsExistingCopy
-            ? existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList()
-            : [];
-        var removedAdditionalVideoTracks = existingArchive.VideoTracks
+        var attachmentReusePlan = BuildAttachmentReusePlan(outputPath, existingArchive.Container.Attachments, existingArchive.VideoTracks, videoPlan.VideoSelections);
+        var needsExistingCopy = videoPlan.RetainedExistingTracks.Count > 0
+            || (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
+            || subtitlePlan.EmbeddedPlans.Count > 0
+            || attachmentReusePlan.PreservedAttachmentNames.Count > 0;
+        var removedAdditionalVideoTracks = videoPlan.RemovedExistingTracks
             .Where(track => bestExistingVideo is null || track.TrackId != bestExistingVideo.TrackId)
             .ToList();
         var removedPrimaryAudio = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
@@ -346,7 +489,7 @@ public sealed partial class SeriesArchiveService
                 ? null
                 : new ArchiveUsageChange(
                     BuildVideoTrackLabel(outputPath, bestExistingVideo),
-                    $"Neue Videospur hat höhere Qualität: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel}."),
+                    BuildPrimaryVideoReplacementReason(bestExistingVideo, newPrimaryVideo)),
             AdditionalVideos: BuildRemovedAdditionalVideoChange(outputPath, removedAdditionalVideoTracks),
             Audio: removedPrimaryAudio is null
                 ? null
@@ -360,7 +503,7 @@ public sealed partial class SeriesArchiveService
             Subtitles: BuildRemovedSubtitleChange(outputPath, replacedSubtitleTracks),
             Attachments: BuildRemovedAttachmentChange(
                 existingArchive.Container.Attachments,
-                preservedAttachmentNames,
+                attachmentReusePlan.PreservedAttachmentNames,
                 manualAttachmentPaths.Count > 0));
 
         return new ArchiveIntegrationDecision(
@@ -369,45 +512,52 @@ public sealed partial class SeriesArchiveService
             SkipReason: null,
             SkipUsageSummary: null,
             WorkingCopy: needsExistingCopy ? workingCopyPlan : null,
-            PrimarySourcePath: request.MainVideoPath,
+            PrimarySourcePath: videoPlan.VideoSelections[0].FilePath,
+            VideoSelections: videoPlan.VideoSelections,
             PrimaryAudioTrackIds: null,
             PrimarySubtitleTrackIds: null,
+            PrimarySourceAttachmentIds: null,
             IncludePrimaryAttachments: false,
-            AttachmentSourcePath: preservedAttachmentNames.Count > 0 ? outputPath : null,
-            AdditionalVideoPaths: additionalVideoPaths,
+            AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
+            AttachmentSourceAttachmentIds: attachmentReusePlan.AttachmentSourceAttachmentIds,
+            AdditionalVideoPaths: videoPlan.VideoSelections
+                .Skip(1)
+                .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+                .Select(selection => selection.FilePath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             AudioDescriptionFilePath: !string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
                 ? request.AudioDescriptionPath
                 : existingAudioDescription is null || !needsExistingCopy
                     ? null
                     : outputPath,
             AudioDescriptionTrackId: !string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
-                ? null
-                : existingAudioDescription?.TrackId,
+                    ? null
+                    : existingAudioDescription?.TrackId,
             SubtitleFiles: subtitlePlan.FinalPlans,
             AttachmentFilePaths: request.AttachmentPaths,
             FallbackToRequestAttachments: true,
-            PreservedAttachmentNames: preservedAttachmentNames,
+            PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",
                 bestExistingVideo is null
-                    ? $"Neue Hauptquelle wird verwendet: {Path.GetFileName(request.MainVideoPath)}."
-                    : $"Neue Videospur ist besser als Archiv: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel} statt {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
+                    ? $"Neue Hauptquelle wird verwendet: {Path.GetFileName(videoPlan.VideoSelections[0].FilePath)}."
+                    : BuildPrimaryVideoReplacementReason(bestExistingVideo, newPrimaryVideo)
             ]);
     }
 
     private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(
         string outputPath,
-        ExistingArchiveState existingArchive,
-        ContainerTrackMetadata? bestExistingVideo,
+        IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
         ContainerTrackMetadata? primaryAudioTrack,
         ContainerTrackMetadata? existingAudioDescription,
-        SubtitleReusePlan subtitlePlan)
+        SubtitleReusePlan subtitlePlan,
+        IReadOnlyList<string> preservedAttachmentNames)
     {
-        var additionalVideoTracks = existingArchive.VideoTracks
-            .Where(track => bestExistingVideo is null || track.TrackId != bestExistingVideo.TrackId)
-            .ToList();
+        var bestExistingVideo = retainedExistingVideoTracks.FirstOrDefault();
+        var additionalVideoTracks = retainedExistingVideoTracks.Skip(1).ToList();
 
         return new EpisodeUsageSummary(
             ArchiveAction: "Zieldatei bereits aktuell",
@@ -448,26 +598,28 @@ public sealed partial class SeriesArchiveService
                 null,
                 null),
             Attachments: new EpisodeUsageEntry(
-                existingArchive.Container.Attachments.Count == 0
+                preservedAttachmentNames.Count == 0
                     ? "keine"
                     : string.Join(
                         ", ",
-                        existingArchive.Container.Attachments.Select(attachment => BuildExistingTargetDisplayText(attachment.FileName))),
+                        preservedAttachmentNames.Select(BuildExistingTargetDisplayText)),
                 null,
                 null));
     }
 
     private static bool RequiresRelevantTrackNameNormalization(
-        ContainerTrackMetadata? bestExistingVideo,
+        IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
         ContainerTrackMetadata? primaryAudioTrack,
         ContainerTrackMetadata? existingAudioDescription,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
     {
-        if (bestExistingVideo is not null
-            && !HasConsistentTrackName(bestExistingVideo.TrackName, BuildExpectedVideoTrackName(bestExistingVideo)))
+        foreach (var existingVideoTrack in retainedExistingVideoTracks)
         {
-            return true;
+            if (!HasConsistentTrackName(existingVideoTrack.TrackName, BuildExpectedVideoTrackName(existingVideoTrack)))
+            {
+                return true;
+            }
         }
 
         if (primaryAudioTrack is not null
@@ -552,30 +704,80 @@ public sealed partial class SeriesArchiveService
         return File.Exists(outputPath) && IsArchivePath(outputPath);
     }
 
-    private static bool IsNewVideoClearlyBetter(MediaTrackMetadata newVideo, ContainerTrackMetadata existingVideo)
+    private static string BuildPrimaryVideoReplacementReason(
+        ContainerTrackMetadata existingPrimaryVideo,
+        PreparedVideoSource newPrimaryVideo)
     {
-        if (newVideo.VideoWidth != existingVideo.VideoWidth)
+        if (ShouldReplaceExistingVideoForSameSlot(newPrimaryVideo.Metadata, existingPrimaryVideo))
         {
-            return newVideo.VideoWidth > existingVideo.VideoWidth;
+            return $"Neue Videospur hat höhere Qualität: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel} statt {existingPrimaryVideo.VideoWidth}px / {existingPrimaryVideo.CodecLabel}.";
         }
 
-        return MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(newVideo.VideoCodecLabel)
-            < MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(existingVideo.CodecLabel);
+        return "Neue Videospur belegt einen bevorzugten Sprach-/Codec-Slot und wird deshalb an die erste Stelle gezogen.";
     }
 
-    private static bool ShouldKeepAdditionalVideo(
-        MediaTrackMetadata candidate,
-        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
+    private static AttachmentReusePlan BuildAttachmentReusePlan(
+        string outputPath,
+        IReadOnlyList<ContainerAttachmentMetadata> existingAttachments,
+        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks,
+        IReadOnlyList<VideoTrackSelection> selectedVideoTracks)
     {
-        // Gleicher Codec allein ist kein Ausschluss mehr; nur gleich- oder höherwertige Archivspuren desselben Codecs verdrängen die neue Spur.
-        var bestExistingWithSameCodec = existingVideoTracks
-            .Where(track => string.Equals(track.CodecLabel, candidate.VideoCodecLabel, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(track => track.VideoWidth)
-            .ThenBy(track => track.TrackId)
-            .FirstOrDefault();
+        if (existingAttachments.Count == 0)
+        {
+            return AttachmentReusePlan.None;
+        }
 
-        return bestExistingWithSameCodec is null
-            || candidate.VideoWidth > bestExistingWithSameCodec.VideoWidth;
+        var preservedAttachments = existingAttachments.ToList();
+        var singleTextAttachment = existingAttachments
+            .Where(attachment => attachment.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var singleExistingVideo = existingVideoTracks.Count == 1
+            ? existingVideoTracks[0]
+            : null;
+        var keepsSingleExistingVideo = singleExistingVideo is not null
+            && selectedVideoTracks.Any(selection =>
+                string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase)
+                && selection.TrackId == singleExistingVideo.TrackId);
+
+        // Nur im einzig wirklich sicheren Fall darf eine bestehende TXT automatisch verworfen werden:
+        // genau eine vorhandene Videospur, genau eine TXT im Container und diese Videospur wird ersetzt.
+        // Bei mehreren Videospuren oder mehreren TXT-Anhängen bleibt alles konservativ erhalten.
+        if (singleExistingVideo is not null
+            && !keepsSingleExistingVideo
+            && singleTextAttachment.Count == 1)
+        {
+            preservedAttachments = preservedAttachments
+                .Where(attachment => attachment.Id != singleTextAttachment[0].Id)
+                .ToList();
+        }
+
+        if (preservedAttachments.Count == 0)
+        {
+            return AttachmentReusePlan.None;
+        }
+
+        var preservedAttachmentIds = preservedAttachments
+            .Select(attachment => attachment.Id)
+            .ToList();
+        var preservedAttachmentNames = preservedAttachments
+            .Select(attachment => attachment.FileName)
+            .ToList();
+        var primaryUsesArchive = selectedVideoTracks.Count > 0
+            && string.Equals(selectedVideoTracks[0].FilePath, outputPath, StringComparison.OrdinalIgnoreCase);
+
+        return primaryUsesArchive
+            ? new AttachmentReusePlan(
+                IncludePrimarySourceAttachments: true,
+                PrimarySourceAttachmentIds: preservedAttachmentIds,
+                AttachmentSourcePath: null,
+                AttachmentSourceAttachmentIds: null,
+                PreservedAttachmentNames: preservedAttachmentNames)
+            : new AttachmentReusePlan(
+                IncludePrimarySourceAttachments: false,
+                PrimarySourceAttachmentIds: null,
+                AttachmentSourcePath: outputPath,
+                AttachmentSourceAttachmentIds: preservedAttachmentIds,
+                PreservedAttachmentNames: preservedAttachmentNames);
     }
 
     private static IReadOnlyList<string> BuildAttachmentPathsForUsedVideos(IEnumerable<string> usedVideoPaths)
@@ -766,7 +968,30 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<ContainerTrackMetadata> AudioTracks,
         IReadOnlyList<ContainerTrackMetadata> SubtitleTracks);
 
-    private sealed record PreparedVideoSource(string FilePath, MediaTrackMetadata Metadata);
+    private sealed record PreparedVideoSource(
+        string FilePath,
+        MediaTrackMetadata Metadata,
+        long FileSizeBytes);
+
+    private sealed record FinalVideoSelectionPlan(
+        IReadOnlyList<VideoTrackSelection> VideoSelections,
+        IReadOnlyList<ContainerTrackMetadata> RetainedExistingTracks,
+        IReadOnlyList<ContainerTrackMetadata> RemovedExistingTracks);
+
+    private sealed record AttachmentReusePlan(
+        bool IncludePrimarySourceAttachments,
+        IReadOnlyList<int>? PrimarySourceAttachmentIds,
+        string? AttachmentSourcePath,
+        IReadOnlyList<int>? AttachmentSourceAttachmentIds,
+        IReadOnlyList<string> PreservedAttachmentNames)
+    {
+        public static AttachmentReusePlan None { get; } = new(
+            IncludePrimarySourceAttachments: false,
+            PrimarySourceAttachmentIds: null,
+            AttachmentSourcePath: null,
+            AttachmentSourceAttachmentIds: null,
+            PreservedAttachmentNames: []);
+    }
 
     private sealed record SubtitleReusePlan(
         IReadOnlyList<SubtitleFile> ExternalPlans,

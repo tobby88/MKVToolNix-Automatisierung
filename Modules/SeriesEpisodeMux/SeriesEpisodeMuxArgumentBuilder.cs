@@ -50,6 +50,10 @@ internal static class SeriesEpisodeMuxArgumentBuilder
         {
             arguments.Add("--no-attachments");
         }
+        else if (plan.PrimarySourceAttachmentIds is { Count: > 0 })
+        {
+            arguments.AddRange(["--attachments", string.Join(",", plan.PrimarySourceAttachmentIds)]);
+        }
     }
 
     private static void AppendPrimaryVideo(List<string> arguments, SeriesEpisodeMuxPlan plan)
@@ -60,6 +64,8 @@ internal static class SeriesEpisodeMuxArgumentBuilder
 
         arguments.AddRange(
         [
+            "--video-tracks",
+            primaryVideoTrackId,
             "--language",
             $"{primaryVideoTrackId}:{primaryVideo.LanguageCode}",
             "--track-name",
@@ -94,6 +100,8 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--no-audio",
                 "--no-subtitles",
                 "--no-attachments",
+                "--video-tracks",
+                trackId,
                 "--language",
                 $"{trackId}:{videoSource.LanguageCode}",
                 "--track-name",
@@ -207,9 +215,19 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             [
                 "--no-video",
                 "--no-audio",
-                "--no-subtitles",
-                plan.ResolveRuntimeFilePath(plan.AttachmentSourcePath)
+                "--no-subtitles"
             ]);
+
+            if (plan.AttachmentSourceAttachmentIds is { Count: > 0 })
+            {
+                arguments.AddRange(["--attachments", string.Join(",", plan.AttachmentSourceAttachmentIds)]);
+            }
+            else
+            {
+                arguments.Add("--no-attachments");
+            }
+
+            arguments.Add(plan.ResolveRuntimeFilePath(plan.AttachmentSourcePath));
         }
 
         foreach (var attachmentFilePath in plan.AttachmentFilePaths)

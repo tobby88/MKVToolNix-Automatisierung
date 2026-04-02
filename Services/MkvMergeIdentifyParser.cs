@@ -123,16 +123,24 @@ internal static class MkvMergeIdentifyParser
         if (trackDocument.RootElement.TryGetProperty("attachments", out var attachmentsElement)
             && attachmentsElement.ValueKind == JsonValueKind.Array)
         {
+            var fallbackAttachmentId = 0;
             foreach (var attachment in attachmentsElement.EnumerateArray())
             {
+                var attachmentId = attachment.TryGetProperty("id", out var idElement) && idElement.TryGetInt32(out var parsedAttachmentId)
+                    ? parsedAttachmentId
+                    : fallbackAttachmentId;
                 var fileName = attachment.TryGetProperty("file_name", out var fileNameElement)
                     ? fileNameElement.GetString()
                     : null;
 
                 if (!string.IsNullOrWhiteSpace(fileName))
                 {
-                    attachments.Add(new ContainerAttachmentMetadata(NormalizeDisplayText(fileName.Trim())));
+                    attachments.Add(new ContainerAttachmentMetadata(
+                        attachmentId,
+                        NormalizeDisplayText(fileName.Trim())));
                 }
+
+                fallbackAttachmentId++;
             }
         }
 

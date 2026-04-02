@@ -241,8 +241,8 @@ internal static class SeriesEpisodeMuxPresentationBuilder
     private static bool IsTrackNameNormalizationOnlyPlan(SeriesEpisodeMuxPlan plan)
     {
         return plan.WorkingCopy is not null
-            && plan.VideoSources.Count == 1
-            && string.Equals(plan.VideoSources[0].FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            && plan.VideoSources.Count > 0
+            && plan.VideoSources.All(video => string.Equals(video.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
             && string.Equals(plan.PrimaryAudioFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
             && (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath)
                 || string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))

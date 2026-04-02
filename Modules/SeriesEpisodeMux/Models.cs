@@ -111,7 +111,9 @@ public sealed record ContainerTrackMetadata(
 /// <summary>
 /// Anhänge, die beim Archivabgleich erhalten bleiben können.
 /// </summary>
-public sealed record ContainerAttachmentMetadata(string FileName);
+public sealed record ContainerAttachmentMetadata(
+    int Id,
+    string FileName);
 
 /// <summary>
 /// Zusammenfassung aller Tracks und Anhänge eines Containers.
@@ -159,6 +161,21 @@ public sealed record VideoSourcePlan(
     string TrackName,
     bool IsDefaultTrack,
     string LanguageCode = "de");
+
+/// <summary>
+/// Bereits fachlich ausgewählte Videospur aus einer frischen Quelldatei oder aus einer vorhandenen Ziel-MKV.
+/// </summary>
+/// <param name="FilePath">Quelldatei, aus der die Videospur gelesen wird.</param>
+/// <param name="TrackId">Track-ID innerhalb von <paramref name="FilePath"/>.</param>
+/// <param name="VideoWidth">Horizontale Pixelbreite der Spur für Qualitäts- und Namenslogik.</param>
+/// <param name="CodecLabel">Normalisiertes Codec-Label der Videospur.</param>
+/// <param name="LanguageCode">Projektweit normalisierter Sprachcode der Spur.</param>
+public sealed record VideoTrackSelection(
+    string FilePath,
+    int TrackId,
+    int VideoWidth,
+    string CodecLabel,
+    string LanguageCode);
 
 /// <summary>
 /// Zielnamen und Sprachcodes für automatisch erzeugte Audio- und AD-Trackbezeichnungen.

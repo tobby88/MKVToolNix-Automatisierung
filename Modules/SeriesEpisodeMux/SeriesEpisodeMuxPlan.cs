@@ -16,8 +16,10 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="primaryAudioTrackId">Track-ID der primären Audiospur.</param>
     /// <param name="primarySourceAudioTrackIds">Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.</param>
     /// <param name="primarySourceSubtitleTrackIds">Optional explizit weiterzuverwendende Untertitel-Track-IDs der Primärquelle.</param>
+    /// <param name="primarySourceAttachmentIds">Optional explizit weiterzuverwendende Attachment-IDs der Primärquelle.</param>
     /// <param name="includePrimarySourceAttachments">Gibt an, ob Anhänge der Primärquelle übernommen werden sollen.</param>
     /// <param name="attachmentSourcePath">Optionale separate Quelle für wiederverwendete Archiv-Anhänge.</param>
+    /// <param name="attachmentSourceAttachmentIds">Optional explizit weiterzuverwendende Attachment-IDs der separaten Attachment-Quelle.</param>
     /// <param name="audioDescriptionFilePath">Optionale Datei mit Audiodeskriptionsspur.</param>
     /// <param name="audioDescriptionTrackId">Track-ID der AD-Spur in <paramref name="audioDescriptionFilePath"/>, falls eingebettet.</param>
     /// <param name="subtitleFiles">Alle einzubindenden Untertitelspuren.</param>
@@ -36,8 +38,10 @@ public sealed class SeriesEpisodeMuxPlan
         int primaryAudioTrackId,
         IReadOnlyList<int>? primarySourceAudioTrackIds,
         IReadOnlyList<int>? primarySourceSubtitleTrackIds,
+        IReadOnlyList<int>? primarySourceAttachmentIds,
         bool includePrimarySourceAttachments,
         string? attachmentSourcePath,
+        IReadOnlyList<int>? attachmentSourceAttachmentIds,
         string? audioDescriptionFilePath,
         int? audioDescriptionTrackId,
         IReadOnlyList<SubtitleFile> subtitleFiles,
@@ -61,8 +65,10 @@ public sealed class SeriesEpisodeMuxPlan
         PrimaryAudioTrackId = primaryAudioTrackId;
         PrimarySourceAudioTrackIds = primarySourceAudioTrackIds;
         PrimarySourceSubtitleTrackIds = primarySourceSubtitleTrackIds;
+        PrimarySourceAttachmentIds = primarySourceAttachmentIds;
         IncludePrimarySourceAttachments = includePrimarySourceAttachments;
         AttachmentSourcePath = attachmentSourcePath;
+        AttachmentSourceAttachmentIds = attachmentSourceAttachmentIds;
         AudioDescriptionFilePath = audioDescriptionFilePath;
         AudioDescriptionTrackId = audioDescriptionTrackId;
         SubtitleFiles = subtitleFiles;
@@ -93,8 +99,10 @@ public sealed class SeriesEpisodeMuxPlan
         PrimaryAudioFilePath = string.Empty;
         PrimarySourceAudioTrackIds = null;
         PrimarySourceSubtitleTrackIds = null;
+        PrimarySourceAttachmentIds = null;
         IncludePrimarySourceAttachments = false;
         AttachmentSourcePath = null;
+        AttachmentSourceAttachmentIds = null;
         SubtitleFiles = [];
         AttachmentFilePaths = [];
         PreservedAttachmentNames = [];
@@ -159,6 +167,11 @@ public sealed class SeriesEpisodeMuxPlan
     public IReadOnlyList<int>? PrimarySourceSubtitleTrackIds { get; }
 
     /// <summary>
+    /// Optional explizit weiterzuverwendende Attachment-IDs der Primärquelle.
+    /// </summary>
+    public IReadOnlyList<int>? PrimarySourceAttachmentIds { get; }
+
+    /// <summary>
     /// Gibt an, ob Anhänge der Primärquelle übernommen werden sollen.
     /// </summary>
     public bool IncludePrimarySourceAttachments { get; }
@@ -167,6 +180,11 @@ public sealed class SeriesEpisodeMuxPlan
     /// Optionale separate Quelle für wiederverwendete Archiv-Anhänge.
     /// </summary>
     public string? AttachmentSourcePath { get; }
+
+    /// <summary>
+    /// Optional explizit weiterzuverwendende Attachment-IDs der separaten Attachment-Quelle.
+    /// </summary>
+    public IReadOnlyList<int>? AttachmentSourceAttachmentIds { get; }
 
     /// <summary>
     /// Optionale Datei mit Audiodeskriptionsspur.

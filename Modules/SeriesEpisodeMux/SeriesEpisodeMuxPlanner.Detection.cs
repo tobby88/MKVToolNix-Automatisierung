@@ -408,14 +408,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         var effectiveOutputPath = archiveDecision.OutputFilePath;
-        var effectivePrimarySourcePath = string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath)
-            ? request.MainVideoPath
-            : archiveDecision.PrimarySourcePath;
-        var additionalVideoPaths = archiveDecision.AdditionalVideoPaths.Count > 0
-            ? archiveDecision.AdditionalVideoPaths
-            : plannedVideoPaths
-                .Where(path => !string.Equals(path, request.MainVideoPath, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+        var videoSelections = archiveDecision.VideoSelections.Count > 0
+            ? archiveDecision.VideoSelections
+            : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
 
         var videoSources = new List<VideoSourcePlan>();
         string? primaryAudioFilePath = null;
@@ -423,30 +418,41 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var primaryAudioCodecLabel = "Audio";
         var primaryAudioLanguage = "de";
 
-        var effectiveVideoPaths = new[] { effectivePrimarySourcePath }
-            .Concat(additionalVideoPaths)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        for (var index = 0; index < effectiveVideoPaths.Count; index++)
+        for (var index = 0; index < videoSelections.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var videoPath = effectiveVideoPaths[index];
-            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
-            var trackName = BuildVideoTrackName(metadata);
+            var videoSelection = videoSelections[index];
             videoSources.Add(new VideoSourcePlan(
-                videoPath,
-                metadata.VideoTrackId,
-                trackName,
+                videoSelection.FilePath,
+                videoSelection.TrackId,
+                BuildVideoTrackName(videoSelection.LanguageCode, videoSelection.VideoWidth, videoSelection.CodecLabel),
                 IsDefaultTrack: index == 0,
-                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.VideoLanguage)));
+                LanguageCode: videoSelection.LanguageCode));
 
             if (index == 0)
             {
-                primaryAudioFilePath = videoPath;
-                primaryAudioTrackId = metadata.AudioTrackId;
-                primaryAudioCodecLabel = metadata.AudioCodecLabel;
-                primaryAudioLanguage = metadata.AudioLanguage;
+                primaryAudioFilePath = videoSelection.FilePath;
+
+                if (archiveDecision.PrimaryAudioTrackIds is { Count: > 0 }
+                    && string.Equals(videoSelection.FilePath, effectiveOutputPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    var embeddedPrimaryAudioMetadata = await ReadEmbeddedAudioTrackMetadataAsync(
+                        mkvMergePath,
+                        effectiveOutputPath,
+                        archiveDecision.PrimaryAudioTrackIds[0],
+                        videoSelection.LanguageCode,
+                        cancellationToken);
+                    primaryAudioTrackId = embeddedPrimaryAudioMetadata.TrackId;
+                    primaryAudioCodecLabel = embeddedPrimaryAudioMetadata.CodecLabel;
+                    primaryAudioLanguage = embeddedPrimaryAudioMetadata.Language;
+                }
+                else
+                {
+                    var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoSelection.FilePath, cancellationToken);
+                    primaryAudioTrackId = metadata.AudioTrackId;
+                    primaryAudioCodecLabel = metadata.AudioCodecLabel;
+                    primaryAudioLanguage = metadata.AudioLanguage;
+                }
             }
         }
 
@@ -499,10 +505,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
             videoSources,
             primaryAudioFilePath,
             primaryAudioTrackId,
-            archiveDecision.PrimaryAudioTrackIds,
+            archiveDecision.PrimaryAudioTrackIds ?? [primaryAudioTrackId],
             archiveDecision.PrimarySubtitleTrackIds,
+            archiveDecision.PrimarySourceAttachmentIds,
             archiveDecision.IncludePrimaryAttachments,
             archiveDecision.AttachmentSourcePath,
+            archiveDecision.AttachmentSourceAttachmentIds,
             audioDescriptionPath,
             audioDescriptionMetadata?.TrackId,
             subtitleFilesForPlan,
@@ -512,6 +520,28 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.WorkingCopy,
             BuildTrackMetadata(primaryAudioCodecLabel, primaryAudioLanguage, audioDescriptionMetadata),
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    private async Task<IReadOnlyList<VideoTrackSelection>> BuildVideoSelectionsFromPlannedPathsAsync(
+        string mkvMergePath,
+        IReadOnlyList<string> plannedVideoPaths,
+        CancellationToken cancellationToken)
+    {
+        var selections = new List<VideoTrackSelection>(plannedVideoPaths.Count);
+
+        foreach (var videoPath in plannedVideoPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
+            selections.Add(new VideoTrackSelection(
+                videoPath,
+                metadata.VideoTrackId,
+                metadata.VideoWidth,
+                metadata.VideoCodecLabel,
+                MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.VideoLanguage)));
+        }
+
+        return selections;
     }
 
     private static void ValidateRequest(SeriesEpisodeMuxRequest request)
@@ -762,7 +792,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static string BuildVideoTrackName(MediaTrackMetadata metadata)
     {
-        return $"{MediaLanguageHelper.GetLanguageDisplayName(metadata.VideoLanguage)} - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
+        return BuildVideoTrackName(metadata.VideoLanguage, metadata.VideoWidth, metadata.VideoCodecLabel);
+    }
+
+    private static string BuildVideoTrackName(string? languageCode, int videoWidth, string codecLabel)
+    {
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(languageCode)} - {ResolutionLabel.FromWidth(videoWidth).Value} - {codecLabel}";
     }
 
     private static string BuildVideoSlotKey(string? languageCode, string codecLabel)
