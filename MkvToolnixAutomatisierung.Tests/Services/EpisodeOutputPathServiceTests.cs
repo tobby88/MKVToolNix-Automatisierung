@@ -85,6 +85,75 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveExistingArchiveOutputPath_ReturnsExistingArchiveFile_WhenOverrideMatchesArchiveRoot()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E01 - Pilot.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var resolvedPath = service.TryResolveExistingArchiveOutputPath(
+            archiveRoot,
+            "Beispielserie",
+            "01",
+            "01",
+            "Pilot");
+
+        Assert.Equal(archiveFilePath, resolvedPath);
+    }
+
+    [Fact]
+    public void TryResolveExistingArchiveOutputPath_FallsBackToUniqueTitleMatch_WhenExactCanonicalPathIsMissing()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 4", "Beispielserie - S04E07 - Ostern.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var resolvedPath = service.TryResolveExistingArchiveOutputPath(
+            archiveRoot,
+            "Beispielserie",
+            "xx",
+            "xx",
+            "Ostern");
+
+        Assert.Equal(archiveFilePath, resolvedPath);
+    }
+
+    [Fact]
+    public void TryResolveExistingArchiveOutputPath_ReturnsNull_WhenTitleFallbackIsAmbiguous()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var firstArchiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 4", "Beispielserie - S04E07 - Ostern.mkv");
+        var secondArchiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 5", "Beispielserie - S05E01 - Ostern.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(firstArchiveFilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(secondArchiveFilePath)!);
+        File.WriteAllText(firstArchiveFilePath, "archive");
+        File.WriteAllText(secondArchiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var resolvedPath = service.TryResolveExistingArchiveOutputPath(
+            archiveRoot,
+            "Beispielserie",
+            "xx",
+            "xx",
+            "Ostern");
+
+        Assert.Null(resolvedPath);
+    }
+
+    [Fact]
     public void BuildOutputRootOverrideHint_ReturnsMessage_WhenArchiveIsUnavailableAndOverrideIsSet()
     {
         var overrideRoot = Path.Combine(_tempDirectory, "custom-output");

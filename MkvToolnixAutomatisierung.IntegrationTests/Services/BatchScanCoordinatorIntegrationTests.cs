@@ -200,6 +200,72 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             result.OutputPath);
     }
 
+    [Fact]
+    public async Task ScanAsync_AudioDescriptionOnly_ReusesExistingArchiveOutputPath_WhenLibraryFileAlreadyExists()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "ad-only-existing-source");
+        var archiveDirectory = Path.Combine(_tempDirectory, "ad-only-existing-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Ostern (Audiodeskription)-2079540621.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Ostern (Audiodeskription)-2079540621.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Ostern (Audiodeskription)\r\nDauer: 00:25:34");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC"));
+
+        var archiveFilePath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season xx",
+            "Neues aus Büttenwarder - SxxExx - Ostern.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        CreateFile(Path.GetDirectoryName(archiveFilePath)!, Path.GetFileName(archiveFilePath), "archive");
+
+        var coordinator = CreateBatchScanCoordinator(archiveDirectory, new StubTvdbClient());
+
+        var result = await coordinator.ScanAsync(audioDescriptionPath, archiveDirectory);
+
+        Assert.False(result.Detected.HasPrimaryVideoSource);
+        Assert.Equal(archiveFilePath, result.OutputPath);
+    }
+
+    [Fact]
+    public async Task ScanAsync_AudioDescriptionOnly_ReusesUniqueArchiveTitleMatch_WhenExactCanonicalPathDiffers()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "ad-only-title-match-source");
+        var archiveDirectory = Path.Combine(_tempDirectory, "ad-only-title-match-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Ostern (Audiodeskription)-2079540621.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Ostern (Audiodeskription)-2079540621.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Ostern (Audiodeskription)\r\nDauer: 00:25:34");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC"));
+
+        var archiveFilePath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season 2001",
+            "Neues aus Büttenwarder - S2001E01 - Ostern.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        CreateFile(Path.GetDirectoryName(archiveFilePath)!, Path.GetFileName(archiveFilePath), "archive");
+
+        var coordinator = CreateBatchScanCoordinator(archiveDirectory, new StubTvdbClient());
+
+        var result = await coordinator.ScanAsync(audioDescriptionPath, archiveDirectory);
+
+        Assert.False(result.Detected.HasPrimaryVideoSource);
+        Assert.Equal(archiveFilePath, result.OutputPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

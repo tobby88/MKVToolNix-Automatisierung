@@ -108,6 +108,16 @@ internal sealed class BatchScanCoordinator
             detected.EpisodeNumber,
             detected.SuggestedTitle,
             outputDirectory);
+        if (!detected.HasPrimaryVideoSource)
+        {
+            outputPath = _outputPaths.TryResolveExistingArchiveOutputPath(
+                    outputDirectory,
+                    detected.SeriesName,
+                    detected.SeasonNumber,
+                    detected.EpisodeNumber,
+                    detected.SuggestedTitle)
+                ?? outputPath;
+        }
 
         return new BatchScanCoordinatorResult(detected, localGuess, metadataResolution, outputPath);
     }

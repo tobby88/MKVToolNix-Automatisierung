@@ -96,6 +96,8 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
+        TryRedirectAudioDescriptionOnlyItemToExistingArchive(item);
+
         if (preserveCurrentPresentation)
         {
             if (ShouldSkipPresentationUpdate())
@@ -193,6 +195,36 @@ internal sealed partial class BatchMuxViewModel
         CancellationToken cancellationToken = default)
     {
         return await _services.EpisodePlans.BuildPlanAsync(item, cancellationToken);
+    }
+
+    private void TryRedirectAudioDescriptionOnlyItemToExistingArchive(BatchEpisodeItemViewModel item)
+    {
+        if (item.HasPrimaryVideoSource
+            || item.HasArchiveComparisonTarget
+            || !item.UsesAutomaticOutputPath)
+        {
+            return;
+        }
+
+        var existingArchiveOutputPath = _services.OutputPaths.TryResolveExistingArchiveOutputPath(
+            OutputDirectory,
+            item.SeriesName,
+            item.SeasonNumber,
+            item.EpisodeNumber,
+            item.TitleForMux);
+        if (string.IsNullOrWhiteSpace(existingArchiveOutputPath)
+            || PathComparisonHelper.AreSamePath(existingArchiveOutputPath, item.OutputPath))
+        {
+            return;
+        }
+
+        // AD-only-Eintraege sollen einen bereits vorhandenen Bibliothekstreffer wieder als
+        // Hauptquellenbasis nutzen koennen. Das korrigiert veraltete automatische Batch-Ziele,
+        // ohne bewusst manuell gesetzte Custom-Ausgaben umzubiegen.
+        item.SetAutomaticOutputPathWithContext(
+            existingArchiveOutputPath,
+            _services.OutputPaths.IsArchivePath(existingArchiveOutputPath));
+        _planCache.Invalidate(item);
     }
 
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(

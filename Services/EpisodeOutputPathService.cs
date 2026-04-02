@@ -64,6 +64,39 @@ internal sealed class EpisodeOutputPathService
     }
 
     /// <summary>
+    /// Liefert fuer AD-only-Faelle optional den fachlich passenden Bibliothekspfad, wenn unter der konfigurierten
+    /// Serienbibliothek bereits eine passende MKV existiert.
+    /// Dieser Fallback hilft Batch-Zeilen mit reinem AD-Eingang, deren automatischer Ausgabepfad zwischenzeitlich
+    /// auf einen anderen Ort zeigte, obwohl die eigentliche Bibliotheksdatei vorhanden ist.
+    /// </summary>
+    /// <param name="outputRootOverride">Aktuell gewaehlte Batch-Zielwurzel.</param>
+    /// <param name="seriesName">Serienname der Episode.</param>
+    /// <param name="seasonNumber">Normalisierte Staffelnummer oder Jahresstaffel.</param>
+    /// <param name="episodeNumber">Normalisierte Episodennummer.</param>
+    /// <param name="title">Episodentitel.</param>
+    /// <returns>Bestehender Bibliothekspfad oder <see langword="null"/>, wenn kein passender Bibliothekstreffer vorliegt.</returns>
+    public string? TryResolveExistingArchiveOutputPath(
+        string? outputRootOverride,
+        string seriesName,
+        string seasonNumber,
+        string episodeNumber,
+        string title)
+    {
+        if (!PathComparisonHelper.AreSamePath(outputRootOverride, _archiveService.ArchiveRootDirectory))
+        {
+            return null;
+        }
+
+        var archiveOutputPath = _archiveService.BuildArchiveOutputPath(seriesName, seasonNumber, episodeNumber, title);
+        if (File.Exists(archiveOutputPath))
+        {
+            return archiveOutputPath;
+        }
+
+        return TryFindUniqueArchiveMatchBySeriesAndTitle(seriesName, seasonNumber, episodeNumber, title);
+    }
+
+    /// <summary>
     /// Liefert optional einen UI-Hinweistext, wenn ein alternativer Zielordner wegen nicht erreichbarer Bibliothek
     /// nur eine flache Dateiliste statt der Serien-/Staffelstruktur aufnehmen kann.
     /// </summary>
@@ -89,5 +122,58 @@ internal sealed class EpisodeOutputPathService
     public bool IsArchivePath(string? path)
     {
         return PathComparisonHelper.IsPathWithinRoot(path, _archiveService.ArchiveRootDirectory);
+    }
+
+    /// <summary>
+    /// Sucht innerhalb des Serienordners der Bibliothek nach genau einer passenden MKV mit gleichem Titel.
+    /// Dieser konservative Fallback greift nur, wenn der exakte Sollpfad nicht existiert, die Episode aber
+    /// dennoch bereits archiviert wurde und der aktuelle Scan noch keinen stabilen Staffel-/Episodencode liefert.
+    /// </summary>
+    /// <param name="seriesName">Serienname der Episode.</param>
+    /// <param name="seasonNumber">Normalisierte Staffelnummer oder Jahresstaffel.</param>
+    /// <param name="episodeNumber">Normalisierte Episodennummer.</param>
+    /// <param name="title">Episodentitel.</param>
+    /// <returns>Eindeutig gefundener Bibliothekspfad oder <see langword="null"/> bei fehlendem oder mehrdeutigem Treffer.</returns>
+    private string? TryFindUniqueArchiveMatchBySeriesAndTitle(
+        string seriesName,
+        string seasonNumber,
+        string episodeNumber,
+        string title)
+    {
+        var seriesDirectory = Path.Combine(
+            _archiveService.ArchiveRootDirectory,
+            EpisodeFileNameHelper.SanitizePathSegment(seriesName));
+        if (!Directory.Exists(seriesDirectory))
+        {
+            return null;
+        }
+
+        var sanitizedTitle = Path.GetFileNameWithoutExtension(EpisodeFileNameHelper.SanitizeFileName($"{title}.mkv"));
+        var titleSuffix = $" - {sanitizedTitle}";
+        var titleMatches = Directory.EnumerateFiles(seriesDirectory, "*.mkv", SearchOption.AllDirectories)
+            .Where(path => Path.GetFileNameWithoutExtension(path).EndsWith(titleSuffix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (titleMatches.Count == 0)
+        {
+            return null;
+        }
+
+        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(seasonNumber);
+        var normalizedEpisodeNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(episodeNumber);
+        if (normalizedSeasonNumber != "xx" && normalizedEpisodeNumber != "xx")
+        {
+            var episodeToken = $" - S{normalizedSeasonNumber}E{normalizedEpisodeNumber} - ";
+            var episodeCodeMatches = titleMatches
+                .Where(path => Path.GetFileName(path).Contains(episodeToken, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (episodeCodeMatches.Count == 1)
+            {
+                return episodeCodeMatches[0];
+            }
+        }
+
+        return titleMatches.Count == 1
+            ? titleMatches[0]
+            : null;
     }
 }
