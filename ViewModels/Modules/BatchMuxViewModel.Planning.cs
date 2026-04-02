@@ -43,7 +43,7 @@ internal sealed partial class BatchMuxViewModel
 
                 try
                 {
-                    await RefreshComparisonForItemAsync(item, cancellationToken);
+                    await RefreshComparisonForItemAsync(item, cancellationToken: cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -66,6 +66,7 @@ internal sealed partial class BatchMuxViewModel
 
     private async Task RefreshComparisonForItemAsync(
         BatchEpisodeItemViewModel item,
+        bool preserveCurrentPresentation = false,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -78,16 +79,28 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        item.RefreshArchivePresence();
+        if (preserveCurrentPresentation)
+        {
+            // Das Anklicken eines Eintrags soll die letzte gültige Anzeige beibehalten, bis die
+            // aktualisierte Planung fertig vorliegt. Sonst springt der Status kurz zurück.
+            item.RefreshArchivePresence(item.StatusKind);
+        }
+        else
+        {
+            item.RefreshArchivePresence();
+        }
         var outputExists = item.ArchiveState == EpisodeArchiveState.Existing;
         var hasArchiveComparisonTarget = item.HasArchiveComparisonTarget;
 
-        item.SetPlanSummary(hasArchiveComparisonTarget
-            ? "Zielvergleich wird berechnet..."
-            : "Verwendungsplan wird berechnet...");
-        item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
-            hasArchiveComparisonTarget ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
-            hasArchiveComparisonTarget ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
+        if (!preserveCurrentPresentation)
+        {
+            item.SetPlanSummary(hasArchiveComparisonTarget
+                ? "Zielvergleich wird berechnet..."
+                : "Verwendungsplan wird berechnet...");
+            item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
+                hasArchiveComparisonTarget ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
+                hasArchiveComparisonTarget ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
+        }
 
         try
         {
@@ -283,7 +296,7 @@ internal sealed partial class BatchMuxViewModel
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await RefreshComparisonForItemAsync(item, cancellationToken);
+            await RefreshComparisonForItemAsync(item, preserveCurrentPresentation: true, cancellationToken);
             if (version != _selectedPlanSummaryVersion || !ReferenceEquals(SelectedEpisodeItem, item))
             {
                 return;
