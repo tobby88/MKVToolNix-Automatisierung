@@ -64,6 +64,27 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void BuildOutputPath_UsesArchiveStructure_WhenOverridePointsToArchiveRoot_EvenIfArchiveIsUnavailable()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "missing-archive");
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var outputPath = service.BuildOutputPath(
+            Path.Combine(_tempDirectory, "fallback"),
+            "Beispielserie",
+            "01",
+            "01",
+            "Pilot",
+            outputRootOverride: archiveRoot);
+
+        Assert.Equal(
+            Path.Combine(archiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E01 - Pilot.mkv"),
+            outputPath);
+    }
+
+    [Fact]
     public void BuildOutputRootOverrideHint_ReturnsMessage_WhenArchiveIsUnavailableAndOverrideIsSet()
     {
         var overrideRoot = Path.Combine(_tempDirectory, "custom-output");

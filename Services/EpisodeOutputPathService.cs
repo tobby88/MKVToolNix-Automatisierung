@@ -42,13 +42,17 @@ internal sealed class EpisodeOutputPathService
             return suggestedOutputPath;
         }
 
+        if (PathComparisonHelper.AreSamePath(outputRootOverride, _archiveService.ArchiveRootDirectory))
+        {
+            // Fuer die Serienbibliothek selbst soll die fachliche Serien-/Staffelstruktur stabil bleiben,
+            // auch wenn die Reachability-Pruefung der Bibliothek gerade negativ ausfaellt.
+            // Das ist besonders fuer AD-only-Faelle wichtig, weil deren Archivvergleich sonst schon im Scan
+            // auf einen flachen Dateinamen zusammenfaellt und vorhandene Bibliotheksdateien nicht mehr trifft.
+            return _archiveService.BuildArchiveOutputPath(seriesName, seasonNumber, episodeNumber, title);
+        }
+
         if (IsArchivePath(suggestedOutputPath))
         {
-            if (PathComparisonHelper.AreSamePath(outputRootOverride, _archiveService.ArchiveRootDirectory))
-            {
-                return suggestedOutputPath;
-            }
-
             var relativePath = PathComparisonHelper.TryGetRelativePathWithinRoot(
                 suggestedOutputPath,
                 _archiveService.ArchiveRootDirectory)

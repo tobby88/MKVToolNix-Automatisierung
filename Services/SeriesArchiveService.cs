@@ -48,6 +48,21 @@ public sealed partial class SeriesArchiveService
             return EpisodeMetadataPath(fallbackDirectory, seriesName, seasonNumber, episodeNumber, title);
         }
 
+        return BuildArchiveOutputPath(seriesName, seasonNumber, episodeNumber, title);
+    }
+
+    /// <summary>
+    /// Baut den fachlich korrekten Bibliothekspfad unterhalb der konfigurierten Archivwurzel, ohne vorherige Erreichbarkeitspruefung.
+    /// Dieser Pfad wird gebraucht, wenn der Benutzer explizit die Serienbibliothek als Zielwurzel ausgewaehlt hat und
+    /// die Struktur auch bei einem voruebergehend negativen Reachability-Check stabil bleiben soll.
+    /// </summary>
+    /// <param name="seriesName">Serienname der Episode.</param>
+    /// <param name="seasonNumber">Normalisierte Staffelnummer oder Jahresstaffel.</param>
+    /// <param name="episodeNumber">Normalisierte Episodennummer.</param>
+    /// <param name="title">Episodentitel.</param>
+    /// <returns>Vollstaendiger Pfad innerhalb der konfigurierten Serienbibliothek.</returns>
+    public string BuildArchiveOutputPath(string seriesName, string seasonNumber, string episodeNumber, string title)
+    {
         var seasonFolderName = int.TryParse(seasonNumber, out var parsedSeason) && parsedSeason > 0
             ? $"Season {parsedSeason}"
             : "Season xx";
