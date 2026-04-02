@@ -15,19 +15,41 @@ internal static class CompanionTextMetadataReader
     /// <returns>Gelesene Metadaten oder <see cref="CompanionTextMetadata.Empty"/>, wenn keine Datei vorliegt.</returns>
     public static CompanionTextMetadata Read(string? filePath)
     {
+        var details = ReadDetailed(filePath);
+        return new CompanionTextMetadata(details.Sender, details.Topic, details.Title, details.Duration);
+    }
+
+    /// <summary>
+    /// Liest die Begleitdatei direkt von einem TXT-Pfad inklusive zusätzlicher URL-/Web-Metadaten für Heuristiken.
+    /// </summary>
+    /// <param name="filePath">Pfad zur TXT-Datei.</param>
+    /// <returns>Gelesene Detailmetadaten oder <see cref="CompanionTextDetails.Empty"/>, wenn keine Datei vorliegt.</returns>
+    public static CompanionTextDetails ReadDetailed(string? filePath)
+    {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
-            return CompanionTextMetadata.Empty;
+            return CompanionTextDetails.Empty;
         }
 
         var content = ReadTextWithFallback(filePath);
-        var sender = ReadLabeledValue(content, "Sender");
-        var topic = ReadLabeledValue(content, "Thema");
-        var title = ReadLabeledValue(content, "Titel");
-        var durationText = ReadLabeledValue(content, "Dauer");
-        var duration = TimeSpan.TryParse(durationText, out var parsedDuration) ? (TimeSpan?)parsedDuration : null;
+        return ReadDetailedFromContent(content);
+    }
 
-        return new CompanionTextMetadata(sender, topic, title, duration);
+    /// <summary>
+    /// Liest dieselben Detailmetadaten direkt aus bereits vorhandenem TXT-Inhalt.
+    /// Dieser Pfad wird für eingebettete Test- und Archiv-Anhänge genutzt, damit Dateiquellen und extrahierte Texte
+    /// dieselbe Parserlogik verwenden und Heuristiken nicht zwischen beiden Wegen auseinanderlaufen.
+    /// </summary>
+    /// <param name="content">Rohinhalt einer TXT-Begleitdatei.</param>
+    /// <returns>Gelesene Detailmetadaten oder <see cref="CompanionTextDetails.Empty"/>, wenn kein Inhalt vorliegt.</returns>
+    public static CompanionTextDetails ReadDetailedFromContent(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return CompanionTextDetails.Empty;
+        }
+
+        return ParseDetailed(content);
     }
 
     /// <summary>
@@ -77,6 +99,28 @@ internal static class CompanionTextMetadataReader
         var match = Regex.Match(content, $@"^{Regex.Escape(label)}\s*:\s*(.+)$", RegexOptions.Multiline);
         return match.Success ? match.Groups[1].Value.Trim() : null;
     }
+
+    private static CompanionTextDetails ParseDetailed(string content)
+    {
+        var sender = ReadLabeledValue(content, "Sender");
+        var topic = ReadLabeledValue(content, "Thema");
+        var title = ReadLabeledValue(content, "Titel");
+        var durationText = ReadLabeledValue(content, "Dauer");
+        var duration = TimeSpan.TryParse(durationText, out var parsedDuration) ? (TimeSpan?)parsedDuration : null;
+        var websiteUrl = ReadSectionUrl(content, "Website");
+        var mediaUrl = ReadSectionUrl(content, "URL");
+
+        return new CompanionTextDetails(sender, topic, title, duration, websiteUrl, mediaUrl);
+    }
+
+    private static string? ReadSectionUrl(string content, string sectionTitle)
+    {
+        var match = Regex.Match(
+            content,
+            $@"^{Regex.Escape(sectionTitle)}\s*$\s*(?:\r?\n)+\s*(https?://\S+)",
+            RegexOptions.Multiline);
+        return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
 }
 
 /// <summary>
@@ -85,4 +129,18 @@ internal static class CompanionTextMetadataReader
 internal sealed record CompanionTextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration)
 {
     public static CompanionTextMetadata Empty { get; } = new(null, null, null, null);
+}
+
+/// <summary>
+/// Erweiterte TXT-Begleitmetadaten inklusive URL-Feldern für spätere Zuordnungsheuristiken.
+/// </summary>
+internal sealed record CompanionTextDetails(
+    string? Sender,
+    string? Topic,
+    string? Title,
+    TimeSpan? Duration,
+    string? WebsiteUrl,
+    string? MediaUrl)
+{
+    public static CompanionTextDetails Empty { get; } = new(null, null, null, null, null, null);
 }

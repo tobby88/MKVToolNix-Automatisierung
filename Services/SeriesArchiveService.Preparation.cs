@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -40,6 +42,13 @@ public sealed partial class SeriesArchiveService
             plannedVideos,
             preferredExistingVideoTracks,
             existingArchive.VideoTracks);
+        var attachmentReusePlan = await BuildAttachmentReusePlanAsync(
+            mkvMergePath,
+            outputPath,
+            existingArchive.Container.Attachments,
+            existingArchive.VideoTracks,
+            videoPlan.VideoSelections,
+            cancellationToken);
 
         if (plannedVideos.Count == 0)
         {
@@ -52,7 +61,8 @@ public sealed partial class SeriesArchiveService
                 existingArchive,
                 bestExistingVideo,
                 existingAudioDescription,
-                workingCopyPlan);
+                workingCopyPlan,
+                attachmentReusePlan);
         }
 
         var selectedPrimaryVideo = videoPlan.VideoSelections.FirstOrDefault()
@@ -72,7 +82,8 @@ public sealed partial class SeriesArchiveService
                 existingArchive,
                 bestExistingVideo,
                 existingAudioDescription,
-                workingCopyPlan)
+                workingCopyPlan,
+                attachmentReusePlan)
             : BuildDecisionReplacingExistingPrimary(
                 outputPath,
                 request,
@@ -83,7 +94,8 @@ public sealed partial class SeriesArchiveService
                 bestExistingVideo,
                 newPrimaryVideo ?? throw new InvalidOperationException("Die ausgewählte neue Hauptvideospur konnte nicht mehr einer frischen Quelle zugeordnet werden."),
                 existingAudioDescription,
-                workingCopyPlan);
+                workingCopyPlan,
+                attachmentReusePlan);
     }
 
     private async Task<ExistingArchiveState> ReadExistingArchiveStateAsync(
@@ -328,7 +340,8 @@ public sealed partial class SeriesArchiveService
         ExistingArchiveState existingArchive,
         ContainerTrackMetadata? bestExistingVideo,
         ContainerTrackMetadata? existingAudioDescription,
-        FileCopyPlan workingCopyPlan)
+        FileCopyPlan workingCopyPlan,
+        AttachmentReusePlan attachmentReusePlan)
     {
         var primaryAudioTrack = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
             ?? existingArchive.AudioTracks.FirstOrDefault();
@@ -337,7 +350,6 @@ public sealed partial class SeriesArchiveService
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
         // Ein echter Zusatzbedarf liegt nur vor, wenn neue externe Untertitel dazukommen.
         var needsSubtitleSupplement = subtitlePlan.ExternalPlans.Count > 0;
-        var attachmentReusePlan = BuildAttachmentReusePlan(outputPath, existingArchive.Container.Attachments, existingArchive.VideoTracks, videoPlan.VideoSelections);
         var freshVideoPaths = videoPlan.VideoSelections
             .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
             .Select(selection => selection.FilePath)
@@ -471,10 +483,10 @@ public sealed partial class SeriesArchiveService
         ContainerTrackMetadata? bestExistingVideo,
         PreparedVideoSource newPrimaryVideo,
         ContainerTrackMetadata? existingAudioDescription,
-        FileCopyPlan workingCopyPlan)
+        FileCopyPlan workingCopyPlan,
+        AttachmentReusePlan attachmentReusePlan)
     {
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
-        var attachmentReusePlan = BuildAttachmentReusePlan(outputPath, existingArchive.Container.Attachments, existingArchive.VideoTracks, videoPlan.VideoSelections);
         var needsExistingCopy = videoPlan.RetainedExistingTracks.Count > 0
             || (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
             || subtitlePlan.EmbeddedPlans.Count > 0
@@ -716,48 +728,85 @@ public sealed partial class SeriesArchiveService
         return "Neue Videospur belegt einen bevorzugten Sprach-/Codec-Slot und wird deshalb an die erste Stelle gezogen.";
     }
 
-    private static AttachmentReusePlan BuildAttachmentReusePlan(
+    private async Task<AttachmentReusePlan> BuildAttachmentReusePlanAsync(
+        string mkvMergePath,
         string outputPath,
         IReadOnlyList<ContainerAttachmentMetadata> existingAttachments,
         IReadOnlyList<ContainerTrackMetadata> existingVideoTracks,
-        IReadOnlyList<VideoTrackSelection> selectedVideoTracks)
+        IReadOnlyList<VideoTrackSelection> selectedVideoTracks,
+        CancellationToken cancellationToken)
     {
         if (existingAttachments.Count == 0)
         {
             return AttachmentReusePlan.None;
         }
 
-        var preservedAttachments = existingAttachments.ToList();
-        var singleTextAttachment = existingAttachments
-            .Where(attachment => attachment.FileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        var preservedAttachmentIds = new HashSet<int>(
+            existingAttachments
+                .Where(attachment => !IsTextAttachment(attachment.FileName))
+                .Select(attachment => attachment.Id));
+        var textAttachments = existingAttachments
+            .Where(attachment => IsTextAttachment(attachment.FileName))
             .ToList();
+        var keptExistingTrackIds = selectedVideoTracks
+            .Where(selection => string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select(selection => selection.TrackId)
+            .ToHashSet();
+        var removedExistingTrackIds = existingVideoTracks
+            .Where(track => !keptExistingTrackIds.Contains(track.TrackId))
+            .Select(track => track.TrackId)
+            .ToHashSet();
         var singleExistingVideo = existingVideoTracks.Count == 1
             ? existingVideoTracks[0]
             : null;
         var keepsSingleExistingVideo = singleExistingVideo is not null
-            && selectedVideoTracks.Any(selection =>
-                string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase)
-                && selection.TrackId == singleExistingVideo.TrackId);
+            && keptExistingTrackIds.Contains(singleExistingVideo.TrackId);
+
+        if (textAttachments.Count > 0)
+        {
+            var textAttachmentMatches = await MatchTextAttachmentsToExistingTracksAsync(
+                mkvMergePath,
+                outputPath,
+                textAttachments,
+                existingVideoTracks,
+                cancellationToken);
+            var uniquelyMatchedRemovedAttachmentIds = textAttachmentMatches
+                .Where(match => match.IsStrongMatch && match.MatchedTrackId is not null)
+                .GroupBy(match => match.MatchedTrackId!.Value)
+                .Where(group => group.Count() == 1)
+                .Select(group => group.Single())
+                .Where(match => removedExistingTrackIds.Contains(match.MatchedTrackId!.Value))
+                .Select(match => match.AttachmentId)
+                .ToHashSet();
+
+            foreach (var textAttachment in textAttachments)
+            {
+                if (!uniquelyMatchedRemovedAttachmentIds.Contains(textAttachment.Id))
+                {
+                    preservedAttachmentIds.Add(textAttachment.Id);
+                }
+            }
+        }
 
         // Nur im einzig wirklich sicheren Fall darf eine bestehende TXT automatisch verworfen werden:
         // genau eine vorhandene Videospur, genau eine TXT im Container und diese Videospur wird ersetzt.
-        // Bei mehreren Videospuren oder mehreren TXT-Anhängen bleibt alles konservativ erhalten.
+        // Die neue Heuristik oben darf darüber hinaus ebenfalls nur eindeutige Zuordnungen verwerfen.
+        // Wenn sie nichts Sicheres liefern kann, bleibt dieser alte, explizit sichere Fallback aktiv.
         if (singleExistingVideo is not null
             && !keepsSingleExistingVideo
-            && singleTextAttachment.Count == 1)
+            && textAttachments.Count == 1
+            && preservedAttachmentIds.Contains(textAttachments[0].Id))
         {
-            preservedAttachments = preservedAttachments
-                .Where(attachment => attachment.Id != singleTextAttachment[0].Id)
-                .ToList();
+            preservedAttachmentIds.Remove(textAttachments[0].Id);
         }
 
-        if (preservedAttachments.Count == 0)
+        if (preservedAttachmentIds.Count == 0)
         {
             return AttachmentReusePlan.None;
         }
 
-        var preservedAttachmentIds = preservedAttachments
-            .Select(attachment => attachment.Id)
+        var preservedAttachments = existingAttachments
+            .Where(attachment => preservedAttachmentIds.Contains(attachment.Id))
             .ToList();
         var preservedAttachmentNames = preservedAttachments
             .Select(attachment => attachment.FileName)
@@ -768,7 +817,7 @@ public sealed partial class SeriesArchiveService
         return primaryUsesArchive
             ? new AttachmentReusePlan(
                 IncludePrimarySourceAttachments: true,
-                PrimarySourceAttachmentIds: preservedAttachmentIds,
+                PrimarySourceAttachmentIds: preservedAttachments.Select(attachment => attachment.Id).ToList(),
                 AttachmentSourcePath: null,
                 AttachmentSourceAttachmentIds: null,
                 PreservedAttachmentNames: preservedAttachmentNames)
@@ -776,8 +825,370 @@ public sealed partial class SeriesArchiveService
                 IncludePrimarySourceAttachments: false,
                 PrimarySourceAttachmentIds: null,
                 AttachmentSourcePath: outputPath,
-                AttachmentSourceAttachmentIds: preservedAttachmentIds,
+                AttachmentSourceAttachmentIds: preservedAttachments.Select(attachment => attachment.Id).ToList(),
                 PreservedAttachmentNames: preservedAttachmentNames);
+    }
+
+    private async Task<IReadOnlyList<AttachmentTrackMatch>> MatchTextAttachmentsToExistingTracksAsync(
+        string mkvMergePath,
+        string outputPath,
+        IReadOnlyList<ContainerAttachmentMetadata> textAttachments,
+        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks,
+        CancellationToken cancellationToken)
+    {
+        var matches = new List<AttachmentTrackMatch>(textAttachments.Count);
+
+        foreach (var textAttachment in textAttachments)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var details = await TryReadEmbeddedTextAttachmentDetailsAsync(
+                mkvMergePath,
+                outputPath,
+                textAttachment,
+                cancellationToken);
+            var profile = BuildAttachmentTextHeuristicProfile(textAttachment.FileName, details);
+            matches.Add(MatchTextAttachmentToTrack(textAttachment, profile, existingVideoTracks));
+        }
+
+        return matches;
+    }
+
+    private static AttachmentTrackMatch MatchTextAttachmentToTrack(
+        ContainerAttachmentMetadata attachment,
+        AttachmentTextHeuristicProfile profile,
+        IReadOnlyList<ContainerTrackMetadata> existingVideoTracks)
+    {
+        if (!profile.HasUsableSignals)
+        {
+            return new AttachmentTrackMatch(attachment.Id, attachment.FileName, null, false);
+        }
+
+        var candidateTracks = existingVideoTracks
+            .Where(track => MatchesAttachmentProfile(track, profile))
+            .ToList();
+        if (candidateTracks.Count != 1)
+        {
+            return new AttachmentTrackMatch(attachment.Id, attachment.FileName, null, false);
+        }
+
+        var matchedTrack = candidateTracks[0];
+        var strongMatch = profile.HasCodecAndResolution
+            || (profile.LanguageCode is not null && (profile.CodecLabel is not null || profile.ResolutionLabel is not null))
+            || (profile.HasExplicitLanguageMarker
+                && existingVideoTracks.Count(track => string.Equals(
+                    MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language),
+                    profile.LanguageCode,
+                    StringComparison.OrdinalIgnoreCase)) == 1);
+
+        return new AttachmentTrackMatch(
+            attachment.Id,
+            attachment.FileName,
+            strongMatch ? matchedTrack.TrackId : null,
+            strongMatch);
+    }
+
+    private static bool MatchesAttachmentProfile(ContainerTrackMetadata track, AttachmentTextHeuristicProfile profile)
+    {
+        if (profile.LanguageCode is not null
+            && !string.Equals(
+                MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language),
+                profile.LanguageCode,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (profile.CodecLabel is not null
+            && !string.Equals(track.CodecLabel, profile.CodecLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (profile.ResolutionLabel is not null
+            && !string.Equals(
+                ResolutionLabel.FromWidth(track.VideoWidth).Value,
+                profile.ResolutionLabel,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static AttachmentTextHeuristicProfile BuildAttachmentTextHeuristicProfile(
+        string fileName,
+        CompanionTextDetails details)
+    {
+        var languageSignals = string.Join(
+            " ",
+            new[] { fileName, details.Title, details.Topic, details.Sender }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+        var hasExplicitLanguageMarker = TryInferExplicitLanguageCode(languageSignals, out var languageCode);
+        if (languageCode is null && (!string.IsNullOrWhiteSpace(details.Title) || !string.IsNullOrWhiteSpace(fileName)))
+        {
+            languageCode = "de";
+        }
+
+        var codecLabel = TryInferCodecLabel(details.MediaUrl);
+        var resolutionLabel = TryInferResolutionLabel(details.MediaUrl);
+
+        return new AttachmentTextHeuristicProfile(
+            LanguageCode: languageCode,
+            HasExplicitLanguageMarker: hasExplicitLanguageMarker,
+            CodecLabel: codecLabel,
+            ResolutionLabel: resolutionLabel);
+    }
+
+    private static bool TryInferExplicitLanguageCode(string? value, out string? languageCode)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            languageCode = null;
+            return false;
+        }
+
+        if (ContainsAny(value, "op platt", "plattd", "plattdu", "plattdü"))
+        {
+            languageCode = "nds";
+            return true;
+        }
+
+        if (ContainsAny(value, "englisch", "english", "originalversion"))
+        {
+            languageCode = "en";
+            return true;
+        }
+
+        if (ContainsAny(value, "deutsch", "german"))
+        {
+            languageCode = "de";
+            return true;
+        }
+
+        languageCode = null;
+        return false;
+    }
+
+    private static string? TryInferCodecLabel(string? mediaUrl)
+    {
+        if (string.IsNullOrWhiteSpace(mediaUrl))
+        {
+            return null;
+        }
+
+        if (ContainsAny(mediaUrl, "hevc", "h265", "h.265"))
+        {
+            return "H.265";
+        }
+
+        return mediaUrl.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+            || ContainsAny(mediaUrl, "h264", "h.264", "avc")
+            ? "H.264"
+            : null;
+    }
+
+    private static string? TryInferResolutionLabel(string? mediaUrl)
+    {
+        if (string.IsNullOrWhiteSpace(mediaUrl))
+        {
+            return null;
+        }
+
+        if (ContainsAny(mediaUrl, "2160", "uhd", "4k"))
+        {
+            return "UHD";
+        }
+
+        if (ContainsAny(mediaUrl, "1080"))
+        {
+            return "FHD";
+        }
+
+        if (ContainsAny(mediaUrl, "720") || ContainsAny(mediaUrl, "hd.mp4", "_hd.", "-hd.", "/hd."))
+        {
+            return "HD";
+        }
+
+        if (ContainsAny(mediaUrl, "540", "sd.mp4", "_sd.", "-sd.", "/sd."))
+        {
+            return "SD";
+        }
+
+        return null;
+    }
+
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task<CompanionTextDetails> TryReadEmbeddedTextAttachmentDetailsAsync(
+        string mkvMergePath,
+        string containerPath,
+        ContainerAttachmentMetadata attachment,
+        CancellationToken cancellationToken)
+    {
+        var probeSidecarContent = TryReadAttachmentTextFromProbeSidecar(containerPath, attachment);
+        if (!string.IsNullOrWhiteSpace(probeSidecarContent))
+        {
+            return CompanionTextMetadataReader.ReadDetailedFromContent(probeSidecarContent);
+        }
+
+        var mkvExtractPath = ResolveMkvExtractPath(mkvMergePath);
+        if (!File.Exists(mkvExtractPath))
+        {
+            return CompanionTextDetails.Empty;
+        }
+
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-embedded-attachments", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        var tempFilePath = Path.Combine(
+            tempDirectory,
+            $"{attachment.Id}{Path.GetExtension(attachment.FileName)}");
+
+        try
+        {
+            var exitCode = await RunMkvExtractAttachmentAsync(
+                mkvExtractPath,
+                containerPath,
+                attachment.Id,
+                tempFilePath,
+                cancellationToken);
+            if (exitCode != 0 || !File.Exists(tempFilePath))
+            {
+                return CompanionTextDetails.Empty;
+            }
+
+            return CompanionTextMetadataReader.ReadDetailed(tempFilePath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return CompanionTextDetails.Empty;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+            catch
+            {
+                // Die TXT-Heuristik ist nur ein optionaler Präzisionsgewinn.
+                // Ein liegen gebliebener Temp-Ordner darf die eigentliche Planung nicht scheitern lassen.
+            }
+        }
+    }
+
+    private static string? TryReadAttachmentTextFromProbeSidecar(
+        string containerPath,
+        ContainerAttachmentMetadata attachment)
+    {
+        var probeSidecarPath = containerPath + ".mkvmerge.json";
+        if (!File.Exists(probeSidecarPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(probeSidecarPath));
+            if (!document.RootElement.TryGetProperty("attachments", out var attachmentsElement)
+                || attachmentsElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var fallbackAttachmentId = 0;
+            foreach (var attachmentElement in attachmentsElement.EnumerateArray())
+            {
+                var candidateId = attachmentElement.TryGetProperty("id", out var idElement)
+                    && idElement.TryGetInt32(out var parsedAttachmentId)
+                        ? parsedAttachmentId
+                        : fallbackAttachmentId;
+                var candidateFileName = attachmentElement.TryGetProperty("file_name", out var fileNameElement)
+                    ? fileNameElement.GetString()
+                    : null;
+                if ((candidateId == attachment.Id
+                        || string.Equals(candidateFileName, attachment.FileName, StringComparison.OrdinalIgnoreCase))
+                    && attachmentElement.TryGetProperty("text_content", out var textContentElement)
+                    && textContentElement.ValueKind == JsonValueKind.String)
+                {
+                    return textContentElement.GetString();
+                }
+
+                fallbackAttachmentId++;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static string ResolveMkvExtractPath(string mkvMergePath)
+    {
+        var toolDirectory = Path.GetDirectoryName(mkvMergePath);
+        return string.IsNullOrWhiteSpace(toolDirectory)
+            ? "mkvextract.exe"
+            : Path.Combine(toolDirectory, "mkvextract.exe");
+    }
+
+    private static async Task<int> RunMkvExtractAttachmentAsync(
+        string mkvExtractPath,
+        string containerPath,
+        int attachmentId,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = mkvExtractPath,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add("attachments");
+        process.StartInfo.ArgumentList.Add(containerPath);
+        process.StartInfo.ArgumentList.Add($"{attachmentId}:{outputPath}");
+
+        process.Start();
+        using var cancellationRegistration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // Best effort für Cancel. Die eigentliche Abbruchsemantik kommt über das geworfene Token.
+            }
+        });
+
+        await process.WaitForExitAsync(cancellationToken);
+        return process.ExitCode;
+    }
+
+    private static bool IsTextAttachment(string fileName)
+    {
+        return fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<string> BuildAttachmentPathsForUsedVideos(IEnumerable<string> usedVideoPaths)
@@ -992,6 +1403,23 @@ public sealed partial class SeriesArchiveService
             AttachmentSourceAttachmentIds: null,
             PreservedAttachmentNames: []);
     }
+
+    private sealed record AttachmentTextHeuristicProfile(
+        string? LanguageCode,
+        bool HasExplicitLanguageMarker,
+        string? CodecLabel,
+        string? ResolutionLabel)
+    {
+        public bool HasCodecAndResolution => CodecLabel is not null && ResolutionLabel is not null;
+
+        public bool HasUsableSignals => LanguageCode is not null || CodecLabel is not null || ResolutionLabel is not null;
+    }
+
+    private sealed record AttachmentTrackMatch(
+        int AttachmentId,
+        string FileName,
+        int? MatchedTrackId,
+        bool IsStrongMatch);
 
     private sealed record SubtitleReusePlan(
         IReadOnlyList<SubtitleFile> ExternalPlans,
