@@ -129,6 +129,8 @@ internal sealed partial class BatchMuxViewModel
             {
                 ShowBatchRunArtifactInfo(logSaveResult);
             }
+
+            ResetCompletedBatchSession();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

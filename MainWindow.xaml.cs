@@ -11,6 +11,7 @@ public partial class MainWindow : Window
     internal MainWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
+        MainWindowStartupLayout.ApplyTo(this, SystemParameters.WorkArea);
         DataContext = viewModel;
     }
 }

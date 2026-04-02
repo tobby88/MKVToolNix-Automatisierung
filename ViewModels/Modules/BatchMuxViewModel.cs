@@ -305,6 +305,16 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         SelectedEpisodeItem = null;
     }
 
+    /// <summary>
+    /// Leert nach einem abgeschlossenen Batch bewusst die Episodenliste.
+    /// So kann derselbe Lauf nicht versehentlich noch einmal gestartet werden, während
+    /// Status- und Logzusammenfassung der gerade beendeten Sitzung sichtbar bleiben.
+    /// </summary>
+    internal void ResetCompletedBatchSession()
+    {
+        ClearEpisodeItems();
+    }
+
     private void SetStatus(string text, int progress)
     {
         StatusText = text;

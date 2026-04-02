@@ -263,6 +263,35 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal("Bleibt waehrend des Batch-Laufs sichtbar", item.UsageSummary?.ArchiveDetails);
     }
 
+    [Fact]
+    public void ResetCompletedBatchSession_ClearsEpisodeItems_AndSelection()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.ResetCompletedBatchSession();
+
+        Assert.Empty(viewModel.EpisodeItems);
+        Assert.Null(viewModel.SelectedEpisodeItem);
+    }
+
     private static BatchMuxViewModel CreateBatchViewModel(IEpisodeReviewWorkflow reviewWorkflow)
     {
         return new BatchMuxViewModel(
