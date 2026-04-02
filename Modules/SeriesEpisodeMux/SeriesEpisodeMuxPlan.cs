@@ -69,6 +69,7 @@ public sealed class SeriesEpisodeMuxPlan
         AttachmentFilePaths = attachmentFilePaths;
         PreservedAttachmentNames = preservedAttachmentNames;
         UsageComparison = usageComparison;
+        SkipUsageSummary = null;
         WorkingCopy = workingCopy;
         Metadata = metadata;
         Notes = notes;
@@ -79,6 +80,7 @@ public sealed class SeriesEpisodeMuxPlan
         string outputFilePath,
         string title,
         string skipReason,
+        EpisodeUsageSummary? skipUsageSummary,
         IReadOnlyList<string> notes)
     {
         MkvMergePath = mkvMergePath;
@@ -86,6 +88,7 @@ public sealed class SeriesEpisodeMuxPlan
         Title = title;
         SkipMux = true;
         SkipReason = skipReason;
+        SkipUsageSummary = skipUsageSummary;
         VideoSources = [];
         PrimaryAudioFilePath = string.Empty;
         PrimarySourceAudioTrackIds = null;
@@ -124,6 +127,11 @@ public sealed class SeriesEpisodeMuxPlan
     /// Fachliche Begründung, warum kein Mux-Lauf nötig ist.
     /// </summary>
     public string? SkipReason { get; }
+
+    /// <summary>
+    /// Optional bereits aufgelöste Nutzungsübersicht für reine Skip-Pläne.
+    /// </summary>
+    public EpisodeUsageSummary? SkipUsageSummary { get; }
 
     /// <summary>
     /// Alle einzubindenden Videospuren in finaler Mux-Reihenfolge.
@@ -212,6 +220,7 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="outputFilePath">Pfad der bereits vollständigen Zieldatei.</param>
     /// <param name="title">Container-Titel der Episode.</param>
     /// <param name="skipReason">Fachliche Begründung für den Skip.</param>
+    /// <param name="skipUsageSummary">Optional bereits berechnete Nutzungsübersicht für die GUI.</param>
     /// <param name="notes">Zusätzliche Hinweise für die GUI.</param>
     /// <returns>Skip-Plan ohne ausführbaren Mux-Aufruf.</returns>
     public static SeriesEpisodeMuxPlan CreateSkip(
@@ -219,9 +228,10 @@ public sealed class SeriesEpisodeMuxPlan
         string outputFilePath,
         string title,
         string skipReason,
-        IReadOnlyList<string> notes)
+        EpisodeUsageSummary? skipUsageSummary = null,
+        IReadOnlyList<string>? notes = null)
     {
-        return new SeriesEpisodeMuxPlan(mkvMergePath, outputFilePath, title, skipReason, notes);
+        return new SeriesEpisodeMuxPlan(mkvMergePath, outputFilePath, title, skipReason, skipUsageSummary, notes ?? []);
     }
 
     /// <summary>

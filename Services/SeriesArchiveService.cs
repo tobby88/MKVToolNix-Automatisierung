@@ -146,6 +146,7 @@ public sealed record ArchiveIntegrationDecision(
     string OutputFilePath,
     bool SkipMux,
     string? SkipReason,
+    EpisodeUsageSummary? SkipUsageSummary,
     FileCopyPlan? WorkingCopy,
     string PrimarySourcePath,
     IReadOnlyList<int>? PrimaryAudioTrackIds,
@@ -173,6 +174,7 @@ public sealed record ArchiveIntegrationDecision(
             outputPath,
             SkipMux: false,
             SkipReason: null,
+            SkipUsageSummary: null,
             WorkingCopy: null,
             PrimarySourcePath: string.Empty,
             PrimaryAudioTrackIds: null,
@@ -195,14 +197,20 @@ public sealed record ArchiveIntegrationDecision(
     /// </summary>
     /// <param name="outputPath">Pfad der bereits vollständigen Zieldatei.</param>
     /// <param name="skipReason">Fachliche Begründung für das Überspringen.</param>
+    /// <param name="skipUsageSummary">Optional bereits aufgelöste Nutzungsübersicht für die GUI.</param>
     /// <param name="notes">Zusätzliche Hinweise für UI und Vorschau.</param>
     /// <returns>Entscheidung für einen No-Op-Lauf.</returns>
-    public static ArchiveIntegrationDecision CreateSkip(string outputPath, string skipReason, IReadOnlyList<string> notes)
+    public static ArchiveIntegrationDecision CreateSkip(
+        string outputPath,
+        string skipReason,
+        EpisodeUsageSummary? skipUsageSummary,
+        IReadOnlyList<string> notes)
     {
         return new ArchiveIntegrationDecision(
             outputPath,
             SkipMux: true,
             SkipReason: skipReason,
+            SkipUsageSummary: skipUsageSummary,
             WorkingCopy: null,
             PrimarySourcePath: string.Empty,
             PrimaryAudioTrackIds: null,

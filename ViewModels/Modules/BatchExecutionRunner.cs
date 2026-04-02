@@ -101,6 +101,7 @@ internal sealed class BatchExecutionRunner
         var successCount = 0;
         var warningCount = 0;
         var errorCount = 0;
+        var upToDateCount = 0;
         var movedDoneFiles = new List<string>();
         var newOutputFiles = new List<string>();
 
@@ -117,6 +118,22 @@ internal sealed class BatchExecutionRunner
 
             try
             {
+                if (plan.SkipMux)
+                {
+                    upToDateCount++;
+                    item.SetStatus(BatchEpisodeStatusKind.UpToDate);
+                    appendLog($"  KEIN MUX: {plan.SkipReason ?? "Zieldatei bereits aktuell."}");
+
+                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                        workItem,
+                        doneDirectory,
+                        index + 1,
+                        progressTracker,
+                        appendLog,
+                        cancellationToken));
+                    continue;
+                }
+
                 var result = await _muxWorkflow.ExecuteMuxAsync(
                     plan,
                     line => appendLog($"  {line}"),
@@ -191,6 +208,7 @@ internal sealed class BatchExecutionRunner
             successCount,
             warningCount,
             errorCount,
+            upToDateCount,
             movedDoneFiles,
             newOutputFiles);
     }
@@ -255,5 +273,6 @@ internal sealed record BatchExecutionOutcome(
     int SuccessCount,
     int WarningCount,
     int ErrorCount,
+    int UpToDateCount,
     IReadOnlyList<string> MovedDoneFiles,
     IReadOnlyList<string> NewOutputFiles);

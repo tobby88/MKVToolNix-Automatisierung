@@ -16,44 +16,29 @@ internal static class SeriesEpisodeMuxPresentationBuilder
     {
         if (plan.SkipMux)
         {
-            return EpisodeUsageSummary.CreatePending(
-                plan.SkipReason ?? "Die Zieldatei ist bereits vollständig.",
-                "keine weiteren Aktionen");
+            return plan.SkipUsageSummary
+                ?? EpisodeUsageSummary.CreatePending(
+                    plan.SkipReason ?? "Die Zieldatei ist bereits vollständig.",
+                    "keine weiteren Aktionen");
         }
 
-        var archiveAction = plan.WorkingCopy is not null
-            ? string.Equals(plan.VideoSources[0].FilePath, plan.WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase)
-                ? "Vorhandene Zieldatei bleibt Basis"
-                : "Vorhandene Zieldatei wird mit neuer Hauptquelle aktualisiert"
-            : File.Exists(plan.OutputFilePath)
-                ? "MKV am Ziel bereits vorhanden"
-                : "MKV am Ziel noch nicht vorhanden";
-
-        var archiveDetails = plan.WorkingCopy is not null
-            ? plan.WorkingCopy.IsReusable
-                ? $"Arbeitskopie aktuell vorhanden: {Path.GetFileName(plan.WorkingCopy.DestinationFilePath)}"
-                : $"Arbeitskopie wird erstellt: {Path.GetFileName(plan.WorkingCopy.DestinationFilePath)}"
-            : File.Exists(plan.OutputFilePath)
-                ? Path.GetFileName(plan.OutputFilePath)
-                : "Neue MKV wird direkt erstellt";
+        var (archiveAction, archiveDetails) = BuildArchiveStatus(plan);
 
         return new EpisodeUsageSummary(
             archiveAction,
             archiveDetails,
-            CreateUsageEntry(Path.GetFileName(plan.VideoSources[0].FilePath), plan.UsageComparison.MainVideo),
+            CreateUsageEntry(BuildVideoUsageText(plan, plan.VideoSources[0]), plan.UsageComparison.MainVideo),
             CreateUsageEntry(
                 plan.VideoSources.Count > 1
-                    ? string.Join(Environment.NewLine, plan.VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath)))
+                    ? string.Join(Environment.NewLine, plan.VideoSources.Skip(1).Select(source => BuildVideoUsageText(plan, source)))
                     : "(keine)",
                 plan.UsageComparison.AdditionalVideos),
-            CreateUsageEntry(Path.GetFileName(plan.PrimaryAudioFilePath), plan.UsageComparison.Audio),
+            CreateUsageEntry(BuildAudioUsageText(plan), plan.UsageComparison.Audio),
             CreateUsageEntry(
-                string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath) ? "(keine)" : Path.GetFileName(plan.AudioDescriptionFilePath),
+                BuildAudioDescriptionUsageText(plan),
                 plan.UsageComparison.AudioDescription),
             CreateUsageEntry(
-                plan.SubtitleFiles.Count == 0
-                    ? "(keine)"
-                    : string.Join(Environment.NewLine, plan.SubtitleFiles.Select(file => file.PreviewLabel)),
+                BuildSubtitleUsageText(plan),
                 plan.UsageComparison.Subtitles),
             CreateUsageEntry(BuildAttachmentPreview(plan), plan.UsageComparison.Attachments));
     }
@@ -161,12 +146,77 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         return argument.Contains(' ') ? $"\"{argument}\"" : argument;
     }
 
+    private static (string ArchiveAction, string ArchiveDetails) BuildArchiveStatus(SeriesEpisodeMuxPlan plan)
+    {
+        if (IsTrackNameNormalizationOnlyPlan(plan))
+        {
+            return (
+                "Zieldatei bleibt inhaltlich unverändert",
+                "Es werden nur die Benennungen der relevanten Spuren vereinheitlicht");
+        }
+
+        var archiveAction = plan.WorkingCopy is not null
+            ? string.Equals(plan.VideoSources[0].FilePath, plan.WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase)
+                ? "Vorhandene Zieldatei bleibt Basis"
+                : "Vorhandene Zieldatei wird mit neuer Hauptquelle aktualisiert"
+            : File.Exists(plan.OutputFilePath)
+                ? "MKV am Ziel bereits vorhanden"
+                : "MKV am Ziel noch nicht vorhanden";
+
+        var archiveDetails = plan.WorkingCopy is not null
+            ? plan.WorkingCopy.IsReusable
+                ? $"Arbeitskopie aktuell vorhanden: {Path.GetFileName(plan.WorkingCopy.DestinationFilePath)}"
+                : $"Arbeitskopie wird erstellt: {Path.GetFileName(plan.WorkingCopy.DestinationFilePath)}"
+            : File.Exists(plan.OutputFilePath)
+                ? Path.GetFileName(plan.OutputFilePath)
+                : "Neue MKV wird direkt erstellt";
+
+        return (archiveAction, archiveDetails);
+    }
+
     private static EpisodeUsageEntry CreateUsageEntry(string currentText, ArchiveUsageChange? removedChange)
     {
         return new EpisodeUsageEntry(
             CurrentText: currentText,
             RemovedText: removedChange?.RemovedText,
             RemovedReason: removedChange?.Reason);
+    }
+
+    private static string BuildVideoUsageText(SeriesEpisodeMuxPlan plan, VideoSourcePlan videoSource)
+    {
+        return string.Equals(videoSource.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            ? BuildExistingTargetDisplayText(videoSource.TrackName)
+            : Path.GetFileName(videoSource.FilePath);
+    }
+
+    private static string BuildAudioUsageText(SeriesEpisodeMuxPlan plan)
+    {
+        return string.Equals(plan.PrimaryAudioFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            ? BuildExistingTargetDisplayText(plan.Metadata.AudioTrackName)
+            : Path.GetFileName(plan.PrimaryAudioFilePath);
+    }
+
+    private static string BuildAudioDescriptionUsageText(SeriesEpisodeMuxPlan plan)
+    {
+        if (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath))
+        {
+            return "(keine)";
+        }
+
+        return string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            ? BuildExistingTargetDisplayText(plan.Metadata.AudioDescriptionTrackName)
+            : Path.GetFileName(plan.AudioDescriptionFilePath);
+    }
+
+    private static string BuildSubtitleUsageText(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.SubtitleFiles.Count == 0
+            ? "(keine)"
+            : string.Join(
+                Environment.NewLine,
+                plan.SubtitleFiles.Select(subtitle => subtitle.IsEmbedded
+                    ? BuildExistingTargetDisplayText(subtitle.TrackName)
+                    : Path.GetFileName(subtitle.FilePath)));
     }
 
     private static string BuildAttachmentPreview(SeriesEpisodeMuxPlan plan)
@@ -176,8 +226,8 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         if ((plan.IncludePrimarySourceAttachments || !string.IsNullOrWhiteSpace(plan.AttachmentSourcePath))
             && plan.PreservedAttachmentNames.Count > 0)
         {
-            // GUI-Vorschau soll sichtbar machen, dass diese Anhänge nicht aus neuen Dateien, sondern aus der Ziel-MKV stammen.
-            parts.AddRange(plan.PreservedAttachmentNames.Select(name => $"{name} (aus Zieldatei)"));
+            // GUI-Vorschau soll alle wiederverwendeten Bestandteile einheitlich als Ziel-MKV-Inhalt kennzeichnen.
+            parts.AddRange(plan.PreservedAttachmentNames.Select(BuildExistingTargetDisplayText));
         }
 
         parts.AddRange(plan.AttachmentFilePaths
@@ -186,5 +236,24 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             .Cast<string>());
 
         return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static bool IsTrackNameNormalizationOnlyPlan(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.WorkingCopy is not null
+            && plan.VideoSources.Count == 1
+            && string.Equals(plan.VideoSources[0].FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(plan.PrimaryAudioFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            && (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath)
+                || string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
+            && plan.SubtitleFiles.All(subtitle => subtitle.IsEmbedded && string.Equals(subtitle.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
+            && plan.AttachmentFilePaths.Count == 0
+            && string.IsNullOrWhiteSpace(plan.AttachmentSourcePath)
+            && plan.UsageComparison == ArchiveUsageComparison.Empty;
+    }
+
+    private static string BuildExistingTargetDisplayText(string value)
+    {
+        return $"Aus Zieldatei: {value}";
     }
 }

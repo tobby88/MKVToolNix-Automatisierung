@@ -402,6 +402,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 archiveDecision.OutputFilePath,
                 request.Title,
                 archiveDecision.SkipReason ?? "Archiv bereits aktuell.",
+                archiveDecision.SkipUsageSummary,
                 archiveDecision.Notes);
         }
 

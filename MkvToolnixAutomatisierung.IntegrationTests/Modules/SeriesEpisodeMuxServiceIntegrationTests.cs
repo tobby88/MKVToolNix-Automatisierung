@@ -385,7 +385,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         Assert.Equal(new[] { "cover.jpg", "notes.txt" }, plan.PreservedAttachmentNames);
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
-        Assert.Contains("cover.jpg (aus Zieldatei)", plan.BuildUsageSummary().Attachments.CurrentText, StringComparison.Ordinal);
+        Assert.Contains("Aus Zieldatei: cover.jpg", plan.BuildUsageSummary().Attachments.CurrentText, StringComparison.Ordinal);
 
         var arguments = plan.BuildArguments();
         var runtimeArchivePath = plan.WorkingCopy!.DestinationFilePath;
@@ -821,7 +821,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
 
         Assert.False(summary.MainVideo.HasRemoved);
         Assert.False(summary.Subtitles.HasRemoved);
-        Assert.Contains("Deutsch (hörgeschädigte) - SRT (aus Zieldatei)", summary.Subtitles.CurrentText, StringComparison.Ordinal);
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
@@ -841,6 +841,115 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             "3:yes",
             "--original-flag",
             "3:yes");
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_WithoutNewContent_SkipsWhenRelevantTrackNamesAreAlreadyConsistent()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-skip-consistent");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-skip-consistent");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("cover.jpg")],
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.True(plan.SkipMux);
+
+        var summary = plan.BuildUsageSummary();
+        Assert.Equal("Zieldatei bereits aktuell", summary.ArchiveAction);
+        Assert.Contains("relevanten Spurnamen", summary.ArchiveDetails, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Aus Zieldatei: Deutsch - FHD - H.264", summary.MainVideo.CurrentText);
+        Assert.Equal("Aus Zieldatei: Deutsch - E-AC-3", summary.Audio.CurrentText);
+        Assert.Equal("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", summary.AudioDescription.CurrentText);
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
+        Assert.Contains("Aus Zieldatei: cover.jpg", summary.Attachments.CurrentText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_WithoutNewContent_RemuxesOnlyForTrackNameNormalization()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-rename-only");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-rename-only");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("cover.jpg")],
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.NotNull(plan.WorkingCopy);
+        Assert.Contains(
+            plan.Notes,
+            note => note.Contains("Benennungen der relevanten Spuren", StringComparison.OrdinalIgnoreCase));
+
+        var summary = plan.BuildUsageSummary();
+        Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);
+        Assert.Equal("Es werden nur die Benennungen der relevanten Spuren vereinheitlicht", summary.ArchiveDetails);
+        Assert.Equal("Aus Zieldatei: Deutsch - FHD - H.264", summary.MainVideo.CurrentText);
+        Assert.Equal("Aus Zieldatei: Deutsch - E-AC-3", summary.Audio.CurrentText);
+        Assert.Equal("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", summary.AudioDescription.CurrentText);
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
+        Assert.Contains("Aus Zieldatei: cover.jpg", summary.Attachments.CurrentText, StringComparison.Ordinal);
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--track-name", "1:Deutsch - E-AC-3");
     }
 
     [Fact]
@@ -998,7 +1107,12 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         return path;
     }
 
-    private static object CreateVideoTrack(int id, string codec, string pixelDimensions)
+    private static object CreateVideoTrack(
+        int id,
+        string codec,
+        string pixelDimensions,
+        string trackName = "",
+        string language = "de")
     {
         return new
         {
@@ -1008,7 +1122,8 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             properties = new
             {
                 pixel_dimensions = pixelDimensions,
-                language_ietf = "de"
+                language_ietf = language,
+                track_name = trackName
             }
         };
     }

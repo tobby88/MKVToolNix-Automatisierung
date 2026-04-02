@@ -212,14 +212,22 @@ internal sealed partial class BatchMuxViewModel
             try
             {
                 var plan = await GetOrBuildPlanForItemAsync(item, cancellationToken);
+                var cleanupFiles = BuildBatchCleanupFileList(item, plan);
                 if (plan.SkipMux)
                 {
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);
                     appendBatchRunLog($"SKIP: {item.MainVideoFileName} -> {plan.SkipReason}");
+
+                    if (cleanupFiles.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    executablePlans.Add(new BatchExecutionWorkItem(item, plan, cleanupFiles));
                     continue;
                 }
 
-                executablePlans.Add(new BatchExecutionWorkItem(item, plan, BuildBatchCleanupFileList(item, plan)));
+                executablePlans.Add(new BatchExecutionWorkItem(item, plan, cleanupFiles));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

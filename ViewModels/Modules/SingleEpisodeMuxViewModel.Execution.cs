@@ -56,6 +56,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             {
                 SetStatus("Zieldatei bereits aktuell", 100);
                 _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
+                await OfferSingleEpisodeCleanupAsync(_currentPlan);
                 return;
             }
 

@@ -122,6 +122,50 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePlansAsync_SkipPlan_StillMovesCleanupFiles_AndCountsItemAsUpToDate()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "skip", "Episode.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "already-current");
+        var cleanupSource = CreateFile("skip-cleanup.txt");
+        var movedDoneFile = Path.Combine(_tempDirectory, "done", "skip-cleanup.txt");
+        var cleanup = new StubCleanupService
+        {
+            MoveResult = new FileMoveResult([movedDoneFile], [])
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), new StubMuxWorkflowCoordinator(), cleanup);
+        var item = CreateBatchEpisodeItem(outputPath);
+        var logs = new List<string>();
+
+        var outcome = await runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(
+                item,
+                SeriesEpisodeMuxPlan.CreateSkip(
+                    mkvMergePath: @"C:\Tools\mkvmerge.exe",
+                    outputFilePath: outputPath,
+                    title: "Pilot",
+                    skipReason: "Zieldatei bereits aktuell.",
+                    notes: ["Nur Cleanup nötig."]),
+                [cleanupSource])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            logs.Add);
+
+        Assert.Equal(0, outcome.SuccessCount);
+        Assert.Equal(0, outcome.WarningCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Equal(1, outcome.UpToDateCount);
+        Assert.Single(outcome.MovedDoneFiles);
+        Assert.Empty(outcome.NewOutputFiles);
+        Assert.Equal(BatchEpisodeStatusKind.UpToDate, item.StatusKind);
+        Assert.Contains(logs, line => line.Contains("KEIN MUX", StringComparison.Ordinal));
+        Assert.Contains(logs, line => line.StartsWith("DONE:", StringComparison.Ordinal));
+        Assert.Equal(cleanupSource, Assert.Single(cleanup.LastMoveSourceFiles));
+    }
+
+    [Fact]
     public async Task ExecutePlansAsync_TreatsExitCodeOneWithOutputFileAsWarning()
     {
         var outputPath = Path.Combine(_tempDirectory, "warning", "Episode.mkv");

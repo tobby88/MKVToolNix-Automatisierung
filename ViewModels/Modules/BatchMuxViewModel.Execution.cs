@@ -122,7 +122,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             SetStatus(
-                $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich, {executionOutcome.WarningCount} Warnung(en), {executionOutcome.ErrorCount} Fehler",
+                BuildBatchCompletionStatusText(executionOutcome),
                 100);
 
             if (logSaveResult is not null)
@@ -141,6 +141,28 @@ internal sealed partial class BatchMuxViewModel
             CompleteBatchOperation(BatchOperationKind.Execution);
             SetBusy(false);
         }
+    }
+
+    /// <summary>
+    /// Verdichtet die Batch-Endstatistik zu einem lesbaren Abschlussstatus.
+    /// Bereits vollständige Episoden werden separat ausgewiesen, damit Cleanup-only-Fälle
+    /// nicht wie "0 erfolgreich" ohne weitere Erklärung wirken.
+    /// </summary>
+    private static string BuildBatchCompletionStatusText(BatchExecutionOutcome executionOutcome)
+    {
+        var parts = new List<string>
+        {
+            $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich",
+            $"{executionOutcome.WarningCount} Warnung(en)",
+            $"{executionOutcome.ErrorCount} Fehler"
+        };
+
+        if (executionOutcome.UpToDateCount > 0)
+        {
+            parts.Add($"{executionOutcome.UpToDateCount} bereits aktuell");
+        }
+
+        return string.Join(", ", parts);
     }
 
     private List<string> BuildBatchCleanupFileList(BatchEpisodeItemViewModel item, SeriesEpisodeMuxPlan plan)

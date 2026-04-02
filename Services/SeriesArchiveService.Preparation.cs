@@ -212,20 +212,39 @@ public sealed partial class SeriesArchiveService
             ?? existingArchive.AudioTracks.FirstOrDefault();
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
-        var needsSubtitleSupplement = subtitlePlan.FinalPlans.Count > 0;
+        // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
+        // Ein echter Zusatzbedarf liegt nur vor, wenn neue externe Untertitel dazukommen.
+        var needsSubtitleSupplement = subtitlePlan.ExternalPlans.Count > 0;
         var needsAdditionalVideo = additionalVideoPaths.Count > 0;
         var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(additionalVideoPaths)
             .Concat(manualAttachmentPaths)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var needsManualAttachments = manualAttachmentPaths.Count > 0;
+        var requiresRelevantTrackNameNormalization = RequiresRelevantTrackNameNormalization(
+            bestExistingVideo,
+            primaryAudioTrack,
+            existingAudioDescription,
+            existingArchive.SubtitleTracks,
+            subtitlePlan.EmbeddedPlans);
 
-        if (!needsAudioDescription && !needsSubtitleSupplement && !needsAdditionalVideo && !needsManualAttachments)
+        if (!needsAudioDescription
+            && !needsSubtitleSupplement
+            && !needsAdditionalVideo
+            && !needsManualAttachments
+            && !requiresRelevantTrackNameNormalization)
         {
             return ArchiveIntegrationDecision.CreateSkip(
                 outputPath,
-                "Die vorhandene MKV in der Serienbibliothek enthält bereits die bevorzugte Videoquelle sowie alle benötigten Zusatzspuren.",
-                ["Zieldatei bereits vollständig. Kein erneutes Muxen nötig."]);
+                "Die vorhandene MKV in der Serienbibliothek enthält bereits alle benötigten Inhalte; ein erneutes Muxen ist nicht nötig.",
+                BuildReuseOnlySkipUsageSummary(
+                    outputPath,
+                    existingArchive,
+                    bestExistingVideo,
+                    primaryAudioTrack,
+                    existingAudioDescription,
+                    subtitlePlan),
+                ["Zieldatei bereits vollständig. Alle relevanten Spurnamen sind bereits konsistent. Kein erneutes Muxen nötig."]);
         }
 
         var usageComparison = new ArchiveUsageComparison(
@@ -257,13 +276,45 @@ public sealed partial class SeriesArchiveService
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: existingArchive.Container.Attachments.Select(attachment => attachment.FileName).ToList(),
             UsageComparison: usageComparison,
-            Notes:
-            [
-                "Archiv-MKV bereits vorhanden. Vor dem Muxen wird eine lokale Arbeitskopie verwendet.",
-                bestExistingVideo is null
-                    ? "Die vorhandene Archivdatei liefert die Hauptspuren."
-                    : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
-            ]);
+            SkipUsageSummary: null,
+            Notes: BuildKeepExistingPrimaryNotes(
+                bestExistingVideo,
+                needsAudioDescription,
+                needsSubtitleSupplement,
+                needsAdditionalVideo,
+                needsManualAttachments,
+                requiresRelevantTrackNameNormalization));
+    }
+
+    private static IReadOnlyList<string> BuildKeepExistingPrimaryNotes(
+        ContainerTrackMetadata? bestExistingVideo,
+        bool needsAudioDescription,
+        bool needsSubtitleSupplement,
+        bool needsAdditionalVideo,
+        bool needsManualAttachments,
+        bool requiresRelevantTrackNameNormalization)
+    {
+        var notes = new List<string>
+        {
+            "Archiv-MKV bereits vorhanden. Vor dem Muxen wird eine lokale Arbeitskopie verwendet.",
+            bestExistingVideo is null
+                ? "Die vorhandene Archivdatei liefert die Hauptspuren."
+                : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
+        };
+
+        if (!needsAudioDescription
+            && !needsSubtitleSupplement
+            && !needsAdditionalVideo
+            && !needsManualAttachments
+            && requiresRelevantTrackNameNormalization)
+        {
+            // Dieser Sonderfall soll sichtbar machen, dass inhaltlich nichts ergänzt oder ersetzt wird.
+            // Der erneute Lauf dient dann ausschließlich dazu, vorhandene Tracknamen an die heute
+            // projektweit erwartete Benennung anzupassen.
+            notes.Add("Alle Inhalte sind bereits vorhanden. Es werden nur die Benennungen der relevanten Spuren vereinheitlicht.");
+        }
+
+        return notes;
     }
 
     private static ArchiveIntegrationDecision BuildDecisionReplacingExistingPrimary(
@@ -316,6 +367,7 @@ public sealed partial class SeriesArchiveService
             OutputFilePath: outputPath,
             SkipMux: false,
             SkipReason: null,
+            SkipUsageSummary: null,
             WorkingCopy: needsExistingCopy ? workingCopyPlan : null,
             PrimarySourcePath: request.MainVideoPath,
             PrimaryAudioTrackIds: null,
@@ -343,6 +395,148 @@ public sealed partial class SeriesArchiveService
                     ? $"Neue Hauptquelle wird verwendet: {Path.GetFileName(request.MainVideoPath)}."
                     : $"Neue Videospur ist besser als Archiv: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel} statt {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
             ]);
+    }
+
+    private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(
+        string outputPath,
+        ExistingArchiveState existingArchive,
+        ContainerTrackMetadata? bestExistingVideo,
+        ContainerTrackMetadata? primaryAudioTrack,
+        ContainerTrackMetadata? existingAudioDescription,
+        SubtitleReusePlan subtitlePlan)
+    {
+        var additionalVideoTracks = existingArchive.VideoTracks
+            .Where(track => bestExistingVideo is null || track.TrackId != bestExistingVideo.TrackId)
+            .ToList();
+
+        return new EpisodeUsageSummary(
+            ArchiveAction: "Zieldatei bereits aktuell",
+            ArchiveDetails: "Alle benötigten Inhalte und relevanten Spurnamen sind bereits vorhanden. Kein erneutes Muxen nötig.",
+            MainVideo: new EpisodeUsageEntry(
+                bestExistingVideo is null
+                    ? BuildExistingTargetDisplayText(Path.GetFileName(outputPath))
+                    : BuildExistingTargetDisplayText(GetExistingVideoDisplayLabel(bestExistingVideo)),
+                null,
+                null),
+            AdditionalVideos: new EpisodeUsageEntry(
+                additionalVideoTracks.Count == 0
+                    ? "(keine)"
+                    : string.Join(
+                        Environment.NewLine,
+                        additionalVideoTracks.Select(track => BuildExistingTargetDisplayText(GetExistingVideoDisplayLabel(track)))),
+                null,
+                null),
+            Audio: new EpisodeUsageEntry(
+                primaryAudioTrack is null
+                    ? "(keine)"
+                    : BuildExistingTargetDisplayText(BuildExpectedAudioTrackName(primaryAudioTrack)),
+                null,
+                null),
+            AudioDescription: new EpisodeUsageEntry(
+                existingAudioDescription is null
+                    ? "(keine)"
+                    : BuildExistingTargetDisplayText(
+                        BuildExpectedAudioDescriptionTrackName(existingAudioDescription, primaryAudioTrack?.Language)),
+                null,
+                null),
+            Subtitles: new EpisodeUsageEntry(
+                subtitlePlan.EmbeddedPlans.Count == 0
+                    ? "(keine)"
+                    : string.Join(
+                        Environment.NewLine,
+                        subtitlePlan.EmbeddedPlans.Select(subtitle => BuildExistingTargetDisplayText(subtitle.TrackName))),
+                null,
+                null),
+            Attachments: new EpisodeUsageEntry(
+                existingArchive.Container.Attachments.Count == 0
+                    ? "keine"
+                    : string.Join(
+                        ", ",
+                        existingArchive.Container.Attachments.Select(attachment => BuildExistingTargetDisplayText(attachment.FileName))),
+                null,
+                null));
+    }
+
+    private static bool RequiresRelevantTrackNameNormalization(
+        ContainerTrackMetadata? bestExistingVideo,
+        ContainerTrackMetadata? primaryAudioTrack,
+        ContainerTrackMetadata? existingAudioDescription,
+        IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
+        IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
+    {
+        if (bestExistingVideo is not null
+            && !HasConsistentTrackName(bestExistingVideo.TrackName, BuildExpectedVideoTrackName(bestExistingVideo)))
+        {
+            return true;
+        }
+
+        if (primaryAudioTrack is not null
+            && !HasConsistentTrackName(primaryAudioTrack.TrackName, BuildExpectedAudioTrackName(primaryAudioTrack)))
+        {
+            return true;
+        }
+
+        if (existingAudioDescription is not null
+            && !HasConsistentTrackName(
+                existingAudioDescription.TrackName,
+                BuildExpectedAudioDescriptionTrackName(existingAudioDescription, primaryAudioTrack?.Language)))
+        {
+            return true;
+        }
+
+        foreach (var subtitlePlan in embeddedSubtitlePlans)
+        {
+            if (subtitlePlan.EmbeddedTrackId is not int embeddedTrackId)
+            {
+                continue;
+            }
+
+            var existingTrack = existingSubtitleTracks.FirstOrDefault(track => track.TrackId == embeddedTrackId);
+            if (existingTrack is not null && !HasConsistentTrackName(existingTrack.TrackName, subtitlePlan.TrackName))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasConsistentTrackName(string? currentTrackName, string expectedTrackName)
+    {
+        return string.Equals(
+            (currentTrackName ?? string.Empty).Trim(),
+            expectedTrackName.Trim(),
+            StringComparison.Ordinal);
+    }
+
+    private static string GetExistingVideoDisplayLabel(ContainerTrackMetadata track)
+    {
+        return string.IsNullOrWhiteSpace(track.TrackName)
+            ? BuildExpectedVideoTrackName(track)
+            : track.TrackName;
+    }
+
+    private static string BuildExpectedVideoTrackName(ContainerTrackMetadata track)
+    {
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(track.Language)} - {ResolutionLabel.FromWidth(track.VideoWidth).Value} - {track.CodecLabel}";
+    }
+
+    private static string BuildExpectedAudioTrackName(ContainerTrackMetadata track)
+    {
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(track.Language)} - {track.CodecLabel}";
+    }
+
+    private static string BuildExpectedAudioDescriptionTrackName(ContainerTrackMetadata track, string? fallbackLanguage)
+    {
+        var languageCode = string.IsNullOrWhiteSpace(track.Language)
+            ? fallbackLanguage
+            : track.Language;
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(languageCode)} (sehbehinderte) - {track.CodecLabel}";
+    }
+
+    private static string BuildExistingTargetDisplayText(string value)
+    {
+        return $"Aus Zieldatei: {value}";
     }
 
     /// <summary>
