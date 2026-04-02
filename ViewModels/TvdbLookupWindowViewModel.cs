@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// <summary>
 /// Kapselt Zustand und Suchlogik des TVDB-Dialogs, damit das Fenster selbst nur noch UI-Ereignisse weiterreicht.
 /// </summary>
-public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
+public sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
 {
     private readonly EpisodeMetadataLookupService _lookupService;
     private readonly EpisodeMetadataGuess _guess;
@@ -26,6 +26,11 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     private SelectableSeriesItem? _selectedSeriesItem;
     private SelectableEpisodeItem? _selectedEpisodeItem;
 
+    /// <summary>
+    /// Initialisiert das ViewModel für den manuellen TVDB-Abgleich einer Episode.
+    /// </summary>
+    /// <param name="lookupService">Service für Settings, Suche und Episodenabgleich.</param>
+    /// <param name="guess">Lokal erkannter Ausgangspunkt für Serie, Staffel, Folge und Titel.</param>
     public TvdbLookupWindowViewModel(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
     {
         _lookupService = lookupService;
@@ -37,9 +42,12 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
         _seriesSearchText = guess.SeriesName;
         _episodeSearchText = guess.EpisodeTitle;
         _comparisonSummaryText = "Noch kein TVDB-Treffer ausgewählt.";
-        GuessSummaryText = BuildGuessSummaryText();
+        GuessSummaryText = TvdbLookupWindowTextFormatter.BuildGuessSummaryText(_guess);
     }
 
+    /// <summary>
+    /// Benachrichtigt die UI über geänderte Bindungswerte.
+    /// </summary>
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>
@@ -242,98 +250,6 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     public bool CanApply => SelectedSeriesItem is not null && SelectedEpisodeItem is not null;
 
     /// <summary>
-    /// Lädt beim ersten Öffnen direkt die vorbefüllte TVDB-Suche, sofern bereits ein API-Key vorhanden ist.
-    /// </summary>
-    public async Task InitializeAsync()
-    {
-        if (_isInitialized)
-        {
-            return;
-        }
-
-        _isInitialized = true;
-        await SearchSeriesAsync(autoLoadEpisodes: true);
-    }
-
-    /// <summary>
-    /// Startet die TVDB-Seriensuche mit den aktuell sichtbaren Zugangsdaten und Suchfeldern.
-    /// </summary>
-    /// <param name="autoLoadEpisodes">Lädt nach erfolgreicher Seriensuche direkt die Episodenliste der bevorzugten Serie.</param>
-    public async Task SearchSeriesAsync(bool autoLoadEpisodes)
-    {
-        try
-        {
-            SetBusy(true, "Suche Serie bei TVDB...");
-            var currentSettings = BuildTransientSettings();
-            if (string.IsNullOrWhiteSpace(currentSettings.TvdbApiKey))
-            {
-                ClearLoadedResults();
-                StatusText = "TVDB-API-Key fehlt. Bitte zuerst eintragen und dann suchen.";
-                UpdateComparisonSummary();
-                return;
-            }
-
-            var results = await _lookupService.SearchSeriesAsync(SeriesSearchText.Trim(), currentSettings);
-
-            _seriesResults.Clear();
-            _seriesResults.AddRange(results);
-            ReplaceItems(SeriesResults, results.Select(result => new SelectableSeriesItem(result)));
-
-            _episodes.Clear();
-            ReplaceItems(EpisodeResults, []);
-            SelectedEpisodeItem = null;
-
-            if (_seriesResults.Count == 0)
-            {
-                SelectedSeriesItem = null;
-                StatusText = "Keine passende Serie gefunden.";
-                UpdateComparisonSummary();
-                return;
-            }
-
-            var preferredSeries = _lookupService.FindPreferredSeriesResult(_guess, _seriesResults) ?? _seriesResults[0];
-            var preferredItem = SeriesResults.FirstOrDefault(result => result.Series.Id == preferredSeries.Id) ?? SeriesResults[0];
-
-            _suppressSeriesSelectionChanged = true;
-            SelectedSeriesItem = preferredItem;
-            _suppressSeriesSelectionChanged = false;
-
-            StatusText = $"{_seriesResults.Count} Serie(n) gefunden.";
-
-            if (autoLoadEpisodes)
-            {
-                await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
-            }
-            else
-            {
-                UpdateComparisonSummary();
-            }
-        }
-        catch
-        {
-            StatusText = "TVDB-Suche fehlgeschlagen";
-            throw;
-        }
-        finally
-        {
-            SetBusy(false, StatusText);
-        }
-    }
-
-    /// <summary>
-    /// Reagiert auf eine manuell geänderte Serienauswahl und lädt die Episoden der gewählten Serie.
-    /// </summary>
-    public async Task HandleSelectedSeriesSelectionChangedAsync()
-    {
-        if (_suppressSeriesSelectionChanged || IsBusy || SelectedSeriesItem is null)
-        {
-            return;
-        }
-
-        await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
-    }
-
-    /// <summary>
     /// Persistiert die aktuell sichtbaren Zugangsdaten, ohne den Dialog zu schließen.
     /// </summary>
     public void SaveSettings()
@@ -348,18 +264,6 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
     public void RememberLocalDetectionChoice()
     {
         _lookupService.SaveSettings(BuildTransientSettings());
-    }
-
-    private void ClearLoadedResults()
-    {
-        _seriesResults.Clear();
-        _episodes.Clear();
-        _suppressSeriesSelectionChanged = true;
-        SelectedSeriesItem = null;
-        _suppressSeriesSelectionChanged = false;
-        SelectedEpisodeItem = null;
-        ReplaceItems(SeriesResults, []);
-        ReplaceItems(EpisodeResults, []);
     }
 
     /// <summary>
@@ -395,125 +299,9 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
             SelectedSeriesItem.Series.Name,
             SelectedEpisodeItem.Episode.Id,
             SelectedEpisodeItem.Episode.Name,
-            FormatNumber(SelectedEpisodeItem.Episode.SeasonNumber),
-            FormatNumber(SelectedEpisodeItem.Episode.EpisodeNumber));
+            TvdbLookupWindowTextFormatter.FormatTvdbNumber(SelectedEpisodeItem.Episode.SeasonNumber),
+            TvdbLookupWindowTextFormatter.FormatTvdbNumber(SelectedEpisodeItem.Episode.EpisodeNumber));
         return true;
-    }
-
-    private async Task LoadEpisodesForSelectedSeriesAsync(bool autoSelectBest)
-    {
-        if (SelectedSeriesItem is null)
-        {
-            return;
-        }
-
-        try
-        {
-            SetBusy(true, "Lade Episodenliste...");
-            var currentSettings = BuildTransientSettings();
-            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, currentSettings);
-
-            _episodes.Clear();
-            _episodes.AddRange(episodes);
-            ApplyEpisodeFilter(autoSelectBest);
-
-            if (SelectedEpisodeItem is null)
-            {
-                StatusText = $"{_episodes.Count} Episode(n) geladen.";
-            }
-        }
-        catch
-        {
-            StatusText = "Episodenliste konnte nicht geladen werden";
-            throw;
-        }
-        finally
-        {
-            SetBusy(false, StatusText);
-        }
-    }
-
-    private void ApplyEpisodeFilter(bool autoSelectBest)
-    {
-        var searchText = EpisodeSearchText.Trim();
-        var normalizedSearchText = NormalizeTextForSearch(searchText);
-        var filteredEpisodes = string.IsNullOrWhiteSpace(searchText)
-            ? _episodes.ToList()
-            : _episodes
-                .Where(episode => EpisodeMatchesSearch(episode, searchText, normalizedSearchText))
-                .ToList();
-
-        var items = filteredEpisodes
-            .OrderBy(episode => episode.SeasonNumber ?? int.MaxValue)
-            .ThenBy(episode => episode.EpisodeNumber ?? int.MaxValue)
-            .Select(episode => new SelectableEpisodeItem(episode))
-            .ToList();
-
-        var previouslySelectedEpisodeId = SelectedEpisodeItem?.Episode.Id;
-        ReplaceItems(EpisodeResults, items);
-        SelectedEpisodeItem = null;
-
-        if (!autoSelectBest || SelectedSeriesItem is null)
-        {
-            if (previouslySelectedEpisodeId is int episodeId)
-            {
-                SelectedEpisodeItem = EpisodeResults.FirstOrDefault(item => item.Episode.Id == episodeId);
-            }
-
-            UpdateComparisonSummary();
-            return;
-        }
-
-        var match = _lookupService.FindBestEpisodeMatch(_guess, SelectedSeriesItem.Series, _episodes);
-        if (match is null)
-        {
-            StatusText = "Keine Episode automatisch sicher vorgewählt.";
-            UpdateComparisonSummary();
-            return;
-        }
-
-        SelectedEpisodeItem = EpisodeResults.FirstOrDefault(item => item.Episode.Id == match.TvdbEpisodeId);
-        if (SelectedEpisodeItem is not null)
-        {
-            StatusText = $"TVDB-Vorschlag: S{match.SeasonNumber}E{match.EpisodeNumber} - {match.EpisodeTitle}";
-        }
-
-        UpdateComparisonSummary();
-    }
-
-    private static bool EpisodeMatchesSearch(TvdbEpisodeRecord episode, string rawSearchText, string normalizedSearchText)
-    {
-        if (episode.Name.Contains(rawSearchText, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(normalizedSearchText))
-        {
-            return false;
-        }
-
-        // Zusätzliche Tokens decken typische Suchmuster wie S01E02 oder 01x02 ab, ohne die eigentliche Titelsuche zu verdrängen.
-        return BuildEpisodeSearchTokens(episode).Any(token =>
-            NormalizeTextForSearch(token).Contains(normalizedSearchText, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<string> BuildEpisodeSearchTokens(TvdbEpisodeRecord episode)
-    {
-        var seasonNumber = FormatNumber(episode.SeasonNumber);
-        var episodeNumber = FormatNumber(episode.EpisodeNumber);
-
-        yield return $"s{seasonNumber}e{episodeNumber}";
-        yield return $"{seasonNumber}x{episodeNumber}";
-        yield return $"staffel {seasonNumber} folge {episodeNumber}";
-    }
-
-    private static string NormalizeTextForSearch(string value)
-    {
-        // Vereinheitlicht Eingaben wie "S01-E02" oder "Staffel 1, Folge 2" auf einen robust vergleichbaren Kern.
-        return string.Concat(value
-            .Where(character => char.IsLetterOrDigit(character))
-            .Select(char.ToLowerInvariant));
     }
 
     private AppMetadataSettings BuildTransientSettings()
@@ -526,53 +314,12 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
         };
     }
 
-    private string BuildGuessSummaryText()
-    {
-        return $"Lokal erkannt: {_guess.SeriesName} - S{NormalizeNumber(_guess.SeasonNumber)}E{NormalizeNumber(_guess.EpisodeNumber)} - {_guess.EpisodeTitle}";
-    }
-
     private void UpdateComparisonSummary()
     {
-        if (SelectedSeriesItem is null)
-        {
-            ComparisonSummaryText = "Noch keine TVDB-Serie ausgewählt.";
-            return;
-        }
-
-        if (SelectedEpisodeItem is null)
-        {
-            ComparisonSummaryText = "Noch keine TVDB-Episode ausgewählt.";
-            return;
-        }
-
-        var selectedSeries = SelectedSeriesItem.Series;
-        var selectedSeason = FormatNumber(SelectedEpisodeItem.Episode.SeasonNumber);
-        var selectedEpisodeNumber = FormatNumber(SelectedEpisodeItem.Episode.EpisodeNumber);
-        var differences = new List<string>();
-
-        if (!string.Equals(_guess.SeriesName.Trim(), selectedSeries.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            differences.Add($"Serie: lokal '{_guess.SeriesName}' -> TVDB '{selectedSeries.Name}'");
-        }
-
-        if (!string.Equals(NormalizeNumber(_guess.SeasonNumber), selectedSeason, StringComparison.OrdinalIgnoreCase))
-        {
-            differences.Add($"Staffel: lokal '{NormalizeNumber(_guess.SeasonNumber)}' -> TVDB '{selectedSeason}'");
-        }
-
-        if (!string.Equals(NormalizeNumber(_guess.EpisodeNumber), selectedEpisodeNumber, StringComparison.OrdinalIgnoreCase))
-        {
-            differences.Add($"Folge: lokal '{NormalizeNumber(_guess.EpisodeNumber)}' -> TVDB '{selectedEpisodeNumber}'");
-        }
-
-        if (!string.Equals(_guess.EpisodeTitle.Trim(), SelectedEpisodeItem.Episode.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-        {
-            differences.Add($"Titel: lokal '{_guess.EpisodeTitle}' -> TVDB '{SelectedEpisodeItem.Episode.Name}'");
-        }
-
-        ComparisonSummaryText = differences.Count == 0
-            ? "TVDB stimmt mit der lokalen Erkennung überein."
-            : "Abweichungen: " + string.Join(" | ", differences);
+        ComparisonSummaryText = TvdbLookupWindowTextFormatter.BuildComparisonSummaryText(
+            _guess,
+            SelectedSeriesItem?.Series,
+            SelectedEpisodeItem?.Episode);
     }
 
     private void SetBusy(bool isBusy, string statusText)
@@ -581,59 +328,8 @@ public sealed class TvdbLookupWindowViewModel : INotifyPropertyChanged
         StatusText = statusText;
     }
 
-    private static void ReplaceItems<T>(ObservableCollection<T> target, IEnumerable<T> items)
-    {
-        target.Clear();
-        foreach (var item in items)
-        {
-            target.Add(item);
-        }
-    }
-
-    private static string NormalizeNumber(string value)
-    {
-        return int.TryParse(value, out var number) && number >= 0 ? number.ToString("00") : "xx";
-    }
-
-    private static string FormatNumber(int? value)
-    {
-        return value is null or <= 0 ? "xx" : value.Value.ToString("00");
-    }
-
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-
-    /// <summary>
-    /// UI-taugliche Serienzeile für die linke Trefferliste.
-    /// </summary>
-    public sealed class SelectableSeriesItem
-    {
-        public SelectableSeriesItem(TvdbSeriesSearchResult series)
-        {
-            Series = series;
-        }
-
-        public TvdbSeriesSearchResult Series { get; }
-
-        public string DisplayText => string.IsNullOrWhiteSpace(Series.Year)
-            ? $"{Series.Name} (ID {Series.Id})"
-            : $"{Series.Name} ({Series.Year}) - ID {Series.Id}";
-    }
-
-    /// <summary>
-    /// UI-taugliche Episodenzeile für die rechte Ergebnisliste.
-    /// </summary>
-    public sealed class SelectableEpisodeItem
-    {
-        public SelectableEpisodeItem(TvdbEpisodeRecord episode)
-        {
-            Episode = episode;
-        }
-
-        public TvdbEpisodeRecord Episode { get; }
-
-        public string DisplayText => $"S{FormatNumber(Episode.SeasonNumber)}E{FormatNumber(Episode.EpisodeNumber)} - {Episode.Name}";
     }
 }
