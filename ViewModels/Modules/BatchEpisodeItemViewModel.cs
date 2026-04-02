@@ -29,6 +29,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
         string mainVideoPath,
+        bool hasPrimaryVideoSource,
         string localSeriesName,
         string localSeasonNumber,
         string localEpisodeNumber,
@@ -58,6 +59,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         : base(
             requestedMainVideoPath,
             mainVideoPath,
+            hasPrimaryVideoSource,
             localSeriesName,
             localSeasonNumber,
             localEpisodeNumber,
@@ -171,9 +173,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         var outputExists = File.Exists(outputPath);
         var archiveState = outputExists ? EpisodeArchiveState.Existing : EpisodeArchiveState.New;
-        return new BatchEpisodeItemViewModel(
+        var item = new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             detected.MainVideoPath,
+            detected.HasPrimaryVideoSource,
             localGuess.SeriesName,
             localGuess.SeasonNumber,
             localGuess.EpisodeNumber,
@@ -192,14 +195,21 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             metadataResolution.RequiresReview,
             DetermineAutomaticMetadataApproval(metadataResolution),
             statusKind,
-            BuildPendingPlanSummary(outputExists, isArchiveTargetPath),
-            BuildPendingUsageSummary(outputExists, isArchiveTargetPath),
+            BuildPendingPlanSummary(outputExists, isArchiveTargetPath, detected.HasPrimaryVideoSource),
+            BuildPendingUsageSummary(outputExists, isArchiveTargetPath, detected.HasPrimaryVideoSource),
             archiveState,
             isArchiveTargetPath,
             isSelected,
             detected.RequiresManualCheck,
             detected.ManualCheckFilePaths,
             detected.Notes);
+
+        if (!detected.HasPrimaryVideoSource && statusKind == BatchEpisodeStatusKind.Warning)
+        {
+            item.SetStatus(BatchEpisodeStatusKind.Warning, item.BuildMissingPrimaryVideoStatusText());
+        }
+
+        return item;
     }
 
     public static BatchEpisodeItemViewModel CreateErrorItem(string requestedMainVideoPath, string errorMessage)
@@ -207,6 +217,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return new BatchEpisodeItemViewModel(
             requestedMainVideoPath,
             requestedMainVideoPath,
+            true,
             Path.GetFileNameWithoutExtension(requestedMainVideoPath),
             "xx",
             "xx",
@@ -351,18 +362,29 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         var hasArchiveComparisonTarget = HasArchiveComparisonTarget;
-        SetStatus(
-            statusOverride ?? (hasArchiveComparisonTarget ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready),
-            statusText);
+        var effectiveStatus = statusOverride ?? ResolveDefaultStatus(hasArchiveComparisonTarget, HasPrimaryVideoSource);
+        var effectiveStatusText = string.IsNullOrWhiteSpace(statusText)
+            && effectiveStatus == BatchEpisodeStatusKind.Warning
+            && !HasPrimaryVideoSource
+                ? BuildMissingPrimaryVideoStatusText()
+                : statusText;
+        SetStatus(effectiveStatus, effectiveStatusText);
         if (!preservePlanSummary)
         {
-            SetPlanSummary(BuildPendingPlanSummary(outputExists, _isArchiveTargetPath));
-            SetUsageSummary(BuildPendingUsageSummary(outputExists, _isArchiveTargetPath));
+            SetPlanSummary(BuildPendingPlanSummary(outputExists, _isArchiveTargetPath, HasPrimaryVideoSource));
+            SetUsageSummary(BuildPendingUsageSummary(outputExists, _isArchiveTargetPath, HasPrimaryVideoSource));
         }
     }
 
-    private static string BuildPendingPlanSummary(bool outputExists, bool isArchiveTargetPath)
+    private static string BuildPendingPlanSummary(bool outputExists, bool isArchiveTargetPath, bool hasPrimaryVideoSource)
     {
+        if (!hasPrimaryVideoSource)
+        {
+            return outputExists && isArchiveTargetPath
+                ? "Es liegt nur eine AD-Quelle vor. Für die Hauptspuren wird die vorhandene Bibliotheks-MKV geprüft."
+                : "Es liegt nur eine AD-Quelle vor. Ohne vorhandene Bibliotheks-MKV kann derzeit kein vollständiger Mux geplant werden.";
+        }
+
         if (outputExists && isArchiveTargetPath)
         {
             return "Am Ziel liegt bereits eine MKV in der Serienbibliothek. Details wählen für den genauen Vergleich.";
@@ -376,8 +398,19 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return "Am Ziel liegt noch keine MKV. Neue Datei wird erstellt.";
     }
 
-    private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists, bool isArchiveTargetPath)
+    private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists, bool isArchiveTargetPath, bool hasPrimaryVideoSource)
     {
+        if (!hasPrimaryVideoSource)
+        {
+            return outputExists && isArchiveTargetPath
+                ? EpisodeUsageSummary.CreatePending(
+                    "Nur AD erkannt",
+                    "Vorhandene Bibliotheks-MKV wird als Hauptquelle geprüft")
+                : EpisodeUsageSummary.CreatePending(
+                    "Nur AD erkannt",
+                    "Ohne vorhandene Bibliotheks-MKV aktuell nicht ausführbar");
+        }
+
         if (outputExists && isArchiveTargetPath)
         {
             return EpisodeUsageSummary.CreatePending(
@@ -395,6 +428,25 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return EpisodeUsageSummary.CreatePending(
             "Ziel noch frei",
             "Neue MKV wird erstellt");
+    }
+
+    private static BatchEpisodeStatusKind ResolveDefaultStatus(bool hasArchiveComparisonTarget, bool hasPrimaryVideoSource)
+    {
+        if (hasArchiveComparisonTarget)
+        {
+            return BatchEpisodeStatusKind.ComparisonPending;
+        }
+
+        return hasPrimaryVideoSource
+            ? BatchEpisodeStatusKind.Ready
+            : BatchEpisodeStatusKind.Warning;
+    }
+
+    private string BuildMissingPrimaryVideoStatusText()
+    {
+        return HasArchiveComparisonTarget
+            ? EpisodeEditTextBuilder.BuildBatchStatusText(BatchEpisodeStatusKind.ComparisonPending)
+            : "Warnung (nur AD ohne vorhandene Bibliotheks-MKV)";
     }
 
     private string? GetCurrentStatusTextOverride()

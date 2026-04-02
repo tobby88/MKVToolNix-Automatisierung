@@ -79,6 +79,7 @@ internal sealed class EpisodePlanCache
     private static string BuildCacheKey(IEpisodePlanInput input)
     {
         var builder = new StringBuilder();
+        AppendValue(builder, input.HasPrimaryVideoSource ? "primary-video-present" : "archive-primary-required");
         AppendFileValue(builder, input.MainVideoPath);
         AppendDetectionDirectoryState(builder, input.MainVideoPath);
         AppendFileValue(builder, input.AudioDescriptionPath);

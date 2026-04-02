@@ -29,21 +29,31 @@ public sealed partial class SeriesArchiveService
 
         var existingArchive = await ReadExistingArchiveStateAsync(mkvMergePath, outputPath, cancellationToken);
         var plannedVideos = await ReadPlannedVideoSourcesAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
-        var newPrimaryVideo = plannedVideos.FirstOrDefault();
-        if (newPrimaryVideo is null)
+        var bestExistingVideo = SelectBestExistingVideo(existingArchive.VideoTracks);
+        var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
+        var existingAudioDescription = FindExistingAudioDescription(existingArchive.AudioTracks);
+        var workingCopyPlan = BuildWorkingCopyPlan(outputPath, ResolveWorkingDirectory(request, outputPath));
+        var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
+
+        if (plannedVideos.Count == 0)
         {
-            return ArchiveIntegrationDecision.CreateForFreshTarget(outputPath);
+            return BuildDecisionUsingExistingPrimary(
+                outputPath,
+                request,
+                additionalVideoPaths: [],
+                subtitlePlan,
+                replacedSubtitleTracks,
+                existingArchive,
+                bestExistingVideo,
+                existingAudioDescription,
+                workingCopyPlan);
         }
 
-        var bestExistingVideo = SelectBestExistingVideo(existingArchive.VideoTracks);
+        var newPrimaryVideo = plannedVideos[0];
         // Die Archivdatei bleibt nur dann Hauptquelle, wenn die neue Quelle nicht klar besser ist.
         var keepExistingPrimary = bestExistingVideo is not null
             && !IsNewVideoClearlyBetter(newPrimaryVideo.Metadata, bestExistingVideo);
         var additionalVideoPaths = BuildAdditionalVideoPaths(plannedVideos, plannedVideoPaths, existingArchive.VideoTracks, keepExistingPrimary);
-        var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
-        var existingAudioDescription = FindExistingAudioDescription(existingArchive.AudioTracks);
-        var workingCopyPlan = BuildWorkingCopyPlan(outputPath, Path.GetDirectoryName(request.MainVideoPath)!);
-        var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
 
         return keepExistingPrimary
             ? BuildDecisionUsingExistingPrimary(
@@ -539,6 +549,21 @@ public sealed partial class SeriesArchiveService
             destinationPath,
             archiveInfo.Length,
             archiveInfo.LastWriteTimeUtc);
+    }
+
+    private static string ResolveWorkingDirectory(SeriesEpisodeMuxRequest request, string outputPath)
+    {
+        var preferredSourcePath = !string.IsNullOrWhiteSpace(request.MainVideoPath)
+            ? request.MainVideoPath
+            : request.AudioDescriptionPath;
+        var workingDirectory = string.IsNullOrWhiteSpace(preferredSourcePath)
+            ? null
+            : Path.GetDirectoryName(preferredSourcePath);
+
+        return string.IsNullOrWhiteSpace(workingDirectory)
+            ? Path.GetDirectoryName(outputPath)
+                ?? throw new DirectoryNotFoundException($"Arbeitsverzeichnis konnte nicht bestimmt werden: {outputPath}")
+            : workingDirectory;
     }
 
     private sealed record ExistingArchiveState(

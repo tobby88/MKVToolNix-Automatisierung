@@ -13,7 +13,8 @@ public sealed record SeriesEpisodeMuxRequest(
     string OutputFilePath,
     string Title,
     IReadOnlyCollection<string>? ExcludedSourcePaths = null,
-    IReadOnlyList<string>? ManualAttachmentPaths = null);
+    IReadOnlyList<string>? ManualAttachmentPaths = null,
+    bool HasPrimaryVideoSource = true);
 
 /// <summary>
 /// Ergebnis der automatischen Dateierkennung rund um eine Episode.
@@ -32,7 +33,8 @@ public sealed record AutoDetectedEpisodeFiles(
     string EpisodeNumber,
     bool RequiresManualCheck,
     IReadOnlyList<string> ManualCheckFilePaths,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    bool HasPrimaryVideoSource = true);
 
 /// <summary>
 /// Fortschrittsmeldung aus der Dateierkennung.

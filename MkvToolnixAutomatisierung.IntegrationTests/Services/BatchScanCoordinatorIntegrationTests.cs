@@ -64,7 +64,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
     }
 
     [Fact]
-    public void CreateDirectoryContext_FiltersAudioDescription_AndSortsAlphabetically()
+    public void CreateDirectoryContext_KeepsAudioDescriptionOnlyEntries_AndSortsAlphabetically()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "batch-files");
         Directory.CreateDirectory(sourceDirectory);
@@ -72,14 +72,20 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         CreateFile(sourceDirectory, "Zulu - Finale (S01_E03).mp4");
         CreateFile(sourceDirectory, "Alpha - Pilot (S01_E01).mp4");
         CreateFile(sourceDirectory, "Alpha - Pilot (S01_E01) Audiodeskription.mp4");
+        CreateFile(sourceDirectory, "Beta - Spezial (S01_E02) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beta - Spezial (S01_E02) Audiodeskription.txt",
+            "Sender: ARD\r\nThema: Beta\r\nTitel: Spezial (S01_E02)\r\nDauer: 00:42:00");
 
         var coordinator = CreateBatchScanCoordinator(Path.Combine(_tempDirectory, "archive"), new StubTvdbClient());
 
         var files = coordinator.CreateDirectoryContext(sourceDirectory).MainVideoFiles;
 
-        Assert.Equal(2, files.Count);
+        Assert.Equal(3, files.Count);
         Assert.EndsWith("Alpha - Pilot (S01_E01).mp4", files[0], StringComparison.OrdinalIgnoreCase);
-        Assert.EndsWith("Zulu - Finale (S01_E03).mp4", files[1], StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("Beta - Spezial (S01_E02) Audiodeskription.mp4", files[1], StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("Zulu - Finale (S01_E03).mp4", files[2], StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

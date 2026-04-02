@@ -8,9 +8,14 @@ namespace MkvToolnixAutomatisierung.Services;
 internal interface IEpisodePlanInput
 {
     /// <summary>
-    /// Pfad zur primären Videodatei.
+    /// Pfad zur aktuell ausgewählten Erkennungsquelle. Bei AD-only-Fällen kann dies bewusst die AD-Datei sein.
     /// </summary>
     string MainVideoPath { get; }
+
+    /// <summary>
+    /// Kennzeichnet, ob für diese Episode bereits eine frische Hauptvideoquelle vorliegt.
+    /// </summary>
+    bool HasPrimaryVideoSource { get; }
 
     /// <summary>
     /// Optionaler Pfad zur AD-Datei.
@@ -78,7 +83,8 @@ internal sealed class EpisodePlanCoordinator
             input.OutputPath,
             input.TitleForMux,
             input.ExcludedSourcePaths,
-            input.ManualAttachmentPaths),
+            input.ManualAttachmentPaths,
+            input.HasPrimaryVideoSource),
             cancellationToken);
     }
 }

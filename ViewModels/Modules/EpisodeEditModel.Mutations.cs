@@ -44,6 +44,7 @@ internal partial class EpisodeEditModel
         SetDetectionSeedPath(requestedMainVideoPath);
         SetRequestedSourcePaths([requestedMainVideoPath]);
         SetLocalMetadataGuess(localGuess);
+        HasPrimaryVideoSource = detected.HasPrimaryVideoSource;
         MainVideoPath = detected.MainVideoPath;
         SeriesName = detected.SeriesName;
         SeasonNumber = detected.SeasonNumber;
@@ -305,7 +306,7 @@ internal partial class EpisodeEditModel
 
     private IEnumerable<string> EnumerateSourceFilePaths()
     {
-        if (!string.IsNullOrWhiteSpace(MainVideoPath))
+        if (HasPrimaryVideoSource && !string.IsNullOrWhiteSpace(MainVideoPath))
         {
             yield return MainVideoPath;
         }

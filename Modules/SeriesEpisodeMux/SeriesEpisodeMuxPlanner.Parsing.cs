@@ -232,7 +232,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string Directory,
         EpisodeIdentity EpisodeIdentity,
         IReadOnlyList<NormalVideoCandidate> NormalCandidates,
-        NormalVideoCandidate PrimaryVideoCandidate,
+        NormalVideoCandidate? PrimaryVideoCandidate,
         IReadOnlyList<NormalVideoCandidate> SelectedVideoCandidates,
         IReadOnlyList<string> SubtitlePaths,
         IReadOnlyList<string> RelatedFilePaths,

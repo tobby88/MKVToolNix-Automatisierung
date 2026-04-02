@@ -76,6 +76,23 @@ internal partial class EpisodeEditModel
 
     public string RequestedMainVideoPath => _requestedMainVideoPath;
 
+    public bool HasPrimaryVideoSource
+    {
+        get => _hasPrimaryVideoSource;
+        protected set
+        {
+            if (_hasPrimaryVideoSource == value)
+            {
+                return;
+            }
+
+            _hasPrimaryVideoSource = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MainVideoDisplayText));
+            OnPropertyChanged(nameof(SourceFilePaths));
+        }
+    }
+
     public string MainVideoPath
     {
         get => _mainVideoPath;
@@ -324,7 +341,9 @@ internal partial class EpisodeEditModel
 
     public string RequestedSourcesDisplayText => EpisodeEditTextBuilder.FormatPaths(_requestedSourcePaths);
 
-    public string MainVideoDisplayText => MainVideoPath;
+    public string MainVideoDisplayText => HasPrimaryVideoSource
+        ? MainVideoPath
+        : $"(keine frische Hauptvideoquelle erkannt){Environment.NewLine}Ausgewählte AD-Datei: {AudioDescriptionPath}";
 
     public string MetadataDisplayText => $"{SeriesName} - {EpisodeCodeDisplayText} - {Title}";
 
@@ -360,6 +379,8 @@ internal partial class EpisodeEditModel
     public IReadOnlyList<string> SourceFilePaths => EnumerateSourceFilePaths().ToList();
 
     string IEpisodePlanInput.MainVideoPath => MainVideoPath;
+
+    bool IEpisodePlanInput.HasPrimaryVideoSource => HasPrimaryVideoSource;
 
     string? IEpisodePlanInput.AudioDescriptionPath => string.IsNullOrWhiteSpace(AudioDescriptionPath) ? null : AudioDescriptionPath;
 

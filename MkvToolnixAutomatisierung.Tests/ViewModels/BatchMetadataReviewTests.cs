@@ -78,6 +78,49 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void CreateFromDetection_OnlyAudioDescriptionWithoutExistingArchiveTarget_StartsWithWarning()
+    {
+        var audioDescriptionPath = @"C:\Temp\episode-ad.mp4";
+        var detected = new AutoDetectedEpisodeFiles(
+            MainVideoPath: audioDescriptionPath,
+            AdditionalVideoPaths: [],
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            RelatedFilePaths: [],
+            SuggestedOutputFilePath: @"C:\Temp\output.mkv",
+            SuggestedTitle: "Pilot",
+            SeriesName: "Beispielserie",
+            SeasonNumber: "01",
+            EpisodeNumber: "02",
+            RequiresManualCheck: false,
+            ManualCheckFilePaths: [],
+            Notes: ["Nur AD erkannt."],
+            HasPrimaryVideoSource: false);
+
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: audioDescriptionPath,
+            CreateLocalGuess(),
+            detected,
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Warning,
+            isSelected: true);
+
+        Assert.False(item.HasPrimaryVideoSource);
+        Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
+        Assert.Contains("AD-Quelle", item.PlanSummaryText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nur AD", item.Status, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void CreateFromDetection_AutoApproves_WhenTvdbLookupSucceededWithoutReview()
     {
         var selection = new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02");

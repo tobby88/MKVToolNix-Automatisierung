@@ -197,6 +197,8 @@ public sealed class EpisodePlanCacheTests : IDisposable
     {
         public string MainVideoPath { get; init; } = @"C:\Temp\episode.mp4";
 
+        public bool HasPrimaryVideoSource { get; init; } = true;
+
         public string? AudioDescriptionPath { get; init; } = @"C:\Temp\episode-ad.mp4";
 
         public IReadOnlyList<string> SubtitlePaths { get; set; } = [@"C:\Temp\episode.srt"];

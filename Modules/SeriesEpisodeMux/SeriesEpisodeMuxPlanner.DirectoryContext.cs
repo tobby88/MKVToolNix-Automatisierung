@@ -94,6 +94,27 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return Path.Combine(directory, fileNameWithoutExtension);
     }
 
+    private static IReadOnlyList<string> BuildBatchEntryFiles(IReadOnlyList<CandidateSeed> candidateSeeds)
+    {
+        var normalSeeds = candidateSeeds
+            .Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
+            .ToList();
+        var audioDescriptionOnlySeeds = candidateSeeds
+            .Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
+            .Where(seed => !normalSeeds.Any(normalSeed => normalSeed.Identity.Matches(seed.Identity)))
+            .GroupBy(seed => seed.Identity)
+            .Select(group => group
+                .OrderBy(seed => Path.GetFileName(seed.FilePath), StringComparer.OrdinalIgnoreCase)
+                .First())
+            .ToList();
+
+        return normalSeeds
+            .Concat(audioDescriptionOnlySeeds)
+            .Select(seed => seed.FilePath)
+            .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     /// <summary>
     /// Wiederverwendbarer Ordnerkontext für mehrere Erkennungsläufe innerhalb desselben Quellverzeichnisses.
     /// </summary>
@@ -122,11 +143,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             _candidateSeeds = candidateSeeds.ToList();
             _normalVideoCandidates = new ConcurrentDictionary<string, Lazy<NormalVideoCandidate>>(StringComparer.OrdinalIgnoreCase);
             _audioDescriptionCandidates = new ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>>(StringComparer.OrdinalIgnoreCase);
-            MainVideoFiles = candidateSeeds
-                .Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
-                .Select(seed => seed.FilePath)
-                .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            MainVideoFiles = BuildBatchEntryFiles(candidateSeeds);
         }
 
         /// <summary>
@@ -135,7 +152,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         public string SourceDirectory { get; }
 
         /// <summary>
-        /// Beim Vorbereiten erkannte Hauptvideodateien ohne AD-Dateien.
+        /// Beim Vorbereiten erkannte Batch-Einstiegsdateien: reguläre Hauptvideos sowie AD-only-Fälle ohne passende Hauptvideoquelle.
         /// </summary>
         public IReadOnlyList<string> MainVideoFiles { get; }
 

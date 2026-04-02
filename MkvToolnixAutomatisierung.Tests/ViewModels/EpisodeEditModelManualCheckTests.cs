@@ -76,6 +76,7 @@ public sealed class EpisodeEditModelManualCheckTests : IDisposable
             : base(
                 requestedMainVideoPath: @"C:\Temp\requested.mp4",
                 mainVideoPath: @"C:\Temp\main.mp4",
+                hasPrimaryVideoSource: true,
                 localSeriesName: "Serie",
                 localSeasonNumber: "01",
                 localEpisodeNumber: "01",

@@ -29,6 +29,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private string _episodeNumber = "xx";
     private string _requestedMainVideoPath = string.Empty;
     private string _mainVideoPath = string.Empty;
+    private bool _hasPrimaryVideoSource = true;
     private List<string> _requestedSourcePaths = [];
     private List<string> _additionalVideoPaths = [];
     private string _audioDescriptionPath = string.Empty;
@@ -59,6 +60,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     protected EpisodeEditModel(
         string requestedMainVideoPath,
         string mainVideoPath,
+        bool hasPrimaryVideoSource,
         string localSeriesName,
         string localSeasonNumber,
         string localEpisodeNumber,
@@ -85,6 +87,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     {
         _requestedMainVideoPath = requestedMainVideoPath;
         _mainVideoPath = mainVideoPath;
+        _hasPrimaryVideoSource = hasPrimaryVideoSource;
         _localSeriesName = localSeriesName;
         _localSeasonNumber = localSeasonNumber;
         _localEpisodeNumber = localEpisodeNumber;

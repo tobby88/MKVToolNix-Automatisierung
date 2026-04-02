@@ -320,6 +320,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.SeasonNumber)
             or nameof(BatchEpisodeItemViewModel.EpisodeNumber)
             or nameof(BatchEpisodeItemViewModel.TitleForMux)
+            or nameof(BatchEpisodeItemViewModel.HasPrimaryVideoSource)
             or nameof(BatchEpisodeItemViewModel.MainVideoPath)
             or nameof(BatchEpisodeItemViewModel.AudioDescriptionPath)
             or nameof(BatchEpisodeItemViewModel.SubtitlePaths)

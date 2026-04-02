@@ -129,7 +129,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanAsync(CancellationToken cancellationToken = default)
     {
-        RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
+        if (HasPrimaryVideoSource)
+        {
+            RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
+        }
+        else
+        {
+            RequireValue(AudioDescriptionPath, "Bitte eine AD-Datei auswählen.");
+        }
+
         RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
         RequireValue(Title.Trim(), "Bitte einen Dateititel eingeben.");
         var plan = await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);

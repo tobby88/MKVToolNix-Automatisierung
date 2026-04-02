@@ -153,10 +153,20 @@ internal sealed partial class SingleEpisodeMuxViewModel
     {
         var lines = new List<string>
         {
-            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf prüfen.",
-            $"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}",
-            $"Erkannte Episode: {detected.SeriesName} - S{detected.SeasonNumber}E{detected.EpisodeNumber} - {detected.SuggestedTitle}"
+            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf prüfen."
         };
+
+        if (detected.HasPrimaryVideoSource)
+        {
+            lines.Add($"Hauptquelle: {Path.GetFileName(detected.MainVideoPath)}");
+        }
+        else
+        {
+            lines.Add($"AD-Quelle: {Path.GetFileName(detected.AudioDescriptionPath ?? detected.MainVideoPath)}");
+            lines.Add("Zu dieser Episode wurde noch keine frische Hauptvideoquelle gefunden.");
+        }
+
+        lines.Add($"Erkannte Episode: {detected.SeriesName} - S{detected.SeasonNumber}E{detected.EpisodeNumber} - {detected.SuggestedTitle}");
 
         if (detected.AdditionalVideoPaths.Count > 0)
         {
@@ -263,6 +273,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
         if (string.IsNullOrWhiteSpace(OutputPath))
         {
             OutputTargetStatusText = string.Empty;
+            return;
+        }
+
+        if (!HasPrimaryVideoSource)
+        {
+            OutputTargetStatusText = ArchiveState == EpisodeArchiveState.Existing
+                && _services.OutputPaths.IsArchivePath(OutputPath)
+                ? "Es liegt nur eine AD-Quelle vor. Bei Vorschau oder Mux kann die vorhandene Bibliotheks-MKV als Hauptquelle weiterverwendet und um die AD ergänzt werden."
+                : "Es liegt nur eine AD-Quelle vor. Ohne vorhandene Bibliotheks-MKV kann aktuell kein vollständiger Mux geplant werden.";
             return;
         }
 

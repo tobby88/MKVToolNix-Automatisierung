@@ -140,22 +140,21 @@ internal sealed partial class BatchMuxViewModel
 
                 var outputAlreadyExists = File.Exists(outputPath);
                 var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
+                var statusKind = DetermineInitialStatus(detected, outputAlreadyExists, isArchiveTargetPath);
                 var item = BatchEpisodeItemViewModel.CreateFromDetection(
                     requestedMainVideoPath: result.SourcePath,
                     localGuess: localGuess,
                     detected: detected,
                     metadataResolution: metadataResolution,
                     outputPath: outputPath,
-                    statusKind: outputAlreadyExists && isArchiveTargetPath ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
+                    statusKind: statusKind,
                     isSelected: true,
                     isArchiveTargetPath: isArchiveTargetPath);
 
                 scannedItems.Add(item);
                 itemsByEpisodeKey[episodeKey] = item;
 
-                AppendLog(outputAlreadyExists
-                    ? $"OK: {Path.GetFileName(result.SourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
-                    : $"OK: {Path.GetFileName(result.SourcePath)}");
+                AppendLog(BuildScanSuccessLogLine(result.SourcePath, detected, outputAlreadyExists, isArchiveTargetPath));
             }
 
             _episodeCollection.Reset(scannedItems);
@@ -212,6 +211,24 @@ internal sealed partial class BatchMuxViewModel
         await dispatcher.InvokeAsync(
             static () => { },
             DispatcherPriority.ApplicationIdle);
+    }
+
+    private static string BuildScanSuccessLogLine(
+        string sourcePath,
+        AutoDetectedEpisodeFiles detected,
+        bool outputAlreadyExists,
+        bool isArchiveTargetPath)
+    {
+        if (!detected.HasPrimaryVideoSource)
+        {
+            return outputAlreadyExists && isArchiveTargetPath
+                ? $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur AD erkannt. Die vorhandene Bibliotheksdatei wird später als Hauptquelle geprüft."
+                : $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur AD erkannt. Ohne vorhandene Bibliotheks-MKV aktuell nicht ausführbar.";
+        }
+
+        return outputAlreadyExists
+            ? $"OK: {Path.GetFileName(sourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
+            : $"OK: {Path.GetFileName(sourcePath)}";
     }
 
 }

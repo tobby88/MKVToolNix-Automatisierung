@@ -32,6 +32,7 @@ internal sealed partial class BatchMuxViewModel
             var outputPath = result.OutputPath;
             var outputAlreadyExists = File.Exists(outputPath);
             var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
+            var statusKind = DetermineInitialStatus(result.Detected, outputAlreadyExists, isArchiveTargetPath);
 
             item.ApplyDetection(
                 requestedMainVideoPath: selectedVideoPath,
@@ -39,7 +40,7 @@ internal sealed partial class BatchMuxViewModel
                 detected: result.Detected,
                 metadataResolution: result.MetadataResolution,
                 outputPath: outputPath,
-                statusKind: outputAlreadyExists && isArchiveTargetPath ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
+                statusKind: statusKind,
                 isArchiveTargetPath: isArchiveTargetPath);
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
@@ -73,6 +74,23 @@ internal sealed partial class BatchMuxViewModel
     {
         value = Math.Clamp(value, 0, 100);
         return start + (int)Math.Round((end - start) * (value / 100d));
+    }
+
+    private static BatchEpisodeStatusKind DetermineInitialStatus(
+        AutoDetectedEpisodeFiles detected,
+        bool outputAlreadyExists,
+        bool isArchiveTargetPath)
+    {
+        if (!detected.HasPrimaryVideoSource)
+        {
+            return outputAlreadyExists && isArchiveTargetPath
+                ? BatchEpisodeStatusKind.ComparisonPending
+                : BatchEpisodeStatusKind.Warning;
+        }
+
+        return outputAlreadyExists && isArchiveTargetPath
+            ? BatchEpisodeStatusKind.ComparisonPending
+            : BatchEpisodeStatusKind.Ready;
     }
 
     private async Task ProcessBatchScanItemAsync(
