@@ -231,6 +231,38 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal("TVDB-Prüfung erforderlich.", item.MetadataStatusText);
     }
 
+    [Fact]
+    public async Task FreezeSelectedItemPlanSummaryForExecution_CancelsPendingSelectionRefresh()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        item.SetPlanSummary("Stabile Batch-Details");
+        item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Stabil", "Bleibt waehrend des Batch-Laufs sichtbar"));
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.FreezeSelectedItemPlanSummaryForExecution();
+        await Task.Delay(350);
+
+        Assert.Equal("Stabile Batch-Details", item.PlanSummaryText);
+        Assert.Equal("Stabil", item.UsageSummary?.ArchiveAction);
+        Assert.Equal("Bleibt waehrend des Batch-Laufs sichtbar", item.UsageSummary?.ArchiveDetails);
+    }
+
     private static BatchMuxViewModel CreateBatchViewModel(IEpisodeReviewWorkflow reviewWorkflow)
     {
         return new BatchMuxViewModel(

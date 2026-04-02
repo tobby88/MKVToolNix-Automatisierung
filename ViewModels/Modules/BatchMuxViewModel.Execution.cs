@@ -34,6 +34,7 @@ internal sealed partial class BatchMuxViewModel
         {
             SetBusy(true);
             cancellationToken = BeginBatchOperation(BatchOperationKind.Execution);
+            FreezeSelectedItemPlanSummaryForExecution();
             // Persistierte Batch-Logs sollen genau diesen Lauf enthalten, ohne ältere Scan-Einträge mitzuschleppen.
             var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
             void AppendBatchRunLogCore(string line)
@@ -136,6 +137,7 @@ internal sealed partial class BatchMuxViewModel
         }
         finally
         {
+            UnfreezeSelectedItemPlanSummaryAfterExecution();
             CompleteBatchOperation(BatchOperationKind.Execution);
             SetBusy(false);
         }

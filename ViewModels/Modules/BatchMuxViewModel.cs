@@ -36,6 +36,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private string _logText = string.Empty;
     private int _progressValue;
     private bool _isBusy;
+    private bool _isSelectedItemPlanSummaryFrozen;
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
     private int _selectedPlanSummaryVersion;
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
@@ -354,6 +355,26 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         OnPropertyChanged(nameof(CanCancelBatchOperation));
         OnPropertyChanged(nameof(CancelBatchOperationTooltip));
         RefreshCommands();
+    }
+
+    /// <summary>
+    /// Friert die sichtbare Plan- und Nutzungsübersicht des aktuell ausgewählten Batch-Eintrags ein.
+    /// Während des Batch-Laufs wird die Zieldatei aktiv geschrieben; automatische Neuplanungen
+    /// gegen diesen Zwischenstand würden die Anzeige mit falschen Warnungen und Schein-Vergleichen
+    /// überschreiben. Deshalb bleibt ab hier bewusst die letzte bestätigte Darstellung sichtbar.
+    /// </summary>
+    internal void FreezeSelectedItemPlanSummaryForExecution()
+    {
+        _isSelectedItemPlanSummaryFrozen = true;
+        CancelSelectedItemPlanSummaryRefresh(invalidateInFlightRefreshes: true);
+    }
+
+    /// <summary>
+    /// Hebt das Einfrieren der Detailübersicht nach dem Batch-Lauf wieder auf.
+    /// </summary>
+    internal void UnfreezeSelectedItemPlanSummaryAfterExecution()
+    {
+        _isSelectedItemPlanSummaryFrozen = false;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -69,33 +69,64 @@ internal sealed partial class BatchMuxViewModel
     private async Task RefreshComparisonForItemAsync(
         BatchEpisodeItemViewModel item,
         bool preserveCurrentPresentation = false,
+        Func<bool>? shouldSkipPresentationUpdate = null,
         CancellationToken cancellationToken = default)
     {
+        bool ShouldSkipPresentationUpdate()
+        {
+            return shouldSkipPresentationUpdate?.Invoke() == true;
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
+        if (ShouldSkipPresentationUpdate())
+        {
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(item.MainVideoPath)
             || string.IsNullOrWhiteSpace(item.OutputPath)
             || string.IsNullOrWhiteSpace(item.TitleForMux))
         {
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             item.SetPlanSummary(string.Empty);
             return;
         }
 
         if (preserveCurrentPresentation)
         {
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             // Das Anklicken eines Eintrags soll die letzte gültige Anzeige beibehalten, bis die
             // aktualisierte Planung fertig vorliegt. Sonst springt der Status kurz zurück.
             item.RefreshArchivePresence(item.StatusKind);
         }
         else
         {
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             item.RefreshArchivePresence();
         }
+
         var outputExists = item.ArchiveState == EpisodeArchiveState.Existing;
         var hasArchiveComparisonTarget = item.HasArchiveComparisonTarget;
 
         if (!preserveCurrentPresentation)
         {
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             item.SetPlanSummary(hasArchiveComparisonTarget
                 ? "Zielvergleich wird berechnet..."
                 : "Verwendungsplan wird berechnet...");
@@ -109,6 +140,11 @@ internal sealed partial class BatchMuxViewModel
             cancellationToken.ThrowIfCancellationRequested();
             var plan = await GetOrBuildPlanForItemAsync(item, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             item.SetPlanSummary(plan.BuildCompactSummaryText());
             item.SetUsageSummary(plan.BuildUsageSummary());
 
@@ -127,6 +163,11 @@ internal sealed partial class BatchMuxViewModel
         }
         catch (Exception ex)
         {
+            if (ShouldSkipPresentationUpdate())
+            {
+                return;
+            }
+
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
             item.SetStatus(BatchEpisodeStatusKind.Warning);
@@ -257,8 +298,11 @@ internal sealed partial class BatchMuxViewModel
 
     private void ScheduleSelectedItemPlanSummaryRefresh()
     {
-        _selectedPlanSummaryRefreshCts?.Cancel();
-        _selectedPlanSummaryRefreshCts?.Dispose();
+        CancelSelectedItemPlanSummaryRefresh();
+        if (_isSelectedItemPlanSummaryFrozen)
+        {
+            return;
+        }
 
         var cancellationSource = new CancellationTokenSource();
         _selectedPlanSummaryRefreshCts = cancellationSource;
@@ -295,24 +339,52 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
+        bool ShouldSkipPresentationUpdate()
+        {
+            return _isSelectedItemPlanSummaryFrozen
+                || version != _selectedPlanSummaryVersion
+                || !ReferenceEquals(SelectedEpisodeItem, item);
+        }
+
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await RefreshComparisonForItemAsync(item, preserveCurrentPresentation: true, cancellationToken);
-            if (version != _selectedPlanSummaryVersion || !ReferenceEquals(SelectedEpisodeItem, item))
-            {
-                return;
-            }
+            await RefreshComparisonForItemAsync(
+                item,
+                preserveCurrentPresentation: true,
+                shouldSkipPresentationUpdate: ShouldSkipPresentationUpdate,
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            if (version != _selectedPlanSummaryVersion || !ReferenceEquals(SelectedEpisodeItem, item))
+            if (ShouldSkipPresentationUpdate())
             {
                 return;
             }
 
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Bricht geplante oder laufende Detail-Refreshes für den ausgewählten Batch-Eintrag ab.
+    /// Auf Wunsch wird zusätzlich die laufende Versionsnummer angehoben, damit Ergebnisse
+    /// bereits gestarteter Hintergrundberechnungen beim Abschluss nicht mehr in die UI
+    /// zurückgeschrieben werden.
+    /// </summary>
+    /// <param name="invalidateInFlightRefreshes">
+    /// <see langword="true"/>, wenn auch bereits gestartete Refreshes ihre Ergebnisse verwerfen sollen.
+    /// </param>
+    private void CancelSelectedItemPlanSummaryRefresh(bool invalidateInFlightRefreshes = false)
+    {
+        _selectedPlanSummaryRefreshCts?.Cancel();
+        _selectedPlanSummaryRefreshCts?.Dispose();
+        _selectedPlanSummaryRefreshCts = null;
+
+        if (invalidateInFlightRefreshes)
+        {
+            Interlocked.Increment(ref _selectedPlanSummaryVersion);
         }
     }
 
