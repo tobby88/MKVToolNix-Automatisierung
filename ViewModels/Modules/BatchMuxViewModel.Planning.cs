@@ -38,8 +38,10 @@ internal sealed partial class BatchMuxViewModel
                         ? $"Vergleiche vorhandene Bibliotheksdateien... {index + 1}/{items.Count}"
                         : $"Aktualisiere Vergleiche... {index + 1}/{items.Count}",
                     automatic
-                        ? ScaleProgress(CalculatePercent(index + 1, items.Count), AutomaticCompareProgressStart, 100)
-                        : CalculatePercent(index + 1, items.Count));
+                        // Die Anzeige soll abgeschlossene Vergleiche abbilden. Sonst erreicht die
+                        // letzte Episode bereits vor Ende ihres Vergleichs kurzzeitig 100 %.
+                        ? ScaleProgress(CalculatePercent(index, items.Count), AutomaticCompareProgressStart, 100)
+                        : CalculatePercent(index, items.Count));
 
                 try
                 {

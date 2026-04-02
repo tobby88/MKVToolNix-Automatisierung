@@ -326,15 +326,23 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         IsSelected = true;
     }
 
-    public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null)
+    public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null, string? statusText = null)
     {
-        ApplyArchiveState(statusOverride, preservePlanSummary: true);
+        if (statusText is null
+            && statusOverride is BatchEpisodeStatusKind requestedStatus
+            && requestedStatus == StatusKind)
+        {
+            statusText = GetCurrentStatusTextOverride();
+        }
+
+        ApplyArchiveState(statusOverride, preservePlanSummary: true, statusText: statusText);
     }
 
     private void ApplyArchiveState(
         BatchEpisodeStatusKind? statusOverride = null,
         bool preservePlanSummary = false,
-        bool refreshArchiveState = true)
+        bool refreshArchiveState = true,
+        string? statusText = null)
     {
         if (refreshArchiveState)
         {
@@ -343,7 +351,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         var hasArchiveComparisonTarget = HasArchiveComparisonTarget;
-        SetStatus(statusOverride ?? (hasArchiveComparisonTarget ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
+        SetStatus(
+            statusOverride ?? (hasArchiveComparisonTarget ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready),
+            statusText);
         if (!preservePlanSummary)
         {
             SetPlanSummary(BuildPendingPlanSummary(outputExists, _isArchiveTargetPath));
@@ -385,6 +395,14 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return EpisodeUsageSummary.CreatePending(
             "Ziel noch frei",
             "Neue MKV wird erstellt");
+    }
+
+    private string? GetCurrentStatusTextOverride()
+    {
+        var defaultStatusText = EpisodeEditTextBuilder.BuildBatchStatusText(StatusKind);
+        return string.Equals(Status, defaultStatusText, StringComparison.Ordinal)
+            ? null
+            : Status;
     }
 
     protected override void OnPropertyChanged(string? propertyName = null)

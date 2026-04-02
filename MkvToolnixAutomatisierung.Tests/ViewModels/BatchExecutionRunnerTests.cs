@@ -136,6 +136,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         };
         var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
         var item = CreateBatchEpisodeItem(outputPath);
+        var logs = new List<string>();
 
         var outcome = await runner.ExecutePlansAsync(
         [
@@ -143,7 +144,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         ],
             Path.Combine(_tempDirectory, "done"),
             new BatchRunProgressTracker(1, (_, _) => { }),
-            _ => { });
+            logs.Add);
 
         Assert.Equal(0, outcome.SuccessCount);
         Assert.Equal(1, outcome.WarningCount);
@@ -151,6 +152,41 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Single(outcome.NewOutputFiles);
         Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
         Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
+        Assert.Equal("Warnung (Datei erstellt, Exit-Code 1)", item.Status);
+        Assert.Contains(logs, line => line.Contains("Exit-Code 1", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecutePlansAsync_TreatsMkvMergeWarningsAsWarning_AndExplainsSource()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "warning-lines", "Episode.mkv");
+        var muxWorkflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (plan, _) =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(plan.OutputFilePath)!);
+                File.WriteAllText(plan.OutputFilePath, "muxed with warnings");
+                return Task.FromResult(new MuxExecutionResult(0, HasWarning: true, LastProgressPercent: 100));
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, new StubCleanupService());
+        var item = CreateBatchEpisodeItem(outputPath);
+        var logs = new List<string>();
+
+        var outcome = await runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(item, CreatePlan(outputPath), [])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            logs.Add);
+
+        Assert.Equal(0, outcome.SuccessCount);
+        Assert.Equal(1, outcome.WarningCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
+        Assert.Equal("Warnung (mkvmerge meldet Warnungen)", item.Status);
+        Assert.Contains(logs, line => line.Contains("mkvmerge meldet Warnungen", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -242,6 +278,21 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal("Letzte berechnete Planung", item.PlanSummaryText);
         Assert.Same(usageSummary, item.UsageSummary);
         Assert.Equal("Video alt", item.UsageSummary!.MainVideo.CurrentText);
+    }
+
+    [Fact]
+    public void RefreshArchivePresence_PreservesCustomWarningStatusText_WhenStatusKindStaysTheSame()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "existing-warning", "Episode.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "existing");
+        var item = CreateBatchEpisodeItem(outputPath);
+
+        item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (mkvmerge meldet Warnungen)");
+        item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning);
+
+        Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
+        Assert.Equal("Warnung (mkvmerge meldet Warnungen)", item.Status);
     }
 
     public void Dispose()

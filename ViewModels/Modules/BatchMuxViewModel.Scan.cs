@@ -97,9 +97,16 @@ internal sealed partial class BatchMuxViewModel
                 {
                     var processed = Interlocked.Increment(ref completedCount);
                     _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    {
+                        // Einzelne Abschlussmeldungen aus den parallelen Scan-Tasks koennen noch kurz
+                        // spaeter in der UI ankommen. Der globale Fortschritt darf dabei nie hinter
+                        // einen bereits angezeigten Vergleichsstand zurueckfallen.
                         SetStatus(
                             $"Scanne Ordner... {processed}/{total} abgeschlossen",
-                            ScaleProgress(CalculatePercent(processed, total), 0, AutomaticCompareProgressStart)));
+                            Math.Max(
+                                ProgressValue,
+                                ScaleProgress(CalculatePercent(processed, total), 0, AutomaticCompareProgressStart)));
+                    });
                 }));
 
             await Task.WhenAll(scanTasks);

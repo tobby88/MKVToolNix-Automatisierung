@@ -144,9 +144,10 @@ internal sealed class BatchExecutionRunner
                 else if ((result.ExitCode == 0 && result.HasWarning)
                     || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
                 {
-                    item.SetStatus(BatchEpisodeStatusKind.Warning);
                     warningCount++;
-                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning);
+                    var warningStatusText = BuildWarningStatusText(result);
+                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning, warningStatusText);
+                    appendLog($"  WARNUNG: {warningStatusText}");
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
                         newOutputFiles.Add(item.OutputPath);
@@ -229,6 +230,13 @@ internal sealed class BatchExecutionRunner
         _cleanupService.DeleteEmptyParentDirectories(cleanupFiles, Path.GetDirectoryName(doneDirectory));
 
         return moveResult.MovedFiles;
+    }
+
+    private static string BuildWarningStatusText(MuxExecutionResult result)
+    {
+        return result.HasWarning
+            ? "Warnung (mkvmerge meldet Warnungen)"
+            : "Warnung (Datei erstellt, Exit-Code 1)";
     }
 }
 
