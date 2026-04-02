@@ -61,4 +61,19 @@ public sealed class AppSettingsFileLocatorTests
         Assert.True(result.HasWarning);
         Assert.True(Directory.EnumerateFiles(PortableAppStorage.DataDirectory, "settings.corrupt-*.json").Count() >= 1);
     }
+
+    [Fact]
+    public void SaveCombinedSettings_DoesNotLeaveTemporaryFilesBehind()
+    {
+        AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+        {
+            Metadata = new AppMetadataSettings
+            {
+                TvdbApiKey = "abc"
+            }
+        });
+
+        Assert.True(File.Exists(PortableAppStorage.SettingsFilePath));
+        Assert.Empty(Directory.EnumerateFiles(PortableAppStorage.DataDirectory, "settings.json.tmp-*"));
+    }
 }

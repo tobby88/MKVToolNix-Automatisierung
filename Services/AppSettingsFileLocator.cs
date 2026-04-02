@@ -56,22 +56,44 @@ public static class AppSettingsFileLocator
     {
         var settingsPath = GetSettingsFilePath();
         var backupPath = GetBackupFilePath();
-        var temporaryPath = settingsPath + ".tmp";
+        var temporaryPath = BuildTemporarySettingsFilePath(settingsPath);
         PortableAppStorage.EnsureDataDirectoryForSave();
         var json = JsonSerializer.Serialize(settings, SerializerOptions);
-        File.WriteAllText(temporaryPath, json, Utf8Encoding);
 
-        if (File.Exists(settingsPath))
+        try
         {
-            File.Copy(settingsPath, backupPath, overwrite: true);
-        }
+            File.WriteAllText(temporaryPath, json, Utf8Encoding);
 
-        File.Move(temporaryPath, settingsPath, overwrite: true);
+            if (File.Exists(settingsPath))
+            {
+                File.Copy(settingsPath, backupPath, overwrite: true);
+            }
+
+            File.Move(temporaryPath, settingsPath, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                {
+                    File.Delete(temporaryPath);
+                }
+            }
+            catch
+            {
+            }
+        }
     }
 
     private static string GetBackupFilePath()
     {
         return PortableAppStorage.SettingsBackupFilePath;
+    }
+
+    private static string BuildTemporarySettingsFilePath(string settingsPath)
+    {
+        return $"{settingsPath}.tmp-{Environment.ProcessId}-{Guid.NewGuid():N}";
     }
 
     private static AppSettingsLoadResult LoadCombinedSettingsInternal(bool captureCorruptSnapshots)
