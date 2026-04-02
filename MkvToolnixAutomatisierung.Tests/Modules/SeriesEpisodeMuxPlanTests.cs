@@ -52,7 +52,7 @@ public sealed class SeriesEpisodeMuxPlanTests
                 new VideoSourcePlan(
                     @"C:\Temp\video.mkv",
                     0,
-                    "Englisch - FHD - H.264",
+                    "English - FHD - H.264",
                     IsDefaultTrack: true,
                     LanguageCode: "en")
             ],
@@ -78,8 +78,8 @@ public sealed class SeriesEpisodeMuxPlanTests
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
             metadata: new EpisodeTrackMetadata(
-                "Englisch - AC-3",
-                "Plattdeutsch (sehbehinderte) - AC-3",
+                "English - AC-3",
+                "Plattdüütsch (sehbehinderte) - AC-3",
                 AudioLanguageCode: "en",
                 AudioDescriptionLanguageCode: "nds"),
             notes: []);
@@ -88,7 +88,7 @@ public sealed class SeriesEpisodeMuxPlanTests
 
         AssertContainsSequence(arguments, "--language", "0:en");
         AssertContainsSequence(arguments, "--language", "1:en");
-        Assert.Contains("0:Englisch - SRT", arguments);
+        Assert.Contains("0:English - SRT", arguments);
     }
 
     private static SeriesEpisodeMuxPlan CreatePlan(IReadOnlyList<SubtitleFile> subtitleFiles)

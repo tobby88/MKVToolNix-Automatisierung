@@ -46,15 +46,17 @@ internal static class MediaLanguageHelper
     {
         return NormalizeMuxLanguageCode(languageCode) switch
         {
-            "nds" => "Plattdeutsch",
-            "en" => "Englisch",
+            // Tracknamen sollen die Sprache jeweils in ihrer eigenen Bezeichnung tragen,
+            // damit Mehrspuren-Sets sprachlich konsistent und direkt lesbar bleiben.
+            "nds" => "Plattdüütsch",
+            "en" => "English",
             _ => "Deutsch"
         };
     }
 
     /// <summary>
     /// Liefert die projektweit gewünschte Sortierreihenfolge für Videosprachen.
-    /// Deutsch steht vor Plattdeutsch und Englisch; unbekannte Werte landen wegen der Normalisierung ebenfalls bei Deutsch.
+    /// Deutsch steht vor Plattdüütsch und English; unbekannte Werte landen wegen der Normalisierung ebenfalls bei Deutsch.
     /// </summary>
     /// <param name="languageCode">Rohwert oder bereits normalisierter Sprachcode.</param>
     /// <returns>Kleinerer Wert bedeutet höhere Priorität in Mehrspuren-Video-Sets.</returns>

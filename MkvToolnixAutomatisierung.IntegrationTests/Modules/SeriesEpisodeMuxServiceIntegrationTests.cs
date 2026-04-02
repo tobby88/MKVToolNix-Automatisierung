@@ -218,8 +218,8 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             [
                 "Deutsch - HD - H.264",
                 "Deutsch - UHD - H.265",
-                "Plattdeutsch - FHD - H.264",
-                "Englisch - UHD - H.264"
+                "Plattdüütsch - FHD - H.264",
+                "English - UHD - H.264"
             ],
             plan.VideoSources.Select(source => source.TrackName).ToList());
     }
