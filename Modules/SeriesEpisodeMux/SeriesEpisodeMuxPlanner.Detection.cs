@@ -168,8 +168,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         var episodeIdentity = SelectPreferredEpisodeIdentity(normalCandidates, selectedIdentity);
-        var primaryVideoCandidate = SelectBestNormalVideoCandidate(normalCandidates);
-        var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, primaryVideoCandidate);
+        var durationReferenceCandidate = SelectBestNormalVideoCandidate(normalCandidates);
+        var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, durationReferenceCandidate);
+        var primaryVideoCandidate = selectedVideoCandidates[0];
         var subtitlePaths = CollectSubtitlePaths(selectedVideoCandidates, primaryVideoCandidate);
         var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName);
 
@@ -569,6 +570,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             DurationSeconds: durationSeconds,
             VideoWidth: mediaMetadata.VideoWidth,
             VideoCodecLabel: mediaMetadata.VideoCodecLabel,
+            VideoLanguage: MediaLanguageHelper.NormalizeMuxLanguageCode(mediaMetadata.VideoLanguage),
             AudioCodecLabel: mediaMetadata.AudioCodecLabel,
             FileSizeBytes: new FileInfo(seed.FilePath).Length,
             SubtitlePaths: subtitlePaths,
@@ -611,23 +613,25 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .First();
     }
 
-    private static List<NormalVideoCandidate> SelectVideoCandidates(IReadOnlyList<NormalVideoCandidate> candidates, NormalVideoCandidate primaryCandidate)
+    private static List<NormalVideoCandidate> SelectVideoCandidates(
+        IReadOnlyList<NormalVideoCandidate> candidates,
+        NormalVideoCandidate durationReferenceCandidate)
     {
-        var sameDurationCandidates = FilterByDuration(candidates, primaryCandidate.DurationSeconds);
-        var bestByCodec = sameDurationCandidates
-            .GroupBy(candidate => candidate.VideoCodecLabel, StringComparer.OrdinalIgnoreCase)
-            .Select(group => SelectBestNormalVideoCandidate(group))
-            .ToList();
+        var sameDurationCandidates = FilterByDuration(candidates, durationReferenceCandidate.DurationSeconds);
 
-        var additionalCandidates = bestByCodec
-            .Where(candidate => !string.Equals(candidate.FilePath, primaryCandidate.FilePath, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(candidate => candidate.VideoWidth)
+        // Fachlich wird pro Sprach-/Codec-Slot genau die beste Quelle übernommen.
+        // So kann z. B. Deutsch H.264 vor Deutsch H.265 stehen, während Fremdsprachen
+        // dahinter einsortiert werden, ohne dass gleichsprachige bessere Ersatzquellen
+        // desselben Codecs doppelt im Plan landen.
+        return sameDurationCandidates
+            .GroupBy(candidate => BuildVideoSlotKey(candidate.VideoLanguage, candidate.VideoCodecLabel), StringComparer.OrdinalIgnoreCase)
+            .Select(group => SelectBestNormalVideoCandidate(group))
+            .OrderBy(candidate => MediaLanguageHelper.GetLanguageSortRank(candidate.VideoLanguage))
             .ThenBy(candidate => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(candidate.VideoCodecLabel))
+            .ThenByDescending(candidate => candidate.VideoWidth)
             .ThenByDescending(candidate => candidate.FileSizeBytes)
             .ThenBy(candidate => GetSenderPriority(candidate.Sender))
             .ToList();
-
-        return [primaryCandidate, .. additionalCandidates];
     }
 
     private static AudioDescriptionCandidate? SelectAudioDescriptionCandidate(
@@ -696,7 +700,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         if (selectedVideoCandidates.Count > 1)
         {
-            notes.Add($"Es werden {selectedVideoCandidates.Count} Videospuren mit unterschiedlichen Codecs übernommen.");
+            notes.Add($"Es werden {selectedVideoCandidates.Count} Videospuren aus unterschiedlichen Sprach-/Codec-Slots übernommen.");
         }
 
         if (selectedVideoCandidates.Any(candidate => IsSrfSender(candidate.Sender)))
@@ -759,6 +763,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private static string BuildVideoTrackName(MediaTrackMetadata metadata)
     {
         return $"{MediaLanguageHelper.GetLanguageDisplayName(metadata.VideoLanguage)} - {metadata.ResolutionLabel.Value} - {metadata.VideoCodecLabel}";
+    }
+
+    private static string BuildVideoSlotKey(string? languageCode, string codecLabel)
+    {
+        return $"{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}|{codecLabel.Trim().ToUpperInvariant()}";
     }
 
     private static EpisodeTrackMetadata BuildTrackMetadata(

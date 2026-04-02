@@ -89,6 +89,142 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_SelectsBestVideoPerLanguageAndCodecSlot_AndOrdersLanguagesBeforeQuality()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-video-language-slots");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-video-language-slots");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var germanH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var betterGermanH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h264-besser.mp4");
+        var germanH265Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265.mp4");
+        var lowGermanH265Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265-alt.mp4");
+        var plattdeutschH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-nds-h264.mp4");
+        var englishH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h264.mp4");
+        var englishH265Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h265.mp4");
+
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).txt", "de-h264");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h264-besser.txt", "de-h264-better");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265.txt", "de-h265");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265-alt.txt", "de-h265-old");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-nds-h264.txt", "nds-h264");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h264.txt", "en-h264");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h265.txt", "en-h265");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            germanH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            betterGermanH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            germanH265Path,
+            CreateVideoTrack(0, "HEVC/H.265", "3840x2160", language: "de"),
+            CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            lowGermanH265Path,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            plattdeutschH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "nds"),
+            CreateAudioTrack(1, "E-AC-3", language: "nds"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            englishH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "3840x2160", language: "en"),
+            CreateAudioTrack(1, "E-AC-3", language: "en"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            englishH265Path,
+            CreateVideoTrack(0, "HEVC/H.265", "3840x2160", language: "en"),
+            CreateAudioTrack(1, "AAC", language: "en"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(germanH264Path);
+
+        Assert.Equal(betterGermanH264Path, detected.MainVideoPath);
+        Assert.Equal(
+            [germanH265Path, plattdeutschH264Path, englishH264Path, englishH265Path],
+            detected.AdditionalVideoPaths);
+        Assert.Equal(
+            new[]
+            {
+                Path.ChangeExtension(betterGermanH264Path, ".txt"),
+                Path.ChangeExtension(germanH265Path, ".txt"),
+                Path.ChangeExtension(plattdeutschH264Path, ".txt"),
+                Path.ChangeExtension(englishH264Path, ".txt"),
+                Path.ChangeExtension(englishH265Path, ".txt")
+            }.OrderBy(path => path, StringComparer.OrdinalIgnoreCase),
+            detected.AttachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_FreshTarget_OrdersVideoTracksByLanguageThenCodec()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-plan-video-language-order");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-plan-video-language-order");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var germanH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var germanH265Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265.mp4");
+        var plattdeutschH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-nds-h264.mp4");
+        var englishH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h264.mp4");
+
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).txt", "de-h264");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-de-h265.txt", "de-h265");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-nds-h264.txt", "nds-h264");
+        CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en-h264.txt", "en-h264");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            germanH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            germanH265Path,
+            CreateVideoTrack(0, "HEVC/H.265", "3840x2160", language: "de"),
+            CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            plattdeutschH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "nds"),
+            CreateAudioTrack(1, "E-AC-3", language: "nds"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            englishH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "3840x2160", language: "en"),
+            CreateAudioTrack(1, "E-AC-3", language: "en"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var detected = await service.DetectFromSelectedVideoAsync(germanH264Path);
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            detected.MainVideoPath,
+            detected.AudioDescriptionPath,
+            detected.SubtitlePaths,
+            detected.AttachmentPaths,
+            outputPath,
+            detected.SuggestedTitle));
+
+        Assert.Equal(
+            [germanH264Path, germanH265Path, plattdeutschH264Path, englishH264Path],
+            plan.VideoSources.Select(source => source.FilePath).ToList());
+        Assert.Equal(
+            ["de", "de", "nds", "en"],
+            plan.VideoSources.Select(source => source.LanguageCode).ToList());
+        Assert.Equal(
+            [
+                "Deutsch - HD - H.264",
+                "Deutsch - UHD - H.265",
+                "Plattdeutsch - FHD - H.264",
+                "Englisch - UHD - H.264"
+            ],
+            plan.VideoSources.Select(source => source.TrackName).ToList());
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_DoesNotCreateMissingOutputDirectory_WhenOnlyBuildingPlan()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-preview-only");

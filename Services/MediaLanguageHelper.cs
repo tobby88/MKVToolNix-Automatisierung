@@ -51,4 +51,21 @@ internal static class MediaLanguageHelper
             _ => "Deutsch"
         };
     }
+
+    /// <summary>
+    /// Liefert die projektweit gewünschte Sortierreihenfolge für Videosprachen.
+    /// Deutsch steht vor Plattdeutsch und Englisch; unbekannte Werte landen wegen der Normalisierung ebenfalls bei Deutsch.
+    /// </summary>
+    /// <param name="languageCode">Rohwert oder bereits normalisierter Sprachcode.</param>
+    /// <returns>Kleinerer Wert bedeutet höhere Priorität in Mehrspuren-Video-Sets.</returns>
+    public static int GetLanguageSortRank(string? languageCode)
+    {
+        return NormalizeMuxLanguageCode(languageCode) switch
+        {
+            "de" => 0,
+            "nds" => 1,
+            "en" => 2,
+            _ => 9
+        };
+    }
 }

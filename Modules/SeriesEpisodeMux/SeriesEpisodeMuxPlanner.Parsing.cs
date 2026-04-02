@@ -287,6 +287,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         int? DurationSeconds,
         int VideoWidth,
         string VideoCodecLabel,
+        string VideoLanguage,
         string AudioCodecLabel,
         long FileSizeBytes,
         IReadOnlyList<string> SubtitlePaths,
