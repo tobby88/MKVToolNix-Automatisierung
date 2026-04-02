@@ -390,12 +390,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
             plannedVideoPaths,
             cancellationToken);
 
-        if (!request.HasPrimaryVideoSource && string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
-        {
-            throw new InvalidOperationException(
-                "Zur ausgewählten AD-Datei wurde keine passende Hauptquelle gefunden, und am Ziel liegt noch keine wiederverwendbare Archiv-MKV. Die AD kann deshalb derzeit nicht verarbeitet werden.");
-        }
-
         if (archiveDecision.SkipMux)
         {
             return SeriesEpisodeMuxPlan.CreateSkip(
@@ -405,6 +399,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 archiveDecision.SkipReason ?? "Archiv bereits aktuell.",
                 archiveDecision.SkipUsageSummary,
                 archiveDecision.Notes);
+        }
+
+        if (!request.HasPrimaryVideoSource && string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
+        {
+            throw new InvalidOperationException(
+                "Zur ausgewählten AD-Datei wurde keine passende Hauptquelle gefunden, und am Ziel liegt noch keine wiederverwendbare Archiv-MKV. Die AD kann deshalb derzeit nicht verarbeitet werden.");
         }
 
         var effectiveOutputPath = archiveDecision.OutputFilePath;

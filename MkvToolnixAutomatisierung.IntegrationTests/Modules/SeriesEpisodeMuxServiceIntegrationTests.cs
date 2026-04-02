@@ -1439,6 +1439,50 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WithAlreadyCompleteArchiveTarget_ReturnsSkipPlan()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-skip");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-skip");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02) Audiodeskription.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Pilot",
+            HasPrimaryVideoSource: false));
+
+        Assert.True(plan.SkipMux);
+        Assert.Equal(outputPath, plan.OutputFilePath);
+        Assert.Contains(
+            "erneutes Muxen ist nicht nötig",
+            plan.SkipReason ?? string.Empty,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_WithoutExistingArchiveTarget_ThrowsHelpfulMessage()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-missing");

@@ -9,7 +9,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <DefaultItemExcludes>$(DefaultItemExcludes);MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
+    <!-- WPF-Hilfsprojekte und lokale Debug-Helfer dürfen nie in den App-Compile-Glob geraten. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;scratch\**;MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
