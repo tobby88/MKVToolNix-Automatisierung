@@ -102,6 +102,53 @@ public sealed class EpisodePlanCacheTests : IDisposable
         Assert.False(found);
     }
 
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenRelevantSiblingVideoAppearsInSourceDirectory()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        CreateFile("episode-2.mp4", "new alternative video");
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenRelevantSiblingVideoDisappearsFromSourceDirectory()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        var siblingVideoPath = CreateFile("episode-2.mp4", "existing alternative video");
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        File.Delete(siblingVideoPath);
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_IgnoresIrrelevantSiblingFiles_InSourceDirectory()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        CreateFile("cover.jpg", "preview image");
+
+        var found = cache.TryGet(owner, input, out var cachedPlan);
+
+        Assert.True(found);
+        Assert.NotNull(cachedPlan);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

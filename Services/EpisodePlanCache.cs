@@ -8,6 +8,16 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed class EpisodePlanCache
 {
+    private static readonly HashSet<string> DetectionRelevantExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4",
+        ".txt",
+        ".srt",
+        ".ass",
+        ".vtt",
+        ".ttml"
+    };
+
     private readonly Dictionary<object, CachedEpisodePlan> _cachedPlans = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
@@ -70,6 +80,7 @@ public sealed class EpisodePlanCache
     {
         var builder = new StringBuilder();
         AppendFileValue(builder, input.MainVideoPath);
+        AppendDetectionDirectoryState(builder, input.MainVideoPath);
         AppendFileValue(builder, input.AudioDescriptionPath);
         AppendFileValues(builder, input.SubtitlePaths);
         AppendFileValues(builder, input.AttachmentPaths);
@@ -122,6 +133,55 @@ public sealed class EpisodePlanCache
         builder.Append('\u001F');
     }
 
+    private static void AppendDetectionDirectoryState(StringBuilder builder, string? mainVideoPath)
+    {
+        var sourceDirectory = string.IsNullOrWhiteSpace(mainVideoPath)
+            ? null
+            : Path.GetDirectoryName(mainVideoPath);
+        AppendValue(builder, sourceDirectory);
+
+        // Die Planerzeugung läuft fachlich immer noch über eine frische Detection des Quellordners.
+        // Der UI-Cache muss deshalb nicht nur die sichtbaren Eingaben, sondern auch neue oder entfernte
+        // Begleitdateien im gleichen Ordner bemerken, selbst wenn der Benutzer die UI dabei nicht anfasst.
+        if (string.IsNullOrWhiteSpace(sourceDirectory))
+        {
+            builder.Append("no-source-directory");
+            builder.Append('\u001F');
+            return;
+        }
+
+        try
+        {
+            if (!Directory.Exists(sourceDirectory))
+            {
+                builder.Append("missing-directory");
+                builder.Append('\u001F');
+                return;
+            }
+
+            builder.Append('[');
+            foreach (var filePath in Directory.EnumerateFiles(sourceDirectory)
+                .Where(IsDetectionRelevantFile)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                AppendFileValue(builder, filePath);
+            }
+
+            builder.Append(']');
+        }
+        catch (IOException)
+        {
+            builder.Append("unavailable-directory");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            builder.Append("unavailable-directory");
+        }
+
+        builder.Append('\u001F');
+    }
+
     private static void AppendFileState(StringBuilder builder, string? path)
     {
         // Der UI-nahe Cache soll sich selbst verwerfen, sobald eine relevante Eingabedatei oder das Ziel
@@ -157,6 +217,11 @@ public sealed class EpisodePlanCache
         }
 
         builder.Append('\u001F');
+    }
+
+    private static bool IsDetectionRelevantFile(string path)
+    {
+        return DetectionRelevantExtensions.Contains(Path.GetExtension(path));
     }
 
     private sealed record CachedEpisodePlan(string CacheKey, SeriesEpisodeMuxPlan Plan);

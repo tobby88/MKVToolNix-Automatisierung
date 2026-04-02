@@ -7,8 +7,9 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal static class EpisodeFileNameHelper
 {
-    private static readonly HashSet<string> ReservedDeviceNames =
-    [
+    // Windows behandelt Gerätedateinamen unabhängig von der Schreibweise als reserviert.
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
         "CON",
         "PRN",
         "AUX",
@@ -31,7 +32,7 @@ internal static class EpisodeFileNameHelper
         "LPT7",
         "LPT8",
         "LPT9"
-    ];
+    };
 
     public static bool LooksLikeAudioDescription(string filePath)
     {

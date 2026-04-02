@@ -40,6 +40,22 @@ public sealed class EpisodeFileNameHelperTests
     }
 
     [Fact]
+    public void SanitizeFileName_NormalizesReservedNames_CaseInsensitively()
+    {
+        var fileName = EpisodeFileNameHelper.SanitizeFileName("con.txt");
+
+        Assert.Equal("con_.txt", fileName);
+    }
+
+    [Fact]
+    public void SanitizePathSegment_NormalizesReservedNames_CaseInsensitively()
+    {
+        var segment = EpisodeFileNameHelper.SanitizePathSegment("lPt1. ");
+
+        Assert.Equal("lPt1_", segment);
+    }
+
+    [Fact]
     public void BuildEpisodeFileName_RemovesTrailingDotsAndSpaces_FromTitleStem()
     {
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "01", "02", "Pilot. ");
