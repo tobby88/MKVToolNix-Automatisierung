@@ -122,6 +122,53 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ExistingCustomTargetOutsideArchiveRoot_IsOverwrittenWithoutArchiveReuse()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-custom-target");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-custom-target");
+        var customOutputDirectory = Path.Combine(_tempDirectory, "custom-output");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+        Directory.CreateDirectory(customOutputDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var subtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var outputPath = Path.Combine(customOutputDirectory, "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(customOutputDirectory, Path.GetFileName(outputPath), "existing-custom-target");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("cover.jpg")],
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
+            CreateAudioTrack(1, "AAC"),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [subtitlePath],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(outputPath, plan.OutputFilePath);
+        Assert.Equal(mainVideoPath, plan.VideoSources[0].FilePath);
+        Assert.Null(plan.WorkingCopy);
+        Assert.Null(plan.AttachmentSourcePath);
+        Assert.Empty(plan.PreservedAttachmentNames);
+        Assert.Single(plan.SubtitleFiles);
+        Assert.False(plan.SubtitleFiles[0].IsEmbedded);
+        Assert.Equal(subtitlePath, plan.SubtitleFiles[0].FilePath);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_RefreshesDetection_WhenAdditionalVideoAppearsAfterInitialScan()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-refresh");

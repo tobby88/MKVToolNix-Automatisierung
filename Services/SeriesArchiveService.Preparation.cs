@@ -7,6 +7,7 @@ public sealed partial class SeriesArchiveService
 {
     /// <summary>
     /// Entscheidet, wie eine vorhandene Archivdatei in einen neuen Mux-Lauf eingebunden werden soll.
+    /// Bereits vorhandene Custom-Ziele außerhalb der Serienbibliothek gelten dabei bewusst nicht als wiederverwendbares Archiv.
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
     /// <param name="request">Aktuelle Nutzereingaben für den Mux-Lauf.</param>
@@ -21,7 +22,7 @@ public sealed partial class SeriesArchiveService
     {
         cancellationToken.ThrowIfCancellationRequested();
         var outputPath = request.OutputFilePath;
-        if (!File.Exists(outputPath))
+        if (!ShouldReuseExistingArchive(outputPath))
         {
             return ArchiveIntegrationDecision.CreateForFreshTarget(outputPath);
         }
@@ -331,6 +332,19 @@ public sealed partial class SeriesArchiveService
                     ? $"Neue Hauptquelle wird verwendet: {Path.GetFileName(request.MainVideoPath)}."
                     : $"Neue Videospur ist besser als Archiv: {newPrimaryVideo.Metadata.VideoWidth}px / {newPrimaryVideo.Metadata.VideoCodecLabel} statt {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}."
             ]);
+    }
+
+    /// <summary>
+    /// Prüft, ob eine vorhandene Zieldatei fachlich als wiederverwendbares Archiv behandelt werden darf.
+    /// </summary>
+    /// <param name="outputPath">Tatsächlich geplanter Ausgabepfad des Mux-Laufs.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn die Datei existiert und innerhalb der konfigurierten Serienbibliothek liegt;
+    /// andernfalls <see langword="false"/>, damit manuell gewählte Custom-Ziele als normale Overwrite-Ziele behandelt werden.
+    /// </returns>
+    private bool ShouldReuseExistingArchive(string outputPath)
+    {
+        return File.Exists(outputPath) && IsArchivePath(outputPath);
     }
 
     private static bool IsNewVideoClearlyBetter(MediaTrackMetadata newVideo, ContainerTrackMetadata existingVideo)
