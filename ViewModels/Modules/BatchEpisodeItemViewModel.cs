@@ -22,6 +22,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;
     private bool _isApplyingSharedMetadataState;
+    private bool _isArchiveTargetPath;
     private string? _statusTextOverride;
     private BatchEpisodeStatusKind _statusKind;
 
@@ -49,6 +50,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         string planSummaryText,
         EpisodeUsageSummary? usageSummary,
         EpisodeArchiveState archiveState,
+        bool isArchiveTargetPath,
         bool isSelected,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
@@ -80,6 +82,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             manualCheckFilePaths,
             notes)
     {
+        _isArchiveTargetPath = isArchiveTargetPath;
         _statusKind = statusKind;
         _isSelected = isSelected;
     }
@@ -134,6 +137,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public string StatusTooltip => EpisodeEditTextBuilder.BuildBatchStatusTooltip(StatusKind, Status);
 
+    internal bool HasArchiveComparisonTarget => _isArchiveTargetPath && ArchiveState == EpisodeArchiveState.Existing;
+
     public void SetStatus(BatchEpisodeStatusKind statusKind, string? statusText = null)
     {
         var previousStatus = Status;
@@ -161,7 +166,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
         BatchEpisodeStatusKind statusKind,
-        bool isSelected)
+        bool isSelected,
+        bool isArchiveTargetPath = false)
     {
         var outputExists = File.Exists(outputPath);
         var archiveState = outputExists ? EpisodeArchiveState.Existing : EpisodeArchiveState.New;
@@ -186,9 +192,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             metadataResolution.RequiresReview,
             DetermineAutomaticMetadataApproval(metadataResolution),
             statusKind,
-            BuildPendingPlanSummary(outputExists),
-            BuildPendingUsageSummary(outputExists),
+            BuildPendingPlanSummary(outputExists, isArchiveTargetPath),
+            BuildPendingUsageSummary(outputExists, isArchiveTargetPath),
             archiveState,
+            isArchiveTargetPath,
             isSelected,
             detected.RequiresManualCheck,
             detected.ManualCheckFilePaths,
@@ -221,6 +228,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             "Keine Plan-Zusammenfassung verfügbar.",
             EpisodeUsageSummary.CreatePending("Fehler", "Keine Plan-Zusammenfassung verfügbar."),
             EpisodeArchiveState.New,
+            isArchiveTargetPath: false,
             isSelected: false,
             requiresManualCheck: false,
             manualCheckFilePaths: [],
@@ -233,8 +241,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         AutoDetectedEpisodeFiles detected,
         EpisodeMetadataResolutionResult metadataResolution,
         string outputPath,
-        BatchEpisodeStatusKind statusKind)
+        BatchEpisodeStatusKind statusKind,
+        bool isArchiveTargetPath)
     {
+        _isArchiveTargetPath = isArchiveTargetPath;
         ApplySharedMetadataState(() => ApplyDetectedEpisodeState(
             requestedMainVideoPath,
             localGuess,
@@ -266,14 +276,26 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     public override void SetOutputPath(string outputPath)
     {
         base.SetOutputPath(outputPath);
-        ApplyArchiveState(refreshArchiveState: false);
         IsSelected = true;
     }
 
     public override void SetAutomaticOutputPath(string outputPath)
     {
-        var previousOutputPath = OutputPath;
         base.SetAutomaticOutputPath(outputPath);
+    }
+
+    public void SetOutputPathWithContext(string outputPath, bool isArchiveTargetPath)
+    {
+        _isArchiveTargetPath = isArchiveTargetPath;
+        SetOutputPath(outputPath);
+        ApplyArchiveState(refreshArchiveState: false);
+    }
+
+    public void SetAutomaticOutputPathWithContext(string outputPath, bool isArchiveTargetPath)
+    {
+        var previousOutputPath = OutputPath;
+        _isArchiveTargetPath = isArchiveTargetPath;
+        SetAutomaticOutputPath(outputPath);
         if (!string.Equals(previousOutputPath, OutputPath, StringComparison.OrdinalIgnoreCase))
         {
             ApplyArchiveState(refreshArchiveState: false);
@@ -320,26 +342,49 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
 
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
-        SetStatus(statusOverride ?? (outputExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
+        var hasArchiveComparisonTarget = HasArchiveComparisonTarget;
+        SetStatus(statusOverride ?? (hasArchiveComparisonTarget ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
         if (!preservePlanSummary)
         {
-            SetPlanSummary(BuildPendingPlanSummary(outputExists));
-            SetUsageSummary(BuildPendingUsageSummary(outputExists));
+            SetPlanSummary(BuildPendingPlanSummary(outputExists, _isArchiveTargetPath));
+            SetUsageSummary(BuildPendingUsageSummary(outputExists, _isArchiveTargetPath));
         }
     }
 
-    private static string BuildPendingPlanSummary(bool outputExists)
+    private static string BuildPendingPlanSummary(bool outputExists, bool isArchiveTargetPath)
     {
-        return outputExists
-            ? "Am Ziel liegt bereits eine MKV. Details wählen für den genauen Vergleich."
-            : "Am Ziel liegt noch keine MKV. Neue Datei wird erstellt.";
+        if (outputExists && isArchiveTargetPath)
+        {
+            return "Am Ziel liegt bereits eine MKV in der Serienbibliothek. Details wählen für den genauen Vergleich.";
+        }
+
+        if (outputExists)
+        {
+            return "Am Ziel liegt bereits eine MKV. Sie wird beim Mux überschrieben.";
+        }
+
+        return "Am Ziel liegt noch keine MKV. Neue Datei wird erstellt.";
     }
 
-    private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists)
+    private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists, bool isArchiveTargetPath)
     {
+        if (outputExists && isArchiveTargetPath)
+        {
+            return EpisodeUsageSummary.CreatePending(
+                "Ziel bereits vorhanden",
+                "Vergleich wird berechnet");
+        }
+
+        if (outputExists)
+        {
+            return EpisodeUsageSummary.CreatePending(
+                "Zieldatei bereits vorhanden",
+                "Vorhandene Datei wird überschrieben");
+        }
+
         return EpisodeUsageSummary.CreatePending(
-            outputExists ? "Ziel bereits vorhanden" : "Ziel noch frei",
-            outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
+            "Ziel noch frei",
+            "Neue MKV wird erstellt");
     }
 
     protected override void OnPropertyChanged(string? propertyName = null)

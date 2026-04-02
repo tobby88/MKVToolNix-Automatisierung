@@ -31,6 +31,7 @@ internal sealed partial class BatchMuxViewModel
                 excludedSourcePaths);
             var outputPath = result.OutputPath;
             var outputAlreadyExists = File.Exists(outputPath);
+            var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
 
             item.ApplyDetection(
                 requestedMainVideoPath: selectedVideoPath,
@@ -38,7 +39,8 @@ internal sealed partial class BatchMuxViewModel
                 detected: result.Detected,
                 metadataResolution: result.MetadataResolution,
                 outputPath: outputPath,
-                statusKind: outputAlreadyExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready);
+                statusKind: outputAlreadyExists && isArchiveTargetPath ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
+                isArchiveTargetPath: isArchiveTargetPath);
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");

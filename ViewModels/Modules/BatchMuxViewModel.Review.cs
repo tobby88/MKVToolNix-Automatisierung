@@ -116,7 +116,7 @@ internal sealed partial class BatchMuxViewModel
 
         if (!string.IsNullOrWhiteSpace(path))
         {
-            item.SetOutputPath(path);
+            item.SetOutputPathWithContext(path, _services.OutputPaths.IsArchivePath(path));
             SetStatus("Ausgabedatei aktualisiert", ProgressValue);
             ScheduleSelectedItemPlanSummaryRefresh();
         }
@@ -147,7 +147,7 @@ internal sealed partial class BatchMuxViewModel
     private async Task RefreshAllComparisonsAsync()
     {
         await RefreshComparisonPlansAsync(
-            EpisodeItems.Where(item => item.ArchiveState == EpisodeArchiveState.Existing).ToList(),
+            EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList(),
             automatic: false);
     }
 

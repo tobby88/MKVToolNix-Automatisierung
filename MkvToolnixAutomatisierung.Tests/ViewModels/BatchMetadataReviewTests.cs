@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -10,6 +11,49 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
 public sealed class BatchMetadataReviewTests
 {
+    [Fact]
+    public void CreateFromDetection_ExistingCustomOutputTarget_StaysReady()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-custom-target-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var outputPath = Path.Combine(tempDirectory, "Pilot.mkv");
+            File.WriteAllText(outputPath, "existing");
+
+            var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                requestedMainVideoPath: @"C:\Temp\episode.mp4",
+                CreateLocalGuess(),
+                CreateDetectedEpisode(),
+                new EpisodeMetadataResolutionResult(
+                    CreateLocalGuess(),
+                    Selection: null,
+                    StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                    ConfidenceScore: 0,
+                    RequiresReview: false,
+                    QueryWasAttempted: false,
+                    QuerySucceeded: false),
+                outputPath: outputPath,
+                statusKind: BatchEpisodeStatusKind.Ready,
+                isSelected: false,
+                isArchiveTargetPath: false);
+
+            item.RefreshArchivePresence();
+
+            Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
+            Assert.False(item.HasArchiveComparisonTarget);
+            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+            Assert.Contains("überschrieben", item.PlanSummaryText, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void CreateFromDetection_DoesNotAutoApprove_WhenTvdbLookupWasSkipped()
     {

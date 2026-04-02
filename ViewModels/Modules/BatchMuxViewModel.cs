@@ -251,7 +251,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
             {
                 if (item.UsesAutomaticOutputPath)
                 {
-                    item.SetAutomaticOutputPath(BuildOutputPath(item));
+                    var outputPath = BuildOutputPath(item);
+                    item.SetAutomaticOutputPathWithContext(outputPath, _services.OutputPaths.IsArchivePath(outputPath));
                 }
 
                 item.RefreshArchivePresence();

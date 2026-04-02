@@ -80,13 +80,14 @@ internal sealed partial class BatchMuxViewModel
 
         item.RefreshArchivePresence();
         var outputExists = item.ArchiveState == EpisodeArchiveState.Existing;
+        var hasArchiveComparisonTarget = item.HasArchiveComparisonTarget;
 
-        item.SetPlanSummary(outputExists
+        item.SetPlanSummary(hasArchiveComparisonTarget
             ? "Zielvergleich wird berechnet..."
             : "Verwendungsplan wird berechnet...");
         item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
-            outputExists ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
-            outputExists ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
+            hasArchiveComparisonTarget ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
+            hasArchiveComparisonTarget ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
 
         try
         {
@@ -96,7 +97,7 @@ internal sealed partial class BatchMuxViewModel
             item.SetPlanSummary(plan.BuildCompactSummaryText());
             item.SetUsageSummary(plan.BuildUsageSummary());
 
-            if (outputExists)
+            if (hasArchiveComparisonTarget)
             {
                 item.SetStatus(plan.SkipMux ? BatchEpisodeStatusKind.UpToDate : BatchEpisodeStatusKind.Ready);
             }
@@ -235,7 +236,8 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        item.SetAutomaticOutputPath(BuildOutputPath(item));
+        var outputPath = BuildOutputPath(item);
+        item.SetAutomaticOutputPathWithContext(outputPath, _services.OutputPaths.IsArchivePath(outputPath));
     }
 
     private void ScheduleSelectedItemPlanSummaryRefresh()

@@ -132,14 +132,16 @@ internal sealed partial class BatchMuxViewModel
                 }
 
                 var outputAlreadyExists = File.Exists(outputPath);
+                var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
                 var item = BatchEpisodeItemViewModel.CreateFromDetection(
                     requestedMainVideoPath: result.SourcePath,
                     localGuess: localGuess,
                     detected: detected,
                     metadataResolution: metadataResolution,
                     outputPath: outputPath,
-                    statusKind: outputAlreadyExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
-                    isSelected: true);
+                    statusKind: outputAlreadyExists && isArchiveTargetPath ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready,
+                    isSelected: true,
+                    isArchiveTargetPath: isArchiveTargetPath);
 
                 scannedItems.Add(item);
                 itemsByEpisodeKey[episodeKey] = item;
@@ -156,7 +158,7 @@ internal sealed partial class BatchMuxViewModel
                 $"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt",
                 AutomaticCompareProgressStart);
             await RefreshComparisonPlansAsync(
-                EpisodeItems.Where(item => item.ArchiveState == EpisodeArchiveState.Existing).ToList(),
+                EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList(),
                 automatic: true,
                 cancellationToken);
             SetStatus(StatusText, 100);
