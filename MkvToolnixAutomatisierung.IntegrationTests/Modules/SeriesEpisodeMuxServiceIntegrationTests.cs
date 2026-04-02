@@ -217,6 +217,41 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ExternalSubtitles_RemainGerman_WhenPrimaryAudioUsesDifferentLanguage()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-language");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-language");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var subtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "AAC", language: "en"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [subtitlePath],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        var subtitle = Assert.Single(plan.SubtitleFiles);
+        Assert.Equal("de", subtitle.LanguageCode);
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--language", "0:de");
+        Assert.DoesNotContain("0:en", arguments);
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotReuseStaleSingleFileCache()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-detect-refresh");
@@ -874,7 +909,12 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
         };
     }
 
-    private static object CreateAudioTrack(int id, string codec, string trackName = "", bool isVisualImpaired = false)
+    private static object CreateAudioTrack(
+        int id,
+        string codec,
+        string trackName = "",
+        bool isVisualImpaired = false,
+        string language = "de")
     {
         return new
         {
@@ -883,7 +923,7 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
             codec,
             properties = new
             {
-                language_ietf = "de",
+                language_ietf = language,
                 track_name = trackName,
                 flag_visual_impaired = isVisualImpaired
             }

@@ -271,6 +271,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         onProgress?.Invoke(new DetectionProgressUpdate(statusText, Math.Clamp(progressPercent, 0, 100)));
     }
 
+    /// <summary>
+    /// Erzeugt aus einer konkreten Episodeingabe einen vollständig aufgelösten Mux-Plan inklusive Archivintegration.
+    /// </summary>
+    /// <param name="request">Aktuelle Benutzereingabe mit Quellen, Zielpfad und optionalen Ausschlüssen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für Probe-, Archiv- und Planungsarbeit.</param>
+    /// <returns>Fertiger Mux-Plan oder ein fachlicher Skip-Plan, wenn kein Lauf mehr nötig ist.</returns>
     public async Task<SeriesEpisodeMuxPlan> CreatePlanAsync(
         SeriesEpisodeMuxRequest request,
         CancellationToken cancellationToken = default)
@@ -285,7 +291,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var subtitleFiles = request.SubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
+            .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .ToList();
 
         var mkvMergePath = _locator.FindMkvMergePath();
@@ -375,14 +381,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
             ? archiveDecision.SubtitleFiles
             : subtitleFiles;
-        subtitleFilesForPlan = subtitleFilesForPlan
-            .Select(subtitle => subtitle.IsEmbedded
-                ? subtitle
-                : subtitle with
-                {
-                    LanguageCode = MediaLanguageHelper.NormalizeMuxLanguageCode(primaryAudioLanguage)
-                })
-            .ToList();
 
         var attachmentFilePaths = archiveDecision.AttachmentFilePaths.Count > 0
             ? archiveDecision.AttachmentFilePaths

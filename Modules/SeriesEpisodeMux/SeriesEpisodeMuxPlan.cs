@@ -1,5 +1,3 @@
-﻿using System.Text;
-
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
@@ -7,6 +5,28 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 /// </summary>
 public sealed class SeriesEpisodeMuxPlan
 {
+    /// <summary>
+    /// Initialisiert einen vollständigen Mux-Plan für einen echten mkvmerge-Lauf.
+    /// </summary>
+    /// <param name="mkvMergePath">Pfad zur verwendeten <c>mkvmerge.exe</c>.</param>
+    /// <param name="outputFilePath">Finaler Ausgabepfad der Zieldatei.</param>
+    /// <param name="title">MKV-Titel für den finalen Container.</param>
+    /// <param name="videoSources">Alle einzubindenden Videospuren in Mux-Reihenfolge.</param>
+    /// <param name="primaryAudioFilePath">Datei, aus der die primäre Audiospur stammt.</param>
+    /// <param name="primaryAudioTrackId">Track-ID der primären Audiospur.</param>
+    /// <param name="primarySourceAudioTrackIds">Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.</param>
+    /// <param name="primarySourceSubtitleTrackIds">Optional explizit weiterzuverwendende Untertitel-Track-IDs der Primärquelle.</param>
+    /// <param name="includePrimarySourceAttachments">Gibt an, ob Anhänge der Primärquelle übernommen werden sollen.</param>
+    /// <param name="attachmentSourcePath">Optionale separate Quelle für wiederverwendete Archiv-Anhänge.</param>
+    /// <param name="audioDescriptionFilePath">Optionale Datei mit Audiodeskriptionsspur.</param>
+    /// <param name="audioDescriptionTrackId">Track-ID der AD-Spur in <paramref name="audioDescriptionFilePath"/>, falls eingebettet.</param>
+    /// <param name="subtitleFiles">Alle einzubindenden Untertitelspuren.</param>
+    /// <param name="attachmentFilePaths">Zusätzlich anzuhängende externe Dateien.</param>
+    /// <param name="preservedAttachmentNames">Namen wiederverwendeter Archiv-Anhänge für die GUI-Vorschau.</param>
+    /// <param name="usageComparison">Vergleich zwischen bisheriger Ziel-MKV und geplanter Verwendung.</param>
+    /// <param name="workingCopy">Optionale Arbeitskopie einer vorhandenen Archivdatei.</param>
+    /// <param name="metadata">Bereits aufgelöste Trackmetadaten für Audio und AD.</param>
+    /// <param name="notes">Zusätzliche Hinweise für GUI und Vorschau.</param>
     public SeriesEpisodeMuxPlan(
         string mkvMergePath,
         string outputFilePath,
@@ -80,28 +100,120 @@ public sealed class SeriesEpisodeMuxPlan
         Notes = notes;
     }
 
+    /// <summary>
+    /// Pfad zur verwendeten <c>mkvmerge.exe</c>.
+    /// </summary>
     public string MkvMergePath { get; }
+
+    /// <summary>
+    /// Finaler Ausgabepfad der Zieldatei.
+    /// </summary>
     public string OutputFilePath { get; }
+
+    /// <summary>
+    /// Titel, der als Container-Titel in die Ziel-MKV geschrieben wird.
+    /// </summary>
     public string Title { get; }
+
+    /// <summary>
+    /// Kennzeichnet einen rein informativen Skip-Plan ohne echten Mux-Lauf.
+    /// </summary>
     public bool SkipMux { get; }
+
+    /// <summary>
+    /// Fachliche Begründung, warum kein Mux-Lauf nötig ist.
+    /// </summary>
     public string? SkipReason { get; }
+
+    /// <summary>
+    /// Alle einzubindenden Videospuren in finaler Mux-Reihenfolge.
+    /// </summary>
     public IReadOnlyList<VideoSourcePlan> VideoSources { get; }
+
+    /// <summary>
+    /// Datei, aus der die primäre Audiospur stammt.
+    /// </summary>
     public string PrimaryAudioFilePath { get; }
+
+    /// <summary>
+    /// Track-ID der primären Audiospur innerhalb von <see cref="PrimaryAudioFilePath"/>.
+    /// </summary>
     public int PrimaryAudioTrackId { get; }
+
+    /// <summary>
+    /// Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.
+    /// </summary>
     public IReadOnlyList<int>? PrimarySourceAudioTrackIds { get; }
+
+    /// <summary>
+    /// Optional explizit weiterzuverwendende Untertitel-Track-IDs der Primärquelle.
+    /// </summary>
     public IReadOnlyList<int>? PrimarySourceSubtitleTrackIds { get; }
+
+    /// <summary>
+    /// Gibt an, ob Anhänge der Primärquelle übernommen werden sollen.
+    /// </summary>
     public bool IncludePrimarySourceAttachments { get; }
+
+    /// <summary>
+    /// Optionale separate Quelle für wiederverwendete Archiv-Anhänge.
+    /// </summary>
     public string? AttachmentSourcePath { get; }
+
+    /// <summary>
+    /// Optionale Datei mit Audiodeskriptionsspur.
+    /// </summary>
     public string? AudioDescriptionFilePath { get; }
+
+    /// <summary>
+    /// Track-ID der AD-Spur in <see cref="AudioDescriptionFilePath"/>, falls diese eingebettet ist.
+    /// </summary>
     public int? AudioDescriptionTrackId { get; }
+
+    /// <summary>
+    /// Alle einzubindenden Untertitelspuren.
+    /// </summary>
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
+
+    /// <summary>
+    /// Zusätzlich anzuhängende externe Dateien.
+    /// </summary>
     public IReadOnlyList<string> AttachmentFilePaths { get; }
+
+    /// <summary>
+    /// Namen wiederverwendeter Archiv-Anhänge für die GUI-Vorschau.
+    /// </summary>
     public IReadOnlyList<string> PreservedAttachmentNames { get; }
+
+    /// <summary>
+    /// Vergleich zwischen bisheriger Ziel-MKV und geplanter Verwendung.
+    /// </summary>
     public ArchiveUsageComparison UsageComparison { get; }
+
+    /// <summary>
+    /// Optionale Arbeitskopie einer vorhandenen Archivdatei.
+    /// </summary>
     public FileCopyPlan? WorkingCopy { get; }
+
+    /// <summary>
+    /// Bereits aufgelöste Trackmetadaten für Audio und Audiodeskription.
+    /// </summary>
     public EpisodeTrackMetadata Metadata { get; }
+
+    /// <summary>
+    /// Zusätzliche Hinweise für GUI und Vorschau.
+    /// </summary>
     public IReadOnlyList<string> Notes { get; }
 
+    /// <summary>
+    /// Erzeugt einen Plan, der einen echten Mux-Lauf fachlich überspringt.
+    /// </summary>
+    /// <param name="mkvMergePath">Pfad zur verwendeten <c>mkvmerge.exe</c>.</param>
+    /// <param name="outputFilePath">Pfad der bereits vollständigen Zieldatei.</param>
+    /// <param name="title">Container-Titel der Episode.</param>
+    /// <param name="skipReason">Fachliche Begründung für den Skip.</param>
+    /// <param name="notes">Zusätzliche Hinweise für die GUI.</param>
+    /// <returns>Skip-Plan ohne ausführbaren Mux-Aufruf.</returns>
     public static SeriesEpisodeMuxPlan CreateSkip(
         string mkvMergePath,
         string outputFilePath,
@@ -118,187 +230,55 @@ public sealed class SeriesEpisodeMuxPlan
     /// <returns>Argumentliste für <c>mkvmerge.exe</c>.</returns>
     public IReadOnlyList<string> BuildArguments()
     {
-        if (SkipMux)
-        {
-            return [];
-        }
-
-        var arguments = new List<string>
-        {
-            "--output",
-            OutputFilePath,
-            "--title",
-            Title
-        };
-
-        var primaryVideo = VideoSources[0];
-        var primaryVideoTrackId = primaryVideo.TrackId.ToString();
-        var primaryAudioTrackId = PrimaryAudioTrackId.ToString();
-        var primaryVideoFilePath = ResolveRuntimeFilePath(primaryVideo.FilePath);
-
-        if (PrimarySourceAudioTrackIds is { Count: > 0 })
-        {
-            arguments.AddRange(["--audio-tracks", string.Join(",", PrimarySourceAudioTrackIds)]);
-        }
-
-        if (PrimarySourceSubtitleTrackIds is { Count: 0 })
-        {
-            arguments.Add("--no-subtitles");
-        }
-        else if (PrimarySourceSubtitleTrackIds is { Count: > 0 })
-        {
-            arguments.AddRange(["--subtitle-tracks", string.Join(",", PrimarySourceSubtitleTrackIds)]);
-        }
-
-        if (!IncludePrimarySourceAttachments)
-        {
-            arguments.Add("--no-attachments");
-        }
-
-        arguments.AddRange(
-        [
-            "--language",
-            $"{primaryVideoTrackId}:{primaryVideo.LanguageCode}",
-            "--track-name",
-            $"{primaryVideoTrackId}:{primaryVideo.TrackName}",
-            "--default-track-flag",
-            $"{primaryVideoTrackId}:yes",
-            "--stereo-mode",
-            $"{primaryVideoTrackId}:mono",
-            "--original-flag",
-            $"{primaryVideoTrackId}:yes",
-
-            "--language",
-            $"{primaryAudioTrackId}:{Metadata.AudioLanguageCode}",
-            "--track-name",
-            $"{primaryAudioTrackId}:{Metadata.AudioTrackName}",
-            "--default-track-flag",
-            $"{primaryAudioTrackId}:yes",
-            "--original-flag",
-            $"{primaryAudioTrackId}:yes",
-
-            primaryVideoFilePath
-        ]);
-
-        foreach (var videoSource in VideoSources.Skip(1))
-        {
-            var trackId = videoSource.TrackId.ToString();
-            var runtimeVideoFilePath = ResolveRuntimeFilePath(videoSource.FilePath);
-            arguments.AddRange(
-            [
-                "--no-audio",
-                "--no-subtitles",
-                "--no-attachments",
-                "--language",
-                $"{trackId}:{videoSource.LanguageCode}",
-                "--track-name",
-                $"{trackId}:{videoSource.TrackName}",
-                "--default-track-flag",
-                $"{trackId}:no",
-                "--stereo-mode",
-                $"{trackId}:mono",
-                "--original-flag",
-                $"{trackId}:yes",
-                runtimeVideoFilePath
-            ]);
-        }
-
-        if (!string.IsNullOrWhiteSpace(AudioDescriptionFilePath) && AudioDescriptionTrackId is not null)
-        {
-            var adTrackId = AudioDescriptionTrackId.Value.ToString();
-            var runtimeAudioDescriptionFilePath = ResolveRuntimeFilePath(AudioDescriptionFilePath);
-            arguments.AddRange(
-            [
-                "--no-video",
-                "--no-subtitles",
-                "--no-attachments",
-                "--audio-tracks",
-                adTrackId,
-                "--language",
-                $"{adTrackId}:{Metadata.AudioDescriptionLanguageCode}",
-                "--track-name",
-                $"{adTrackId}:{Metadata.AudioDescriptionTrackName}",
-                "--default-track-flag",
-                $"{adTrackId}:no",
-                "--visual-impaired-flag",
-                $"{adTrackId}:yes",
-                "--original-flag",
-                $"{adTrackId}:yes",
-                runtimeAudioDescriptionFilePath
-            ]);
-        }
-
-        foreach (var subtitle in SubtitleFiles)
-        {
-            if (subtitle.IsEmbedded && subtitle.EmbeddedTrackId is int embeddedTrackId)
-            {
-                var embeddedTrackIdText = embeddedTrackId.ToString();
-                var runtimeSubtitleFilePath = ResolveRuntimeFilePath(subtitle.FilePath);
-                arguments.AddRange(
-                [
-                    "--no-video",
-                    "--no-audio",
-                    "--no-attachments",
-                    "--subtitle-tracks",
-                    embeddedTrackIdText,
-                    "--language",
-                    $"{embeddedTrackIdText}:{subtitle.LanguageCode}",
-                    "--track-name",
-                    $"{embeddedTrackIdText}:{subtitle.TrackName}",
-                    "--default-track-flag",
-                    $"{embeddedTrackIdText}:no",
-                    "--hearing-impaired-flag",
-                    subtitle.IsHearingImpaired ? $"{embeddedTrackIdText}:yes" : $"{embeddedTrackIdText}:no",
-                    "--original-flag",
-                    $"{embeddedTrackIdText}:yes",
-                    runtimeSubtitleFilePath
-                ]);
-                continue;
-            }
-
-            arguments.AddRange(
-            [
-                "--language",
-                $"0:{subtitle.LanguageCode}",
-                "--track-name",
-                $"0:{subtitle.TrackName}",
-                "--default-track-flag",
-                "0:no",
-                "--hearing-impaired-flag",
-                subtitle.IsHearingImpaired ? "0:yes" : "0:no",
-                "--original-flag",
-                "0:yes",
-                subtitle.FilePath
-            ]);
-        }
-
-        if (!string.IsNullOrWhiteSpace(AttachmentSourcePath))
-        {
-            // Separate Attachment-Quelle hält vorhandene TXT-Anhänge am Leben, auch wenn die Hauptquelle ausgetauscht wurde.
-            arguments.AddRange(
-            [
-                "--no-video",
-                "--no-audio",
-                "--no-subtitles",
-                ResolveRuntimeFilePath(AttachmentSourcePath)
-            ]);
-        }
-
-        foreach (var attachmentFilePath in AttachmentFilePaths)
-        {
-            arguments.AddRange(
-            [
-                "--attachment-mime-type",
-                "text/plain",
-                "--attach-file",
-                attachmentFilePath
-            ]);
-        }
-
-        return arguments;
+        return SeriesEpisodeMuxArgumentBuilder.Build(this);
     }
 
-    private string ResolveRuntimeFilePath(string filePath)
+    /// <summary>
+    /// Liefert die Argumentliste als lesbare Vorschau mit einfachen Shell-Escapes.
+    /// </summary>
+    /// <returns>Mehrzeilige Darstellung der mkvmerge-Argumente.</returns>
+    public string GetCommandLinePreview()
+    {
+        return SeriesEpisodeMuxPresentationBuilder.BuildCommandLinePreview(this);
+    }
+
+    /// <summary>
+    /// Verdichtet den Plan zu einer kompakten Nutzungszusammenfassung für die GUI.
+    /// </summary>
+    /// <returns>Zusammenfassung von Archivaktion, Quellen und Zusatzspuren.</returns>
+    public EpisodeUsageSummary BuildUsageSummary()
+    {
+        return SeriesEpisodeMuxPresentationBuilder.BuildUsageSummary(this);
+    }
+
+    /// <summary>
+    /// Liefert die Nutzungszusammenfassung als flachen mehrzeiligen Textblock.
+    /// </summary>
+    /// <returns>Kompakter Text für Vorschau- und Statusbereiche.</returns>
+    public string BuildCompactSummaryText()
+    {
+        return SeriesEpisodeMuxPresentationBuilder.BuildCompactSummaryText(this);
+    }
+
+    /// <summary>
+    /// Liefert alle im Plan referenzierten Eingabedateien ohne Ausgabe- und Hilfspfade.
+    /// </summary>
+    /// <returns>Deduplicierte Liste aller Eingabedateien des Plans.</returns>
+    public IReadOnlyList<string> GetReferencedInputFiles()
+    {
+        return SeriesEpisodeMuxPresentationBuilder.GetReferencedInputFiles(this);
+    }
+
+    /// <summary>
+    /// Erzeugt eine ausführliche menschenlesbare Vorschau des Plans inklusive Hinweise.
+    /// </summary>
+    /// <returns>Mehrzeiliger Vorschautext für die GUI.</returns>
+    public string BuildPreviewText()
+    {
+        return SeriesEpisodeMuxPresentationBuilder.BuildPreviewText(this);
+    }
+
+    internal string ResolveRuntimeFilePath(string filePath)
     {
         if (WorkingCopy is not null
             && string.Equals(filePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase))
@@ -308,254 +288,4 @@ public sealed class SeriesEpisodeMuxPlan
 
         return filePath;
     }
-
-    /// <summary>
-    /// Liefert die Argumentliste als lesbare Vorschau mit einfachen Shell-Escapes.
-    /// </summary>
-    /// <returns>Mehrzeilige Darstellung der mkvmerge-Argumente.</returns>
-    public string GetCommandLinePreview()
-    {
-        return string.Join(Environment.NewLine, BuildArguments().Select(EscapeArgument));
-    }
-
-    /// <summary>
-    /// Verdichtet den Plan zu einer kompakten Nutzungszusammenfassung für die GUI.
-    /// </summary>
-    /// <returns>Zusammenfassung von Archivaktion, Quellen und Zusatzspuren.</returns>
-    public EpisodeUsageSummary BuildUsageSummary()
-    {
-        if (SkipMux)
-        {
-            return EpisodeUsageSummary.CreatePending(
-                SkipReason ?? "Die Zieldatei ist bereits vollständig.",
-                "keine weiteren Aktionen");
-        }
-
-        var archiveAction = WorkingCopy is not null
-            ? string.Equals(VideoSources[0].FilePath, WorkingCopy.SourceFilePath, StringComparison.OrdinalIgnoreCase)
-                ? "Vorhandene Zieldatei bleibt Basis"
-                : "Vorhandene Zieldatei wird mit neuer Hauptquelle aktualisiert"
-            : File.Exists(OutputFilePath)
-                ? "MKV in der Serienbibliothek vorhanden, wird aktualisiert"
-                : "MKV in der Serienbibliothek noch nicht vorhanden";
-
-        var archiveDetails = WorkingCopy is not null
-            ? WorkingCopy.IsReusable
-                ? $"Arbeitskopie aktuell vorhanden: {Path.GetFileName(WorkingCopy.DestinationFilePath)}"
-                : $"Arbeitskopie wird erstellt: {Path.GetFileName(WorkingCopy.DestinationFilePath)}"
-            : File.Exists(OutputFilePath)
-                ? Path.GetFileName(OutputFilePath)
-                : "Neue MKV wird direkt erstellt";
-
-        return new EpisodeUsageSummary(
-            archiveAction,
-            archiveDetails,
-            CreateUsageEntry(Path.GetFileName(VideoSources[0].FilePath), UsageComparison.MainVideo),
-            CreateUsageEntry(
-                VideoSources.Count > 1
-                    ? string.Join(Environment.NewLine, VideoSources.Skip(1).Select(source => Path.GetFileName(source.FilePath)))
-                    : "(keine)",
-                UsageComparison.AdditionalVideos),
-            CreateUsageEntry(Path.GetFileName(PrimaryAudioFilePath), UsageComparison.Audio),
-            CreateUsageEntry(
-                string.IsNullOrWhiteSpace(AudioDescriptionFilePath) ? "(keine)" : Path.GetFileName(AudioDescriptionFilePath),
-                UsageComparison.AudioDescription),
-            CreateUsageEntry(
-                SubtitleFiles.Count == 0
-                    ? "(keine)"
-                    : string.Join(Environment.NewLine, SubtitleFiles.Select(file => file.PreviewLabel)),
-                UsageComparison.Subtitles),
-            CreateUsageEntry(BuildAttachmentPreview(), UsageComparison.Attachments));
-    }
-
-    /// <summary>
-    /// Liefert die Nutzungszusammenfassung als flachen mehrzeiligen Textblock.
-    /// </summary>
-    /// <returns>Kompakter Text für Vorschau- und Statusbereiche.</returns>
-    public string BuildCompactSummaryText()
-    {
-        var summary = BuildUsageSummary();
-        return string.Join(Environment.NewLine,
-        [
-            $"{summary.ArchiveAction}: {summary.ArchiveDetails}",
-            $"Hauptvideo: {summary.MainVideo.CurrentText}",
-            $"Weitere Videos: {summary.AdditionalVideos.CurrentText}",
-            $"Audio: {summary.Audio.CurrentText}",
-            $"AD: {summary.AudioDescription.CurrentText}",
-            $"Untertitel: {summary.Subtitles.CurrentText}",
-            $"Anhänge: {summary.Attachments.CurrentText}"
-        ]);
-    }
-
-    /// <summary>
-    /// Liefert alle im Plan referenzierten Eingabedateien ohne Ausgabe- und Hilfspfade.
-    /// </summary>
-    /// <returns>Deduplicierte Liste aller Eingabedateien des Plans.</returns>
-    public IReadOnlyList<string> GetReferencedInputFiles()
-    {
-        if (SkipMux)
-        {
-            return [];
-        }
-
-        var filePaths = new List<string>();
-        filePaths.AddRange(VideoSources.Select(video => video.FilePath));
-
-        if (!string.IsNullOrWhiteSpace(AudioDescriptionFilePath))
-        {
-            filePaths.Add(AudioDescriptionFilePath);
-        }
-
-        if (!string.IsNullOrWhiteSpace(AttachmentSourcePath)
-            && !string.Equals(AttachmentSourcePath, OutputFilePath, StringComparison.OrdinalIgnoreCase))
-        {
-            filePaths.Add(AttachmentSourcePath);
-        }
-
-        filePaths.AddRange(SubtitleFiles
-            .Where(subtitle => !subtitle.IsEmbedded)
-            .Select(subtitle => subtitle.FilePath));
-        filePaths.AddRange(AttachmentFilePaths);
-
-        return filePaths
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    /// <summary>
-    /// Erzeugt eine ausführliche menschenlesbare Vorschau des Plans inklusive Hinweise.
-    /// </summary>
-    /// <returns>Mehrzeiliger Vorschautext für die GUI.</returns>
-    public string BuildPreviewText()
-    {
-        var builder = new StringBuilder();
-        builder.AppendLine($"mkvmerge.exe: {MkvMergePath}");
-        builder.AppendLine();
-        builder.AppendLine($"Titel: {Title}");
-        builder.AppendLine($"Ausgabe: {OutputFilePath}");
-
-        if (SkipMux)
-        {
-            builder.AppendLine();
-            builder.AppendLine($"Kein Mux nötig: {SkipReason}");
-        }
-        else
-        {
-            builder.AppendLine("Videos:");
-
-            foreach (var videoSource in VideoSources)
-            {
-                var defaultText = videoSource.IsDefaultTrack ? " (Standard)" : string.Empty;
-                builder.AppendLine($"- {Path.GetFileName(videoSource.FilePath)} -> {videoSource.TrackName}{defaultText}");
-            }
-
-            builder.AppendLine($"Audio: {Path.GetFileName(PrimaryAudioFilePath)} -> {Metadata.AudioTrackName}");
-            builder.AppendLine($"AD: {(AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(AudioDescriptionFilePath))}");
-            builder.AppendLine($"Untertitel: {(SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", SubtitleFiles.Select(file => file.PreviewLabel)))}");
-            builder.AppendLine($"Anhänge: {BuildAttachmentPreview()}");
-
-            if (WorkingCopy is not null)
-            {
-                builder.AppendLine($"Arbeitskopie vorab: {WorkingCopy.SourceFilePath} -> {WorkingCopy.DestinationFilePath}");
-            }
-
-            builder.AppendLine();
-            builder.AppendLine("Argumente:");
-            builder.AppendLine(GetCommandLinePreview());
-        }
-
-        if (Notes.Count > 0)
-        {
-            builder.AppendLine();
-            builder.AppendLine("Hinweise:");
-            foreach (var note in Notes)
-            {
-                builder.AppendLine($"- {note}");
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private static string EscapeArgument(string argument)
-    {
-        return argument.Contains(' ') ? $"\"{argument}\"" : argument;
-    }
-
-    private static EpisodeUsageEntry CreateUsageEntry(string currentText, ArchiveUsageChange? removedChange)
-    {
-        return new EpisodeUsageEntry(
-            CurrentText: currentText,
-            RemovedText: removedChange?.RemovedText,
-            RemovedReason: removedChange?.Reason);
-    }
-
-    private string BuildAttachmentPreview()
-    {
-        var parts = new List<string>();
-
-        if ((IncludePrimarySourceAttachments || !string.IsNullOrWhiteSpace(AttachmentSourcePath))
-            && PreservedAttachmentNames.Count > 0)
-        {
-            // GUI-Vorschau soll sichtbar machen, dass diese Anhänge nicht aus neuen Dateien, sondern aus der Ziel-MKV stammen.
-            parts.AddRange(PreservedAttachmentNames.Select(name => $"{name} (aus Zieldatei)"));
-        }
-
-        parts.AddRange(AttachmentFilePaths
-            .Select(Path.GetFileName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Cast<string>());
-
-        return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
-    }
 }
-
-/// <summary>
-/// Kurzfassung für die UI, wie eine Episode relativ zur Bibliothek eingeordnet wird.
-/// </summary>
-public sealed record EpisodeUsageSummary(
-    string ArchiveAction,
-    string ArchiveDetails,
-    EpisodeUsageEntry MainVideo,
-    EpisodeUsageEntry AdditionalVideos,
-    EpisodeUsageEntry Audio,
-    EpisodeUsageEntry AudioDescription,
-    EpisodeUsageEntry Subtitles,
-    EpisodeUsageEntry Attachments)
-{
-    /// <summary>
-    /// Erzeugt eine Platzhalterzusammenfassung für noch nicht berechnete Pläne.
-    /// </summary>
-    /// <param name="archiveAction">Text zur aktuellen Archivaktion.</param>
-    /// <param name="archiveDetails">Zusätzliche Details zum Archivstatus.</param>
-    /// <returns>Platzhalterzusammenfassung mit offenen Feldern.</returns>
-    public static EpisodeUsageSummary CreatePending(string archiveAction, string archiveDetails)
-    {
-        return new EpisodeUsageSummary(
-            archiveAction,
-            archiveDetails,
-            EpisodeUsageEntry.Pending,
-            EpisodeUsageEntry.Pending,
-            EpisodeUsageEntry.Pending,
-            EpisodeUsageEntry.Pending,
-            EpisodeUsageEntry.Pending,
-            EpisodeUsageEntry.Pending);
-    }
-}
-
-/// <summary>
-/// Eine einzelne Zeile der Nutzungsübersicht inklusive optionaler Altteile, die entfallen oder ersetzt werden.
-/// </summary>
-public sealed record EpisodeUsageEntry(
-    string CurrentText,
-    string? RemovedText,
-    string? RemovedReason)
-{
-    public static EpisodeUsageEntry Pending { get; } = new("(wird berechnet)", null, null);
-
-    public bool HasRemoved => !string.IsNullOrWhiteSpace(RemovedText);
-
-    public bool HasRemovedReason => !string.IsNullOrWhiteSpace(RemovedReason);
-}
-

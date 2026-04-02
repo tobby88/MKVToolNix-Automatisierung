@@ -142,17 +142,18 @@ public sealed partial class SeriesArchiveService
             .Where(entry => entry.Kind is not null)
             .OrderBy(entry => entry.Kind!.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
-            .Select(entry => new SubtitleFile(
-                outputPath,
-                entry.Kind!,
-                entry.Track.TrackId,
-                BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!),
-                MediaLanguageHelper.NormalizeMuxLanguageCode(entry.Track.Language))
-            {
-                Accessibility = entry.Track.IsHearingImpaired
-                    ? SubtitleAccessibility.HearingImpaired
-                    : SubtitleAccessibility.Standard
-            })
+            .Select(entry => SubtitleFile.CreateEmbedded(
+                    outputPath,
+                    entry.Kind!,
+                    entry.Track.TrackId,
+                    BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!),
+                    entry.Track.Language)
+                with
+                {
+                    Accessibility = entry.Track.IsHearingImpaired
+                        ? SubtitleAccessibility.HearingImpaired
+                        : SubtitleAccessibility.Standard
+                })
             .ToList();
 
         var embeddedCoverage = embeddedSubtitlePlans
@@ -171,7 +172,7 @@ public sealed partial class SeriesArchiveService
         var externalSubtitlePlans = requestSubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .Select(path => new SubtitleFile(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
+            .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();
 
