@@ -224,7 +224,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         File.WriteAllText(outputPath, "existing");
         var item = CreateBatchEpisodeItem(outputPath);
         var usageSummary = new EpisodeUsageSummary(
-            "In Serienbibliothek vorhanden",
+            "Ziel bereits vorhanden",
             "Vergleich fertig",
             new EpisodeUsageEntry("Video alt", null, null),
             new EpisodeUsageEntry("(keine)", null, null),

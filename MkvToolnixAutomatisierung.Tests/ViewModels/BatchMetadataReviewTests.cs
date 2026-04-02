@@ -1,0 +1,268 @@
+using System.Windows;
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
+using MkvToolnixAutomatisierung.ViewModels.Modules;
+using Xunit;
+
+namespace MkvToolnixAutomatisierung.Tests.ViewModels;
+
+public sealed class BatchMetadataReviewTests
+{
+    [Fact]
+    public void CreateFromDetection_DoesNotAutoApprove_WhenTvdbLookupWasSkipped()
+    {
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: false);
+
+        Assert.False(item.RequiresMetadataReview);
+        Assert.False(item.IsMetadataReviewApproved);
+    }
+
+    [Fact]
+    public void CreateFromDetection_AutoApproves_WhenTvdbLookupSucceededWithoutReview()
+    {
+        var selection = new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02");
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                selection,
+                StatusText: "TVDB-Zuordnung automatisch bestätigt.",
+                ConfidenceScore: 100,
+                RequiresReview: false,
+                QueryWasAttempted: true,
+                QuerySucceeded: true),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: false);
+
+        Assert.False(item.RequiresMetadataReview);
+        Assert.True(item.IsMetadataReviewApproved);
+    }
+
+    [Fact]
+    public async Task ReviewSelectedMetadataCommand_InvokesWorkflow_ForSkippedAutomaticLookup()
+    {
+        var workflow = new FakeEpisodeReviewWorkflow();
+        var viewModel = CreateBatchViewModel(workflow);
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.ReviewSelectedMetadataCommand.Execute(null);
+        await workflow.WaitForMetadataReviewAsync();
+
+        Assert.Equal(1, workflow.MetadataReviewCallCount);
+        Assert.Same(item, workflow.LastMetadataItem);
+    }
+
+    [Fact]
+    public async Task ReviewSelectedMetadataCommand_InvokesWorkflow_ForAlreadyApprovedItem()
+    {
+        var workflow = new FakeEpisodeReviewWorkflow();
+        var viewModel = CreateBatchViewModel(workflow);
+        var selection = new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02");
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                selection,
+                StatusText: "TVDB-Zuordnung automatisch bestätigt.",
+                ConfidenceScore: 100,
+                RequiresReview: false,
+                QueryWasAttempted: true,
+                QuerySucceeded: true),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.ReviewSelectedMetadataCommand.Execute(null);
+        await workflow.WaitForMetadataReviewAsync();
+
+        Assert.Equal(1, workflow.MetadataReviewCallCount);
+        Assert.Same(item, workflow.LastMetadataItem);
+    }
+
+    [Fact]
+    public void ManualMetadataEdit_ApprovesPendingMetadataReview()
+    {
+        var item = CreatePendingReviewItem();
+
+        item.Title = "Manuell korrigierter Titel";
+
+        Assert.False(item.RequiresMetadataReview);
+        Assert.True(item.IsMetadataReviewApproved);
+        Assert.Equal("Metadaten manuell angepasst.", item.MetadataStatusText);
+    }
+
+    [Fact]
+    public void ApplyTvdbSelection_LeavesPendingReviewState_UntilExplicitApproval()
+    {
+        var item = CreatePendingReviewItem();
+
+        item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"));
+
+        Assert.True(item.RequiresMetadataReview);
+        Assert.False(item.IsMetadataReviewApproved);
+        Assert.Equal("TVDB-Prüfung erforderlich.", item.MetadataStatusText);
+    }
+
+    private static BatchMuxViewModel CreateBatchViewModel(IEpisodeReviewWorkflow reviewWorkflow)
+    {
+        return new BatchMuxViewModel(
+            ViewModelTestContext.CreateAppServices(),
+            new FakeDialogService(),
+            reviewWorkflow);
+    }
+
+    private static BatchEpisodeItemViewModel CreatePendingReviewItem()
+    {
+        return BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Prüfung erforderlich.",
+                ConfidenceScore: 25,
+                RequiresReview: true,
+                QueryWasAttempted: true,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+    }
+
+    private static EpisodeMetadataGuess CreateLocalGuess()
+    {
+        return new EpisodeMetadataGuess("Beispielserie", "Pilot", "01", "02");
+    }
+
+    private static AutoDetectedEpisodeFiles CreateDetectedEpisode()
+    {
+        return new AutoDetectedEpisodeFiles(
+            MainVideoPath: @"C:\Temp\episode.mp4",
+            AdditionalVideoPaths: [],
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            RelatedFilePaths: [],
+            SuggestedOutputFilePath: @"C:\Temp\output.mkv",
+            SuggestedTitle: "Pilot",
+            SeriesName: "Beispielserie",
+            SeasonNumber: "01",
+            EpisodeNumber: "02",
+            RequiresManualCheck: false,
+            ManualCheckFilePaths: [],
+            Notes: []);
+    }
+
+    private sealed class FakeEpisodeReviewWorkflow : IEpisodeReviewWorkflow
+    {
+        private readonly TaskCompletionSource _metadataReviewCompletion = new();
+
+        public int MetadataReviewCallCount { get; private set; }
+
+        public IEpisodeReviewItem? LastMetadataItem { get; private set; }
+
+        public Task<bool> ReviewManualSourceAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string openFailedStatusText,
+            string approvedStatusText,
+            string alternativeStatusText,
+            Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<EpisodeMetadataReviewOutcome> ReviewMetadataAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string localApprovedStatusText,
+            string tvdbApprovedStatusText,
+            Action onEpisodeChanged)
+        {
+            MetadataReviewCallCount++;
+            LastMetadataItem = item;
+            _metadataReviewCompletion.TrySetResult();
+            return Task.FromResult(EpisodeMetadataReviewOutcome.Cancelled);
+        }
+
+        public async Task WaitForMetadataReviewAsync()
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _metadataReviewCompletion.Task.WaitAsync(timeout.Token);
+        }
+    }
+
+    private sealed class FakeDialogService : IUserDialogService
+    {
+        public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
+        public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
+        public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
+        public string[]? SelectAttachments(string initialDirectory) => throw new NotSupportedException();
+        public string? SelectOutput(string initialDirectory, string fileName) => throw new NotSupportedException();
+        public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
+        public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
+        public MessageBoxResult AskAudioDescriptionChoice() => throw new NotSupportedException();
+        public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();
+        public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();
+        public bool ConfirmMuxStart() => throw new NotSupportedException();
+        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
+        public bool ConfirmArchiveCopy(FileCopyPlan copyPlan) => throw new NotSupportedException();
+        public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();
+        public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => throw new NotSupportedException();
+        public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
+        public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
+        public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => throw new NotSupportedException();
+        public void ShowInfo(string title, string message) => throw new NotSupportedException();
+        public void ShowWarning(string title, string message) => throw new NotSupportedException();
+        public void ShowError(string message) => throw new NotSupportedException();
+    }
+}

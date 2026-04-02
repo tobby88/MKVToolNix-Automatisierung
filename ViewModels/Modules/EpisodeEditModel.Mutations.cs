@@ -254,7 +254,15 @@ public partial class EpisodeEditModel
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool DetermineAutomaticMetadataApproval(EpisodeMetadataResolutionResult resolution)
+    /// <summary>
+    /// Leitet aus dem Ergebnis der TVDB-Automatik ab, ob die Zuordnung bereits als wirklich freigegeben gilt.
+    /// </summary>
+    /// <param name="resolution">Automatisches TVDB-Ergebnis inklusive Ablaufzustand.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn eine Anfrage tatsächlich ausgeführt wurde und kein weiterer Review nötig ist;
+    /// andernfalls <see langword="false"/>, damit übersprungene Automatikläufe im UI offen bleiben.
+    /// </returns>
+    protected static bool DetermineAutomaticMetadataApproval(EpisodeMetadataResolutionResult resolution)
     {
         // Eine übersprungene oder fehlgeschlagene Automatik soll im UI nicht wie eine freigegebene TVDB-Zuordnung wirken.
         return resolution.QueryWasAttempted && !resolution.RequiresReview;

@@ -59,11 +59,8 @@ public sealed partial class BatchMuxViewModel
 
     private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
     {
-        if (!item.RequiresMetadataReview || item.IsMetadataReviewApproved)
-        {
-            return true;
-        }
-
+        // Die explizite Detailaktion im Batch soll den TVDB-Dialog immer wieder öffnen können.
+        // Nur die automatische Pflichtprüfungs-Schleife filtert weiterhin separat auf offene Fälle.
         var outcome = await _reviewWorkflow.ReviewMetadataAsync(
             item,
             SetStatus,

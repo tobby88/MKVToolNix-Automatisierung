@@ -21,6 +21,7 @@ internal sealed record BatchScanResult(
 public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;
+    private bool _isApplyingSharedMetadataState;
     private string? _statusTextOverride;
     private BatchEpisodeStatusKind _statusKind;
 
@@ -183,14 +184,10 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             detected.SuggestedTitle,
             metadataResolution.StatusText,
             metadataResolution.RequiresReview,
-            !metadataResolution.RequiresReview,
+            DetermineAutomaticMetadataApproval(metadataResolution),
             statusKind,
-            outputExists
-                ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
-                : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.",
-            EpisodeUsageSummary.CreatePending(
-                outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
-                outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"),
+            BuildPendingPlanSummary(outputExists),
+            BuildPendingUsageSummary(outputExists),
             archiveState,
             isSelected,
             detected.RequiresManualCheck,
@@ -238,12 +235,12 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         string outputPath,
         BatchEpisodeStatusKind statusKind)
     {
-        ApplyDetectedEpisodeState(
+        ApplySharedMetadataState(() => ApplyDetectedEpisodeState(
             requestedMainVideoPath,
             localGuess,
             detected,
             metadataResolution,
-            outputPath);
+            outputPath));
         ApplyArchiveState(statusKind, refreshArchiveState: false);
         IsSelected = true;
     }
@@ -291,13 +288,13 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public override void ApplyTvdbSelection(TvdbEpisodeSelection selection)
     {
-        base.ApplyTvdbSelection(selection);
+        ApplySharedMetadataState(() => base.ApplyTvdbSelection(selection));
         IsSelected = true;
     }
 
     public override void ApplyLocalMetadataGuess()
     {
-        base.ApplyLocalMetadataGuess();
+        ApplySharedMetadataState(base.ApplyLocalMetadataGuess);
         IsSelected = true;
     }
 
@@ -326,12 +323,58 @@ public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         SetStatus(statusOverride ?? (outputExists ? BatchEpisodeStatusKind.ComparisonPending : BatchEpisodeStatusKind.Ready));
         if (!preservePlanSummary)
         {
-            SetPlanSummary(outputExists
-                ? "In der Serienbibliothek bereits vorhanden. Details wählen für den genauen Vergleich."
-                : "Noch nicht in der Serienbibliothek vorhanden. Neue MKV wird erstellt.");
-            SetUsageSummary(EpisodeUsageSummary.CreatePending(
-                outputExists ? "In Serienbibliothek vorhanden" : "Noch nicht in Serienbibliothek",
-                outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt"));
+            SetPlanSummary(BuildPendingPlanSummary(outputExists));
+            SetUsageSummary(BuildPendingUsageSummary(outputExists));
+        }
+    }
+
+    private static string BuildPendingPlanSummary(bool outputExists)
+    {
+        return outputExists
+            ? "Am Ziel liegt bereits eine MKV. Details wählen für den genauen Vergleich."
+            : "Am Ziel liegt noch keine MKV. Neue Datei wird erstellt.";
+    }
+
+    private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists)
+    {
+        return EpisodeUsageSummary.CreatePending(
+            outputExists ? "Ziel bereits vorhanden" : "Ziel noch frei",
+            outputExists ? "Vergleich wird berechnet" : "Neue MKV wird erstellt");
+    }
+
+    protected override void OnPropertyChanged(string? propertyName = null)
+    {
+        base.OnPropertyChanged(propertyName);
+
+        if (_isApplyingSharedMetadataState)
+        {
+            return;
+        }
+
+        if (propertyName is nameof(SeriesName) or nameof(SeasonNumber) or nameof(EpisodeNumber) or nameof(Title))
+        {
+            HandleManualMetadataOverride();
+        }
+    }
+
+    private void HandleManualMetadataOverride()
+    {
+        if (!string.IsNullOrWhiteSpace(MetadataStatusText) || RequiresMetadataReview)
+        {
+            ApproveMetadataReview("Metadaten manuell angepasst.");
+        }
+    }
+
+    private void ApplySharedMetadataState(Action applyAction)
+    {
+        _isApplyingSharedMetadataState = true;
+        try
+        {
+            applyAction();
+        }
+        finally
+        {
+            _isApplyingSharedMetadataState = false;
         }
     }
 

@@ -20,7 +20,7 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchi
     private readonly AppServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _previewOutputBuffer;
-    private readonly EpisodeReviewWorkflow _reviewWorkflow;
+    private readonly IEpisodeReviewWorkflow _reviewWorkflow;
     private readonly EpisodePlanCache _planCache = new();
     private CancellationTokenSource? _planSummaryRefreshCts;
 
@@ -35,11 +35,14 @@ public sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchi
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _planSummaryVersion;
 
-    public SingleEpisodeMuxViewModel(AppServices services, IUserDialogService dialogService)
+    public SingleEpisodeMuxViewModel(
+        AppServices services,
+        IUserDialogService dialogService,
+        IEpisodeReviewWorkflow? reviewWorkflow = null)
     {
         _services = services;
         _dialogService = dialogService;
-        _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
+        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _previewOutputBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => PreviewText = text,

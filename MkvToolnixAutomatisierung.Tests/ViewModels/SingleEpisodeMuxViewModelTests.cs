@@ -1,3 +1,6 @@
+using System.IO;
+using System.Windows;
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -101,10 +104,83 @@ public sealed class SingleEpisodeMuxViewModelTests
             viewModel.AttachmentDisplayText);
     }
 
+    [Fact]
+    public void SelectOutputCommand_UsesCurrentOutputDirectory_AsDialogStart()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateAppServices(),
+            dialogService);
+        var expectedDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-single-output");
+
+        viewModel.SetOutputPath(Path.Combine(expectedDirectory, "Folge.mkv"));
+
+        viewModel.SelectOutputCommand.Execute(null);
+
+        Assert.Equal(expectedDirectory, dialogService.LastOutputInitialDirectory);
+        Assert.Equal("Folge.mkv", dialogService.LastOutputFileName);
+    }
+
     private static SingleEpisodeMuxViewModel CreateViewModel()
     {
         return new SingleEpisodeMuxViewModel(
             ViewModelTestContext.CreateAppServices(),
             new UserDialogService());
+    }
+
+    private sealed class CapturingDialogService : IUserDialogService
+    {
+        public string? LastOutputInitialDirectory { get; private set; }
+
+        public string? LastOutputFileName { get; private set; }
+
+        public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
+
+        public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
+
+        public string[]? SelectAttachments(string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectOutput(string initialDirectory, string fileName)
+        {
+            LastOutputInitialDirectory = initialDirectory;
+            LastOutputFileName = fileName;
+            return null;
+        }
+
+        public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
+
+        public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
+
+        public MessageBoxResult AskAudioDescriptionChoice() => throw new NotSupportedException();
+
+        public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();
+
+        public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();
+
+        public bool ConfirmMuxStart() => throw new NotSupportedException();
+
+        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
+
+        public bool ConfirmArchiveCopy(FileCopyPlan copyPlan) => throw new NotSupportedException();
+
+        public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();
+
+        public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => throw new NotSupportedException();
+
+        public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
+
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
+
+        public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
+
+        public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => throw new NotSupportedException();
+
+        public void ShowInfo(string title, string message) => throw new NotSupportedException();
+
+        public void ShowWarning(string title, string message) => throw new NotSupportedException();
+
+        public void ShowError(string message) => throw new NotSupportedException();
     }
 }

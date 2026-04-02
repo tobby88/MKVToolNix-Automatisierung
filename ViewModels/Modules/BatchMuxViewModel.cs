@@ -24,7 +24,7 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     private readonly AppServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _logBuffer;
-    private readonly EpisodeReviewWorkflow _reviewWorkflow;
+    private readonly IEpisodeReviewWorkflow _reviewWorkflow;
     private readonly BatchEpisodeCollectionController _episodeCollection;
     private readonly BatchExecutionRunner _executionRunner;
     private readonly BatchOperationController _operationController = new();
@@ -40,11 +40,14 @@ public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchive
     private int _selectedPlanSummaryVersion;
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
 
-    public BatchMuxViewModel(AppServices services, IUserDialogService dialogService)
+    public BatchMuxViewModel(
+        AppServices services,
+        IUserDialogService dialogService,
+        IEpisodeReviewWorkflow? reviewWorkflow = null)
     {
         _services = services;
         _dialogService = dialogService;
-        _reviewWorkflow = new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
+        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
         _episodeCollection = new BatchEpisodeCollectionController();
         _executionRunner = new BatchExecutionRunner(services.FileCopy, services.MuxWorkflow, services.Cleanup);
         _logBuffer = new BufferedTextStore(

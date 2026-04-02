@@ -34,7 +34,40 @@ public interface IEpisodeReviewItem
 /// <summary>
 /// Kapselt Pflichtprüfungen für Quelle und TVDB-Metadaten inklusive Dialogabfolge.
 /// </summary>
-public sealed class EpisodeReviewWorkflow
+public interface IEpisodeReviewWorkflow
+{
+    /// <summary>
+    /// Führt die manuelle Quellenprüfung inklusive möglicher Alternativwahl durch.
+    /// </summary>
+    Task<bool> ReviewManualSourceAsync(
+        IEpisodeReviewItem item,
+        Action<string, int> reportStatus,
+        int currentProgress,
+        string reviewStatusText,
+        string cancelledStatusText,
+        string openFailedStatusText,
+        string approvedStatusText,
+        string alternativeStatusText,
+        Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync);
+
+    /// <summary>
+    /// Öffnet den TVDB-Dialog für die aktuelle Episode und schreibt die Entscheidung zurück.
+    /// </summary>
+    Task<EpisodeMetadataReviewOutcome> ReviewMetadataAsync(
+        IEpisodeReviewItem item,
+        Action<string, int> reportStatus,
+        int currentProgress,
+        string reviewStatusText,
+        string cancelledStatusText,
+        string localApprovedStatusText,
+        string tvdbApprovedStatusText,
+        Action onEpisodeChanged);
+}
+
+/// <summary>
+/// Kapselt Pflichtprüfungen für Quelle und TVDB-Metadaten inklusive Dialogabfolge.
+/// </summary>
+public sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
 {
     private readonly IUserDialogService _dialogService;
     private readonly EpisodeMetadataLookupService _episodeMetadata;

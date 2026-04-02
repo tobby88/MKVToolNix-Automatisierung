@@ -380,7 +380,7 @@ public sealed partial class SingleEpisodeMuxViewModel
 
     private void SelectOutput()
     {
-        var path = _dialogService.SelectOutput(ResolveComponentInitialDirectory(), BuildFallbackOutputName());
+        var path = _dialogService.SelectOutput(ResolveOutputDirectory(), BuildFallbackOutputName());
         if (!string.IsNullOrWhiteSpace(path))
         {
             SetOutputPath(path);
