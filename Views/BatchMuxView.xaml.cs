@@ -10,6 +10,9 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class BatchMuxView : UserControl
 {
+    /// <summary>
+    /// Initialisiert die Batch-Ansicht mit ihren XAML-Komponenten.
+    /// </summary>
     public BatchMuxView()
     {
         InitializeComponent();

@@ -5,7 +5,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Minimale Eingabeoberfläche, damit Planerzeugung aus unterschiedlichen ViewModels heraus wiederverwendbar bleibt.
 /// </summary>
-public interface IEpisodePlanInput
+internal interface IEpisodePlanInput
 {
     /// <summary>
     /// Pfad zur primären Videodatei.
@@ -51,7 +51,7 @@ public interface IEpisodePlanInput
 /// <summary>
 /// Erzeugt Mux-Pläne aus den aktuell sichtbaren Eingaben eines Moduls.
 /// </summary>
-public sealed class EpisodePlanCoordinator
+internal sealed class EpisodePlanCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
 

@@ -24,6 +24,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private readonly SeriesArchiveService _archiveService;
     private readonly IMediaDurationProbe _durationProbe;
 
+    /// <summary>
+    /// Initialisiert den zentralen Planer für Dateierkennung, Archivabgleich und Mux-Planerzeugung.
+    /// </summary>
+    /// <param name="locator">Liefert den aktuell verwendbaren Pfad zur <c>mkvmerge.exe</c>.</param>
+    /// <param name="probeService">Liest Container- und Track-Metadaten aus vorhandenen Dateien.</param>
+    /// <param name="archiveService">Entscheidet, wie vorhandene Archivdateien in neue Pläne integriert werden.</param>
+    /// <param name="durationProbe">Liefert optionale Laufzeiten für Qualitäts- und Kandidatenvergleiche.</param>
     public SeriesEpisodeMuxPlanner(
         MkvToolNixLocator locator,
         MkvMergeProbeService probeService,
@@ -36,6 +43,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
         _durationProbe = durationProbe;
     }
 
+    /// <summary>
+    /// Führt die lokale Dateierkennung für eine ausgewählte Hauptquelle synchron aus.
+    /// </summary>
+    /// <param name="mainVideoPath">Pfad zur primären Video- oder AD-Datei der Episode.</param>
+    /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
+    /// <param name="excludedSourcePaths">Optionaler Satz an Pfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <returns>Automatisch erkannte Episodenquellen inklusive Metadaten- und Zielvorschlägen.</returns>
     public AutoDetectedEpisodeFiles DetectFromMainVideo(
         string mainVideoPath,
         Action<DetectionProgressUpdate>? onProgress = null,
@@ -68,6 +82,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return detected;
     }
 
+    /// <summary>
+    /// Verwirft gecachte Probe-Ergebnisse für mehrere betroffene Mediendateien.
+    /// </summary>
+    /// <param name="filePaths">Dateipfade, deren Probe-Ergebnisse nicht weiterverwendet werden sollen.</param>
     public void InvalidateProbeCaches(IEnumerable<string?> filePaths)
     {
         _probeService.Invalidate(filePaths);

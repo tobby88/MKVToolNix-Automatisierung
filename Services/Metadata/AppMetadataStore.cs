@@ -9,11 +9,18 @@ public class AppMetadataStore
 {
     private readonly AppSettingsStore _settingsStore;
 
+    /// <summary>
+    /// Initialisiert den Metadaten-Store mit dem standardmäßigen portablen Settings-Backend.
+    /// </summary>
     public AppMetadataStore()
         : this(new AppSettingsStore())
     {
     }
 
+    /// <summary>
+    /// Initialisiert den Metadaten-Store mit einem expliziten kombinierten Settings-Backend.
+    /// </summary>
+    /// <param name="settingsStore">Store für die gemeinsame portable Settings-Datei.</param>
     public AppMetadataStore(AppSettingsStore settingsStore)
     {
         _settingsStore = settingsStore;

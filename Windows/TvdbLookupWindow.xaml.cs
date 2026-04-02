@@ -13,6 +13,11 @@ public partial class TvdbLookupWindow : Window
     private readonly TvdbLookupWindowViewModel _viewModel;
     private bool _loadedOnce;
 
+    /// <summary>
+    /// Initialisiert den Dialog für die manuelle TVDB-Serien- und Episodenauswahl.
+    /// </summary>
+    /// <param name="lookupService">Service für TVDB-Suche, Episodenladen und Settings-Persistenz.</param>
+    /// <param name="guess">Lokal erkannter Startvorschlag für Serie, Staffel, Folge und Titel.</param>
     public TvdbLookupWindow(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
     {
         InitializeComponent();
@@ -22,8 +27,14 @@ public partial class TvdbLookupWindow : Window
         Loaded += TvdbLookupWindow_Loaded;
     }
 
+    /// <summary>
+    /// Vom Benutzer bestätigte TVDB-Zuordnung nach einem erfolgreichen Dialogabschluss.
+    /// </summary>
     public TvdbEpisodeSelection? SelectedEpisodeSelection { get; private set; }
 
+    /// <summary>
+    /// Kennzeichnet, dass der Benutzer die lokale Erkennung bewusst beibehalten wollte.
+    /// </summary>
     public bool KeepLocalDetection { get; private set; }
 
     private async void TvdbLookupWindow_Loaded(object sender, RoutedEventArgs e)

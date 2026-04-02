@@ -7,7 +7,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial enthält die Ausführung des Batch-Laufs einschließlich Done-Aufräumen und Log-Speicherung.
-public sealed partial class BatchMuxViewModel
+internal sealed partial class BatchMuxViewModel
 {
     private async Task RunBatchAsync()
     {

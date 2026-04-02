@@ -7,6 +7,12 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 /// </summary>
 public static class EpisodeMetadataMergeHelper
 {
+    /// <summary>
+    /// Wendet eine bestätigte TVDB-Auswahl auf ein lokal erkanntes Episodenobjekt an.
+    /// </summary>
+    /// <param name="detected">Bisher lokal erkannte Episodendaten.</param>
+    /// <param name="selection">Bestätigte TVDB-Zuordnung.</param>
+    /// <returns>Neues Erkennungsobjekt mit TVDB-normalisierten Metadaten und Hinweisen.</returns>
     public static AutoDetectedEpisodeFiles ApplySelection(
         AutoDetectedEpisodeFiles detected,
         TvdbEpisodeSelection selection)
@@ -35,6 +41,15 @@ public static class EpisodeMetadataMergeHelper
         };
     }
 
+    /// <summary>
+    /// Baut aus Metadaten einen vorgeschlagenen MKV-Dateipfad für den aktuellen Zielordner.
+    /// </summary>
+    /// <param name="directory">Zielordner der Ausgabedatei.</param>
+    /// <param name="seriesName">Serienname der Episode.</param>
+    /// <param name="seasonNumber">Staffelnummer oder Jahresstaffel.</param>
+    /// <param name="episodeNumber">Normalisierte Episodennummer.</param>
+    /// <param name="title">Episodentitel.</param>
+    /// <returns>Vollständiger vorgeschlagener Ausgabepfad.</returns>
     public static string BuildSuggestedOutputFilePath(
         string directory,
         string seriesName,
@@ -54,6 +69,11 @@ public static class EpisodeMetadataMergeHelper
                 normalizedTitle));
     }
 
+    /// <summary>
+    /// Normalisiert eine lokale Episodennummer auf das projektweit verwendete zweistellige Format.
+    /// </summary>
+    /// <param name="value">Rohwert aus Dateiname, TVDB oder Benutzereingabe.</param>
+    /// <returns>Normalisierte Episodennummer oder <c>xx</c> für unbekannte Werte.</returns>
     public static string NormalizeEpisodeNumber(string? value)
     {
         return EpisodeFileNameHelper.NormalizeEpisodeNumber(value);

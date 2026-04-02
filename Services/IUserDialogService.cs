@@ -9,7 +9,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// Die ViewModels kennen damit nur noch die fachliche Dialogoberfläche statt der konkreten WPF-Implementierung.
 /// Das vereinfacht Tests und hält UI-nahe Details an einer zentralen Stelle.
 /// </remarks>
-public interface IUserDialogService
+internal interface IUserDialogService
 {
     string? SelectMainVideo(string initialDirectory);
 

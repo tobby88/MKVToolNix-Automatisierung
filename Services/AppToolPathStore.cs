@@ -7,11 +7,18 @@ public sealed class AppToolPathStore
 {
     private readonly AppSettingsStore _settingsStore;
 
+    /// <summary>
+    /// Initialisiert den Toolpfad-Store mit dem standardmäßigen portablen Settings-Backend.
+    /// </summary>
     public AppToolPathStore()
         : this(new AppSettingsStore())
     {
     }
 
+    /// <summary>
+    /// Initialisiert den Toolpfad-Store mit einem expliziten kombinierten Settings-Backend.
+    /// </summary>
+    /// <param name="settingsStore">Store für die gemeinsame portable Settings-Datei.</param>
     public AppToolPathStore(AppSettingsStore settingsStore)
     {
         _settingsStore = settingsStore;

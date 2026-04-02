@@ -8,7 +8,7 @@ using MkvToolnixAutomatisierung.Windows;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial enthält Dateiauswahl, automatische Erkennung, manuelle Korrekturen und TVDB-Interaktion.
-public sealed partial class SingleEpisodeMuxViewModel
+internal sealed partial class SingleEpisodeMuxViewModel
 {
     private string ResolveMainVideoInitialDirectory()
     {

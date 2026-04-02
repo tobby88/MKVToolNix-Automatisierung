@@ -256,6 +256,9 @@ public class TvdbClient : IDisposable
         _httpClient.DefaultRequestHeaders.Authorization = null;
     }
 
+    /// <summary>
+    /// Gibt interne Synchronisationsobjekte sowie optional den besessenen <see cref="HttpClient"/> frei.
+    /// </summary>
     public void Dispose()
     {
         _authSync.Dispose();

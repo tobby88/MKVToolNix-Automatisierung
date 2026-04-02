@@ -12,6 +12,11 @@ public sealed class EpisodeMetadataLookupService
     private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
     private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
 
+    /// <summary>
+    /// Initialisiert den TVDB-Lookup-Service mit persistentem Settings-Store und API-Client.
+    /// </summary>
+    /// <param name="store">Persistenter Store für Zugangsdaten und Serien-Mappings.</param>
+    /// <param name="tvdbClient">HTTP-Client für TVDB-Serien- und Episodenabfragen.</param>
     public EpisodeMetadataLookupService(AppMetadataStore store, TvdbClient tvdbClient)
     {
         _store = store;

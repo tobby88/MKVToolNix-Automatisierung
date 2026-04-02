@@ -9,6 +9,9 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class SingleEpisodeMuxView : UserControl
 {
+    /// <summary>
+    /// Initialisiert die Einzelmodus-Ansicht mit ihren XAML-Komponenten.
+    /// </summary>
     public SingleEpisodeMuxView()
     {
         InitializeComponent();

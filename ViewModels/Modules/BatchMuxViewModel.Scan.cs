@@ -8,7 +8,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial enthält Ordnerauswahl, Batch-Scan und die Erstbefüllung der UI-Liste.
-public sealed partial class BatchMuxViewModel
+internal sealed partial class BatchMuxViewModel
 {
     private async Task SelectSourceDirectoryAsync()
     {

@@ -7,7 +7,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial verbindet das allgemeine Review-Workflow-Objekt mit den Batch-Zeilen.
-public sealed partial class BatchMuxViewModel
+internal sealed partial class BatchMuxViewModel
 {
     private async Task ReviewPendingSourcesAsync()
     {

@@ -9,8 +9,6 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- Die XML-Dokumentation ist projektweit noch nicht vollständig; CS1591 bleibt bis zu einem eigenen Doku-Aufräumblock unterdrückt. -->
-    <NoWarn>$(NoWarn);1591</NoWarn>
     <DefaultItemExcludes>$(DefaultItemExcludes);MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>

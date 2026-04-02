@@ -51,5 +51,8 @@ public sealed record EpisodeMetadataResolutionResult(
     bool QueryWasAttempted,
     bool QuerySucceeded)
 {
+    /// <summary>
+    /// Kennzeichnet, ob aus der Auflösung bereits eine konkrete TVDB-Zuordnung hervorgegangen ist.
+    /// </summary>
     public bool HasSelection => Selection is not null;
 }

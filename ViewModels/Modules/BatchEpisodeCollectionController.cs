@@ -10,7 +10,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Filteroptionen für die Batch-Liste.
 /// </summary>
-public enum BatchEpisodeFilterMode
+internal enum BatchEpisodeFilterMode
 {
     All,
     PendingChecks,
@@ -22,7 +22,7 @@ public enum BatchEpisodeFilterMode
 /// <summary>
 /// Sortieroptionen für die Batch-Liste.
 /// </summary>
-public enum BatchEpisodeSortMode
+internal enum BatchEpisodeSortMode
 {
     FileName,
     PendingChecksFirst,
@@ -33,12 +33,12 @@ public enum BatchEpisodeSortMode
 /// <summary>
 /// UI-Objekt für einen auswählbaren Filtereintrag.
 /// </summary>
-public sealed record BatchEpisodeFilterOption(BatchEpisodeFilterMode Key, string DisplayName);
+internal sealed record BatchEpisodeFilterOption(BatchEpisodeFilterMode Key, string DisplayName);
 
 /// <summary>
 /// UI-Objekt für einen auswählbaren Sortiereintrag.
 /// </summary>
-public sealed record BatchEpisodeSortOption(BatchEpisodeSortMode Key, string DisplayName);
+internal sealed record BatchEpisodeSortOption(BatchEpisodeSortMode Key, string DisplayName);
 
 /// <summary>
 /// Kümmert sich ausschließlich um Filterung, Sortierung und Selection-Synchronisation der Batch-Liste.

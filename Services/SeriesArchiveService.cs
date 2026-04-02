@@ -7,11 +7,19 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
+    /// <summary>
+    /// Standardwurzel der Serienbibliothek für dieses Projekt.
+    /// </summary>
     public const string DefaultArchiveRootDirectory = @"Z:\Videos\Serien";
 
     private readonly MkvMergeProbeService _probeService;
     private readonly AppArchiveSettingsStore _archiveSettingsStore;
 
+    /// <summary>
+    /// Initialisiert den Archivdienst für Pfadvorschläge und bestehende Ziel-MKV-Integration.
+    /// </summary>
+    /// <param name="probeService">Liest Track- und Container-Metadaten vorhandener Archivdateien.</param>
+    /// <param name="archiveSettingsStore">Persistenter Store für den konfigurierten Archivwurzelpfad.</param>
     public SeriesArchiveService(MkvMergeProbeService probeService, AppArchiveSettingsStore archiveSettingsStore)
     {
         _probeService = probeService;

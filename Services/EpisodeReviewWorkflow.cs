@@ -7,7 +7,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Gemeinsame Oberfläche für Einzel- und Batch-Episoden, damit Review-Dialoge dieselbe Logik verwenden können.
 /// </summary>
-public interface IEpisodeReviewItem
+internal interface IEpisodeReviewItem
 {
     string ReviewTitle { get; }
     string SeriesName { get; }
@@ -34,7 +34,7 @@ public interface IEpisodeReviewItem
 /// <summary>
 /// Kapselt Pflichtprüfungen für Quelle und TVDB-Metadaten inklusive Dialogabfolge.
 /// </summary>
-public interface IEpisodeReviewWorkflow
+internal interface IEpisodeReviewWorkflow
 {
     /// <summary>
     /// Führt die manuelle Quellenprüfung inklusive möglicher Alternativwahl durch.
@@ -67,7 +67,7 @@ public interface IEpisodeReviewWorkflow
 /// <summary>
 /// Kapselt Pflichtprüfungen für Quelle und TVDB-Metadaten inklusive Dialogabfolge.
 /// </summary>
-public sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
+internal sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
 {
     private readonly IUserDialogService _dialogService;
     private readonly EpisodeMetadataLookupService _episodeMetadata;
@@ -199,7 +199,7 @@ public sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
 /// <summary>
 /// Ergebnis des manuellen TVDB-Dialogs.
 /// </summary>
-public enum EpisodeMetadataReviewOutcome
+internal enum EpisodeMetadataReviewOutcome
 {
     Cancelled,
     KeptLocalDetection,

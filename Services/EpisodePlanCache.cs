@@ -6,7 +6,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Hält zuletzt berechnete Episodenpläne anhand der aktuellen Eingabeeigenschaften wiederverwendbar vor.
 /// </summary>
-public sealed class EpisodePlanCache
+internal sealed class EpisodePlanCache
 {
     private static readonly HashSet<string> DetectionRelevantExtensions = new(StringComparer.OrdinalIgnoreCase)
     {

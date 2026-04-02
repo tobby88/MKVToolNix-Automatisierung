@@ -8,6 +8,9 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class EpisodeUsageSummaryView : UserControl
 {
+    /// <summary>
+    /// Initialisiert die gemeinsame read-only Nutzungsübersicht für Einzel- und Batchmodus.
+    /// </summary>
     public EpisodeUsageSummaryView()
     {
         InitializeComponent();

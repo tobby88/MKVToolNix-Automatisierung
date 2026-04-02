@@ -6,7 +6,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Führt die automatische Erkennung für Batch-Quellen parallelisiert aus und sammelt Ergebnisobjekte für das ViewModel.
 /// </summary>
-public sealed class BatchScanCoordinator
+internal sealed class BatchScanCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
     private readonly EpisodeMetadataLookupService _episodeMetadata;
@@ -116,7 +116,7 @@ public sealed class BatchScanCoordinator
 /// <summary>
 /// Ergebnis eines einzelnen Batch-Scan-Laufs inklusive lokaler und TVDB-basierter Metadaten.
 /// </summary>
-public sealed record BatchScanCoordinatorResult(
+internal sealed record BatchScanCoordinatorResult(
     AutoDetectedEpisodeFiles Detected,
     EpisodeMetadataGuess LocalGuess,
     EpisodeMetadataResolutionResult MetadataResolution,
@@ -125,7 +125,7 @@ public sealed record BatchScanCoordinatorResult(
 /// <summary>
 /// Vorbereiteter Batch-Ordnerkontext mit Hauptvideo-Liste und wiederverwendbarer Detection-Grundlage.
 /// </summary>
-public sealed record BatchScanDirectoryContext(
+internal sealed record BatchScanDirectoryContext(
     string SourceDirectory,
     IReadOnlyList<string> MainVideoFiles,
     SeriesEpisodeMuxPlanner.DirectoryDetectionContext DetectionContext);

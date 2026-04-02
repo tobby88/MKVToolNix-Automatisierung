@@ -18,7 +18,7 @@ internal sealed record BatchScanResult(
 /// <summary>
 /// Repräsentiert eine Zeile im Batch-Bildschirm inklusive Auswahl-, Status- und Review-Zustand.
 /// </summary>
-public sealed class BatchEpisodeItemViewModel : EpisodeEditModel
+internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
     private bool _isSelected;
     private bool _isApplyingSharedMetadataState;

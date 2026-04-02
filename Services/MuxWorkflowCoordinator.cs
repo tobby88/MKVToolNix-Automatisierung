@@ -6,7 +6,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Verknüpft Arbeitskopie, Mux-Ausführung und temporäres Aufräumen zu einem robusten Einzellauf.
 /// </summary>
-public class MuxWorkflowCoordinator
+internal class MuxWorkflowCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
     private readonly FileCopyService _fileCopyService;
@@ -115,4 +115,4 @@ public class MuxWorkflowCoordinator
 /// <summary>
 /// Fortschrittsmeldung für die Vorbereitung einer lokalen Arbeitskopie.
 /// </summary>
-public sealed record WorkingCopyPreparationUpdate(int ProgressPercent, bool ReusesExistingCopy);
+internal sealed record WorkingCopyPreparationUpdate(int ProgressPercent, bool ReusesExistingCopy);

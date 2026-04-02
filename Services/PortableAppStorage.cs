@@ -3,7 +3,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Definiert die portable Ordnerstruktur relativ zur EXE und prüft beim Start die Schreibbarkeit.
 /// </summary>
-public static class PortableAppStorage
+internal static class PortableAppStorage
 {
     private const string DataDirectoryName = "Data";
     private const string LogsDirectoryName = "Logs";

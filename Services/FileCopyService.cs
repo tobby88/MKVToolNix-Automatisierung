@@ -9,11 +9,22 @@ public class FileCopyService
 {
     private const int BufferSize = 1024 * 1024;
 
+    /// <summary>
+    /// Prüft, ob die beschriebene Arbeitskopie tatsächlich neu erstellt oder aktualisiert werden muss.
+    /// </summary>
+    /// <param name="copyPlan">Beschreibung der gewünschten Arbeitskopie.</param>
+    /// <returns><see langword="true"/>, wenn eine Kopieroperation nötig ist.</returns>
     public virtual bool NeedsCopy(FileCopyPlan copyPlan)
     {
         return !copyPlan.IsReusable;
     }
 
+    /// <summary>
+    /// Erstellt oder aktualisiert eine lokale Arbeitskopie einer vorhandenen Archivdatei.
+    /// </summary>
+    /// <param name="copyPlan">Beschreibung von Quell- und Zielpfad der Arbeitskopie.</param>
+    /// <param name="onProgress">Optionaler Callback für bereits kopierte und gesamte Bytes.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     public virtual async Task CopyAsync(
         FileCopyPlan copyPlan,
         Action<long, long>? onProgress = null,

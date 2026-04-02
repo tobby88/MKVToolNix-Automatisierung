@@ -11,6 +11,11 @@ public sealed class MkvMergeOutputParser
         @"\b(?:Fortschritt|Progress)\b\s*:\s*(?<percent>\d{1,3})%",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// Übersetzt eine einzelne mkvmerge-Konsolenzeile in Fortschritts- und Warninformationen.
+    /// </summary>
+    /// <param name="line">Rohzeile aus Standardausgabe oder Standardfehler von mkvmerge.</param>
+    /// <returns>Strukturiertes Statusereignis für GUI und Logik.</returns>
     public MkvMergeOutputEvent Parse(string line)
     {
         var progressPercent = TryReadProgressPercent(line);

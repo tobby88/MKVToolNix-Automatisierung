@@ -10,11 +10,18 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
     private const string RelativeMkvMergePath = "mkvtoolnix\\mkvmerge.exe";
     private readonly AppToolPathStore _toolPathStore;
 
+    /// <summary>
+    /// Initialisiert den MKVToolNix-Locator mit dem standardmäßigen Toolpfad-Store.
+    /// </summary>
     public MkvToolNixLocator()
         : this(new AppToolPathStore())
     {
     }
 
+    /// <summary>
+    /// Initialisiert den MKVToolNix-Locator mit einem expliziten Toolpfad-Store.
+    /// </summary>
+    /// <param name="toolPathStore">Persistente Quelle für manuell gesetzte Toolpfade.</param>
     public MkvToolNixLocator(AppToolPathStore toolPathStore)
     {
         _toolPathStore = toolPathStore;

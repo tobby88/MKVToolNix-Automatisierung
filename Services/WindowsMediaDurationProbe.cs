@@ -11,6 +11,7 @@ public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
     {
         var snapshot = FileStateSnapshot.TryCreate(filePath);

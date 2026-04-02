@@ -308,9 +308,21 @@ public sealed class CombinedAppSettings
 /// </summary>
 public enum AppSettingsLoadStatus
 {
+    /// <summary>
+    /// Die primäre portable Settings-Datei wurde erfolgreich geladen.
+    /// </summary>
     LoadedPrimary,
+    /// <summary>
+    /// Die primäre Datei war unbrauchbar, daher wurde erfolgreich auf das Backup zurückgegriffen.
+    /// </summary>
     LoadedBackup,
+    /// <summary>
+    /// Es gab noch keine Settings-Datei; die App startet mit Standardwerten.
+    /// </summary>
     LoadedDefaultsNoFile,
+    /// <summary>
+    /// Weder primäre Datei noch Backup waren lesbar; die App startet deshalb mit Standardwerten.
+    /// </summary>
     LoadedDefaultsAfterFailure
 }
 

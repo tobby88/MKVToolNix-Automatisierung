@@ -7,11 +7,18 @@ public sealed class AppArchiveSettingsStore
 {
     private readonly AppSettingsStore _settingsStore;
 
+    /// <summary>
+    /// Initialisiert den Archiv-Settings-Store mit dem standardmäßigen portablen Settings-Backend.
+    /// </summary>
     public AppArchiveSettingsStore()
         : this(new AppSettingsStore())
     {
     }
 
+    /// <summary>
+    /// Initialisiert den Archiv-Settings-Store mit einem expliziten kombinierten Settings-Backend.
+    /// </summary>
+    /// <param name="settingsStore">Store für die gemeinsame portable Settings-Datei.</param>
     public AppArchiveSettingsStore(AppSettingsStore settingsStore)
     {
         _settingsStore = settingsStore;

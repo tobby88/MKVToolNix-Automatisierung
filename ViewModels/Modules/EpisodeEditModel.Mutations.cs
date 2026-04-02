@@ -7,7 +7,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial enthält alle zustandsändernden Operationen der Episoden-Basisklasse.
-public partial class EpisodeEditModel
+internal partial class EpisodeEditModel
 {
     public void AddRequestedSource(string requestedSourcePath)
     {

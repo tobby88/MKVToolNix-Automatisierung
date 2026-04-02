@@ -14,15 +14,26 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
     private readonly FfprobeLocator _locator;
     private string? _ffprobePath;
 
+    /// <summary>
+    /// Initialisiert den ffprobe-basierten Laufzeit-Probe-Dienst.
+    /// </summary>
+    /// <param name="locator">Liefert bei Bedarf den aktuell nutzbaren Pfad zur <c>ffprobe.exe</c>.</param>
     public FfprobeDurationProbe(FfprobeLocator locator)
     {
         _locator = locator;
     }
 
+    /// <summary>
+    /// Kennzeichnet, ob aktuell eine verwendbare <c>ffprobe.exe</c> gefunden wurde.
+    /// </summary>
     public bool IsAvailable => !string.IsNullOrWhiteSpace(GetCurrentFfprobePath());
 
+    /// <summary>
+    /// Vollständiger Pfad zur aktuell verwendeten <c>ffprobe.exe</c>, falls vorhanden.
+    /// </summary>
     public string? ExecutablePath => GetCurrentFfprobePath();
 
+    /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
     {
         var ffprobePath = GetCurrentFfprobePath();

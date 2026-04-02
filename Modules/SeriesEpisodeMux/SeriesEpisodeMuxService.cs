@@ -11,6 +11,12 @@ public sealed class SeriesEpisodeMuxService
     private readonly MuxExecutionService _executionService;
     private readonly MkvMergeOutputParser _outputParser;
 
+    /// <summary>
+    /// Initialisiert die Fassade für Erkennung, Planerzeugung und Mux-Ausführung.
+    /// </summary>
+    /// <param name="planner">Fachlicher Planer für Detection und Mux-Pläne.</param>
+    /// <param name="executionService">Prozessdienst zum Starten von <c>mkvmerge.exe</c>.</param>
+    /// <param name="outputParser">Übersetzer für rohe Prozessausgabe in strukturierte Updates.</param>
     public SeriesEpisodeMuxService(
         SeriesEpisodeMuxPlanner planner,
         MuxExecutionService executionService,

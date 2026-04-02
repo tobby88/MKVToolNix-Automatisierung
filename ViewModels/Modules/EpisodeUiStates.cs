@@ -3,7 +3,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zusammengefasster Prüfstatus einer Episode aus manueller Quellenprüfung und TVDB-Review.
 /// </summary>
-public enum EpisodeReviewState
+internal enum EpisodeReviewState
 {
     NoneNeeded = 0,
     Approved = 1,
@@ -15,7 +15,7 @@ public enum EpisodeReviewState
 /// <summary>
 /// Farb-/Textzustand des Badges für die Quellenprüfung.
 /// </summary>
-public enum ManualCheckBadgeState
+internal enum ManualCheckBadgeState
 {
     Approved = 0,
     Pending = 1
@@ -24,7 +24,7 @@ public enum ManualCheckBadgeState
 /// <summary>
 /// Farb-/Textzustand des Badges für den TVDB-Status.
 /// </summary>
-public enum MetadataBadgeState
+internal enum MetadataBadgeState
 {
     Open = 0,
     Approved = 1,
@@ -34,7 +34,7 @@ public enum MetadataBadgeState
 /// <summary>
 /// Bestimmt fachliche Badge-Zustände unabhängig von konkreten Farben oder Texten.
 /// </summary>
-public static class EpisodeUiStateResolver
+internal static class EpisodeUiStateResolver
 {
     /// <summary>
     /// Leitet den sichtbaren TVDB-Badge-Zustand aus Reviewpflicht und tatsächlicher Freigabe ab.
@@ -60,7 +60,7 @@ public static class EpisodeUiStateResolver
 /// <summary>
 /// Visuelle Einordnung des Ausgabepfads relativ zur Bibliothek.
 /// </summary>
-public enum OutputTargetBadgeState
+internal enum OutputTargetBadgeState
 {
     Open = 0,
     NewForLibrary = 1,
@@ -71,7 +71,7 @@ public enum OutputTargetBadgeState
 /// <summary>
 /// Sortier- und Darstellungszustände einzelner Batch-Zeilen.
 /// </summary>
-public enum BatchEpisodeStatusKind
+internal enum BatchEpisodeStatusKind
 {
     Error = 0,
     Warning = 1,

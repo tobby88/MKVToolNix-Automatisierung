@@ -8,7 +8,7 @@ using MkvToolnixAutomatisierung.Windows;
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 // Dieser Partial enthält Vorschau, Mux-Ausführung und anschließendes Aufräumen im Einzelmodus.
-public sealed partial class SingleEpisodeMuxViewModel
+internal sealed partial class SingleEpisodeMuxViewModel
 {
     private async Task CreatePreviewAsync()
     {

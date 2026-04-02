@@ -6,17 +6,17 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 public sealed class EpisodeUiStateTests
 {
     [Theory]
-    [InlineData(false, true, false, true, EpisodeReviewState.NoneNeeded)]
-    [InlineData(true, true, false, true, EpisodeReviewState.Approved)]
-    [InlineData(true, false, false, true, EpisodeReviewState.ManualCheckPending)]
-    [InlineData(false, true, true, false, EpisodeReviewState.MetadataReviewPending)]
-    [InlineData(true, false, true, false, EpisodeReviewState.ManualAndMetadataPending)]
+    [InlineData(false, true, false, true, 0)]
+    [InlineData(true, true, false, true, 1)]
+    [InlineData(true, false, false, true, 2)]
+    [InlineData(false, true, true, false, 3)]
+    [InlineData(true, false, true, false, 4)]
     public void GetReviewState_ReturnsExpectedState(
         bool requiresManualCheck,
         bool isManualCheckApproved,
         bool requiresMetadataReview,
         bool isMetadataReviewApproved,
-        EpisodeReviewState expectedState)
+        int expectedState)
     {
         var actualState = EpisodeEditTextBuilder.GetReviewState(
             requiresManualCheck,
@@ -24,7 +24,7 @@ public sealed class EpisodeUiStateTests
             requiresMetadataReview,
             isMetadataReviewApproved);
 
-        Assert.Equal(expectedState, actualState);
+        Assert.Equal(expectedState, (int)actualState);
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Puffert häufige Textupdates und übergibt sie gebündelt an die UI, damit Status-/Logausgaben flüssig bleiben.
 /// </summary>
-public sealed class BufferedTextStore
+internal sealed class BufferedTextStore
 {
     private readonly StringBuilder _buffer = new();
     private readonly StringBuilder _pendingAppendBuffer = new();

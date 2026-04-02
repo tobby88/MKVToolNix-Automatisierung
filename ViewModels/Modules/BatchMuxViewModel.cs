@@ -15,7 +15,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zentrales ViewModel des Batch-Moduls; die Teil-Dateien trennen Scan, Planung, Review und Ausführung.
 /// </summary>
-public sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
+internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
 {
     private const string DoneFolderName = "done";
     private const int AutomaticCompareProgressStart = 80;
