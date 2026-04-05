@@ -67,6 +67,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
         var filePaths = new List<string>();
         filePaths.AddRange(plan.VideoSources.Select(video => video.FilePath));
+        filePaths.AddRange(plan.AudioSources.Select(audio => audio.FilePath));
 
         if (!string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath))
         {
@@ -113,7 +114,13 @@ internal static class SeriesEpisodeMuxPresentationBuilder
                 builder.AppendLine($"- {Path.GetFileName(videoSource.FilePath)} -> {videoSource.TrackName}{defaultText}");
             }
 
-            builder.AppendLine($"Audio: {Path.GetFileName(plan.PrimaryAudioFilePath)} -> {plan.Metadata.AudioTrackName}");
+            builder.AppendLine("Audio:");
+            foreach (var audioSource in plan.AudioSources)
+            {
+                var defaultText = audioSource.IsDefaultTrack ? " (Standard)" : string.Empty;
+                builder.AppendLine($"- {Path.GetFileName(audioSource.FilePath)} -> {audioSource.TrackName}{defaultText}");
+            }
+
             builder.AppendLine($"AD: {(plan.AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(plan.AudioDescriptionFilePath))}");
             builder.AppendLine($"Untertitel: {(plan.SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", plan.SubtitleFiles.Select(file => file.PreviewLabel)))}");
             builder.AppendLine($"Anhänge: {BuildAttachmentPreview(plan)}");
@@ -191,9 +198,14 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
     private static string BuildAudioUsageText(SeriesEpisodeMuxPlan plan)
     {
-        return string.Equals(plan.PrimaryAudioFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
-            ? BuildExistingTargetDisplayText(plan.Metadata.AudioTrackName)
-            : Path.GetFileName(plan.PrimaryAudioFilePath);
+        return plan.AudioSources.Count == 0
+            ? "(keine)"
+            : string.Join(
+                Environment.NewLine,
+                plan.AudioSources.Select(audioSource =>
+                    string.Equals(audioSource.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+                        ? BuildExistingTargetDisplayText(audioSource.TrackName)
+                        : Path.GetFileName(audioSource.FilePath)));
     }
 
     private static string BuildAudioDescriptionUsageText(SeriesEpisodeMuxPlan plan)
@@ -204,7 +216,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         }
 
         return string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
-            ? BuildExistingTargetDisplayText(plan.Metadata.AudioDescriptionTrackName)
+            ? BuildExistingTargetDisplayText(plan.AudioDescriptionTrackName ?? "Audiodeskription")
             : Path.GetFileName(plan.AudioDescriptionFilePath);
     }
 
@@ -243,7 +255,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         return plan.WorkingCopy is not null
             && plan.VideoSources.Count > 0
             && plan.VideoSources.All(video => string.Equals(video.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            && string.Equals(plan.PrimaryAudioFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            && plan.AudioSources.All(audio => string.Equals(audio.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
             && (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath)
                 || string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
             && plan.SubtitleFiles.All(subtitle => subtitle.IsEmbedded && string.Equals(subtitle.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))

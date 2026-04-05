@@ -52,8 +52,9 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             [
                 new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - 1080p - H.264", IsDefaultTrack: true)
             ],
-            sourceVideoPath,
-            1,
+            [
+                new AudioSourcePlan(sourceVideoPath, 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
             [1],
             [],
             null,
@@ -62,6 +63,8 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
@@ -71,7 +74,6 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
                 workingCopyDestination,
                 new FileInfo(workingCopySource).Length,
                 File.GetLastWriteTimeUtc(workingCopySource)),
-            metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
             notes: []);
         var copyUpdates = new List<WorkingCopyPreparationUpdate>();
         var muxUpdates = new List<MuxExecutionUpdate>();
@@ -109,8 +111,9 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             [
                 new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - 1080p - H.264", IsDefaultTrack: true)
             ],
-            sourceVideoPath,
-            1,
+            [
+                new AudioSourcePlan(sourceVideoPath, 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
             [1],
             [],
             null,
@@ -119,12 +122,13 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
-            metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
             notes: []);
 
         Assert.False(Directory.Exists(Path.GetDirectoryName(outputPath)!));
@@ -164,8 +168,9 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             [
                 new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - 1080p - H.264", IsDefaultTrack: true)
             ],
-            sourceVideoPath,
-            1,
+            [
+                new AudioSourcePlan(sourceVideoPath, 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
             [1],
             [],
             null,
@@ -174,6 +179,8 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
@@ -183,7 +190,6 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
                 workingCopyDestination,
                 new FileInfo(workingCopySource).Length,
                 File.GetLastWriteTimeUtc(workingCopySource)),
-            metadata: new EpisodeTrackMetadata("Deutsch - E-AC-3", "Deutsch (sehbehinderte) - E-AC-3"),
             notes: []);
 
         await coordinator.PrepareWorkingCopyAsync(plan);

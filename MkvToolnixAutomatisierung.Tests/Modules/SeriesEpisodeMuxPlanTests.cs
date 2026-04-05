@@ -56,8 +56,15 @@ public sealed class SeriesEpisodeMuxPlanTests
                     IsDefaultTrack: true,
                     LanguageCode: "en")
             ],
-            primaryAudioFilePath: @"C:\Temp\video.mkv",
-            primaryAudioTrackId: 1,
+            audioSources:
+            [
+                new AudioSourcePlan(
+                    @"C:\Temp\video.mkv",
+                    1,
+                    "English - AC-3",
+                    IsDefaultTrack: true,
+                    LanguageCode: "en")
+            ],
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
             primarySourceAttachmentIds: null,
@@ -66,6 +73,8 @@ public sealed class SeriesEpisodeMuxPlanTests
             attachmentSourceAttachmentIds: null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: "Plattdüütsch (sehbehinderte) - AC-3",
+            audioDescriptionLanguageCode: "nds",
             subtitleFiles:
             [
                 new SubtitleFile(subtitlePath, new SubtitleKind("SRT", 1), LanguageCode: "en")
@@ -77,11 +86,6 @@ public sealed class SeriesEpisodeMuxPlanTests
             preservedAttachmentNames: [],
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
-            metadata: new EpisodeTrackMetadata(
-                "English - AC-3",
-                "Plattdüütsch (sehbehinderte) - AC-3",
-                AudioLanguageCode: "en",
-                AudioDescriptionLanguageCode: "nds"),
             notes: []);
 
         var arguments = plan.BuildArguments();
@@ -101,8 +105,10 @@ public sealed class SeriesEpisodeMuxPlanTests
             [
                 new VideoSourcePlan(@"C:\Temp\video.mkv", 0, "Deutsch - FHD - H.264", IsDefaultTrack: true)
             ],
-            primaryAudioFilePath: @"C:\Temp\video.mkv",
-            primaryAudioTrackId: 1,
+            audioSources:
+            [
+                new AudioSourcePlan(@"C:\Temp\video.mkv", 1, "Deutsch - AC-3", IsDefaultTrack: true)
+            ],
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
             primarySourceAttachmentIds: null,
@@ -111,12 +117,13 @@ public sealed class SeriesEpisodeMuxPlanTests
             attachmentSourceAttachmentIds: null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
             subtitleFiles: subtitleFiles,
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
-            metadata: new EpisodeTrackMetadata("Deutsch - AC-3", "Deutsch (sehbehinderte) - AC-3"),
             notes: []);
     }
 

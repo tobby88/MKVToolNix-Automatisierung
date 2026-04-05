@@ -222,6 +222,25 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
                 "English - UHD - H.264"
             ],
             plan.VideoSources.Select(source => source.TrackName).ToList());
+        Assert.Equal(
+            [germanH264Path, germanH265Path, plattdeutschH264Path, englishH264Path],
+            plan.AudioSources.Select(source => source.FilePath).ToList());
+        Assert.Equal(
+            ["de", "de", "nds", "en"],
+            plan.AudioSources.Select(source => source.LanguageCode).ToList());
+        Assert.Equal(
+            [
+                "Deutsch - E-AC-3",
+                "Deutsch - AAC",
+                "Plattdüütsch - E-AC-3",
+                "English - E-AC-3"
+            ],
+            plan.AudioSources.Select(source => source.TrackName).ToList());
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--audio-tracks", "1");
+        Assert.Contains("1:Plattdüütsch - E-AC-3", arguments);
+        Assert.Contains("1:English - E-AC-3", arguments);
     }
 
     [Fact]

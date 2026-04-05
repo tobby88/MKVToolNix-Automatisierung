@@ -88,6 +88,7 @@ public sealed partial class SeriesArchiveService
                 outputPath,
                 request,
                 videoPlan,
+                plannedVideos,
                 subtitlePlan,
                 replacedSubtitleTracks,
                 existingArchive,
@@ -343,8 +344,7 @@ public sealed partial class SeriesArchiveService
         FileCopyPlan workingCopyPlan,
         AttachmentReusePlan attachmentReusePlan)
     {
-        var primaryAudioTrack = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
-            ?? existingArchive.AudioTracks.FirstOrDefault();
+        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks, existingAudioDescription);
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
@@ -364,7 +364,7 @@ public sealed partial class SeriesArchiveService
         var needsManualAttachments = manualAttachmentPaths.Count > 0;
         var requiresRelevantTrackNameNormalization = RequiresRelevantTrackNameNormalization(
             videoPlan.RetainedExistingTracks,
-            primaryAudioTrack,
+            retainedNormalAudioTracks,
             existingAudioDescription,
             existingArchive.SubtitleTracks,
             subtitlePlan.EmbeddedPlans);
@@ -382,7 +382,7 @@ public sealed partial class SeriesArchiveService
                 BuildReuseOnlySkipUsageSummary(
                     outputPath,
                     videoPlan.RetainedExistingTracks,
-                    primaryAudioTrack,
+                    retainedNormalAudioTracks,
                     existingAudioDescription,
                     subtitlePlan,
                     attachmentReusePlan.PreservedAttachmentNames),
@@ -407,7 +407,7 @@ public sealed partial class SeriesArchiveService
             WorkingCopy: workingCopyPlan,
             PrimarySourcePath: outputPath,
             VideoSelections: videoPlan.VideoSelections,
-            PrimaryAudioTrackIds: primaryAudioTrack is null ? null : [primaryAudioTrack.TrackId],
+            RetainedAudioTrackIds: retainedNormalAudioTracks.Select(track => track.TrackId).ToList(),
             PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 ? [] : null,
             PrimarySourceAttachmentIds: attachmentReusePlan.PrimarySourceAttachmentIds,
             IncludePrimaryAttachments: attachmentReusePlan.IncludePrimarySourceAttachments,
@@ -477,6 +477,7 @@ public sealed partial class SeriesArchiveService
         string outputPath,
         SeriesEpisodeMuxRequest request,
         FinalVideoSelectionPlan videoPlan,
+        IReadOnlyList<PreparedVideoSource> plannedVideos,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
         ExistingArchiveState existingArchive,
@@ -487,15 +488,23 @@ public sealed partial class SeriesArchiveService
         AttachmentReusePlan attachmentReusePlan)
     {
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
+        var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForPrimaryReplacement(
+            outputPath,
+            videoPlan.VideoSelections,
+            plannedVideos,
+            existingArchive.AudioTracks,
+            existingAudioDescription);
+        var removedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks, existingAudioDescription)
+            .Where(track => !retainedNormalAudioTracks.Any(retained => retained.TrackId == track.TrackId))
+            .ToList();
         var needsExistingCopy = videoPlan.RetainedExistingTracks.Count > 0
+            || retainedNormalAudioTracks.Count > 0
             || (existingAudioDescription is not null && string.IsNullOrWhiteSpace(request.AudioDescriptionPath))
             || subtitlePlan.EmbeddedPlans.Count > 0
             || attachmentReusePlan.PreservedAttachmentNames.Count > 0;
         var removedAdditionalVideoTracks = videoPlan.RemovedExistingTracks
             .Where(track => bestExistingVideo is null || track.TrackId != bestExistingVideo.TrackId)
             .ToList();
-        var removedPrimaryAudio = existingArchive.AudioTracks.FirstOrDefault(track => !track.IsVisualImpaired)
-            ?? existingArchive.AudioTracks.FirstOrDefault();
         var usageComparison = new ArchiveUsageComparison(
             MainVideo: bestExistingVideo is null
                 ? null
@@ -503,11 +512,7 @@ public sealed partial class SeriesArchiveService
                     BuildVideoTrackLabel(outputPath, bestExistingVideo),
                     BuildPrimaryVideoReplacementReason(bestExistingVideo, newPrimaryVideo)),
             AdditionalVideos: BuildRemovedAdditionalVideoChange(outputPath, removedAdditionalVideoTracks),
-            Audio: removedPrimaryAudio is null
-                ? null
-                : new ArchiveUsageChange(
-                    BuildAudioTrackLabel(outputPath, removedPrimaryAudio),
-                    "Die bisherige Tonspur entfällt, weil die Hauptquelle ausgetauscht wird."),
+            Audio: BuildRemovedAudioChange(outputPath, removedNormalAudioTracks),
             AudioDescription: BuildRemovedAudioDescriptionChange(
                 outputPath,
                 existingAudioDescription,
@@ -526,7 +531,7 @@ public sealed partial class SeriesArchiveService
             WorkingCopy: needsExistingCopy ? workingCopyPlan : null,
             PrimarySourcePath: videoPlan.VideoSelections[0].FilePath,
             VideoSelections: videoPlan.VideoSelections,
-            PrimaryAudioTrackIds: null,
+            RetainedAudioTrackIds: retainedNormalAudioTracks.Select(track => track.TrackId).ToList(),
             PrimarySubtitleTrackIds: null,
             PrimarySourceAttachmentIds: null,
             IncludePrimaryAttachments: false,
@@ -563,7 +568,7 @@ public sealed partial class SeriesArchiveService
     private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(
         string outputPath,
         IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
-        ContainerTrackMetadata? primaryAudioTrack,
+        IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
         ContainerTrackMetadata? existingAudioDescription,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<string> preservedAttachmentNames)
@@ -589,16 +594,18 @@ public sealed partial class SeriesArchiveService
                 null,
                 null),
             Audio: new EpisodeUsageEntry(
-                primaryAudioTrack is null
+                retainedNormalAudioTracks.Count == 0
                     ? "(keine)"
-                    : BuildExistingTargetDisplayText(BuildExpectedAudioTrackName(primaryAudioTrack)),
+                    : string.Join(
+                        Environment.NewLine,
+                        retainedNormalAudioTracks.Select(track => BuildExistingTargetDisplayText(BuildExpectedAudioTrackName(track)))),
                 null,
                 null),
             AudioDescription: new EpisodeUsageEntry(
                 existingAudioDescription is null
                     ? "(keine)"
                     : BuildExistingTargetDisplayText(
-                        BuildExpectedAudioDescriptionTrackName(existingAudioDescription, primaryAudioTrack?.Language)),
+                        BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language)),
                 null,
                 null),
             Subtitles: new EpisodeUsageEntry(
@@ -621,7 +628,7 @@ public sealed partial class SeriesArchiveService
 
     private static bool RequiresRelevantTrackNameNormalization(
         IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
-        ContainerTrackMetadata? primaryAudioTrack,
+        IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
         ContainerTrackMetadata? existingAudioDescription,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
@@ -634,16 +641,18 @@ public sealed partial class SeriesArchiveService
             }
         }
 
-        if (primaryAudioTrack is not null
-            && !HasConsistentTrackName(primaryAudioTrack.TrackName, BuildExpectedAudioTrackName(primaryAudioTrack)))
+        foreach (var retainedNormalAudioTrack in retainedNormalAudioTracks)
         {
-            return true;
+            if (!HasConsistentTrackName(retainedNormalAudioTrack.TrackName, BuildExpectedAudioTrackName(retainedNormalAudioTrack)))
+            {
+                return true;
+            }
         }
 
         if (existingAudioDescription is not null
             && !HasConsistentTrackName(
                 existingAudioDescription.TrackName,
-                BuildExpectedAudioDescriptionTrackName(existingAudioDescription, primaryAudioTrack?.Language)))
+                BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language)))
         {
             return true;
         }
@@ -688,6 +697,41 @@ public sealed partial class SeriesArchiveService
     private static string BuildExpectedAudioTrackName(ContainerTrackMetadata track)
     {
         return $"{MediaLanguageHelper.GetLanguageDisplayName(track.Language)} - {track.CodecLabel}";
+    }
+
+    private static IReadOnlyList<ContainerTrackMetadata> GetRetainedNormalAudioTracks(
+        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks,
+        ContainerTrackMetadata? existingAudioDescription)
+    {
+        return existingAudioTracks
+            .Where(track => existingAudioDescription is null || track.TrackId != existingAudioDescription.TrackId)
+            .Where(track => !track.IsVisualImpaired)
+            .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
+            .ThenBy(track => track.IsDefaultTrack ? 0 : 1)
+            .ThenBy(track => track.TrackId)
+            .ToList();
+    }
+
+    private static IReadOnlyList<ContainerTrackMetadata> SelectRetainedExistingNormalAudioTracksForPrimaryReplacement(
+        string outputPath,
+        IReadOnlyList<VideoTrackSelection> videoSelections,
+        IReadOnlyList<PreparedVideoSource> plannedVideos,
+        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks,
+        ContainerTrackMetadata? existingAudioDescription)
+    {
+        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingAudioTracks, existingAudioDescription);
+        var selectedFreshVideoPaths = videoSelections
+            .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select(selection => selection.FilePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var freshAudioLanguages = plannedVideos
+            .Where(video => selectedFreshVideoPaths.Contains(video.FilePath))
+            .Select(video => MediaLanguageHelper.NormalizeMuxLanguageCode(video.Metadata.AudioLanguage))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return retainedNormalAudioTracks
+            .Where(track => !freshAudioLanguages.Contains(MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)))
+            .ToList();
     }
 
     private static string BuildExpectedAudioDescriptionTrackName(ContainerTrackMetadata track, string? fallbackLanguage)
@@ -1241,6 +1285,20 @@ public sealed partial class SeriesArchiveService
         return new ArchiveUsageChange(
             string.Join(Environment.NewLine, removedAdditionalVideoTracks.Select(track => BuildVideoTrackLabel(outputPath, track))),
             "Zusätzliche bisherige Videospuren werden nicht übernommen.");
+    }
+
+    private static ArchiveUsageChange? BuildRemovedAudioChange(
+        string outputPath,
+        IReadOnlyList<ContainerTrackMetadata> removedAudioTracks)
+    {
+        if (removedAudioTracks.Count == 0)
+        {
+            return null;
+        }
+
+        return new ArchiveUsageChange(
+            string.Join(Environment.NewLine, removedAudioTracks.Select(track => BuildAudioTrackLabel(outputPath, track))),
+            "Vorhandene Tonspuren entfallen, weil für diese Sprache bereits frische Tonspuren aus den ausgewählten Quellen übernommen werden.");
     }
 
     private static ArchiveUsageChange? BuildRemovedAudioDescriptionChange(

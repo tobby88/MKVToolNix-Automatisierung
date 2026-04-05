@@ -396,8 +396,10 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             [
                 new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - Video", IsDefaultTrack: true)
             ],
-            primaryAudioFilePath: sourceVideoPath,
-            primaryAudioTrackId: 1,
+            audioSources:
+            [
+                new AudioSourcePlan(sourceVideoPath, 1, "Deutsch - Audio", IsDefaultTrack: true)
+            ],
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
             primarySourceAttachmentIds: null,
@@ -406,12 +408,13 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             attachmentSourceAttachmentIds: null,
             audioDescriptionFilePath: null,
             audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
             subtitleFiles: [],
             attachmentFilePaths: [],
             preservedAttachmentNames: [],
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: workingCopy,
-            metadata: new EpisodeTrackMetadata("Deutsch - Audio", "Deutsch (sehbehinderte) - Audio"),
             notes: []);
     }
 

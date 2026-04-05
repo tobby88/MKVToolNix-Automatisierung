@@ -163,6 +163,21 @@ public sealed record VideoSourcePlan(
     string LanguageCode = "de");
 
 /// <summary>
+/// Beschreibt eine einzubindende normale Audiospur im finalen Mux-Plan.
+/// </summary>
+/// <param name="FilePath">Quelldatei, aus der die Audiospur stammt.</param>
+/// <param name="TrackId">Track-ID innerhalb von <paramref name="FilePath"/>.</param>
+/// <param name="TrackName">Finaler Trackname für GUI und mkvmerge-Metadaten.</param>
+/// <param name="IsDefaultTrack">Kennzeichnet die Standard-Tonspur des finalen Containers.</param>
+/// <param name="LanguageCode">Projektweit normalisierter Sprachcode der Spur.</param>
+public sealed record AudioSourcePlan(
+    string FilePath,
+    int TrackId,
+    string TrackName,
+    bool IsDefaultTrack,
+    string LanguageCode = "de");
+
+/// <summary>
 /// Bereits fachlich ausgewählte Videospur aus einer frischen Quelldatei oder aus einer vorhandenen Ziel-MKV.
 /// </summary>
 /// <param name="FilePath">Quelldatei, aus der die Videospur gelesen wird.</param>
@@ -176,15 +191,6 @@ public sealed record VideoTrackSelection(
     int VideoWidth,
     string CodecLabel,
     string LanguageCode);
-
-/// <summary>
-/// Zielnamen und Sprachcodes für automatisch erzeugte Audio- und AD-Trackbezeichnungen.
-/// </summary>
-public sealed record EpisodeTrackMetadata(
-    string AudioTrackName,
-    string AudioDescriptionTrackName,
-    string AudioLanguageCode = "de",
-    string AudioDescriptionLanguageCode = "de");
 
 /// <summary>
 /// Barrierefreiheits-Markierung einer Untertitelspur.

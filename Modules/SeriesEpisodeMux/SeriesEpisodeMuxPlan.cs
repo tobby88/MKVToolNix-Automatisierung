@@ -1,3 +1,5 @@
+using MkvToolnixAutomatisierung.Services;
+
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
@@ -12,8 +14,7 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="outputFilePath">Finaler Ausgabepfad der Zieldatei.</param>
     /// <param name="title">MKV-Titel für den finalen Container.</param>
     /// <param name="videoSources">Alle einzubindenden Videospuren in Mux-Reihenfolge.</param>
-    /// <param name="primaryAudioFilePath">Datei, aus der die primäre Audiospur stammt.</param>
-    /// <param name="primaryAudioTrackId">Track-ID der primären Audiospur.</param>
+    /// <param name="audioSources">Alle einzubindenden normalen Audiospuren in finaler Reihenfolge.</param>
     /// <param name="primarySourceAudioTrackIds">Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.</param>
     /// <param name="primarySourceSubtitleTrackIds">Optional explizit weiterzuverwendende Untertitel-Track-IDs der Primärquelle.</param>
     /// <param name="primarySourceAttachmentIds">Optional explizit weiterzuverwendende Attachment-IDs der Primärquelle.</param>
@@ -22,20 +23,20 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="attachmentSourceAttachmentIds">Optional explizit weiterzuverwendende Attachment-IDs der separaten Attachment-Quelle.</param>
     /// <param name="audioDescriptionFilePath">Optionale Datei mit Audiodeskriptionsspur.</param>
     /// <param name="audioDescriptionTrackId">Track-ID der AD-Spur in <paramref name="audioDescriptionFilePath"/>, falls eingebettet.</param>
+    /// <param name="audioDescriptionTrackName">Vollständig aufgelöster Trackname der AD-Spur.</param>
+    /// <param name="audioDescriptionLanguageCode">Projektweit normalisierter Sprachcode der AD-Spur.</param>
     /// <param name="subtitleFiles">Alle einzubindenden Untertitelspuren.</param>
     /// <param name="attachmentFilePaths">Zusätzlich anzuhängende externe Dateien.</param>
     /// <param name="preservedAttachmentNames">Namen wiederverwendeter Archiv-Anhänge für die GUI-Vorschau.</param>
     /// <param name="usageComparison">Vergleich zwischen bisheriger Ziel-MKV und geplanter Verwendung.</param>
     /// <param name="workingCopy">Optionale Arbeitskopie einer vorhandenen Archivdatei.</param>
-    /// <param name="metadata">Bereits aufgelöste Trackmetadaten für Audio und AD.</param>
     /// <param name="notes">Zusätzliche Hinweise für GUI und Vorschau.</param>
     public SeriesEpisodeMuxPlan(
         string mkvMergePath,
         string outputFilePath,
         string title,
         IReadOnlyList<VideoSourcePlan> videoSources,
-        string primaryAudioFilePath,
-        int primaryAudioTrackId,
+        IReadOnlyList<AudioSourcePlan> audioSources,
         IReadOnlyList<int>? primarySourceAudioTrackIds,
         IReadOnlyList<int>? primarySourceSubtitleTrackIds,
         IReadOnlyList<int>? primarySourceAttachmentIds,
@@ -44,12 +45,13 @@ public sealed class SeriesEpisodeMuxPlan
         IReadOnlyList<int>? attachmentSourceAttachmentIds,
         string? audioDescriptionFilePath,
         int? audioDescriptionTrackId,
+        string? audioDescriptionTrackName,
+        string? audioDescriptionLanguageCode,
         IReadOnlyList<SubtitleFile> subtitleFiles,
         IReadOnlyList<string> attachmentFilePaths,
         IReadOnlyList<string> preservedAttachmentNames,
         ArchiveUsageComparison usageComparison,
         FileCopyPlan? workingCopy,
-        EpisodeTrackMetadata metadata,
         IReadOnlyList<string> notes)
     {
         if (videoSources.Count == 0)
@@ -57,12 +59,16 @@ public sealed class SeriesEpisodeMuxPlan
             throw new ArgumentException("Mindestens eine Videospur muss vorhanden sein.", nameof(videoSources));
         }
 
+        if (audioSources.Count == 0)
+        {
+            throw new ArgumentException("Mindestens eine normale Audiospur muss vorhanden sein.", nameof(audioSources));
+        }
+
         MkvMergePath = mkvMergePath;
         OutputFilePath = outputFilePath;
         Title = title;
         VideoSources = videoSources;
-        PrimaryAudioFilePath = primaryAudioFilePath;
-        PrimaryAudioTrackId = primaryAudioTrackId;
+        AudioSources = audioSources;
         PrimarySourceAudioTrackIds = primarySourceAudioTrackIds;
         PrimarySourceSubtitleTrackIds = primarySourceSubtitleTrackIds;
         PrimarySourceAttachmentIds = primarySourceAttachmentIds;
@@ -71,13 +77,16 @@ public sealed class SeriesEpisodeMuxPlan
         AttachmentSourceAttachmentIds = attachmentSourceAttachmentIds;
         AudioDescriptionFilePath = audioDescriptionFilePath;
         AudioDescriptionTrackId = audioDescriptionTrackId;
+        AudioDescriptionTrackName = audioDescriptionTrackName;
+        AudioDescriptionLanguageCode = string.IsNullOrWhiteSpace(audioDescriptionTrackName)
+            ? null
+            : MediaLanguageHelper.NormalizeMuxLanguageCode(audioDescriptionLanguageCode);
         SubtitleFiles = subtitleFiles;
         AttachmentFilePaths = attachmentFilePaths;
         PreservedAttachmentNames = preservedAttachmentNames;
         UsageComparison = usageComparison;
         SkipUsageSummary = null;
         WorkingCopy = workingCopy;
-        Metadata = metadata;
         Notes = notes;
     }
 
@@ -96,18 +105,22 @@ public sealed class SeriesEpisodeMuxPlan
         SkipReason = skipReason;
         SkipUsageSummary = skipUsageSummary;
         VideoSources = [];
-        PrimaryAudioFilePath = string.Empty;
+        AudioSources = [];
         PrimarySourceAudioTrackIds = null;
         PrimarySourceSubtitleTrackIds = null;
         PrimarySourceAttachmentIds = null;
         IncludePrimarySourceAttachments = false;
         AttachmentSourcePath = null;
         AttachmentSourceAttachmentIds = null;
+        AudioDescriptionFilePath = null;
+        AudioDescriptionTrackId = null;
+        AudioDescriptionTrackName = null;
+        AudioDescriptionLanguageCode = null;
         SubtitleFiles = [];
         AttachmentFilePaths = [];
         PreservedAttachmentNames = [];
         UsageComparison = ArchiveUsageComparison.Empty;
-        Metadata = new EpisodeTrackMetadata("Deutsch - Audio", "Deutsch (sehbehinderte) - Audio");
+        WorkingCopy = null;
         Notes = notes;
     }
 
@@ -147,14 +160,19 @@ public sealed class SeriesEpisodeMuxPlan
     public IReadOnlyList<VideoSourcePlan> VideoSources { get; }
 
     /// <summary>
-    /// Datei, aus der die primäre Audiospur stammt.
+    /// Alle einzubindenden normalen Audiospuren in finaler Reihenfolge.
     /// </summary>
-    public string PrimaryAudioFilePath { get; }
+    public IReadOnlyList<AudioSourcePlan> AudioSources { get; }
 
     /// <summary>
-    /// Track-ID der primären Audiospur innerhalb von <see cref="PrimaryAudioFilePath"/>.
+    /// Datei, aus der die Standard-Tonspur stammt.
     /// </summary>
-    public int PrimaryAudioTrackId { get; }
+    public string PrimaryAudioFilePath => AudioSources.Count == 0 ? string.Empty : AudioSources[0].FilePath;
+
+    /// <summary>
+    /// Track-ID der Standard-Tonspur innerhalb von <see cref="PrimaryAudioFilePath"/>.
+    /// </summary>
+    public int PrimaryAudioTrackId => AudioSources.Count == 0 ? 0 : AudioSources[0].TrackId;
 
     /// <summary>
     /// Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.
@@ -197,6 +215,16 @@ public sealed class SeriesEpisodeMuxPlan
     public int? AudioDescriptionTrackId { get; }
 
     /// <summary>
+    /// Vollständig aufgelöster Trackname der AD-Spur, falls eine solche geplant ist.
+    /// </summary>
+    public string? AudioDescriptionTrackName { get; }
+
+    /// <summary>
+    /// Projektweit normalisierter Sprachcode der AD-Spur, falls eine solche geplant ist.
+    /// </summary>
+    public string? AudioDescriptionLanguageCode { get; }
+
+    /// <summary>
     /// Alle einzubindenden Untertitelspuren.
     /// </summary>
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
@@ -220,11 +248,6 @@ public sealed class SeriesEpisodeMuxPlan
     /// Optionale Arbeitskopie einer vorhandenen Archivdatei.
     /// </summary>
     public FileCopyPlan? WorkingCopy { get; }
-
-    /// <summary>
-    /// Bereits aufgelöste Trackmetadaten für Audio und Audiodeskription.
-    /// </summary>
-    public EpisodeTrackMetadata Metadata { get; }
 
     /// <summary>
     /// Zusätzliche Hinweise für GUI und Vorschau.

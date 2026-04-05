@@ -19,10 +19,12 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--title",
             plan.Title
         };
+        var audioAlreadyEmittedForFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         AppendPrimarySourceOptions(arguments, plan);
-        AppendPrimaryVideo(arguments, plan);
-        AppendAdditionalVideos(arguments, plan);
+        AppendPrimaryVideo(arguments, plan, audioAlreadyEmittedForFile);
+        AppendAdditionalVideos(arguments, plan, audioAlreadyEmittedForFile);
+        AppendStandaloneAudios(arguments, plan, audioAlreadyEmittedForFile);
         AppendAudioDescription(arguments, plan);
         AppendSubtitles(arguments, plan);
         AppendAttachments(arguments, plan);
@@ -32,7 +34,11 @@ internal static class SeriesEpisodeMuxArgumentBuilder
 
     private static void AppendPrimarySourceOptions(List<string> arguments, SeriesEpisodeMuxPlan plan)
     {
-        if (plan.PrimarySourceAudioTrackIds is { Count: > 0 })
+        if (plan.PrimarySourceAudioTrackIds is { Count: 0 })
+        {
+            arguments.Add("--no-audio");
+        }
+        else if (plan.PrimarySourceAudioTrackIds is { Count: > 0 })
         {
             arguments.AddRange(["--audio-tracks", string.Join(",", plan.PrimarySourceAudioTrackIds)]);
         }
@@ -56,11 +62,17 @@ internal static class SeriesEpisodeMuxArgumentBuilder
         }
     }
 
-    private static void AppendPrimaryVideo(List<string> arguments, SeriesEpisodeMuxPlan plan)
+    private static void AppendPrimaryVideo(
+        List<string> arguments,
+        SeriesEpisodeMuxPlan plan,
+        ISet<string> audioAlreadyEmittedForFile)
     {
         var primaryVideo = plan.VideoSources[0];
         var primaryVideoTrackId = primaryVideo.TrackId.ToString();
-        var primaryAudioTrackId = plan.PrimaryAudioTrackId.ToString();
+        var audioSources = plan.AudioSources
+            .Where(source => string.Equals(source.FilePath, primaryVideo.FilePath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        audioAlreadyEmittedForFile.Add(primaryVideo.FilePath);
 
         arguments.AddRange(
         [
@@ -75,29 +87,38 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--stereo-mode",
             $"{primaryVideoTrackId}:mono",
             "--original-flag",
-            $"{primaryVideoTrackId}:yes",
-
-            "--language",
-            $"{primaryAudioTrackId}:{plan.Metadata.AudioLanguageCode}",
-            "--track-name",
-            $"{primaryAudioTrackId}:{plan.Metadata.AudioTrackName}",
-            "--default-track-flag",
-            $"{primaryAudioTrackId}:yes",
-            "--original-flag",
-            $"{primaryAudioTrackId}:yes",
-
-            plan.ResolveRuntimeFilePath(primaryVideo.FilePath)
+            $"{primaryVideoTrackId}:yes"
         ]);
+
+        AppendAudioTrackMetadata(arguments, audioSources);
+        arguments.Add(plan.ResolveRuntimeFilePath(primaryVideo.FilePath));
     }
 
-    private static void AppendAdditionalVideos(List<string> arguments, SeriesEpisodeMuxPlan plan)
+    private static void AppendAdditionalVideos(
+        List<string> arguments,
+        SeriesEpisodeMuxPlan plan,
+        ISet<string> audioAlreadyEmittedForFile)
     {
         foreach (var videoSource in plan.VideoSources.Skip(1))
         {
             var trackId = videoSource.TrackId.ToString();
+            var includeAudio = audioAlreadyEmittedForFile.Add(videoSource.FilePath);
+            var audioSources = includeAudio
+                ? plan.AudioSources
+                    .Where(source => string.Equals(source.FilePath, videoSource.FilePath, StringComparison.OrdinalIgnoreCase))
+                    .ToList()
+                : [];
+            if (audioSources.Count == 0)
+            {
+                arguments.Add("--no-audio");
+            }
+            else
+            {
+                arguments.AddRange(["--audio-tracks", string.Join(",", audioSources.Select(source => source.TrackId))]);
+            }
+
             arguments.AddRange(
             [
-                "--no-audio",
                 "--no-subtitles",
                 "--no-attachments",
                 "--video-tracks",
@@ -111,9 +132,33 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--stereo-mode",
                 $"{trackId}:mono",
                 "--original-flag",
-                $"{trackId}:yes",
-                plan.ResolveRuntimeFilePath(videoSource.FilePath)
+                $"{trackId}:yes"
             ]);
+            AppendAudioTrackMetadata(arguments, audioSources);
+            arguments.Add(plan.ResolveRuntimeFilePath(videoSource.FilePath));
+        }
+    }
+
+    private static void AppendStandaloneAudios(
+        List<string> arguments,
+        SeriesEpisodeMuxPlan plan,
+        ISet<string> audioAlreadyEmittedForFile)
+    {
+        foreach (var audioGroup in plan.AudioSources
+                     .GroupBy(source => source.FilePath, StringComparer.OrdinalIgnoreCase)
+                     .Where(group => !audioAlreadyEmittedForFile.Contains(group.Key)))
+        {
+            var audioSources = audioGroup.ToList();
+            arguments.AddRange(
+            [
+                "--no-video",
+                "--no-subtitles",
+                "--no-attachments",
+                "--audio-tracks",
+                string.Join(",", audioSources.Select(source => source.TrackId))
+            ]);
+            AppendAudioTrackMetadata(arguments, audioSources);
+            arguments.Add(plan.ResolveRuntimeFilePath(audioGroup.Key));
         }
     }
 
@@ -133,9 +178,9 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--audio-tracks",
             adTrackId,
             "--language",
-            $"{adTrackId}:{plan.Metadata.AudioDescriptionLanguageCode}",
+            $"{adTrackId}:{plan.AudioDescriptionLanguageCode}",
             "--track-name",
-            $"{adTrackId}:{plan.Metadata.AudioDescriptionTrackName}",
+            $"{adTrackId}:{plan.AudioDescriptionTrackName}",
             "--default-track-flag",
             $"{adTrackId}:no",
             "--visual-impaired-flag",
@@ -144,6 +189,25 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             $"{adTrackId}:yes",
             plan.ResolveRuntimeFilePath(plan.AudioDescriptionFilePath)
         ]);
+    }
+
+    private static void AppendAudioTrackMetadata(List<string> arguments, IReadOnlyList<AudioSourcePlan> audioSources)
+    {
+        foreach (var audioSource in audioSources)
+        {
+            var trackIdText = audioSource.TrackId.ToString();
+            arguments.AddRange(
+            [
+                "--language",
+                $"{trackIdText}:{audioSource.LanguageCode}",
+                "--track-name",
+                $"{trackIdText}:{audioSource.TrackName}",
+                "--default-track-flag",
+                audioSource.IsDefaultTrack ? $"{trackIdText}:yes" : $"{trackIdText}:no",
+                "--original-flag",
+                $"{trackIdText}:yes"
+            ]);
+        }
     }
 
     private static void AppendSubtitles(List<string> arguments, SeriesEpisodeMuxPlan plan)
