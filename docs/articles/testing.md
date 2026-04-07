@@ -27,6 +27,10 @@ Der Integrationstest-Build stößt den Build dieses Hilfsprogramms automatisch m
 
 ## Lokal ausführen
 
+Build, Unit-Tests, Integrationstests, DocFX und App-Build sollten in diesem Projekt seriell laufen. Parallele Build-/Testläufe können insbesondere wegen gemeinsamer Artefaktpfade und des Fake-Tool-Builds unnötige Kollisionen erzeugen.
+
+Der normale Build nutzt die zentralen .NET-Analyzer in `Directory.Build.props` und behandelt Warnungen als Fehler. Neue Warnungen sollten deshalb wie echte Regressionen behandelt und nicht nur lokal ignoriert werden.
+
 ```powershell
 dotnet test .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj
 dotnet test .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj

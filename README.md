@@ -91,7 +91,7 @@ Im aktuellen Serien-Modul werden verwendet:
 - optionale Untertitel: `.srt`, `.ass`, `.vtt`
 - optionaler Anhang: `.txt`
 
-`.ttml` wird weiterhin ignoriert.
+`.ttml` wird nicht gemuxt, aber als Begleitdatei für Cleanup/Archiv-Aufräumen berücksichtigt.
 
 ## Projektaufbau
 
