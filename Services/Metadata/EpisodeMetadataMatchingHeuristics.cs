@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
 // Dieser Helfer bündelt die eigentlichen TVDB-Matching-Heuristiken, damit der Service Orchestrierung und Persistenz klarer trennt.
@@ -10,11 +13,36 @@ internal static class EpisodeMetadataMatchingHeuristics
             return string.Empty;
         }
 
-        var normalized = value.ToLowerInvariant();
+        var normalized = ReplaceGermanTransliterations(value.ToLowerInvariant());
+        normalized = RemoveDiacritics(normalized);
         normalized = normalized.Replace("&", " und ");
         normalized = new string(normalized.Select(character => char.IsLetterOrDigit(character) ? character : ' ').ToArray());
         normalized = string.Join(" ", normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return normalized.Trim();
+    }
+
+    private static string ReplaceGermanTransliterations(string value)
+    {
+        return value
+            .Replace("ä", "ae")
+            .Replace("ö", "oe")
+            .Replace("ü", "ue")
+            .Replace("ß", "ss");
+    }
+
+    private static string RemoveDiacritics(string value)
+    {
+        var decomposed = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(decomposed.Length);
+        foreach (var character in decomposed)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
     public static TvdbSeriesSearchResult? FindPreferredSeriesResult(

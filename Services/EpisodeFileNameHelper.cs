@@ -94,8 +94,18 @@ internal static class EpisodeFileNameHelper
 
     private static string AppendReservedNameSuffixIfNeeded(string value)
     {
-        return ReservedDeviceNames.Contains(value)
+        var extension = Path.GetExtension(value);
+        var stem = string.IsNullOrWhiteSpace(extension)
+            ? value
+            : Path.GetFileNameWithoutExtension(value);
+        var reservedNameProbe = stem.TrimEnd(' ', '.');
+        if (!ReservedDeviceNames.Contains(reservedNameProbe))
+        {
+            return value;
+        }
+
+        return string.IsNullOrWhiteSpace(extension)
             ? value + "_"
-            : value;
+            : reservedNameProbe + "_" + extension;
     }
 }

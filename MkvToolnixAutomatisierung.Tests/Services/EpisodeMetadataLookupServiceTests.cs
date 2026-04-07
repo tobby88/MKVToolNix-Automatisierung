@@ -121,6 +121,31 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Contains(store.CurrentSettings.SeriesMappings, mapping => mapping.TvdbSeriesId == 42 && mapping.LocalSeriesName == "Beispielserie");
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_MatchesGermanUmlautsAndTransliterations()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Müller & Söhne", "2024", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Überraschung", 1, 1, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Mueller und Soehne", "Ueberraschung", "01", "01"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.False(result.RequiresReview);
+        Assert.NotNull(result.Selection);
+        Assert.Equal("Müller & Söhne", result.Selection!.TvdbSeriesName);
+        Assert.Equal("Überraschung", result.Selection.EpisodeTitle);
+    }
+
     private sealed class FakeMetadataStore : AppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

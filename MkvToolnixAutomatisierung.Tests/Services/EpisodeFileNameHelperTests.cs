@@ -56,6 +56,14 @@ public sealed class EpisodeFileNameHelperTests
     }
 
     [Fact]
+    public void SanitizePathSegment_NormalizesReservedNames_WithExtension()
+    {
+        var segment = EpisodeFileNameHelper.SanitizePathSegment("CON.txt");
+
+        Assert.Equal("CON_.txt", segment);
+    }
+
+    [Fact]
     public void BuildEpisodeFileName_RemovesTrailingDotsAndSpaces_FromTitleStem()
     {
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "01", "02", "Pilot. ");
