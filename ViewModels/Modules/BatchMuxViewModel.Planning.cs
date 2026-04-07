@@ -396,6 +396,9 @@ internal sealed partial class BatchMuxViewModel
                 shouldSkipPresentationUpdate: ShouldSkipPresentationUpdate,
                 cancellationToken: cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || ShouldSkipPresentationUpdate())
+        {
+        }
         catch (Exception ex)
         {
             if (ShouldSkipPresentationUpdate())
