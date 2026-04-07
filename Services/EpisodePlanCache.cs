@@ -19,6 +19,7 @@ internal sealed class EpisodePlanCache
     };
 
     private readonly Dictionary<object, CachedEpisodePlan> _cachedPlans = new(ReferenceEqualityComparer.Instance);
+    private readonly object _syncRoot = new();
 
     /// <summary>
     /// Prüft, ob für den angegebenen Besitzer bereits ein zu den aktuellen Eingaben passender Plan im Cache liegt.
@@ -32,15 +33,47 @@ internal sealed class EpisodePlanCache
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(input);
 
-        if (_cachedPlans.TryGetValue(owner, out var cachedPlan)
-            && string.Equals(cachedPlan.CacheKey, BuildCacheKey(input), StringComparison.Ordinal))
+        var cacheKey = BuildCacheKey(CreateSnapshot(input));
+        lock (_syncRoot)
         {
-            plan = cachedPlan.Plan;
-            return true;
+            if (_cachedPlans.TryGetValue(owner, out var cachedPlan)
+                && string.Equals(cachedPlan.CacheKey, cacheKey, StringComparison.Ordinal))
+            {
+                plan = cachedPlan.Plan;
+                return true;
+            }
         }
 
         plan = null;
         return false;
+    }
+
+    /// <summary>
+    /// Prüft cachefähige Pläne, ohne den potenziell teuren Ordnerzustand auf dem UI-Thread zu lesen.
+    /// </summary>
+    /// <param name="owner">Stabile Besitzer-Instanz, zum Beispiel ein ViewModel oder Batch-Eintrag.</param>
+    /// <param name="input">Aktuelle Plan-Eingaben des Besitzers.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für die Hintergrund-Key-Erzeugung.</param>
+    /// <returns>Der wiederverwendbare Plan oder <see langword="null"/>, wenn kein Treffer vorliegt.</returns>
+    public async Task<SeriesEpisodeMuxPlan?> TryGetAsync(
+        object owner,
+        IEpisodePlanInput input,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(input);
+
+        var cacheKey = await BuildCacheKeyAsync(CreateSnapshot(input), cancellationToken);
+        lock (_syncRoot)
+        {
+            if (_cachedPlans.TryGetValue(owner, out var cachedPlan)
+                && string.Equals(cachedPlan.CacheKey, cacheKey, StringComparison.Ordinal))
+            {
+                return cachedPlan.Plan;
+            }
+
+            return null;
+        }
     }
 
     /// <summary>
@@ -55,7 +88,35 @@ internal sealed class EpisodePlanCache
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(plan);
 
-        _cachedPlans[owner] = new CachedEpisodePlan(BuildCacheKey(input), plan);
+        var cacheKey = BuildCacheKey(CreateSnapshot(input));
+        lock (_syncRoot)
+        {
+            _cachedPlans[owner] = new CachedEpisodePlan(cacheKey, plan);
+        }
+    }
+
+    /// <summary>
+    /// Speichert einen Plan, ohne den vollständigen Quellordner synchron auf dem UI-Thread zu scannen.
+    /// </summary>
+    /// <param name="owner">Stabile Besitzer-Instanz des Plans.</param>
+    /// <param name="input">Eingaben, zu denen der Plan berechnet wurde.</param>
+    /// <param name="plan">Berechneter Plan.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für die Hintergrund-Key-Erzeugung.</param>
+    public async Task StoreAsync(
+        object owner,
+        IEpisodePlanInput input,
+        SeriesEpisodeMuxPlan plan,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var cacheKey = await BuildCacheKeyAsync(CreateSnapshot(input), cancellationToken);
+        lock (_syncRoot)
+        {
+            _cachedPlans[owner] = new CachedEpisodePlan(cacheKey, plan);
+        }
     }
 
     /// <summary>
@@ -65,7 +126,10 @@ internal sealed class EpisodePlanCache
     public void Invalidate(object owner)
     {
         ArgumentNullException.ThrowIfNull(owner);
-        _cachedPlans.Remove(owner);
+        lock (_syncRoot)
+        {
+            _cachedPlans.Remove(owner);
+        }
     }
 
     /// <summary>
@@ -73,15 +137,41 @@ internal sealed class EpisodePlanCache
     /// </summary>
     public void Clear()
     {
-        _cachedPlans.Clear();
+        lock (_syncRoot)
+        {
+            _cachedPlans.Clear();
+        }
     }
 
-    private static string BuildCacheKey(IEpisodePlanInput input)
+    private static EpisodePlanCacheKeyInput CreateSnapshot(IEpisodePlanInput input)
+    {
+        return new EpisodePlanCacheKeyInput(
+            input.HasPrimaryVideoSource,
+            input.MainVideoPath,
+            input.AudioDescriptionPath,
+            input.SubtitlePaths.ToList(),
+            input.AttachmentPaths.ToList(),
+            input.ManualAttachmentPaths.ToList(),
+            input.OutputPath,
+            input.TitleForMux,
+            input.ExcludedSourcePaths.ToList());
+    }
+
+    private static Task<string> BuildCacheKeyAsync(
+        EpisodePlanCacheKeyInput input,
+        CancellationToken cancellationToken)
+    {
+        return Task.Run(() => BuildCacheKey(input, cancellationToken), cancellationToken);
+    }
+
+    private static string BuildCacheKey(
+        EpisodePlanCacheKeyInput input,
+        CancellationToken cancellationToken = default)
     {
         var builder = new StringBuilder();
         AppendValue(builder, input.HasPrimaryVideoSource ? "primary-video-present" : "archive-primary-required");
         AppendFileValue(builder, input.MainVideoPath);
-        AppendDetectionDirectoryState(builder, input.MainVideoPath);
+        AppendDetectionDirectoryState(builder, input.MainVideoPath, cancellationToken);
         AppendFileValue(builder, input.AudioDescriptionPath);
         AppendFileValues(builder, input.SubtitlePaths);
         AppendFileValues(builder, input.AttachmentPaths);
@@ -134,8 +224,12 @@ internal sealed class EpisodePlanCache
         builder.Append('\u001F');
     }
 
-    private static void AppendDetectionDirectoryState(StringBuilder builder, string? mainVideoPath)
+    private static void AppendDetectionDirectoryState(
+        StringBuilder builder,
+        string? mainVideoPath,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sourceDirectory = string.IsNullOrWhiteSpace(mainVideoPath)
             ? null
             : Path.GetDirectoryName(mainVideoPath);
@@ -166,6 +260,7 @@ internal sealed class EpisodePlanCache
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 AppendFileValue(builder, filePath);
             }
 
@@ -226,4 +321,15 @@ internal sealed class EpisodePlanCache
     }
 
     private sealed record CachedEpisodePlan(string CacheKey, SeriesEpisodeMuxPlan Plan);
+
+    private sealed record EpisodePlanCacheKeyInput(
+        bool HasPrimaryVideoSource,
+        string MainVideoPath,
+        string? AudioDescriptionPath,
+        IReadOnlyList<string> SubtitlePaths,
+        IReadOnlyList<string> AttachmentPaths,
+        IReadOnlyList<string> ManualAttachmentPaths,
+        string OutputPath,
+        string TitleForMux,
+        IReadOnlyCollection<string> ExcludedSourcePaths);
 }

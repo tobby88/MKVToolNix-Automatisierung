@@ -120,9 +120,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(CancellationToken cancellationToken = default)
     {
-        if (_planCache.TryGet(this, this, out var cachedPlan))
+        var cachedPlan = await _planCache.TryGetAsync(this, this, cancellationToken);
+        if (cachedPlan is not null)
         {
-            return _currentPlan = cachedPlan!;
+            return _currentPlan = cachedPlan;
         }
 
         return _currentPlan = await BuildFreshPlanAsync(cancellationToken);
@@ -142,7 +143,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
         RequireValue(Title.Trim(), "Bitte einen Dateititel eingeben.");
         var plan = await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);
-        _planCache.Store(this, this, plan);
+        await _planCache.StoreAsync(this, this, plan, cancellationToken);
         return plan;
     }
 

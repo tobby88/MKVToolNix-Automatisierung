@@ -180,13 +180,14 @@ internal sealed partial class BatchMuxViewModel
         BatchEpisodeItemViewModel item,
         CancellationToken cancellationToken = default)
     {
-        if (_planCache.TryGet(item, item, out var cachedPlan))
+        var cachedPlan = await _planCache.TryGetAsync(item, item, cancellationToken);
+        if (cachedPlan is not null)
         {
-            return cachedPlan!;
+            return cachedPlan;
         }
 
         var plan = await BuildFreshPlanForItemAsync(item, cancellationToken);
-        _planCache.Store(item, item, plan);
+        await _planCache.StoreAsync(item, item, plan, cancellationToken);
         return plan;
     }
 

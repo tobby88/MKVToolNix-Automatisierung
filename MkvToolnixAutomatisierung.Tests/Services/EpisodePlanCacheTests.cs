@@ -32,6 +32,36 @@ public sealed class EpisodePlanCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task TryGetAsync_ReturnsStoredPlan_WhenInputsAreUnchanged()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        var plan = CreatePlan("cached");
+
+        await cache.StoreAsync(owner, input, plan);
+
+        var cachedPlan = await cache.TryGetAsync(owner, input);
+
+        Assert.Same(plan, cachedPlan);
+    }
+
+    [Fact]
+    public async Task TryGetAsync_ReturnsFalse_WhenRelevantSiblingVideoAppearsInSourceDirectory()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput();
+        await cache.StoreAsync(owner, input, CreatePlan("cached"));
+
+        CreateFile("episode-2.mp4", "new alternative video");
+
+        var cachedPlan = await cache.TryGetAsync(owner, input);
+
+        Assert.Null(cachedPlan);
+    }
+
+    [Fact]
     public void TryGet_ReturnsFalse_WhenRelevantInputChanged()
     {
         var cache = new EpisodePlanCache();
