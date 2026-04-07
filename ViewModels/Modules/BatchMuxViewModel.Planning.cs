@@ -348,7 +348,7 @@ internal sealed partial class BatchMuxViewModel
         var cancellationSource = new CancellationTokenSource();
         _selectedPlanSummaryRefreshCts = cancellationSource;
 
-        _ = RefreshSelectedItemPlanSummaryDebouncedAsync(cancellationSource.Token);
+        SelectedItemPlanSummaryRefreshTask = RefreshSelectedItemPlanSummaryDebouncedAsync(cancellationSource.Token);
     }
 
     private async Task RefreshSelectedItemPlanSummaryDebouncedAsync(CancellationToken cancellationToken)

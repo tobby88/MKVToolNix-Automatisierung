@@ -98,6 +98,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public AsyncRelayCommand RunBatchCommand { get; }
     public RelayCommand CancelBatchOperationCommand { get; }
 
+    internal Task? SelectedItemPlanSummaryRefreshTask { get; private set; }
+
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems => _episodeCollection.Items;
     public ICollectionView EpisodeItemsView => _episodeCollection.View;
     public IReadOnlyList<BatchEpisodeFilterOption> FilterModes => _episodeCollection.FilterModes;

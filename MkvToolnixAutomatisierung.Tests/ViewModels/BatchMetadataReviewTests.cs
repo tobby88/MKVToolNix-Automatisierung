@@ -254,9 +254,13 @@ public sealed class BatchMetadataReviewTests
         item.SetPlanSummary("Stabile Batch-Details");
         item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Stabil", "Bleibt waehrend des Batch-Laufs sichtbar"));
         viewModel.SelectedEpisodeItem = item;
+        var pendingRefresh = viewModel.SelectedItemPlanSummaryRefreshTask;
 
         viewModel.FreezeSelectedItemPlanSummaryForExecution();
-        await Task.Delay(350);
+        if (pendingRefresh is not null)
+        {
+            await pendingRefresh;
+        }
 
         Assert.Equal("Stabile Batch-Details", item.PlanSummaryText);
         Assert.Equal("Stabil", item.UsageSummary?.ArchiveAction);
