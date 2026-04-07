@@ -199,7 +199,7 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
             "Pilot");
 
         Assert.Equal(
-            Path.Combine(archiveRoot, "CON_", "Season 1", "CON. - S01E01 - Pilot.mkv"),
+            Path.Combine(archiveRoot, "CON_", "Season 1", "CON_. - S01E01 - Pilot.mkv"),
             outputPath);
     }
 
