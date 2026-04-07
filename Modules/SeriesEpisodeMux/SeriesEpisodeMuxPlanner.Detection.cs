@@ -10,14 +10,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string mainVideoPath,
         DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress,
-        ISet<string>? excludedSourcePaths)
+        ISet<string>? excludedSourcePaths,
+        CancellationToken cancellationToken)
     {
         var context = BuildEpisodeDetectionContext(
             mainVideoPath,
             directoryContext,
             onProgress,
             excludedSourcePaths,
-            "Es konnten keine passenden Videoquellen fuer diese Episode gefunden werden.");
+            "Es konnten keine passenden Videoquellen fuer diese Episode gefunden werden.",
+            cancellationToken: cancellationToken);
         var primaryVideoCandidate = context.PrimaryVideoCandidate
             ?? throw new InvalidOperationException("Es konnte keine primäre Videoquelle für diese Episode ermittelt werden.");
         var selectedAudioDescription = SelectAudioDescriptionCandidate(context.AudioDescriptionCandidates, primaryVideoCandidate);
@@ -42,7 +44,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string audioDescriptionPath,
         DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress,
-        ISet<string>? excludedSourcePaths)
+        ISet<string>? excludedSourcePaths,
+        CancellationToken cancellationToken)
     {
         var context = BuildEpisodeDetectionContext(
             audioDescriptionPath,
@@ -50,7 +53,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             onProgress,
             excludedSourcePaths,
             "Zu der ausgewählten AD-Datei konnte keine passende Hauptdatei gefunden werden.",
-            allowMissingPrimaryVideo: true);
+            allowMissingPrimaryVideo: true,
+            cancellationToken: cancellationToken);
         var selectedAudioDescription = SelectAudioDescriptionCandidate(
             context.AudioDescriptionCandidates,
             context.PrimaryVideoCandidate,
@@ -99,19 +103,22 @@ public sealed partial class SeriesEpisodeMuxPlanner
         Action<DetectionProgressUpdate>? onProgress,
         ISet<string>? excludedSourcePaths,
         string noVideoCandidatesMessage,
-        bool allowMissingPrimaryVideo = false)
+        bool allowMissingPrimaryVideo = false,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var directory = Path.GetDirectoryName(selectedPath)
             ?? throw new InvalidOperationException("Der Ordner der ausgewählten Datei konnte nicht bestimmt werden.");
 
         ReportProgress(onProgress, "Suche mkvmerge...", 3);
         var mkvMergePath = _locator.FindMkvMergePath();
+        cancellationToken.ThrowIfCancellationRequested();
 
         DirectoryDetectionContext preparedContext;
         if (directoryContext is null)
         {
             ReportProgress(onProgress, "Lese Dateien im Ordner...", 8);
-            preparedContext = CreateDirectoryDetectionContext(directory);
+            preparedContext = CreateDirectoryDetectionContext(directory, cancellationToken);
         }
         else
         {
@@ -128,6 +135,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var selectedSeed = preparedContext.GetSelectedSeed(selectedPath);
         var selectedIdentity = selectedSeed.Identity;
         var episodeSeeds = preparedContext.GetEpisodeSeeds(selectedSeed);
+        cancellationToken.ThrowIfCancellationRequested();
 
         ReportProgress(onProgress, $"Prüfe {episodeSeeds.NormalVideoSeeds.Count} passende Videoquelle(n)...", 12);
         var allNormalCandidates = BuildNormalVideoCandidates(
@@ -137,7 +145,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             companionFilesByBaseName,
             onProgress,
             12,
-            72);
+            72,
+            cancellationToken);
         var normalCandidates = allNormalCandidates
             .Where(candidate => excludedSourcePaths is null || !excludedSourcePaths.Contains(candidate.FilePath))
             .ToList();
@@ -147,7 +156,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
 
         ReportProgress(onProgress, $"Prüfe {audioDescriptionSeeds.Count} passende AD-Quelle(n)...", 76);
-        var audioDescriptionCandidates = BuildAudioDescriptionCandidates(preparedContext, audioDescriptionSeeds, onProgress, 76, 88);
+        var audioDescriptionCandidates = BuildAudioDescriptionCandidates(
+            preparedContext,
+            audioDescriptionSeeds,
+            onProgress,
+            76,
+            88,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (normalCandidates.Count == 0)
         {
@@ -290,16 +306,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName,
         Action<DetectionProgressUpdate>? onProgress,
         int startPercent,
-        int endPercent)
+        int endPercent,
+        CancellationToken cancellationToken)
     {
         var candidates = new List<NormalVideoCandidate>(seeds.Count);
 
         for (var index = 0; index < seeds.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var seed = seeds[index];
             var percent = InterpolateProgress(startPercent, endPercent, index, Math.Max(1, seeds.Count));
             ReportProgress(onProgress, $"Analysiere Videoquelle {index + 1}/{seeds.Count}: {Path.GetFileName(seed.FilePath)}", percent);
+            cancellationToken.ThrowIfCancellationRequested();
             candidates.Add(directoryContext?.GetOrCreateNormalVideoCandidate(seed, mkvMergePath) ?? BuildNormalVideoCandidate(seed, mkvMergePath, companionFilesByBaseName));
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         return candidates;
@@ -310,16 +330,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<CandidateSeed> seeds,
         Action<DetectionProgressUpdate>? onProgress,
         int startPercent,
-        int endPercent)
+        int endPercent,
+        CancellationToken cancellationToken)
     {
         var candidates = new List<AudioDescriptionCandidate>(seeds.Count);
 
         for (var index = 0; index < seeds.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var seed = seeds[index];
             var percent = InterpolateProgress(startPercent, endPercent, index, Math.Max(1, seeds.Count));
             ReportProgress(onProgress, $"Analysiere AD-Quelle {index + 1}/{seeds.Count}: {Path.GetFileName(seed.FilePath)}", percent);
+            cancellationToken.ThrowIfCancellationRequested();
             candidates.Add(directoryContext?.GetOrCreateAudioDescriptionCandidate(seed) ?? BuildAudioDescriptionCandidate(seed));
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         return candidates;
@@ -357,23 +381,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<string> detectedNotes = [];
-        List<string> plannedVideoPaths;
-        if (request.HasPrimaryVideoSource)
-        {
-            var detected = DetectFromMainVideo(
-                request.MainVideoPath,
-                excludedSourcePaths: request.ExcludedSourcePaths);
-            detectedNotes = detected.Notes;
-            plannedVideoPaths = new[] { detected.MainVideoPath }
-                .Concat(detected.AdditionalVideoPaths)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-        else
-        {
-            plannedVideoPaths = [];
-        }
+        var planSources = ResolvePlanSourceDetection(request, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
         var subtitleFiles = request.SubtitlePaths
@@ -387,7 +395,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var archiveDecision = await _archiveService.PrepareAsync(
             mkvMergePath,
             request,
-            plannedVideoPaths,
+            planSources.PlannedVideoPaths,
             cancellationToken);
 
         if (archiveDecision.SkipMux)
@@ -410,7 +418,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var effectiveOutputPath = archiveDecision.OutputFilePath;
         var videoSelections = archiveDecision.VideoSelections.Count > 0
             ? archiveDecision.VideoSelections
-            : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
+            : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, planSources.PlannedVideoPaths, cancellationToken);
 
         var videoSources = videoSelections
             .Select((videoSelection, index) => new VideoSourcePlan(
@@ -463,7 +471,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 ? request.AttachmentPaths
                 : [];
 
-        var notes = detectedNotes
+        var notes = planSources.Notes
             .Concat(archiveDecision.Notes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -504,6 +512,37 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.WorkingCopy,
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
+
+    private PlanSourceDetectionResult ResolvePlanSourceDetection(
+        SeriesEpisodeMuxRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!request.HasPrimaryVideoSource)
+        {
+            return new PlanSourceDetectionResult([], []);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Die Planung muss frische Zusatzvideos erkennen können, die nach der initialen UI-Erkennung
+        // im Ordner gelandet sind. Der erneute Erkennungslauf bleibt deshalb bewusst erhalten, ist aber
+        // nun klar gekapselt und bis in die Kandidatenanalyse hinein abbrechbar.
+        var detected = DetectFromMainVideo(
+            request.MainVideoPath,
+            excludedSourcePaths: request.ExcludedSourcePaths,
+            cancellationToken: cancellationToken);
+
+        var plannedVideoPaths = new[] { detected.MainVideoPath }
+            .Concat(detected.AdditionalVideoPaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new PlanSourceDetectionResult(detected.Notes, plannedVideoPaths);
+    }
+
+    private sealed record PlanSourceDetectionResult(
+        IReadOnlyList<string> Notes,
+        IReadOnlyList<string> PlannedVideoPaths);
 
     private async Task<IReadOnlyList<VideoTrackSelection>> BuildVideoSelectionsFromPlannedPathsAsync(
         string mkvMergePath,

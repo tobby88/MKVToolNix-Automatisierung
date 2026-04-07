@@ -26,10 +26,13 @@ internal sealed class BatchScanCoordinator
     /// Bereitet einen Batch-Ordner einmalig für mehrere Einzelscans vor.
     /// </summary>
     /// <param name="sourceDirectory">Zu scannender Quellordner.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für die vorbereitende Ordneranalyse.</param>
     /// <returns>Wiederverwendbarer Ordnerkontext inklusive vorgefilterter Hauptvideos.</returns>
-    public BatchScanDirectoryContext CreateDirectoryContext(string sourceDirectory)
+    public BatchScanDirectoryContext CreateDirectoryContext(
+        string sourceDirectory,
+        CancellationToken cancellationToken = default)
     {
-        var detectionContext = _muxService.CreateDirectoryDetectionContext(sourceDirectory);
+        var detectionContext = _muxService.CreateDirectoryDetectionContext(sourceDirectory, cancellationToken);
         return new BatchScanDirectoryContext(sourceDirectory, detectionContext.MainVideoFiles, detectionContext);
     }
 
@@ -52,7 +55,7 @@ internal sealed class BatchScanCoordinator
         var sourceDirectory = Path.GetDirectoryName(sourceFilePath)
             ?? throw new InvalidOperationException("Der Ordner der Batch-Quelle konnte nicht bestimmt werden.");
         return await ScanAsync(
-            CreateDirectoryContext(sourceDirectory),
+            CreateDirectoryContext(sourceDirectory, cancellationToken),
             sourceFilePath,
             outputDirectory,
             onDetectionProgress,

@@ -10,20 +10,30 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// Bereitet alle relevanten Video- und Begleitdateien eines Quellordners einmalig für mehrere Erkennungsläufe vor.
     /// </summary>
     /// <param name="sourceDirectory">Ordner mit den Episodenquellen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für die vorbereitende Dateiliste.</param>
     /// <returns>Wiederverwendbarer Kontext für Batch- oder Mehrfacherkennung innerhalb desselben Ordners.</returns>
-    public DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
+    public DirectoryDetectionContext CreateDirectoryDetectionContext(
+        string sourceDirectory,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!Directory.Exists(sourceDirectory))
         {
             throw new DirectoryNotFoundException($"Quellordner nicht gefunden: {sourceDirectory}");
         }
 
         var allFiles = Directory.GetFiles(sourceDirectory);
+        cancellationToken.ThrowIfCancellationRequested();
         var companionFilesByBaseName = BuildCompanionFileLookup(allFiles);
         var videoSeeds = allFiles
             .Where(path => Path.GetExtension(path).Equals(".mp4", StringComparison.OrdinalIgnoreCase))
-            .Select(BuildCandidateSeed)
+            .Select(path =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return BuildCandidateSeed(path);
+            })
             .ToList();
+        cancellationToken.ThrowIfCancellationRequested();
 
         return new DirectoryDetectionContext(this, sourceDirectory, companionFilesByBaseName, videoSeeds);
     }

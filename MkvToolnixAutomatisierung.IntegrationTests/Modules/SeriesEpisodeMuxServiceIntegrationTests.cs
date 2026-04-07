@@ -372,6 +372,39 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_StopsBeforeCandidateProbe_WhenProgressCallbackCancels()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-cancel-detection");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-cancel-detection");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            primaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        using var cancellation = new CancellationTokenSource();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.DetectFromSelectedVideoAsync(
+            primaryVideoPath,
+            update =>
+            {
+                if (update.StatusText.StartsWith("Analysiere Videoquelle", StringComparison.Ordinal))
+                {
+                    cancellation.Cancel();
+                }
+            },
+            cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_ExternalSubtitles_RemainGerman_WhenPrimaryAudioUsesDifferentLanguage()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-language");

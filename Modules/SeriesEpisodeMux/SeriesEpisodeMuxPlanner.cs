@@ -49,21 +49,25 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// <param name="mainVideoPath">Pfad zur primären Video- oder AD-Datei der Episode.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz an Pfaden, die bei der Erkennung ignoriert werden sollen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für Ordner- und Kandidatenanalyse.</param>
     /// <returns>Automatisch erkannte Episodenquellen inklusive Metadaten- und Zielvorschlägen.</returns>
     public AutoDetectedEpisodeFiles DetectFromMainVideo(
         string mainVideoPath,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
-        return DetectFromMainVideo(mainVideoPath, directoryContext: null, onProgress, excludedSourcePaths);
+        return DetectFromMainVideo(mainVideoPath, directoryContext: null, onProgress, excludedSourcePaths, cancellationToken);
     }
 
     internal AutoDetectedEpisodeFiles DetectFromMainVideo(
         string mainVideoPath,
         DirectoryDetectionContext? directoryContext,
         Action<DetectionProgressUpdate>? onProgress = null,
-        IReadOnlyCollection<string>? excludedSourcePaths = null)
+        IReadOnlyCollection<string>? excludedSourcePaths = null,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(mainVideoPath))
         {
             throw new FileNotFoundException($"Videodatei nicht gefunden: {mainVideoPath}");
@@ -76,8 +80,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             : new HashSet<string>(excludedSourcePaths, StringComparer.OrdinalIgnoreCase);
 
         var detected = EpisodeFileNameHelper.LooksLikeAudioDescription(mainVideoPath)
-            ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet)
-            : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet);
+            ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken)
+            : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken);
 
         return detected;
     }

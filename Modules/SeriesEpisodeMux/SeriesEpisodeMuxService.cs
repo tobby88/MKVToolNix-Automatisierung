@@ -53,7 +53,7 @@ public sealed class SeriesEpisodeMuxService
     {
         var progressCallback = CreateCancelableProgressCallback(onProgress, cancellationToken);
         return RunOnStaThreadAsync(
-            () => _planner.DetectFromMainVideo(selectedVideoPath, progressCallback, excludedSourcePaths),
+            token => _planner.DetectFromMainVideo(selectedVideoPath, progressCallback, excludedSourcePaths, token),
             cancellationToken);
     }
 
@@ -76,7 +76,7 @@ public sealed class SeriesEpisodeMuxService
         ArgumentNullException.ThrowIfNull(directoryContext);
         var progressCallback = CreateCancelableProgressCallback(onProgress, cancellationToken);
         return RunOnStaThreadAsync(
-            () => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, progressCallback, excludedSourcePaths),
+            token => _planner.DetectFromMainVideo(selectedVideoPath, directoryContext, progressCallback, excludedSourcePaths, token),
             cancellationToken);
     }
 
@@ -84,10 +84,13 @@ public sealed class SeriesEpisodeMuxService
     /// Bereitet einen Quellordner einmalig für mehrere Erkennungsläufe vor und liefert den wiederverwendbaren Kontext zurück.
     /// </summary>
     /// <param name="sourceDirectory">Ordner mit Episodenquellen und ihren Begleitdateien.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für die vorbereitende Ordneranalyse.</param>
     /// <returns>Wiederverwendbarer Ordnerkontext für Batch-Scans.</returns>
-    public SeriesEpisodeMuxPlanner.DirectoryDetectionContext CreateDirectoryDetectionContext(string sourceDirectory)
+    public SeriesEpisodeMuxPlanner.DirectoryDetectionContext CreateDirectoryDetectionContext(
+        string sourceDirectory,
+        CancellationToken cancellationToken = default)
     {
-        return _planner.CreateDirectoryDetectionContext(sourceDirectory);
+        return _planner.CreateDirectoryDetectionContext(sourceDirectory, cancellationToken);
     }
 
     /// <summary>
@@ -198,7 +201,7 @@ public sealed class SeriesEpisodeMuxService
         };
     }
 
-    private static Task<T> RunOnStaThreadAsync<T>(Func<T> action, CancellationToken cancellationToken = default)
+    private static Task<T> RunOnStaThreadAsync<T>(Func<CancellationToken, T> action, CancellationToken cancellationToken = default)
     {
         if (cancellationToken.IsCancellationRequested)
         {
@@ -222,7 +225,7 @@ public sealed class SeriesEpisodeMuxService
                     return;
                 }
 
-                completionSource.TrySetResult(action());
+                completionSource.TrySetResult(action(cancellationToken));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
