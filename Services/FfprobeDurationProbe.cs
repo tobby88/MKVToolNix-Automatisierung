@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -9,16 +10,20 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed class FfprobeDurationProbe : IMediaDurationProbe
 {
+    private static readonly TimeSpan SuccessfulLookupRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan FailedLookupRefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(10);
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _pathSync = new();
-    private readonly FfprobeLocator _locator;
+    private readonly IFfprobeLocator _locator;
     private string? _ffprobePath;
+    private DateTime _nextLookupAfterUtc = DateTime.MinValue;
 
     /// <summary>
     /// Initialisiert den ffprobe-basierten Laufzeit-Probe-Dienst.
     /// </summary>
     /// <param name="locator">Liefert bei Bedarf den aktuell nutzbaren Pfad zur <c>ffprobe.exe</c>.</param>
-    public FfprobeDurationProbe(FfprobeLocator locator)
+    public FfprobeDurationProbe(IFfprobeLocator locator)
     {
         _locator = locator;
     }
@@ -55,6 +60,22 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
 
     private string? GetCurrentFfprobePath()
     {
+        var nowUtc = DateTime.UtcNow;
+        lock (_pathSync)
+        {
+            if (!string.IsNullOrWhiteSpace(_ffprobePath) && !File.Exists(_ffprobePath))
+            {
+                _ffprobePath = null;
+                _nextLookupAfterUtc = DateTime.MinValue;
+                _cache.Clear();
+            }
+
+            if (nowUtc < _nextLookupAfterUtc)
+            {
+                return _ffprobePath;
+            }
+        }
+
         var resolvedPath = _locator.TryFindFfprobePath();
 
         lock (_pathSync)
@@ -65,11 +86,19 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
                 _cache.Clear();
             }
 
+            _nextLookupAfterUtc = nowUtc + (string.IsNullOrWhiteSpace(resolvedPath)
+                ? FailedLookupRefreshInterval
+                : SuccessfulLookupRefreshInterval);
             return _ffprobePath;
         }
     }
 
     private static TimeSpan? ReadDurationCore(string filePath, string ffprobePath)
+    {
+        return ReadDurationCoreAsync(filePath, ffprobePath).GetAwaiter().GetResult();
+    }
+
+    private static async Task<TimeSpan?> ReadDurationCoreAsync(string filePath, string ffprobePath)
     {
         if (!File.Exists(filePath))
         {
@@ -79,12 +108,20 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         var startInfo = new ProcessStartInfo
         {
             FileName = ffprobePath,
-            Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        startInfo.ArgumentList.Add("-v");
+        startInfo.ArgumentList.Add("error");
+        startInfo.ArgumentList.Add("-show_entries");
+        startInfo.ArgumentList.Add("format=duration");
+        startInfo.ArgumentList.Add("-of");
+        startInfo.ArgumentList.Add("default=noprint_wrappers=1:nokey=1");
+        startInfo.ArgumentList.Add(filePath);
 
         try
         {
@@ -94,8 +131,23 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
                 return null;
             }
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            var standardErrorTask = process.StandardError.ReadToEndAsync();
+            using var timeout = new CancellationTokenSource(ProcessTimeout);
+
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                KillProcessTree(process);
+                await DrainProcessOutputAfterKillAsync(process, standardOutputTask, standardErrorTask);
+                return null;
+            }
+
+            var output = await standardOutputTask;
+            _ = await standardErrorTask;
 
             if (process.ExitCode != 0)
             {
@@ -112,6 +164,35 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         catch
         {
             return null;
+        }
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static async Task DrainProcessOutputAfterKillAsync(
+        Process process,
+        Task<string> standardOutputTask,
+        Task<string> standardErrorTask)
+    {
+        try
+        {
+            await process.WaitForExitAsync();
+            await Task.WhenAll(standardOutputTask, standardErrorTask);
+        }
+        catch
+        {
         }
     }
 }
