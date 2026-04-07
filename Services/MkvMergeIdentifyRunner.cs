@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -47,23 +48,31 @@ internal static class MkvMergeIdentifyRunner
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
 
-        var standardOutput = process.StandardOutput.ReadToEnd();
-        var standardError = process.StandardError.ReadToEnd();
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+        var standardOutput = standardOutputTask.GetAwaiter().GetResult();
+        var standardError = standardErrorTask.GetAwaiter().GetResult();
         return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
     }
 
     private static ProcessStartInfo CreateIdentifyStartInfo(string mkvMergePath, string inputFilePath)
     {
-        return new ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = mkvMergePath,
-            Arguments = $"--identify --identification-format json \"{inputFilePath}\"",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        startInfo.ArgumentList.Add("--identify");
+        startInfo.ArgumentList.Add("--identification-format");
+        startInfo.ArgumentList.Add("json");
+        startInfo.ArgumentList.Add(inputFilePath);
+        return startInfo;
     }
 
     private static JsonDocument ParseIdentifyResult(string standardOutput, string standardError, int exitCode)

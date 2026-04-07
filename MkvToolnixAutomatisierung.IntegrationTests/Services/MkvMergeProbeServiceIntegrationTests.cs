@@ -105,6 +105,36 @@ public sealed class MkvMergeProbeServiceIntegrationTests : IDisposable
         Assert.Equal("Begleittext Überblick.txt", Assert.Single(metadata.Attachments).FileName);
     }
 
+    [Fact]
+    public async Task ReadContainerMetadataAsync_HandlesNonAsciiInputPath()
+    {
+        var mediaFilePath = CreateFile("Grüne Folge.mkv");
+        WriteProbeFile(
+            mediaFilePath,
+            new[]
+            {
+                new
+                {
+                    id = 0,
+                    type = "audio",
+                    codec = "AAC",
+                    properties = new
+                    {
+                        language_ietf = "de",
+                        track_name = "Deutsch"
+                    }
+                }
+            },
+            Array.Empty<object>());
+
+        var service = new MkvMergeProbeService();
+        var metadata = await service.ReadContainerMetadataAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            mediaFilePath);
+
+        Assert.Equal("Deutsch", Assert.Single(metadata.Tracks).TrackName);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
