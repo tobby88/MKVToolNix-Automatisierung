@@ -326,10 +326,14 @@ public sealed partial class SeriesArchiveService
 
     private static ContainerTrackMetadata? FindExistingAudioDescription(IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
-        return existingAudioTracks.FirstOrDefault(track =>
-            track.IsVisualImpaired
+        return existingAudioTracks.FirstOrDefault(IsAudioDescriptionTrack);
+    }
+
+    private static bool IsAudioDescriptionTrack(ContainerTrackMetadata track)
+    {
+        return track.IsVisualImpaired
             || track.TrackName.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase)
-            || track.TrackName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase));
+            || track.TrackName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase);
     }
 
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
@@ -344,7 +348,7 @@ public sealed partial class SeriesArchiveService
         FileCopyPlan workingCopyPlan,
         AttachmentReusePlan attachmentReusePlan)
     {
-        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks, existingAudioDescription);
+        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks);
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
@@ -408,7 +412,7 @@ public sealed partial class SeriesArchiveService
             PrimarySourcePath: outputPath,
             VideoSelections: videoPlan.VideoSelections,
             RetainedAudioTrackIds: retainedNormalAudioTracks.Select(track => track.TrackId).ToList(),
-            PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 ? [] : null,
+            PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 || replacedSubtitleTracks.Count > 0 ? [] : null,
             PrimarySourceAttachmentIds: attachmentReusePlan.PrimarySourceAttachmentIds,
             IncludePrimaryAttachments: attachmentReusePlan.IncludePrimarySourceAttachments,
             AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
@@ -488,13 +492,21 @@ public sealed partial class SeriesArchiveService
         AttachmentReusePlan attachmentReusePlan)
     {
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
+        var freshVideoPaths = videoPlan.VideoSelections
+            .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select(selection => selection.FilePath)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var attachmentFilePaths = BuildAttachmentPathsForUsedVideos(freshVideoPaths)
+            .Concat(manualAttachmentPaths)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForPrimaryReplacement(
             outputPath,
             videoPlan.VideoSelections,
             plannedVideos,
-            existingArchive.AudioTracks,
-            existingAudioDescription);
-        var removedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks, existingAudioDescription)
+            existingArchive.AudioTracks);
+        var removedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks)
             .Where(track => !retainedNormalAudioTracks.Any(retained => retained.TrackId == track.TrackId))
             .ToList();
         var needsExistingCopy = videoPlan.RetainedExistingTracks.Count > 0
@@ -552,8 +564,10 @@ public sealed partial class SeriesArchiveService
                     ? null
                     : existingAudioDescription?.TrackId,
             SubtitleFiles: subtitlePlan.FinalPlans,
-            AttachmentFilePaths: request.AttachmentPaths,
-            FallbackToRequestAttachments: true,
+            // Automatisch erkannte TXT-Dateien dürfen nur den frischen Videospuren folgen,
+            // die der Archivabgleich tatsächlich in die finale Videospurauswahl übernommen hat.
+            AttachmentFilePaths: attachmentFilePaths,
+            FallbackToRequestAttachments: false,
             PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
             Notes:
@@ -700,12 +714,10 @@ public sealed partial class SeriesArchiveService
     }
 
     private static IReadOnlyList<ContainerTrackMetadata> GetRetainedNormalAudioTracks(
-        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks,
-        ContainerTrackMetadata? existingAudioDescription)
+        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
         return existingAudioTracks
-            .Where(track => existingAudioDescription is null || track.TrackId != existingAudioDescription.TrackId)
-            .Where(track => !track.IsVisualImpaired)
+            .Where(track => !IsAudioDescriptionTrack(track))
             .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
             .ThenBy(track => track.IsDefaultTrack ? 0 : 1)
             .ThenBy(track => track.TrackId)
@@ -716,10 +728,9 @@ public sealed partial class SeriesArchiveService
         string outputPath,
         IReadOnlyList<VideoTrackSelection> videoSelections,
         IReadOnlyList<PreparedVideoSource> plannedVideos,
-        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks,
-        ContainerTrackMetadata? existingAudioDescription)
+        IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
-        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingAudioTracks, existingAudioDescription);
+        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingAudioTracks);
         var selectedFreshVideoPaths = videoSelections
             .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
             .Select(selection => selection.FilePath)
@@ -1201,8 +1212,8 @@ public sealed partial class SeriesArchiveService
             {
                 FileName = mkvExtractPath,
                 UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
                 CreateNoWindow = true
             }
         };

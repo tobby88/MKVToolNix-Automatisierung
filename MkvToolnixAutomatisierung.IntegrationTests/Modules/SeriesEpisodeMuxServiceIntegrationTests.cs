@@ -698,6 +698,132 @@ public sealed class SeriesEpisodeMuxServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ReplacingArchivePrimary_DropsTextAttachmentForFreshVideoThatLostArchiveComparison()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-drop-unused-fresh-text");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-drop-unused-fresh-text");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var freshGermanH264Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var freshGermanH264AttachmentPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).txt", "fresh-h264");
+        var freshGermanH265Path = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
+        var freshGermanH265AttachmentPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.txt", "fresh-h265");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            freshGermanH264Path,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            freshGermanH265Path,
+            CreateVideoTrack(0, "HEVC/H.265", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateVideoTrack(2, "HEVC/H.265", "1920x1080", language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            freshGermanH264Path,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [freshGermanH264AttachmentPath, freshGermanH265AttachmentPath],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.Contains(freshGermanH264AttachmentPath, plan.AttachmentFilePaths);
+        Assert.DoesNotContain(freshGermanH265AttachmentPath, plan.AttachmentFilePaths);
+        Assert.Contains(plan.VideoSources, source => string.Equals(source.FilePath, outputPath, StringComparison.OrdinalIgnoreCase) && source.TrackId == 2);
+        Assert.DoesNotContain(plan.VideoSources, source => string.Equals(source.FilePath, freshGermanH265Path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_RemovesUnsupportedSubtitleTracks_WhenAnotherChangeRequiresMux()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-remove-unsupported-subtitle");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-remove-unsupported-subtitle");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var lowerQualityVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var manualAttachmentPath = CreateFile(sourceDirectory, "manual.txt", "manual");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            lowerQualityVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(2, "HDMV PGS", trackName: "Deutsch - PGS"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            lowerQualityVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [manualAttachmentPath],
+            outputPath,
+            Title: "Pilot",
+            ManualAttachmentPaths: [manualAttachmentPath]));
+
+        Assert.False(plan.SkipMux);
+        Assert.Empty(plan.PrimarySourceSubtitleTrackIds!);
+        Assert.Contains("--no-subtitles", plan.BuildArguments());
+        Assert.Contains("Deutsch - PGS", plan.BuildUsageSummary().Subtitles.RemovedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_DoesNotRetainNameDetectedAudioDescriptionAsNormalAudio()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-filter-ad-normal-audio");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-filter-ad-normal-audio");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var lowerQualityVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var manualAttachmentPath = CreateFile(sourceDirectory, "manual.txt", "manual");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            lowerQualityVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: false),
+            CreateAudioTrack(3, "AAC", trackName: "Deutsch Audiodeskription - AAC", isVisualImpaired: false));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            lowerQualityVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [manualAttachmentPath],
+            outputPath,
+            Title: "Pilot",
+            ManualAttachmentPaths: [manualAttachmentPath]));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal([1], plan.AudioSources.Select(source => source.TrackId).ToList());
+        Assert.Equal(2, plan.AudioDescriptionTrackId);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_ReplacingSingleArchiveVideo_DropsOnlyTheUnambiguousSingleTextAttachment()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-single-text-drop");
