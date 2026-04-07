@@ -12,17 +12,23 @@ internal sealed partial class SingleEpisodeMuxViewModel
 {
     private async Task CreatePreviewAsync()
     {
+        var operationSource = BeginCurrentOperation();
         try
         {
+            var cancellationToken = operationSource.Token;
             SetBusy(true);
             SetStatus("Erzeuge Vorschau...", 0);
-            _currentPlan = await GetOrBuildPlanAsync();
+            _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             UsageSummary = _currentPlan.BuildUsageSummary();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+            SetStatus("Abgebrochen", 0);
         }
         catch (Exception ex)
         {
@@ -32,15 +38,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
         finally
         {
             SetBusy(false);
+            CompleteCurrentOperation(operationSource);
         }
     }
 
     private async Task ExecuteMuxAsync()
     {
+        var operationSource = BeginCurrentOperation();
         try
         {
+            var cancellationToken = operationSource.Token;
             SetBusy(true);
-            _currentPlan = await GetOrBuildPlanAsync();
+            _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
@@ -56,7 +65,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             {
                 SetStatus("Zieldatei bereits aktuell", 100);
                 _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
-                await OfferSingleEpisodeCleanupAsync(_currentPlan);
+                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
                 return;
             }
 
@@ -80,32 +89,40 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 return;
             }
 
-            if (!await PrepareWorkingCopyAsync(_currentPlan))
+            if (!await PrepareWorkingCopyAsync(_currentPlan, cancellationToken))
             {
                 return;
             }
 
             SetStatus("Muxing läuft...", 0);
-            var result = await _services.MuxWorkflow.ExecuteMuxAsync(_currentPlan, HandleMuxOutput, HandleMuxUpdate);
+            var result = await _services.MuxWorkflow.ExecuteMuxAsync(
+                _currentPlan,
+                HandleMuxOutput,
+                HandleMuxUpdate,
+                cancellationToken);
 
             if (result.ExitCode == 0 && !result.HasWarning)
             {
                 SetStatus("Muxing erfolgreich abgeschlossen", 100);
                 _dialogService.ShowInfo("Erfolg", $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
-                await OfferSingleEpisodeCleanupAsync(_currentPlan);
+                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else if ((result.ExitCode == 0 && result.HasWarning)
                 || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
             {
                 SetStatus("Muxing mit Warnungen abgeschlossen", 100);
                 _dialogService.ShowWarning("Warnung", $"Die MKV wurde erstellt, aber mkvmerge hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
-                await OfferSingleEpisodeCleanupAsync(_currentPlan);
+                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else
             {
                 SetStatus($"Muxing fehlgeschlagen (Exit-Code {result.ExitCode})", 0);
                 _dialogService.ShowWarning("Hinweis", $"mkvmerge wurde mit Exit-Code {result.ExitCode} beendet.");
             }
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+            SetStatus("Abgebrochen", 0);
         }
         catch (Exception ex)
         {
@@ -115,6 +132,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         finally
         {
             SetBusy(false);
+            CompleteCurrentOperation(operationSource);
         }
     }
 
@@ -166,7 +184,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
         RefreshOutputTargetStatus();
     }
 
-    private async Task<bool> PrepareWorkingCopyAsync(SeriesEpisodeMuxPlan plan)
+    private async Task<bool> PrepareWorkingCopyAsync(
+        SeriesEpisodeMuxPlan plan,
+        CancellationToken cancellationToken)
     {
         if (plan.WorkingCopy is null)
         {
@@ -180,7 +200,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             return false;
         }
 
-        await _services.MuxWorkflow.PrepareWorkingCopyAsync(plan, HandleWorkingCopyPreparationUpdate);
+        await _services.MuxWorkflow.PrepareWorkingCopyAsync(plan, HandleWorkingCopyPreparationUpdate, cancellationToken);
         return true;
     }
 
@@ -231,7 +251,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
         return value;
     }
 
-    private async Task OfferSingleEpisodeCleanupAsync(SeriesEpisodeMuxPlan plan)
+    private async Task OfferSingleEpisodeCleanupAsync(
+        SeriesEpisodeMuxPlan plan,
+        CancellationToken cancellationToken)
     {
         var usedFiles = BuildCleanupFileList(plan.GetReferencedInputFiles(), plan);
         var relatedFiles = BuildCleanupFileList(RelatedEpisodeFilePaths, plan);
@@ -264,7 +286,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 {
                     SetStatus($"Verschiebe Quelldateien in den Papierkorb... {current}/{total}", progress);
                 });
-            });
+            },
+            cancellationToken);
 
         if (recycleResult.FailedFiles.Count > 0)
         {

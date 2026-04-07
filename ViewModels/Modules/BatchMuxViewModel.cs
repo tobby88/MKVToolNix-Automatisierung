@@ -67,7 +67,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => !item.IsSelected));
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources);
-        OpenSelectedSourcesCommand = new RelayCommand(OpenSelectedSources, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0);
+        OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null);
         RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => !_isBusy && EpisodeItems.Any());
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null);
@@ -87,7 +87,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public RelayCommand SelectAllEpisodesCommand { get; }
     public RelayCommand DeselectAllEpisodesCommand { get; }
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
-    public RelayCommand OpenSelectedSourcesCommand { get; }
+    public AsyncRelayCommand OpenSelectedSourcesCommand { get; }
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
     public AsyncRelayCommand RefreshAllComparisonsCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }

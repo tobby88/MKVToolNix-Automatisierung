@@ -23,6 +23,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private readonly IEpisodeReviewWorkflow _reviewWorkflow;
     private readonly EpisodePlanCache _planCache = new();
     private CancellationTokenSource? _planSummaryRefreshCts;
+    private CancellationTokenSource? _currentOperationCts;
 
     private string _previewText = string.Empty;
     private string _statusText = "Bereit";
@@ -55,9 +56,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
         OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        TestSelectedSourcesCommand = new RelayCommand(TestSelectedSources, () => !_isBusy && ManualCheckFilePaths.Count > 0);
+        TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => !_isBusy && ManualCheckFilePaths.Count > 0);
         CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy);
         ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy);
+        CancelCurrentOperationCommand = new RelayCommand(CancelCurrentOperation, () => CanCancelCurrentOperation);
     }
 
     public AsyncRelayCommand SelectMainVideoCommand { get; }
@@ -67,9 +69,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public RelayCommand SelectOutputCommand { get; }
     public AsyncRelayCommand RescanCommand { get; }
     public AsyncRelayCommand OpenTvdbLookupCommand { get; }
-    public RelayCommand TestSelectedSourcesCommand { get; }
+    public AsyncRelayCommand TestSelectedSourcesCommand { get; }
     public AsyncRelayCommand CreatePreviewCommand { get; }
     public AsyncRelayCommand ExecuteMuxCommand { get; }
+    public RelayCommand CancelCurrentOperationCommand { get; }
 
     public string AudioDescriptionButtonText => string.IsNullOrWhiteSpace(MainVideoPath)
         ? "AD-Datei wählen"
@@ -219,6 +222,12 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 
     public string ExecuteMuxButtonTooltip => "Startet das eigentliche Muxing mit der aktuellen Planung.";
 
+    public bool CanCancelCurrentOperation => _currentOperationCts is { IsCancellationRequested: false };
+
+    public string CancelCurrentOperationTooltip => CanCancelCurrentOperation
+        ? "Bricht die laufende Vorschau-, Kopier- oder Mux-Aktion ab."
+        : "Derzeit läuft keine abbrechbare Einzelaktion.";
+
     private void SetBusy(bool isBusy)
     {
         _isBusy = isBusy;
@@ -237,6 +246,48 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         TestSelectedSourcesCommand.RaiseCanExecuteChanged();
         CreatePreviewCommand.RaiseCanExecuteChanged();
         ExecuteMuxCommand.RaiseCanExecuteChanged();
+        CancelCurrentOperationCommand.RaiseCanExecuteChanged();
+    }
+
+    private CancellationTokenSource BeginCurrentOperation()
+    {
+        _currentOperationCts?.Cancel();
+        _currentOperationCts?.Dispose();
+        _currentOperationCts = new CancellationTokenSource();
+        NotifyCurrentOperationChanged();
+        return _currentOperationCts;
+    }
+
+    private void CompleteCurrentOperation(CancellationTokenSource operationSource)
+    {
+        if (!ReferenceEquals(_currentOperationCts, operationSource))
+        {
+            operationSource.Dispose();
+            return;
+        }
+
+        _currentOperationCts.Dispose();
+        _currentOperationCts = null;
+        NotifyCurrentOperationChanged();
+    }
+
+    private void CancelCurrentOperation()
+    {
+        if (_currentOperationCts is null || _currentOperationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _currentOperationCts.Cancel();
+        SetStatus("Abbruch angefordert...", ProgressValue);
+        NotifyCurrentOperationChanged();
+    }
+
+    private void NotifyCurrentOperationChanged()
+    {
+        OnPropertyChanged(nameof(CanCancelCurrentOperation));
+        OnPropertyChanged(nameof(CancelCurrentOperationTooltip));
+        RefreshCommands();
     }
 
     private void SetStatus(string text, int progressValue)

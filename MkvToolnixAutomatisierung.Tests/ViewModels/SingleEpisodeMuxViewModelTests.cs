@@ -105,6 +105,15 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void CancelCurrentOperationCommand_IsDisabled_WhenNoSingleOperationRuns()
+    {
+        var viewModel = CreateViewModel();
+
+        Assert.False(viewModel.CanCancelCurrentOperation);
+        Assert.False(viewModel.CancelCurrentOperationCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void SelectOutputCommand_UsesCurrentOutputDirectory_AsDialogStart()
     {
         var dialogService = new CapturingDialogService();

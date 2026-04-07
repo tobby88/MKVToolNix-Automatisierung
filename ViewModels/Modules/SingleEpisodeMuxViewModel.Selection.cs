@@ -438,11 +438,6 @@ internal sealed partial class SingleEpisodeMuxViewModel
         RefreshCommands();
     }
 
-    private void TestSelectedSources()
-    {
-        _ = ReviewSourcesAsync();
-    }
-
     private async Task ReviewSourcesAsync()
     {
         await _reviewWorkflow.ReviewManualSourceAsync(

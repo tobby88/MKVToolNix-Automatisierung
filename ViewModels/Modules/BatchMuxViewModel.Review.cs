@@ -122,7 +122,7 @@ internal sealed partial class BatchMuxViewModel
         }
     }
 
-    private void OpenSelectedSources()
+    private async Task OpenSelectedSourcesAsync()
     {
         var item = SelectedEpisodeItem;
         if (item is null)
@@ -130,7 +130,7 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        _ = ReviewEpisodeAsync(item, isBatchPreparation: false);
+        await ReviewEpisodeAsync(item, isBatchPreparation: false);
     }
 
     private async Task ReviewSelectedMetadataAsync()
