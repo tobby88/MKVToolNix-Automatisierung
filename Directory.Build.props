@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- Zentrale Warnschiene für App, Tests und Testtools: KI-generierte Regressionen sollen früh im normalen Build scheitern. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Default</AnalysisMode>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
