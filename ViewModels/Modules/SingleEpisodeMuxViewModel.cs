@@ -48,17 +48,18 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => PreviewText = text,
             text => PreviewText += text);
+        Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
-        SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy);
-        SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy);
+        SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy, unexpectedCommandErrorHandler);
+        SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         SelectSubtitlesCommand = new RelayCommand(SelectSubtitles, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
         SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
-        RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => !_isBusy && ManualCheckFilePaths.Count > 0);
-        CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy);
-        ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy);
+        RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
+        OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
+        TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => !_isBusy && ManualCheckFilePaths.Count > 0, unexpectedCommandErrorHandler);
+        CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy, unexpectedCommandErrorHandler);
+        ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         CancelCurrentOperationCommand = new RelayCommand(CancelCurrentOperation, () => CanCancelCurrentOperation);
     }
 
