@@ -97,10 +97,14 @@ Im aktuellen Serien-Modul werden verwendet:
 
 - `MainWindow.xaml`: Shell mit Modulnavigation und Tool-Status
 - `ViewModels/MainWindowViewModel.cs`: Shell-ViewModel
+- `Composition/`: Composition-Root und fachlich getrennte DI-Registrierungsmodule
 - `Views/`: WPF-Views für die einzelnen Module
 - `ViewModels/Modules/`: ViewModels der einzelnen Module
 - `Services/`: technische Dienste wie Dialoge, Toolsuche und Prozessausführung
+- `Services/AppModuleServices.cs`: kleinere Service-Bundles für Einzelmodus, Batch und Shell statt eines globalen Sammelobjekts
 - `Modules/SeriesEpisodeMux/`: Fachlogik für Muxing und Dateierkennung
+
+Die App verwendet `Microsoft.Extensions.DependencyInjection`, bleibt aber bewusst bei einem klaren Composition Root. `IServiceProvider` wird nicht durch die Fachlogik gereicht; aufgelöst wird nur zentral beim App-Start.
 
 ## Starten
 
@@ -132,6 +136,8 @@ Lokale Vorschau im Browser:
 
 Die erzeugte Seite landet unter `.\docs\_site`.  
 Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
+
+Zusätzlich hält `.github/dependabot.yml` Versionsupdates für GitHub Actions und NuGet-Pakete automatisch im Blick.
 
 ## Hinweise
 

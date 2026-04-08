@@ -6,6 +6,9 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
 
 ## Hauptbausteine
 
+- `Composition`
+  - enthält den Composition Root und die DI-Registrierungsmodule
+  - trennt Stores, Tooling, Metadaten, Mux-Kern, Workflow und UI-Komposition bewusst voneinander
 - `Modules/SeriesEpisodeMux`
   - erkennt Episodenquellen, erzeugt Mux-Pläne und kapselt die mkvmerge-spezifische Argumentlogik
 - `Services`
@@ -15,6 +18,21 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
   - kapselt TVDB-Zugriff, Caching und lokale Serien-Zuordnungen
 - `ViewModels/Modules`
   - stellt Einzel- und Batch-Workflow für die GUI bereit
+
+## Composition und DI
+
+Der App-Start läuft bewusst über einen klaren Composition Root statt über verteilte Ad-hoc-Auflösungen:
+
+1. `AppCompositionRoot` erstellt eine `ServiceCollection`.
+2. `AppCompositionModuleCatalog` registriert die fachlich getrennten Module.
+3. Der gebaute `ServiceProvider` wird validiert und nur im Startpfad verwendet.
+4. `AppComposition` hält den Root-Provider über die App-Laufzeit am Leben und entsorgt ihn beim Shutdown wieder.
+
+Wichtig dabei:
+
+- Die Fachlogik bekommt ihre Abhängigkeiten weiterhin per Konstruktor.
+- `IServiceProvider` wird nicht an ViewModels oder Services weitergereicht.
+- Kleinere Service-Bundles in `Services/AppModuleServices.cs` begrenzen, welche Services Einzelmodus, Batch und Shell tatsächlich sehen.
 
 ## Datenfluss
 

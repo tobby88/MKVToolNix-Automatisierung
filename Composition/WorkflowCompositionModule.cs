@@ -12,6 +12,7 @@ internal static class WorkflowCompositionModule
     /// <summary>
     /// Registriert die Workflow-Services für Mux-Ausführung und Nachbereitung.
     /// </summary>
+    /// <param name="services">DI-Sammlung für Copy-, Cleanup-, Workflow- und Log-Services.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<FileCopyService>(_ => new FileCopyService());

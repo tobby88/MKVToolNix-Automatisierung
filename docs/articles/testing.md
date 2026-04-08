@@ -11,6 +11,9 @@ Das Projekt verwendet jetzt drei Testebenen:
   - prüfen mehrere Services zusammen über echte Temp-Dateien und einen kontrollierten Fake-`mkvmerge`
   - decken auch Batch-Scans mit vorbereitetem `BatchScanDirectoryContext` über mehrere Einzeldateien hinweg ab
   - sichern zusätzlich Regressionen ab, bei denen sich Dateierkennung, Archivintegration oder Fake-`mkvmerge` zwischen zwei Schritten unterschiedlich verhalten würden
+- Architektur-/Bootstrap-Tests in den Unit-Tests
+  - prüfen Composition-Root, DI-Registrierung und gezielte Startup-Fehlerpfade
+  - sichern auch ab, dass der Root-ServiceProvider bei fehlgeschlagener Startup-Auflösung wieder disposed wird
 - manuelle GUI-Prüfung
   - bleibt für Dialoge, WPF-Bindings und visuelle Usability weiterhin sinnvoll
 

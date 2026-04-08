@@ -10,6 +10,7 @@ internal static class AppCompositionModuleCatalog
     /// <summary>
     /// Baut das vollständige Anwendungsmodell auf Registrierungsbasis auf.
     /// </summary>
+    /// <param name="services">Zentrale DI-Sammlung, in die alle fachlichen und technischen Module ihre Registrierungen schreiben.</param>
     public static void RegisterAll(IServiceCollection services)
     {
         AppStoreCompositionModule.Register(services);

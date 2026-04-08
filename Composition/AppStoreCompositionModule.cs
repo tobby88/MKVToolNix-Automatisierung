@@ -12,6 +12,7 @@ internal static class AppStoreCompositionModule
     /// <summary>
     /// Registriert die Store-Gruppe für Toolpfade, Archiv und TVDB-Zugangsdaten.
     /// </summary>
+    /// <param name="services">DI-Sammlung, in die die langlebigen Settings-Stores eingetragen werden.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<AppSettingsStore>(_ => new AppSettingsStore());

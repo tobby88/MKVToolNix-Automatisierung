@@ -11,6 +11,7 @@ internal static class ToolingCompositionModule
     /// <summary>
     /// Registriert die Werkzeug-Services auf Basis der gespeicherten Toolpfade.
     /// </summary>
+    /// <param name="services">DI-Sammlung für Locator- und Probe-Registrierungen.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<MkvToolNixLocator>(provider => new MkvToolNixLocator(provider.GetRequiredService<AppToolPathStore>()));

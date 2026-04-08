@@ -13,6 +13,10 @@ internal sealed class AppBootstrapper : IDisposable
 {
     private AppComposition? _composition;
 
+    /// <summary>
+    /// Baut das Hauptfenster aus der verdrahteten App-Komposition und zeigt eventuelle Startwarnungen vor dem ersten UI-Frame an.
+    /// </summary>
+    /// <returns>Fertig initialisiertes Hauptfenster der Anwendung.</returns>
     public MainWindow CreateMainWindow()
     {
         _composition = new AppCompositionRoot().Create();
@@ -25,6 +29,9 @@ internal sealed class AppBootstrapper : IDisposable
         return new MainWindow(_composition.MainWindowViewModel);
     }
 
+    /// <summary>
+    /// Entsorgt die gehaltene App-Komposition samt Root-ServiceProvider, wenn der Bootstrapper die App wieder freigibt.
+    /// </summary>
     public void Dispose()
     {
         _composition?.Dispose();

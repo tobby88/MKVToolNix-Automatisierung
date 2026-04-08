@@ -15,6 +15,7 @@ internal static class UiCompositionModule
     /// <summary>
     /// Registriert Service-Bundles und ViewModels der Benutzeroberfläche.
     /// </summary>
+    /// <param name="services">DI-Sammlung für UI-nahe Service-Bundles, Dialogdienste und Shell-ViewModels.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<IUserDialogService>(_ => new UserDialogService());

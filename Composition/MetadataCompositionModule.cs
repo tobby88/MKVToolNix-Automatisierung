@@ -11,6 +11,7 @@ internal static class MetadataCompositionModule
     /// <summary>
     /// Registriert die Metadaten-Services der Anwendung.
     /// </summary>
+    /// <param name="services">DI-Sammlung für TVDB-Client und Metadatenauflösung.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<TvdbClient>(_ => new TvdbClient());

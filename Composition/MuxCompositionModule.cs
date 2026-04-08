@@ -13,6 +13,7 @@ internal static class MuxCompositionModule
     /// <summary>
     /// Registriert alle Kernservices rund um Erkennung, Archivvergleich und Mux-Planung.
     /// </summary>
+    /// <param name="services">DI-Sammlung für Planner-, Archiv- und Batch-Scan-Services.</param>
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<SeriesArchiveService>(provider => new SeriesArchiveService(
