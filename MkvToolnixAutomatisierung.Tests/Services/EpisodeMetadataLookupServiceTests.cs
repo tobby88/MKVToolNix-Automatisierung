@@ -70,6 +70,105 @@ public sealed class EpisodeMetadataLookupServiceTests
     }
 
     [Fact]
+    public async Task SearchSeriesAsync_DeduplicatesConcurrentRequests()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<TvdbSeriesSearchResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesAsyncOverride = (query, _) =>
+            {
+                started.TrySetResult(true);
+                return release.Task;
+            }
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key",
+            TvdbPin = "pin"
+        };
+
+        var firstTask = service.SearchSeriesAsync("Beispielserie", settings);
+        await started.Task;
+        var secondTask = service.SearchSeriesAsync("Beispielserie", settings);
+
+        release.SetResult([new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)]);
+        var results = await Task.WhenAll(firstTask, secondTask);
+
+        Assert.Same(results[0], results[1]);
+        Assert.Equal(1, client.SearchSeriesCallCount);
+    }
+
+    [Fact]
+    public async Task LoadEpisodesAsync_DeduplicatesConcurrentRequests()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<TvdbEpisodeRecord>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var client = new FakeTvdbClient
+        {
+            GetSeriesEpisodesAsyncOverride = (seriesId, _) =>
+            {
+                started.TrySetResult(true);
+                return release.Task;
+            }
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key",
+            TvdbPin = "pin"
+        };
+
+        var firstTask = service.LoadEpisodesAsync(42, settings);
+        await started.Task;
+        var secondTask = service.LoadEpisodesAsync(42, settings);
+
+        release.SetResult([new TvdbEpisodeRecord(7, "Pilot", 1, 1, "2024-01-01")]);
+        var results = await Task.WhenAll(firstTask, secondTask);
+
+        Assert.Same(results[0], results[1]);
+        Assert.Equal(1, client.LoadEpisodesCallCount);
+    }
+
+    [Fact]
+    public async Task SearchSeriesAsync_CancelledWaiter_DoesNotAbortSharedLookupForOtherCallers()
+    {
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<IReadOnlyList<TvdbSeriesSearchResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesAsyncOverride = (query, _) =>
+            {
+                started.TrySetResult(true);
+                return release.Task;
+            }
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        using var cancellationSource = new CancellationTokenSource();
+
+        var cancelledWaiter = service.SearchSeriesAsync("Beispielserie", settings, cancellationSource.Token);
+        await started.Task;
+        var survivingWaiter = service.SearchSeriesAsync("Beispielserie", settings);
+
+        cancellationSource.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelledWaiter);
+
+        release.SetResult([new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)]);
+        var result = await survivingWaiter;
+
+        Assert.Single(result);
+        Assert.Equal(1, client.SearchSeriesCallCount);
+    }
+
+    [Fact]
     public async Task ResolveAutomaticallyAsync_ReturnsReviewFailure_WhenTvdbLookupThrows()
     {
         var store = new FakeMetadataStore(new AppMetadataSettings
@@ -177,6 +276,10 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
 
+        public Func<string, CancellationToken, Task<IReadOnlyList<TvdbSeriesSearchResult>>>? SearchSeriesAsyncOverride { get; init; }
+
+        public Func<int, CancellationToken, Task<IReadOnlyList<TvdbEpisodeRecord>>>? GetSeriesEpisodesAsyncOverride { get; init; }
+
         public Exception? SearchSeriesException { get; init; }
 
         public int SearchSeriesCallCount { get; private set; }
@@ -190,6 +293,11 @@ public sealed class EpisodeMetadataLookupServiceTests
             CancellationToken cancellationToken = default)
         {
             SearchSeriesCallCount++;
+
+            if (SearchSeriesAsyncOverride is not null)
+            {
+                return SearchSeriesAsyncOverride(query, cancellationToken);
+            }
 
             if (SearchSeriesException is not null)
             {
@@ -207,6 +315,12 @@ public sealed class EpisodeMetadataLookupServiceTests
             CancellationToken cancellationToken = default)
         {
             LoadEpisodesCallCount++;
+
+            if (GetSeriesEpisodesAsyncOverride is not null)
+            {
+                return GetSeriesEpisodesAsyncOverride(seriesId, cancellationToken);
+            }
+
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
         }

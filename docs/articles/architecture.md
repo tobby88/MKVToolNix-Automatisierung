@@ -16,6 +16,7 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
   - bündelt außerdem gemeinsame technische Heuristiken wie die Text-/Mojibake-Normalisierung, damit Parser und Probe-Service nicht auseinanderlaufen
 - `Services/Metadata`
   - kapselt TVDB-Zugriff, Caching und lokale Serien-Zuordnungen
+  - legt identische gleichzeitige TVDB-Suchen und Episoden-Loads pro Cache-Schlüssel zusammen, damit Batch-Scans keine vermeidbaren Doppelanfragen erzeugen
 - `ViewModels/Modules`
   - stellt Einzel- und Batch-Workflow für die GUI bereit
 

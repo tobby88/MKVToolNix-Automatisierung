@@ -11,6 +11,8 @@ internal sealed class EpisodeMetadataLookupService
     private readonly ITvdbClient _tvdbClient;
     private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
     private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
+    private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, Task<IReadOnlyList<TvdbSeriesSearchResult>>> _seriesSearchInFlight = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, Task<IReadOnlyList<TvdbEpisodeRecord>>> _episodeLoadsInFlight = new();
 
     /// <summary>
     /// Initialisiert den TVDB-Lookup-Service mit persistentem Settings-Store und API-Client.
@@ -97,9 +99,15 @@ internal sealed class EpisodeMetadataLookupService
             return cachedResults;
         }
 
-        var results = await _tvdbClient.SearchSeriesAsync(settings.TvdbApiKey, settings.TvdbPin, query, cancellationToken);
-        _seriesSearchCache[cacheKey] = results;
-        return results;
+        var requestTask = _seriesSearchInFlight.GetOrAdd(
+            cacheKey,
+            _ => ExecuteSharedLookupAsync(
+                cacheKey,
+                _seriesSearchCache,
+                _seriesSearchInFlight,
+                () => _tvdbClient.SearchSeriesAsync(settings.TvdbApiKey, settings.TvdbPin, query, CancellationToken.None)));
+
+        return await requestTask.WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -137,9 +145,15 @@ internal sealed class EpisodeMetadataLookupService
             return cachedEpisodes;
         }
 
-        var episodes = await _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, cancellationToken);
-        _episodeCache[cacheKey] = episodes;
-        return episodes;
+        var requestTask = _episodeLoadsInFlight.GetOrAdd(
+            cacheKey,
+            _ => ExecuteSharedLookupAsync(
+                cacheKey,
+                _episodeCache,
+                _episodeLoadsInFlight,
+                () => _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, CancellationToken.None)));
+
+        return await requestTask.WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -363,6 +377,36 @@ internal sealed class EpisodeMetadataLookupService
         {
             throw new InvalidOperationException(
                 "Es ist noch kein TVDB-API-Key gespeichert. Bitte im TVDB-Dialog zuerst den API-Key eintragen.");
+        }
+    }
+
+    /// <summary>
+    /// Führt eine identische TVDB-Abfrage höchstens einmal gleichzeitig aus und teilt das Ergebnis
+    /// mit allen parallelen Aufrufern desselben Cache-Schlüssels.
+    /// </summary>
+    /// <typeparam name="TCacheKey">Cache-Schlüsseltyp der Lookup-Art.</typeparam>
+    /// <typeparam name="TResult">Elementtyp der zurückgelieferten Listenwerte.</typeparam>
+    /// <param name="cacheKey">Eindeutiger Schlüssel der Anfrage.</param>
+    /// <param name="cache">Ergebniscache für erfolgreiche Antworten.</param>
+    /// <param name="inFlightCache">Zwischencache aktuell laufender identischer Requests.</param>
+    /// <param name="fetchAsync">Eigentlicher TVDB-Fetch ohne aufrufergebundenes Cancellation-Token.</param>
+    /// <returns>Das erfolgreiche Ergebnis der Lookup-Anfrage.</returns>
+    private static async Task<IReadOnlyList<TResult>> ExecuteSharedLookupAsync<TCacheKey, TResult>(
+        TCacheKey cacheKey,
+        ConcurrentDictionary<TCacheKey, IReadOnlyList<TResult>> cache,
+        ConcurrentDictionary<TCacheKey, Task<IReadOnlyList<TResult>>> inFlightCache,
+        Func<Task<IReadOnlyList<TResult>>> fetchAsync)
+        where TCacheKey : notnull
+    {
+        try
+        {
+            var results = await fetchAsync();
+            cache[cacheKey] = results;
+            return results;
+        }
+        finally
+        {
+            inFlightCache.TryRemove(cacheKey, out _);
         }
     }
 }
