@@ -146,8 +146,8 @@ Die App setzt Tracknamen bewusst einheitlich, damit die Bibliothek langfristig l
 Typische Formate sind:
 
 - Video: `Deutsch - FHD - H.264`
-- Audio: `English - AAC`
-- Audiodeskription: `Plattdüütsch (sehbehinderte) - AAC`
+- Audio: `Deutsch - AAC`
+- Audiodeskription: `Deutsch (sehbehinderte) - AAC`
 - Untertitel: `Deutsch (hörgeschädigte) - SRT`
 
 Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
@@ -225,5 +225,3 @@ Wichtig:
 
 - Creative Commons empfiehlt diese Lizenzfamilie selbst nicht für Software. Sie wurde hier trotzdem bewusst gewählt, weil sie die gewünschten Bedingungen für dieses Repository am besten abbildet.
 - Dieses Projekt ist wegen der `NC`-Klausel nicht als klassische Open-Source-Lizenz im OSI-Sinne zu verstehen.
-- `.\Data\settings.json` kann lokale Toolpfade sowie TVDB-Zugangsdaten enthalten und gehört nicht ins Repo.
-- `.\Logs` enthält Laufprotokolle und lokale Dateipfade und gehört ebenfalls nicht ins Repo.
