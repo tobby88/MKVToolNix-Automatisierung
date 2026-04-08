@@ -28,5 +28,6 @@ internal sealed class AppBootstrapper : IDisposable
     public void Dispose()
     {
         _composition?.Dispose();
+        _composition = null;
     }
 }

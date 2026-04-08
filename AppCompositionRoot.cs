@@ -24,11 +24,31 @@ internal sealed class AppCompositionRoot
             ValidateScopes = true
         });
 
-        return new AppComposition(
-            serviceProvider,
-            serviceProvider.GetRequiredService<IUserDialogService>(),
-            serviceProvider.GetRequiredService<AppSettingsLoadResult>(),
-            serviceProvider.GetRequiredService<MainWindowViewModel>());
+        return CreateComposition(serviceProvider);
+    }
+
+    /// <summary>
+    /// Löst die Startdienste aus einem bereits gebauten Root-Provider auf und kapselt den Fehlerpfad einschließlich Dispose.
+    /// </summary>
+    /// <param name="serviceProvider">Vollständig gebauter Root-Provider der Anwendung.</param>
+    /// <returns>Fertig aufgelöste Anwendungs-Komposition.</returns>
+    internal static AppComposition CreateComposition(ServiceProvider serviceProvider)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        try
+        {
+            return new AppComposition(
+                serviceProvider,
+                serviceProvider.GetRequiredService<IUserDialogService>(),
+                serviceProvider.GetRequiredService<AppSettingsLoadResult>(),
+                serviceProvider.GetRequiredService<MainWindowViewModel>());
+        }
+        catch
+        {
+            serviceProvider.Dispose();
+            throw;
+        }
     }
 }
 
@@ -37,13 +57,15 @@ internal sealed class AppCompositionRoot
 /// </summary>
 internal sealed class AppComposition : IDisposable
 {
+    private readonly ServiceProvider _serviceProvider;
+
     public AppComposition(
         ServiceProvider serviceProvider,
         IUserDialogService dialogService,
         AppSettingsLoadResult settingsLoadResult,
         MainWindowViewModel mainWindowViewModel)
     {
-        ServiceProvider = serviceProvider;
+        _serviceProvider = serviceProvider;
         DialogService = dialogService;
         SettingsLoadResult = settingsLoadResult;
         MainWindowViewModel = mainWindowViewModel;
@@ -52,8 +74,6 @@ internal sealed class AppComposition : IDisposable
     /// <summary>
     /// Hält den Root-Provider über die App-Laufzeit am Leben und entsorgt künftige IDisposable-Singletons kontrolliert beim Shutdown.
     /// </summary>
-    public ServiceProvider ServiceProvider { get; }
-
     public IUserDialogService DialogService { get; }
 
     public AppSettingsLoadResult SettingsLoadResult { get; }
@@ -62,6 +82,6 @@ internal sealed class AppComposition : IDisposable
 
     public void Dispose()
     {
-        ServiceProvider.Dispose();
+        _serviceProvider.Dispose();
     }
 }
