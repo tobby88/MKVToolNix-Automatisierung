@@ -47,6 +47,7 @@ Wichtig dabei:
    - Die fachlichen Matching-Heuristiken sind bewusst von Caching und TVDB-I/O getrennt, damit Bewertungsregeln unabhängig wartbar bleiben.
 4. `SeriesArchiveService` entscheidet, ob direkt neu gemuxt wird, ob eine bestehende Archivdatei wiederverwendet wird oder ob eine Arbeitskopie nötig ist.
    - Die Archiventscheidung ist dafür in vorbereitende Analyse und eigentliche Integrationsentscheidung getrennt.
+   - Die Umsetzung ist zusätzlich entlang der Verantwortungen `Preparation`, `AttachmentReuse` und `UsageReporting` auf mehrere Partial-Dateien verteilt, damit Archivvergleich, TXT-heuristische Attachment-Zuordnung und GUI-/Diff-Aufbereitung unabhängig angepasst werden können.
 5. `SeriesEpisodeMuxPlan` beschreibt den vollständigen mkvmerge-Aufruf.
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
 7. `BatchRunLogService` schreibt bei Batch-Läufen Log- und Reportdateien in `.\Logs`.
