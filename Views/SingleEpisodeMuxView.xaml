@@ -15,6 +15,18 @@
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Top" />
         </Style>
+        <Style x:Key="DisplaySurfacePathTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="IsReadOnlyCaretVisible" Value="True" />
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
+        </Style>
         <!-- Mehrzeilige Dateilisten dürfen etwas wachsen, bleiben aber bewusst kompakt. -->
         <Style x:Key="CompactListSurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
             <Setter Property="MinHeight" Value="42" />
@@ -60,8 +72,8 @@
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Hauptvideo (.mp4)" />
                     <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
-                        <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
-                                   Text="{Binding MainVideoPath, Mode=OneWay}" />
+                        <TextBox Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
+                                 Text="{Binding MainVideoPath, Mode=OneWay}" />
                     </Border>
                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectMainVideoCommand}" Content="Hauptvideo wählen" />
 
@@ -286,8 +298,8 @@
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="AD-Datei (.mp4)" />
                 <Border Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
-                    <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
-                               Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
+                    <TextBox Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
+                             Text="{Binding AudioDescriptionPath, Mode=OneWay}" />
                 </Border>
                 <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectAudioDescriptionCommand}" Content="{Binding AudioDescriptionButtonText, Mode=OneWay}" />
 
@@ -297,9 +309,9 @@
                         <ItemsControl ItemsSource="{Binding SubtitlePaths, Mode=OneWay}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Margin="0,0,0,4"
-                                               Style="{StaticResource DisplaySurfaceTextStyle}"
-                                               Text="{Binding}" />
+                                    <TextBox Margin="0,0,0,4"
+                                             Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
+                                             Text="{Binding}" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -313,9 +325,9 @@
                         <ItemsControl ItemsSource="{Binding AttachmentPaths, Mode=OneWay}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <TextBlock Margin="0,0,0,4"
-                                               Style="{StaticResource DisplaySurfaceTextStyle}"
-                                               Text="{Binding}" />
+                                    <TextBox Margin="0,0,0,4"
+                                             Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
+                                             Text="{Binding}" />
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -325,8 +337,8 @@
 
                 <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Ausgabedatei (.mkv)" />
                 <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource DisplaySurfaceBorderStyle}">
-                    <TextBlock Style="{StaticResource DisplaySurfaceTextStyle}"
-                               Text="{Binding OutputPath, Mode=OneWay}" />
+                    <TextBox Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
+                             Text="{Binding OutputPath, Mode=OneWay}" />
                 </Border>
                 <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe ändern" />
 
