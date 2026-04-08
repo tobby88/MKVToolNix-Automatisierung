@@ -154,13 +154,20 @@ internal sealed class EpisodePlanCache
             input.ManualAttachmentPaths.ToList(),
             input.OutputPath,
             input.TitleForMux,
-            input.ExcludedSourcePaths.ToList());
+            input.ExcludedSourcePaths.ToList(),
+            input.PlannedVideoPaths.ToList(),
+            input.DetectionNotes.ToList());
     }
 
     private static Task<string> BuildCacheKeyAsync(
         EpisodePlanCacheKeyInput input,
         CancellationToken cancellationToken)
     {
+        if (!RequiresDetectionDirectoryScan(input))
+        {
+            return Task.FromResult(BuildCacheKey(input, cancellationToken));
+        }
+
         return Task.Run(() => BuildCacheKey(input, cancellationToken), cancellationToken);
     }
 
@@ -171,7 +178,7 @@ internal sealed class EpisodePlanCache
         var builder = new StringBuilder();
         AppendValue(builder, input.HasPrimaryVideoSource ? "primary-video-present" : "archive-primary-required");
         AppendFileValue(builder, input.MainVideoPath);
-        AppendDetectionDirectoryState(builder, input.MainVideoPath, cancellationToken);
+        AppendPlanSourceState(builder, input, cancellationToken);
         AppendFileValue(builder, input.AudioDescriptionPath);
         AppendFileValues(builder, input.SubtitlePaths);
         AppendFileValues(builder, input.AttachmentPaths);
@@ -179,7 +186,24 @@ internal sealed class EpisodePlanCache
         AppendFileValue(builder, input.OutputPath);
         AppendValue(builder, input.TitleForMux);
         AppendValues(builder, input.ExcludedSourcePaths);
+        AppendFileValues(builder, input.PlannedVideoPaths);
+        AppendValues(builder, input.DetectionNotes);
         return builder.ToString();
+    }
+
+    private static void AppendPlanSourceState(
+        StringBuilder builder,
+        EpisodePlanCacheKeyInput input,
+        CancellationToken cancellationToken)
+    {
+        if (!RequiresDetectionDirectoryScan(input))
+        {
+            builder.Append("planned-videos-fixed");
+            builder.Append('\u001F');
+            return;
+        }
+
+        AppendDetectionDirectoryState(builder, input.MainVideoPath, cancellationToken);
     }
 
     private static void AppendFileValues(StringBuilder builder, IEnumerable<string> values)
@@ -235,9 +259,9 @@ internal sealed class EpisodePlanCache
             : Path.GetDirectoryName(mainVideoPath);
         AppendValue(builder, sourceDirectory);
 
-        // Die Planerzeugung läuft fachlich immer noch über eine frische Detection des Quellordners.
-        // Der UI-Cache muss deshalb nicht nur die sichtbaren Eingaben, sondern auch neue oder entfernte
-        // Begleitdateien im gleichen Ordner bemerken, selbst wenn der Benutzer die UI dabei nicht anfasst.
+        // Dieser teure Fallback ist nur noch nötig, wenn die spätere Planerzeugung tatsächlich erneut
+        // über eine frische Detection des Quellordners laufen würde. Sobald das UI bereits konkrete
+        // PlannedVideoPaths und DetectionNotes liefert, reicht deren eigener Dateistand im Cache-Schlüssel.
         if (string.IsNullOrWhiteSpace(sourceDirectory))
         {
             builder.Append("no-source-directory");
@@ -320,6 +344,12 @@ internal sealed class EpisodePlanCache
         return DetectionRelevantExtensions.Contains(Path.GetExtension(path));
     }
 
+    private static bool RequiresDetectionDirectoryScan(EpisodePlanCacheKeyInput input)
+    {
+        return input.HasPrimaryVideoSource
+            && input.PlannedVideoPaths.Count == 0;
+    }
+
     private sealed record CachedEpisodePlan(string CacheKey, SeriesEpisodeMuxPlan Plan);
 
     private sealed record EpisodePlanCacheKeyInput(
@@ -331,5 +361,7 @@ internal sealed class EpisodePlanCache
         IReadOnlyList<string> ManualAttachmentPaths,
         string OutputPath,
         string TitleForMux,
-        IReadOnlyCollection<string> ExcludedSourcePaths);
+        IReadOnlyCollection<string> ExcludedSourcePaths,
+        IReadOnlyList<string> PlannedVideoPaths,
+        IReadOnlyList<string> DetectionNotes);
 }

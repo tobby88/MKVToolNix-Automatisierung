@@ -51,7 +51,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
     {
         var cache = new EpisodePlanCache();
         var owner = new object();
-        var input = CreateFileBackedInput();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: false);
         await cache.StoreAsync(owner, input, CreatePlan("cached"));
 
         CreateFile("episode-2.mp4", "new alternative video");
@@ -137,7 +137,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
     {
         var cache = new EpisodePlanCache();
         var owner = new object();
-        var input = CreateFileBackedInput();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: false);
         cache.Store(owner, input, CreatePlan("cached"));
 
         CreateFile("episode-2.mp4", "new alternative video");
@@ -152,7 +152,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
     {
         var cache = new EpisodePlanCache();
         var owner = new object();
-        var input = CreateFileBackedInput();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: false);
         var siblingVideoPath = CreateFile("episode-2.mp4", "existing alternative video");
         cache.Store(owner, input, CreatePlan("cached"));
 
@@ -168,7 +168,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
     {
         var cache = new EpisodePlanCache();
         var owner = new object();
-        var input = CreateFileBackedInput();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: false);
         cache.Store(owner, input, CreatePlan("cached"));
 
         CreateFile("cover.jpg", "preview image");
@@ -177,6 +177,61 @@ public sealed class EpisodePlanCacheTests : IDisposable
 
         Assert.True(found);
         Assert.NotNull(cachedPlan);
+    }
+
+    [Fact]
+    public async Task TryGetAsync_IgnoresNewRelevantSiblingFiles_WhenPlannedVideosAreAlreadyPinned()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: true);
+        var plan = CreatePlan("cached");
+        await cache.StoreAsync(owner, input, plan);
+
+        CreateFile("episode-2.mp4", "new alternative video");
+
+        var cachedPlan = await cache.TryGetAsync(owner, input);
+
+        Assert.Same(plan, cachedPlan);
+    }
+
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenPlannedVideoPathsChange()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var mainVideoPath = CreateFile("episode.mp4", "video");
+        var input = new StubPlanInput
+        {
+            MainVideoPath = mainVideoPath,
+            PlannedVideoPaths = [mainVideoPath]
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        var alternateVideoPath = CreateFile("episode-alt.mp4", "alt");
+        input.PlannedVideoPaths = [mainVideoPath, alternateVideoPath];
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenDetectionNotesChange()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = new StubPlanInput
+        {
+            DetectionNotes = ["Hinweis A"]
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        input.DetectionNotes = ["Hinweis B"];
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
     }
 
     public void Dispose()
@@ -197,7 +252,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
             notes: []);
     }
 
-    private StubPlanInput CreateFileBackedInput()
+    private StubPlanInput CreateFileBackedInput(bool includePlannedVideoPaths = true)
     {
         var mainVideoPath = CreateFile("episode.mp4", "video");
         var audioDescriptionPath = CreateFile("episode-ad.mp4", "ad");
@@ -212,7 +267,8 @@ public sealed class EpisodePlanCacheTests : IDisposable
             SubtitlePaths = [subtitlePath],
             AttachmentPaths = [attachmentPath],
             OutputPath = outputPath,
-            ExcludedSourcePaths = [CreateFile("alt.mp4", "alt")]
+            ExcludedSourcePaths = [CreateFile("alt.mp4", "alt")],
+            PlannedVideoPaths = includePlannedVideoPaths ? [mainVideoPath] : []
         };
     }
 
