@@ -324,7 +324,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
     }
 
     [Fact]
-    public async Task CreatePlanAsync_RefreshesDetection_WhenAdditionalVideoAppearsAfterInitialScan()
+    public async Task CreatePlanAsync_UsesProvidedPlannedVideoPaths_InsteadOfRefreshingDetection()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-refresh");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-refresh");
@@ -364,11 +364,13 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
             detected.SubtitlePaths,
             detected.AttachmentPaths,
             outputPath,
-            detected.SuggestedTitle));
+            detected.SuggestedTitle,
+            PlannedVideoPaths: [detected.MainVideoPath, .. detected.AdditionalVideoPaths],
+            DetectionNotes: detected.Notes));
 
-        Assert.Equal(2, plan.VideoSources.Count);
+        Assert.Single(plan.VideoSources);
         Assert.Equal(primaryVideoPath, plan.VideoSources[0].FilePath);
-        Assert.Equal(alternateVideoPath, plan.VideoSources[1].FilePath);
+        Assert.DoesNotContain(plan.VideoSources, source => string.Equals(source.FilePath, alternateVideoPath, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -402,6 +404,45 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
                 }
             },
             cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_CancelsRunningIdentify_WithoutPoisoningPreparedDirectoryCache()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-cancel-running-identify");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-cancel-running-identify");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFileWithDelay(
+            primaryVideoPath,
+            delayBeforeOutputMilliseconds: 5000,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.DetectFromSelectedVideoAsync(
+            primaryVideoPath,
+            directoryContext,
+            cancellationToken: cancellationSource.Token));
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            primaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var detected = await service.DetectFromSelectedVideoAsync(primaryVideoPath, directoryContext);
+
+        Assert.Equal(primaryVideoPath, detected.MainVideoPath);
+        Assert.Empty(detected.AdditionalVideoPaths);
     }
 
     [Fact]

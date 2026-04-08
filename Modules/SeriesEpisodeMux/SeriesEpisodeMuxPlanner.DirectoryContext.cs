@@ -134,8 +134,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         private readonly Dictionary<string, IReadOnlyList<string>> _companionFilesByBaseName;
         private readonly Dictionary<string, CandidateSeed> _candidateSeedsByPath;
         private readonly IReadOnlyList<CandidateSeed> _candidateSeeds;
-        private readonly ConcurrentDictionary<string, Lazy<NormalVideoCandidate>> _normalVideoCandidates;
-        private readonly ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>> _audioDescriptionCandidates;
+        private readonly ConcurrentDictionary<string, NormalVideoCandidate> _normalVideoCandidates;
+        private readonly ConcurrentDictionary<string, AudioDescriptionCandidate> _audioDescriptionCandidates;
 
         internal DirectoryDetectionContext(
             SeriesEpisodeMuxPlanner owner,
@@ -151,8 +151,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 StringComparer.OrdinalIgnoreCase);
             _candidateSeedsByPath = candidateSeeds.ToDictionary(seed => seed.FilePath, seed => seed, StringComparer.OrdinalIgnoreCase);
             _candidateSeeds = candidateSeeds.ToList();
-            _normalVideoCandidates = new ConcurrentDictionary<string, Lazy<NormalVideoCandidate>>(StringComparer.OrdinalIgnoreCase);
-            _audioDescriptionCandidates = new ConcurrentDictionary<string, Lazy<AudioDescriptionCandidate>>(StringComparer.OrdinalIgnoreCase);
+            _normalVideoCandidates = new ConcurrentDictionary<string, NormalVideoCandidate>(StringComparer.OrdinalIgnoreCase);
+            _audioDescriptionCandidates = new ConcurrentDictionary<string, AudioDescriptionCandidate>(StringComparer.OrdinalIgnoreCase);
             MainVideoFiles = BuildBatchEntryFiles(candidateSeeds);
         }
 
@@ -200,24 +200,43 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 EpisodeFileNameHelper.LooksLikeAudioDescription(selectedSeed.FilePath) ? [selectedSeed] : []);
         }
 
-        internal NormalVideoCandidate GetOrCreateNormalVideoCandidate(CandidateSeed seed, string mkvMergePath)
+        internal NormalVideoCandidate GetOrCreateNormalVideoCandidate(
+            CandidateSeed seed,
+            string mkvMergePath,
+            CancellationToken cancellationToken)
         {
-            var lazyCandidate = _normalVideoCandidates.GetOrAdd(
-                seed.FilePath,
-                _ => new Lazy<NormalVideoCandidate>(
-                    () => _owner.BuildNormalVideoCandidate(seed, mkvMergePath, CompanionFilesByBaseName),
-                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
-            return lazyCandidate.Value;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_normalVideoCandidates.TryGetValue(seed.FilePath, out var cachedCandidate))
+            {
+                return cachedCandidate;
+            }
+
+            var builtCandidate = _owner.BuildNormalVideoCandidate(
+                seed,
+                mkvMergePath,
+                CompanionFilesByBaseName,
+                cancellationToken);
+            _normalVideoCandidates.TryAdd(seed.FilePath, builtCandidate);
+            return _normalVideoCandidates.TryGetValue(seed.FilePath, out cachedCandidate)
+                ? cachedCandidate
+                : builtCandidate;
         }
 
-        internal AudioDescriptionCandidate GetOrCreateAudioDescriptionCandidate(CandidateSeed seed)
+        internal AudioDescriptionCandidate GetOrCreateAudioDescriptionCandidate(
+            CandidateSeed seed,
+            CancellationToken cancellationToken)
         {
-            var lazyCandidate = _audioDescriptionCandidates.GetOrAdd(
-                seed.FilePath,
-                _ => new Lazy<AudioDescriptionCandidate>(
-                    () => _owner.BuildAudioDescriptionCandidate(seed),
-                    System.Threading.LazyThreadSafetyMode.ExecutionAndPublication));
-            return lazyCandidate.Value;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_audioDescriptionCandidates.TryGetValue(seed.FilePath, out var cachedCandidate))
+            {
+                return cachedCandidate;
+            }
+
+            var builtCandidate = _owner.BuildAudioDescriptionCandidate(seed, cancellationToken);
+            _audioDescriptionCandidates.TryAdd(seed.FilePath, builtCandidate);
+            return _audioDescriptionCandidates.TryGetValue(seed.FilePath, out cachedCandidate)
+                ? cachedCandidate
+                : builtCandidate;
         }
     }
 }

@@ -5,6 +5,20 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 /// <summary>
 /// Vom UI zusammengestellte Eingabe für einen konkreten Mux-Vorgang.
 /// </summary>
+/// <param name="MainVideoPath">Ausgewählte Hauptvideoquelle oder bei AD-only-Fällen der Platzhalterpfad der Episode.</param>
+/// <param name="AudioDescriptionPath">Optional ausgewählte AD-Datei.</param>
+/// <param name="SubtitlePaths">Aktuell ausgewählte externe Untertiteldateien.</param>
+/// <param name="AttachmentPaths">Aktuell ausgewählte TXT-Anhänge inklusive automatisch erkannter Videobegleiter.</param>
+/// <param name="OutputFilePath">Vollständiger Zielpfad der Ausgabe-MKV.</param>
+/// <param name="Title">Finaler Episodentitel für Container und Dateiname.</param>
+/// <param name="ExcludedSourcePaths">Optionaler Satz bewusst ausgeschlossener Quellpfade für Fallback-Detection.</param>
+/// <param name="ManualAttachmentPaths">Optional nur manuell ausgewählte TXT-Anhänge ohne automatisch erkannte Videobegleiter.</param>
+/// <param name="HasPrimaryVideoSource">Kennzeichnet, ob aktuell eine frische Hauptvideoquelle vorliegt.</param>
+/// <param name="PlannedVideoPaths">
+/// Bereits erkannte und vom UI bestätigte Videopfad-Auswahl in finaler Reihenfolge.
+/// Wenn gesetzt, baut die Planerstellung daraus weiter und vermeidet eine erneute Ordnererkennung.
+/// </param>
+/// <param name="DetectionNotes">Optional bereits bekannte Detection-Hinweise, die in den Plan übernommen werden sollen.</param>
 public sealed record SeriesEpisodeMuxRequest(
     string MainVideoPath,
     string? AudioDescriptionPath,
@@ -14,7 +28,9 @@ public sealed record SeriesEpisodeMuxRequest(
     string Title,
     IReadOnlyCollection<string>? ExcludedSourcePaths = null,
     IReadOnlyList<string>? ManualAttachmentPaths = null,
-    bool HasPrimaryVideoSource = true);
+    bool HasPrimaryVideoSource = true,
+    IReadOnlyList<string>? PlannedVideoPaths = null,
+    IReadOnlyList<string>? DetectionNotes = null);
 
 /// <summary>
 /// Ergebnis der automatischen Dateierkennung rund um eine Episode.

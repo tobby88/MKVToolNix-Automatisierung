@@ -7,9 +7,8 @@ internal static class FakeMkvMergeTestHelper
 {
     public static string ResolveExecutablePath()
     {
-        foreach (var configuration in new[] { "Release", "Debug" })
-        {
-            var repoExePath = Path.GetFullPath(Path.Combine(
+        var candidatePaths = new[] { "Release", "Debug" }
+            .Select(configuration => Path.GetFullPath(Path.Combine(
                 AppContext.BaseDirectory,
                 "..",
                 "..",
@@ -20,11 +19,15 @@ internal static class FakeMkvMergeTestHelper
                 "bin",
                 configuration,
                 "net9.0",
-                "FakeMkvMerge.exe"));
-            if (File.Exists(repoExePath))
-            {
-                return repoExePath;
-            }
+                "FakeMkvMerge.exe")))
+            .Where(File.Exists)
+            .Select(path => new FileInfo(path))
+            .OrderByDescending(file => file.LastWriteTimeUtc)
+            .ToList();
+
+        if (candidatePaths.Count > 0)
+        {
+            return candidatePaths[0].FullName;
         }
 
         throw new FileNotFoundException("FakeMkvMerge.exe wurde nicht gefunden.");
@@ -37,15 +40,33 @@ internal static class FakeMkvMergeTestHelper
         WriteProbeFileWithAttachments(mediaFilePath, [], tracks);
     }
 
+    public static void WriteProbeFileWithDelay(
+        string mediaFilePath,
+        int delayBeforeOutputMilliseconds,
+        params object[] tracks)
+    {
+        WriteProbeFileWithAttachments(mediaFilePath, [], delayBeforeOutputMilliseconds, tracks);
+    }
+
     public static void WriteProbeFileWithAttachments(
         string mediaFilePath,
         IReadOnlyList<object> attachments,
+        params object[] tracks)
+    {
+        WriteProbeFileWithAttachments(mediaFilePath, attachments, delayBeforeOutputMilliseconds: 0, tracks);
+    }
+
+    public static void WriteProbeFileWithAttachments(
+        string mediaFilePath,
+        IReadOnlyList<object> attachments,
+        int delayBeforeOutputMilliseconds,
         params object[] tracks)
     {
         WriteJsonFile(
             mediaFilePath + ".mkvmerge.json",
             new
             {
+                delayBeforeOutputMilliseconds,
                 tracks,
                 attachments
             });

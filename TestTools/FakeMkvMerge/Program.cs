@@ -32,7 +32,13 @@ internal static class Program
             && string.Equals(args[2], "json", StringComparison.OrdinalIgnoreCase))
         {
             var inputFilePath = args[^1];
-            Console.Write(ReadProbeJson(inputFilePath));
+            var probeResponse = LoadProbeResponse(inputFilePath);
+            if (probeResponse.DelayBeforeOutputMilliseconds > 0)
+            {
+                Thread.Sleep(probeResponse.DelayBeforeOutputMilliseconds);
+            }
+
+            Console.Write(probeResponse.Json);
             return 0;
         }
 
@@ -72,7 +78,7 @@ internal static class Program
         return muxConfig.ExitCode;
     }
 
-    private static string ReadProbeJson(string inputFilePath)
+    private static FakeProbeResponse LoadProbeResponse(string inputFilePath)
     {
         var probeFilePath = inputFilePath + ".mkvmerge.json";
         if (!File.Exists(probeFilePath))
@@ -80,7 +86,18 @@ internal static class Program
             throw new FileNotFoundException($"FakeMkvMerge-Probe-Datei fehlt: {probeFilePath}");
         }
 
-        return File.ReadAllText(probeFilePath);
+        var json = File.ReadAllText(probeFilePath);
+        using var document = JsonDocument.Parse(json);
+        var delayBeforeOutputMilliseconds = 0;
+        if (document.RootElement.TryGetProperty("delayBeforeOutputMilliseconds", out var delayElement)
+            && delayElement.ValueKind == JsonValueKind.Number)
+        {
+            delayBeforeOutputMilliseconds = delayElement.GetInt32();
+        }
+
+        return new FakeProbeResponse(
+            delayBeforeOutputMilliseconds,
+            json);
     }
 
     private static string? FindArgumentValue(IReadOnlyList<string> args, string argumentName)
@@ -141,3 +158,5 @@ internal sealed class FakeMuxRunConfiguration
 
     public int DelayBeforeExitMilliseconds { get; init; }
 }
+
+internal sealed record FakeProbeResponse(int DelayBeforeOutputMilliseconds, string Json);

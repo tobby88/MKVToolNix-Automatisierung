@@ -51,6 +51,16 @@ internal interface IEpisodePlanInput
     /// Optionaler Satz an Quellpfaden, die bei einer erneuten Detection nicht wiederverwendet werden dürfen.
     /// </summary>
     IReadOnlyCollection<string> ExcludedSourcePaths { get; }
+
+    /// <summary>
+    /// Bereits erkannte und aktuell im UI bestätigte Videopfad-Auswahl in finaler Reihenfolge.
+    /// </summary>
+    IReadOnlyList<string> PlannedVideoPaths { get; }
+
+    /// <summary>
+    /// Bereits bekannte Detection-Hinweise, die unverändert in den Mux-Plan übernommen werden können.
+    /// </summary>
+    IReadOnlyList<string> DetectionNotes { get; }
 }
 
 /// <summary>
@@ -84,7 +94,9 @@ internal sealed class EpisodePlanCoordinator
             input.TitleForMux,
             input.ExcludedSourcePaths,
             input.ManualAttachmentPaths,
-            input.HasPrimaryVideoSource),
+            input.HasPrimaryVideoSource,
+            input.PlannedVideoPaths,
+            input.DetectionNotes),
             cancellationToken);
     }
 }

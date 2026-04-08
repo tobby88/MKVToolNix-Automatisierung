@@ -396,4 +396,22 @@ internal partial class EpisodeEditModel
 
     IReadOnlyCollection<string> IEpisodePlanInput.ExcludedSourcePaths => ExcludedSourcePaths;
 
+    IReadOnlyList<string> IEpisodePlanInput.PlannedVideoPaths => BuildPlannedVideoPaths();
+
+    IReadOnlyList<string> IEpisodePlanInput.DetectionNotes => Notes;
+
+    private IReadOnlyList<string> BuildPlannedVideoPaths()
+    {
+        if (!HasPrimaryVideoSource || string.IsNullOrWhiteSpace(MainVideoPath))
+        {
+            return [];
+        }
+
+        return new[] { MainVideoPath }
+            .Concat(AdditionalVideoPaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
 }
