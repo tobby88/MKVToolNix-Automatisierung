@@ -39,6 +39,7 @@ Wichtig dabei:
 1. Eine Quelle wird ausgewählt oder ein Ordner wird gescannt.
 2. `SeriesEpisodeMuxPlanner` erkennt zugehörige Video-, AD-, Untertitel- und TXT-Dateien.
    - Für Batch-Ordner kann dafür einmalig ein `DirectoryDetectionContext` vorbereitet und für mehrere Einzelscans wiederverwendet werden.
+   - Dieser Kontext dedupliziert teure Kandidaten-Probes pro Datei auch unter parallelen Batch-Scans, damit identische Quellen nicht mehrfach gleichzeitig analysiert werden.
    - TXT-Begleitdateien werden dabei projektweit über denselben Reader und dieselben Encoding-Heuristiken ausgewertet, damit Erkennung, Review und spätere Planerstellung nicht auseinanderlaufen.
    - Für frische Quellen liest die Planerstellung normale Audiospuren aus den vollständigen Container-Metadaten, damit Mehrfach-Audio erhalten bleibt und offensichtliche AD-Spuren nicht versehentlich als normale Tonspuren eingeplant werden.
 3. `EpisodeMetadataLookupService` kann die lokale Erkennung mit TVDB-Daten anreichern.

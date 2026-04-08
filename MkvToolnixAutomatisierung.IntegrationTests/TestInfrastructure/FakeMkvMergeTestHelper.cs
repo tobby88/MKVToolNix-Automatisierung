@@ -45,7 +45,26 @@ internal static class FakeMkvMergeTestHelper
         int delayBeforeOutputMilliseconds,
         params object[] tracks)
     {
-        WriteProbeFileWithAttachments(mediaFilePath, [], delayBeforeOutputMilliseconds, tracks);
+        WriteProbeFileWithAttachments(
+            mediaFilePath,
+            attachments: [],
+            delayBeforeOutputMilliseconds,
+            invocationLogFilePath: null,
+            tracks);
+    }
+
+    public static void WriteProbeFileWithDelayAndInvocationLog(
+        string mediaFilePath,
+        int delayBeforeOutputMilliseconds,
+        string invocationLogFilePath,
+        params object[] tracks)
+    {
+        WriteProbeFileWithAttachments(
+            mediaFilePath,
+            attachments: [],
+            delayBeforeOutputMilliseconds,
+            invocationLogFilePath,
+            tracks);
     }
 
     public static void WriteProbeFileWithAttachments(
@@ -53,13 +72,14 @@ internal static class FakeMkvMergeTestHelper
         IReadOnlyList<object> attachments,
         params object[] tracks)
     {
-        WriteProbeFileWithAttachments(mediaFilePath, attachments, delayBeforeOutputMilliseconds: 0, tracks);
+        WriteProbeFileWithAttachments(mediaFilePath, attachments, delayBeforeOutputMilliseconds: 0, invocationLogFilePath: null, tracks);
     }
 
     public static void WriteProbeFileWithAttachments(
         string mediaFilePath,
         IReadOnlyList<object> attachments,
         int delayBeforeOutputMilliseconds,
+        string? invocationLogFilePath,
         params object[] tracks)
     {
         WriteJsonFile(
@@ -67,6 +87,7 @@ internal static class FakeMkvMergeTestHelper
             new
             {
                 delayBeforeOutputMilliseconds,
+                invocationLogFilePath,
                 tracks,
                 attachments
             });

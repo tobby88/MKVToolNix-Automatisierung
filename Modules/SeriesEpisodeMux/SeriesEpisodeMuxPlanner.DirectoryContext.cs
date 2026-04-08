@@ -136,6 +136,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         private readonly IReadOnlyList<CandidateSeed> _candidateSeeds;
         private readonly ConcurrentDictionary<string, NormalVideoCandidate> _normalVideoCandidates;
         private readonly ConcurrentDictionary<string, AudioDescriptionCandidate> _audioDescriptionCandidates;
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _normalVideoCandidateGates;
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _audioDescriptionCandidateGates;
 
         internal DirectoryDetectionContext(
             SeriesEpisodeMuxPlanner owner,
@@ -153,6 +155,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             _candidateSeeds = candidateSeeds.ToList();
             _normalVideoCandidates = new ConcurrentDictionary<string, NormalVideoCandidate>(StringComparer.OrdinalIgnoreCase);
             _audioDescriptionCandidates = new ConcurrentDictionary<string, AudioDescriptionCandidate>(StringComparer.OrdinalIgnoreCase);
+            _normalVideoCandidateGates = new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
+            _audioDescriptionCandidateGates = new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
             MainVideoFiles = BuildBatchEntryFiles(candidateSeeds);
         }
 
@@ -205,38 +209,74 @@ public sealed partial class SeriesEpisodeMuxPlanner
             string mkvMergePath,
             CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_normalVideoCandidates.TryGetValue(seed.FilePath, out var cachedCandidate))
-            {
-                return cachedCandidate;
-            }
-
-            var builtCandidate = _owner.BuildNormalVideoCandidate(
-                seed,
-                mkvMergePath,
-                CompanionFilesByBaseName,
+            return GetOrCreateCandidate(
+                seed.FilePath,
+                _normalVideoCandidates,
+                _normalVideoCandidateGates,
+                () => _owner.BuildNormalVideoCandidate(
+                    seed,
+                    mkvMergePath,
+                    CompanionFilesByBaseName,
+                    cancellationToken),
                 cancellationToken);
-            _normalVideoCandidates.TryAdd(seed.FilePath, builtCandidate);
-            return _normalVideoCandidates.TryGetValue(seed.FilePath, out cachedCandidate)
-                ? cachedCandidate
-                : builtCandidate;
         }
 
         internal AudioDescriptionCandidate GetOrCreateAudioDescriptionCandidate(
             CandidateSeed seed,
             CancellationToken cancellationToken)
         {
+            return GetOrCreateCandidate(
+                seed.FilePath,
+                _audioDescriptionCandidates,
+                _audioDescriptionCandidateGates,
+                () => _owner.BuildAudioDescriptionCandidate(seed, cancellationToken),
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Dedupliziert teure Kandidaten-Builds pro Datei auch dann, wenn mehrere Batch-Tasks
+        /// denselben Seed nahezu gleichzeitig anfordern.
+        /// </summary>
+        /// <typeparam name="TCandidate">Fachtyp des gecachten Kandidaten.</typeparam>
+        /// <param name="filePath">Eindeutiger Dateipfad des Seeds.</param>
+        /// <param name="cache">Zielcache für fertig gebaute Kandidaten.</param>
+        /// <param name="gates">Per-Datei-Gates für konkurrierende Erstzugriffe.</param>
+        /// <param name="factory">Factory für den eigentlichen Kandidaten-Build.</param>
+        /// <param name="cancellationToken">Abbruchsignal auch für wartende Parallelaufrufe.</param>
+        /// <returns>Den bereits vorhandenen oder neu erzeugten Kandidaten.</returns>
+        private static TCandidate GetOrCreateCandidate<TCandidate>(
+            string filePath,
+            ConcurrentDictionary<string, TCandidate> cache,
+            ConcurrentDictionary<string, SemaphoreSlim> gates,
+            Func<TCandidate> factory,
+            CancellationToken cancellationToken)
+            where TCandidate : class
+        {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_audioDescriptionCandidates.TryGetValue(seed.FilePath, out var cachedCandidate))
+            if (cache.TryGetValue(filePath, out var cachedCandidate))
             {
                 return cachedCandidate;
             }
 
-            var builtCandidate = _owner.BuildAudioDescriptionCandidate(seed, cancellationToken);
-            _audioDescriptionCandidates.TryAdd(seed.FilePath, builtCandidate);
-            return _audioDescriptionCandidates.TryGetValue(seed.FilePath, out cachedCandidate)
-                ? cachedCandidate
-                : builtCandidate;
+            var gate = gates.GetOrAdd(filePath, static _ => new SemaphoreSlim(1, 1));
+            gate.Wait(cancellationToken);
+
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (cache.TryGetValue(filePath, out cachedCandidate))
+                {
+                    return cachedCandidate;
+                }
+
+                var builtCandidate = factory();
+                cache[filePath] = builtCandidate;
+                return builtCandidate;
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
     }
 }

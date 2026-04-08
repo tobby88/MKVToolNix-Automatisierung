@@ -203,6 +203,38 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_WithSharedDirectoryContext_ProbesSameVideoOnlyOnceAcrossConcurrentCalls()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-shared-context-single-probe");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-shared-context-single-probe");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var invocationLogPath = Path.Combine(_tempDirectory, "probe-invocations.log");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFileWithDelayAndInvocationLog(
+            primaryVideoPath,
+            delayBeforeOutputMilliseconds: 500,
+            invocationLogPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        var detections = await Task.WhenAll(
+            service.DetectFromSelectedVideoAsync(primaryVideoPath, directoryContext),
+            service.DetectFromSelectedVideoAsync(primaryVideoPath, directoryContext));
+
+        Assert.All(detections, detected => Assert.Equal(primaryVideoPath, detected.MainVideoPath));
+        Assert.Equal([primaryVideoPath], File.ReadAllLines(invocationLogPath));
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotReuseStaleSingleFileCache()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-detect-refresh");

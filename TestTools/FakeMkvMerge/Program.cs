@@ -33,6 +33,7 @@ internal static class Program
         {
             var inputFilePath = args[^1];
             var probeResponse = LoadProbeResponse(inputFilePath);
+            WriteProbeInvocationLog(probeResponse.InvocationLogFilePath, inputFilePath);
             if (probeResponse.DelayBeforeOutputMilliseconds > 0)
             {
                 Thread.Sleep(probeResponse.DelayBeforeOutputMilliseconds);
@@ -89,15 +90,38 @@ internal static class Program
         var json = File.ReadAllText(probeFilePath);
         using var document = JsonDocument.Parse(json);
         var delayBeforeOutputMilliseconds = 0;
+        string? invocationLogFilePath = null;
         if (document.RootElement.TryGetProperty("delayBeforeOutputMilliseconds", out var delayElement)
             && delayElement.ValueKind == JsonValueKind.Number)
         {
             delayBeforeOutputMilliseconds = delayElement.GetInt32();
         }
+        if (document.RootElement.TryGetProperty("invocationLogFilePath", out var invocationLogElement)
+            && invocationLogElement.ValueKind == JsonValueKind.String)
+        {
+            invocationLogFilePath = invocationLogElement.GetString();
+        }
 
         return new FakeProbeResponse(
             delayBeforeOutputMilliseconds,
+            invocationLogFilePath,
             json);
+    }
+
+    private static void WriteProbeInvocationLog(string? invocationLogFilePath, string inputFilePath)
+    {
+        if (string.IsNullOrWhiteSpace(invocationLogFilePath))
+        {
+            return;
+        }
+
+        var directory = Path.GetDirectoryName(invocationLogFilePath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.AppendAllText(invocationLogFilePath, inputFilePath + Environment.NewLine);
     }
 
     private static string? FindArgumentValue(IReadOnlyList<string> args, string argumentName)
@@ -159,4 +183,7 @@ internal sealed class FakeMuxRunConfiguration
     public int DelayBeforeExitMilliseconds { get; init; }
 }
 
-internal sealed record FakeProbeResponse(int DelayBeforeOutputMilliseconds, string Json);
+internal sealed record FakeProbeResponse(
+    int DelayBeforeOutputMilliseconds,
+    string? InvocationLogFilePath,
+    string Json);
