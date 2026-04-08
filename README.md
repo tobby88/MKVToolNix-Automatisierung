@@ -136,6 +136,7 @@ Lokale Vorschau im Browser:
 .\scripts\build-docs.ps1 -Serve
 ```
 
+Das Skript bereinigt vorher alte generierte Artefakte unter `.\docs\api` und `.\docs\_site`, damit lokal keine veralteten DocFX-Seiten liegen bleiben.  
 Die erzeugte Seite landet unter `.\docs\_site`.  
 Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
 
