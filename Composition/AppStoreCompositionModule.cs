@@ -9,15 +9,20 @@ namespace MkvToolnixAutomatisierung.Composition;
 internal static class AppStoreCompositionModule
 {
     /// <summary>
-    /// Baut die Store-Gruppe für Toolpfade, Archiv und TVDB-Zugangsdaten auf.
+    /// Registriert die Store-Gruppe für Toolpfade, Archiv und TVDB-Zugangsdaten.
     /// </summary>
-    public static AppSettingStores Create()
+    public static void Register(AppServiceRegistry services)
     {
-        var settingsStore = new AppSettingsStore();
-        return new AppSettingStores(
-            settingsStore,
-            new AppToolPathStore(settingsStore),
-            new AppArchiveSettingsStore(settingsStore),
-            new AppMetadataStore(settingsStore));
+        services.AddSingleton<AppSettingsStore>(_ => new AppSettingsStore());
+        services.AddSingleton<AppToolPathStore>(provider => new AppToolPathStore(provider.GetRequired<AppSettingsStore>()));
+        services.AddSingleton<AppArchiveSettingsStore>(provider => new AppArchiveSettingsStore(provider.GetRequired<AppSettingsStore>()));
+        services.AddSingleton<AppMetadataStore>(provider => new AppMetadataStore(provider.GetRequired<AppSettingsStore>()));
+        services.AddSingleton<IAppMetadataStore>(provider => provider.GetRequired<AppMetadataStore>());
+        services.AddSingleton<AppSettingsLoadResult>(provider => provider.GetRequired<AppSettingsStore>().LoadWithDiagnostics());
+        services.AddSingleton<AppSettingStores>(provider => new AppSettingStores(
+            provider.GetRequired<AppSettingsStore>(),
+            provider.GetRequired<AppToolPathStore>(),
+            provider.GetRequired<AppArchiveSettingsStore>(),
+            provider.GetRequired<AppMetadataStore>()));
     }
 }

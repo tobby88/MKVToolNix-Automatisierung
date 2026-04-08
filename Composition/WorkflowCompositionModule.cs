@@ -1,3 +1,4 @@
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Composition;
@@ -8,16 +9,24 @@ namespace MkvToolnixAutomatisierung.Composition;
 internal static class WorkflowCompositionModule
 {
     /// <summary>
-    /// Erstellt die Workflow-Services für Mux-Ausführung und Nachbereitung.
+    /// Registriert die Workflow-Services für Mux-Ausführung und Nachbereitung.
     /// </summary>
-    public static WorkflowServices Create(MuxDomainServices muxServices)
+    public static void Register(AppServiceRegistry services)
     {
-        var fileCopyService = new FileCopyService();
-        var cleanupService = new EpisodeCleanupService();
-        return new WorkflowServices(
-            fileCopyService,
-            cleanupService,
-            new MuxWorkflowCoordinator(muxServices.Mux, fileCopyService, cleanupService),
-            new BatchRunLogService());
+        services.AddSingleton<FileCopyService>(_ => new FileCopyService());
+        services.AddSingleton<IFileCopyService>(provider => provider.GetRequired<FileCopyService>());
+        services.AddSingleton<EpisodeCleanupService>(_ => new EpisodeCleanupService());
+        services.AddSingleton<IEpisodeCleanupService>(provider => provider.GetRequired<EpisodeCleanupService>());
+        services.AddSingleton<MuxWorkflowCoordinator>(provider => new MuxWorkflowCoordinator(
+            provider.GetRequired<SeriesEpisodeMuxService>(),
+            provider.GetRequired<IFileCopyService>(),
+            provider.GetRequired<IEpisodeCleanupService>()));
+        services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequired<MuxWorkflowCoordinator>());
+        services.AddSingleton<BatchRunLogService>(_ => new BatchRunLogService());
+        services.AddSingleton<WorkflowServices>(provider => new WorkflowServices(
+            provider.GetRequired<IFileCopyService>(),
+            provider.GetRequired<IEpisodeCleanupService>(),
+            provider.GetRequired<IMuxWorkflowCoordinator>(),
+            provider.GetRequired<BatchRunLogService>()));
     }
 }

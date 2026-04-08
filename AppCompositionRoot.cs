@@ -15,24 +15,9 @@ internal sealed class AppCompositionRoot
     /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
     public AppComposition Create()
     {
-        IUserDialogService dialogService = new UserDialogService();
-        var stores = AppStoreCompositionModule.Create();
-        var settingsLoadResult = stores.Settings.LoadWithDiagnostics();
-        var tooling = ToolingCompositionModule.Create(stores);
-        var metadata = MetadataCompositionModule.Create(stores);
-        var muxServices = MuxCompositionModule.Create(stores, tooling, metadata);
-        var workflow = WorkflowCompositionModule.Create(muxServices);
-        var sharedEpisodeServices = UiCompositionModule.CreateSharedEpisodeServices(muxServices, metadata);
-        var singleEpisodeServices = UiCompositionModule.CreateSingleEpisodeServices(sharedEpisodeServices, workflow);
-        var batchServices = UiCompositionModule.CreateBatchServices(sharedEpisodeServices, muxServices, workflow);
-        var mainWindowServices = UiCompositionModule.CreateMainWindowServices(muxServices, stores, tooling);
-        var mainWindowViewModel = UiCompositionModule.CreateMainWindowViewModel(
-            singleEpisodeServices,
-            batchServices,
-            mainWindowServices,
-            dialogService);
-
-        return new AppComposition(dialogService, settingsLoadResult, mainWindowViewModel);
+        var services = new AppServiceRegistry();
+        AppCompositionModuleCatalog.RegisterAll(services);
+        return services.GetRequired<AppComposition>();
     }
 }
 

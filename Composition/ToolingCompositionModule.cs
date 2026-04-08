@@ -8,13 +8,18 @@ namespace MkvToolnixAutomatisierung.Composition;
 internal static class ToolingCompositionModule
 {
     /// <summary>
-    /// Erstellt die Werkzeug-Services auf Basis der gespeicherten Toolpfade.
+    /// Registriert die Werkzeug-Services auf Basis der gespeicherten Toolpfade.
     /// </summary>
-    public static ToolingServices Create(AppSettingStores stores)
+    public static void Register(AppServiceRegistry services)
     {
-        return new ToolingServices(
-            new MkvToolNixLocator(stores.ToolPaths),
-            new FfprobeLocator(stores.ToolPaths),
-            new MkvMergeProbeService());
+        services.AddSingleton<MkvToolNixLocator>(provider => new MkvToolNixLocator(provider.GetRequired<AppToolPathStore>()));
+        services.AddSingleton<IMkvToolNixLocator>(provider => provider.GetRequired<MkvToolNixLocator>());
+        services.AddSingleton<FfprobeLocator>(provider => new FfprobeLocator(provider.GetRequired<AppToolPathStore>()));
+        services.AddSingleton<IFfprobeLocator>(provider => provider.GetRequired<FfprobeLocator>());
+        services.AddSingleton<MkvMergeProbeService>(_ => new MkvMergeProbeService());
+        services.AddSingleton<ToolingServices>(provider => new ToolingServices(
+            provider.GetRequired<MkvToolNixLocator>(),
+            provider.GetRequired<FfprobeLocator>(),
+            provider.GetRequired<MkvMergeProbeService>()));
     }
 }

@@ -8,11 +8,15 @@ namespace MkvToolnixAutomatisierung.Composition;
 internal static class MetadataCompositionModule
 {
     /// <summary>
-    /// Erstellt die Metadaten-Services der Anwendung.
+    /// Registriert die Metadaten-Services der Anwendung.
     /// </summary>
-    public static MetadataServices Create(AppSettingStores stores)
+    public static void Register(AppServiceRegistry services)
     {
-        var tvdbClient = new TvdbClient();
-        return new MetadataServices(new EpisodeMetadataLookupService(stores.Metadata, tvdbClient));
+        services.AddSingleton<TvdbClient>(_ => new TvdbClient());
+        services.AddSingleton<ITvdbClient>(provider => provider.GetRequired<TvdbClient>());
+        services.AddSingleton<EpisodeMetadataLookupService>(provider => new EpisodeMetadataLookupService(
+            provider.GetRequired<IAppMetadataStore>(),
+            provider.GetRequired<ITvdbClient>()));
+        services.AddSingleton<MetadataServices>(provider => new MetadataServices(provider.GetRequired<EpisodeMetadataLookupService>()));
     }
 }

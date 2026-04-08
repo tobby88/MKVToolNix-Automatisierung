@@ -1,4 +1,6 @@
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -10,87 +12,56 @@ namespace MkvToolnixAutomatisierung.Composition;
 internal static class UiCompositionModule
 {
     /// <summary>
-    /// Erstellt die geteilten Fachservices, die Einzelmodus und Batch gemeinsam verwenden.
+    /// Registriert Service-Bundles und ViewModels der Benutzeroberfläche.
     /// </summary>
-    public static SharedEpisodeModuleServices CreateSharedEpisodeServices(
-        MuxDomainServices muxServices,
-        MetadataServices metadata)
+    public static void Register(AppServiceRegistry services)
     {
-        return new SharedEpisodeModuleServices(
-            muxServices.Mux,
-            muxServices.EpisodePlans,
-            muxServices.OutputPaths,
-            muxServices.CleanupFiles,
-            metadata.Lookup);
-    }
-
-    /// <summary>
-    /// Erstellt das Service-Bundle des Einzelmodus.
-    /// </summary>
-    public static SingleEpisodeModuleServices CreateSingleEpisodeServices(
-        SharedEpisodeModuleServices shared,
-        WorkflowServices workflow)
-    {
-        return new SingleEpisodeModuleServices(shared, workflow.Cleanup, workflow.MuxWorkflow);
-    }
-
-    /// <summary>
-    /// Erstellt das Service-Bundle des Batch-Moduls.
-    /// </summary>
-    public static BatchModuleServices CreateBatchServices(
-        SharedEpisodeModuleServices shared,
-        MuxDomainServices muxServices,
-        WorkflowServices workflow)
-    {
-        return new BatchModuleServices(
-            shared,
-            muxServices.BatchScan,
-            muxServices.Archive,
-            workflow.FileCopy,
-            workflow.Cleanup,
-            workflow.MuxWorkflow,
-            workflow.BatchLogs);
-    }
-
-    /// <summary>
-    /// Erstellt das globale Service-Bundle des Hauptfensters.
-    /// </summary>
-    public static MainWindowModuleServices CreateMainWindowServices(
-        MuxDomainServices muxServices,
-        AppSettingStores stores,
-        ToolingServices tooling)
-    {
-        return new MainWindowModuleServices(
-            muxServices.Archive,
-            stores.ToolPaths,
-            tooling.FfprobeLocator,
-            tooling.MkvToolNixLocator);
-    }
-
-    /// <summary>
-    /// Erstellt das Shell-ViewModel samt Modulnavigation.
-    /// </summary>
-    public static MainWindowViewModel CreateMainWindowViewModel(
-        SingleEpisodeModuleServices singleEpisodeServices,
-        BatchModuleServices batchServices,
-        MainWindowModuleServices mainWindowServices,
-        IUserDialogService dialogService)
-    {
-        var singleEpisode = new SingleEpisodeMuxViewModel(singleEpisodeServices, dialogService);
-        var batch = new BatchMuxViewModel(batchServices, dialogService);
-
-        return new MainWindowViewModel(
+        services.AddSingleton<IUserDialogService>(_ => new UserDialogService());
+        services.AddSingleton<SharedEpisodeModuleServices>(provider => new SharedEpisodeModuleServices(
+            provider.GetRequired<SeriesEpisodeMuxService>(),
+            provider.GetRequired<EpisodePlanCoordinator>(),
+            provider.GetRequired<EpisodeOutputPathService>(),
+            provider.GetRequired<EpisodeCleanupFilePlanner>(),
+            provider.GetRequired<EpisodeMetadataLookupService>()));
+        services.AddSingleton<SingleEpisodeModuleServices>(provider => new SingleEpisodeModuleServices(
+            provider.GetRequired<SharedEpisodeModuleServices>(),
+            provider.GetRequired<IEpisodeCleanupService>(),
+            provider.GetRequired<IMuxWorkflowCoordinator>()));
+        services.AddSingleton<BatchModuleServices>(provider => new BatchModuleServices(
+            provider.GetRequired<SharedEpisodeModuleServices>(),
+            provider.GetRequired<BatchScanCoordinator>(),
+            provider.GetRequired<SeriesArchiveService>(),
+            provider.GetRequired<IFileCopyService>(),
+            provider.GetRequired<IEpisodeCleanupService>(),
+            provider.GetRequired<IMuxWorkflowCoordinator>(),
+            provider.GetRequired<BatchRunLogService>()));
+        services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
+            provider.GetRequired<SeriesArchiveService>(),
+            provider.GetRequired<AppToolPathStore>(),
+            provider.GetRequired<IFfprobeLocator>(),
+            provider.GetRequired<IMkvToolNixLocator>()));
+        services.AddSingleton<SingleEpisodeMuxViewModel>(provider => new SingleEpisodeMuxViewModel(
+            provider.GetRequired<SingleEpisodeModuleServices>(),
+            provider.GetRequired<IUserDialogService>()));
+        services.AddSingleton<BatchMuxViewModel>(provider => new BatchMuxViewModel(
+            provider.GetRequired<BatchModuleServices>(),
+            provider.GetRequired<IUserDialogService>()));
+        services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
                     "Einzelepisode",
                     "Erkennen, prüfen, muxen",
-                    singleEpisode),
+                    provider.GetRequired<SingleEpisodeMuxViewModel>()),
                 new ModuleNavigationItem(
                     "Batch",
                     "Ordner scannen und gesammelt muxen",
-                    batch)
+                    provider.GetRequired<BatchMuxViewModel>())
             ],
-            mainWindowServices,
-            dialogService);
+            provider.GetRequired<MainWindowModuleServices>(),
+            provider.GetRequired<IUserDialogService>()));
+        services.AddSingleton<AppComposition>(provider => new AppComposition(
+            provider.GetRequired<IUserDialogService>(),
+            provider.GetRequired<AppSettingsLoadResult>(),
+            provider.GetRequired<MainWindowViewModel>()));
     }
 }
