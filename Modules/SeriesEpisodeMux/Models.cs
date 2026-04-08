@@ -89,6 +89,8 @@ public sealed record FileCopyPlan(
 
 /// <summary>
 /// Verdichtete Primär-Metadaten einer Videodatei für Qualitätsvergleiche.
+/// Enthält bewusst nur die erste Audiospur der Quelle; für vollständige Audioauswahl ist
+/// <see cref="ContainerMetadata"/> vorgesehen.
 /// </summary>
 public sealed record MediaTrackMetadata(
     int VideoTrackId,

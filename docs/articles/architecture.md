@@ -40,6 +40,7 @@ Wichtig dabei:
 2. `SeriesEpisodeMuxPlanner` erkennt zugehörige Video-, AD-, Untertitel- und TXT-Dateien.
    - Für Batch-Ordner kann dafür einmalig ein `DirectoryDetectionContext` vorbereitet und für mehrere Einzelscans wiederverwendet werden.
    - TXT-Begleitdateien werden dabei projektweit über denselben Reader und dieselben Encoding-Heuristiken ausgewertet, damit Erkennung, Review und spätere Planerstellung nicht auseinanderlaufen.
+   - Für frische Quellen liest die Planerstellung normale Audiospuren aus den vollständigen Container-Metadaten, damit Mehrfach-Audio erhalten bleibt und offensichtliche AD-Spuren nicht versehentlich als normale Tonspuren eingeplant werden.
 3. `EpisodeMetadataLookupService` kann die lokale Erkennung mit TVDB-Daten anreichern.
    - Die fachlichen Matching-Heuristiken sind bewusst von Caching und TVDB-I/O getrennt, damit Bewertungsregeln unabhängig wartbar bleiben.
 4. `SeriesArchiveService` entscheidet, ob direkt neu gemuxt wird, ob eine bestehende Archivdatei wiederverwendet wird oder ob eine Arbeitskopie nötig ist.

@@ -11,6 +11,7 @@ Das Projekt verwendet jetzt drei Testebenen:
   - prüfen mehrere Services zusammen über echte Temp-Dateien und einen kontrollierten Fake-`mkvmerge`
   - decken auch Batch-Scans mit vorbereitetem `BatchScanDirectoryContext` über mehrere Einzeldateien hinweg ab
   - sichern zusätzlich Regressionen ab, bei denen sich Dateierkennung, Archivintegration oder Fake-`mkvmerge` zwischen zwei Schritten unterschiedlich verhalten würden
+  - enthalten gezielte Planungsregressionen für Mehrfach-Audio, damit frische Quellen mit mehreren normalen Audiospuren nicht wieder auf die erste Spur reduziert werden
 - Architektur-/Bootstrap-Tests in den Unit-Tests
   - prüfen Composition-Root, DI-Registrierung und gezielte Startup-Fehlerpfade
   - sichern auch ab, dass der Root-ServiceProvider bei fehlgeschlagener Startup-Auflösung wieder disposed wird

@@ -244,13 +244,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 continue;
             }
 
-            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoSelection.FilePath, cancellationToken);
-            audioSources.Add(new AudioSourcePlan(
+            var freshAudioSources = await BuildFreshNormalAudioSourcesAsync(
+                mkvMergePath,
                 videoSelection.FilePath,
-                metadata.AudioTrackId,
-                BuildNormalAudioTrackName(metadata.AudioLanguage, metadata.AudioCodecLabel),
-                IsDefaultTrack: false,
-                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.AudioLanguage)));
+                cancellationToken);
+            audioSources.AddRange(freshAudioSources);
         }
 
         if (!processedFilePaths.Contains(outputFilePath)
@@ -266,6 +264,33 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         return audioSources
             .Select((source, index) => source with { IsDefaultTrack = index == 0 })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Liest aus einer frischen Videoquelle alle für den normalen Mux relevanten Audiospuren aus.
+    /// </summary>
+    /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
+    /// <param name="inputFilePath">Zu analysierende frische Videoquelle.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>
+    /// Vollständig normalisierte normale Audiospuren der Quelle. Enthält bewusst mehrere
+    /// Audiospuren derselben Datei, wenn die Quelle mehr als eine normale Spur liefert.
+    /// </returns>
+    private async Task<IReadOnlyList<AudioSourcePlan>> BuildFreshNormalAudioSourcesAsync(
+        string mkvMergePath,
+        string inputFilePath,
+        CancellationToken cancellationToken)
+    {
+        var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, inputFilePath, cancellationToken);
+
+        return AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks)
+            .Select(track => new AudioSourcePlan(
+                inputFilePath,
+                track.TrackId,
+                BuildNormalAudioTrackName(track.Language, track.CodecLabel),
+                IsDefaultTrack: false,
+                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)))
             .ToList();
     }
 

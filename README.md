@@ -93,6 +93,8 @@ Im aktuellen Serien-Modul werden verwendet:
 
 `.ttml` wird nicht gemuxt, aber als Begleitdatei für Cleanup/Archiv-Aufräumen berücksichtigt.
 
+Mehrere normale Audiospuren innerhalb einer frischen Quelldatei bleiben im Mux-Plan erhalten. Eine separate Audiodeskriptionsspur wird weiterhin heuristisch getrennt behandelt und nicht als normale Tonspur mitgeführt.
+
 ## Projektaufbau
 
 - `MainWindow.xaml`: Shell mit Modulnavigation und Tool-Status

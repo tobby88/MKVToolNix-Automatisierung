@@ -41,11 +41,14 @@ public sealed partial class MkvMergeProbeService
     }
 
     /// <summary>
-    /// Liest die primären Video-/Audio-Metadaten einer Datei synchron über <c>mkvmerge --identify</c>.
+    /// Liest die primären Video-/Metadaten plus die erste Audiospur einer Datei synchron über <c>mkvmerge --identify</c>.
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
     /// <param name="inputFilePath">Zu analysierende Mediendatei.</param>
-    /// <returns>Qualitäts- und Sprachmetadaten der Hauptspuren.</returns>
+    /// <returns>
+    /// Qualitäts- und Sprachmetadaten der primären Videospur plus der ersten Audiospur.
+    /// Für eine vollständige Audioauswahl einer Quelle muss <see cref="ReadContainerMetadataAsync"/> verwendet werden.
+    /// </returns>
     public MediaTrackMetadata ReadPrimaryVideoMetadata(string mkvMergePath, string inputFilePath)
     {
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
@@ -61,12 +64,15 @@ public sealed partial class MkvMergeProbeService
     }
 
     /// <summary>
-    /// Liest die primären Video-/Audio-Metadaten einer Datei asynchron über <c>mkvmerge --identify</c>.
+    /// Liest die primären Video-/Metadaten plus die erste Audiospur einer Datei asynchron über <c>mkvmerge --identify</c>.
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
     /// <param name="inputFilePath">Zu analysierende Mediendatei.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
-    /// <returns>Qualitäts- und Sprachmetadaten der Hauptspuren.</returns>
+    /// <returns>
+    /// Qualitäts- und Sprachmetadaten der primären Videospur plus der ersten Audiospur.
+    /// Für eine vollständige Audioauswahl einer Quelle muss <see cref="ReadContainerMetadataAsync"/> verwendet werden.
+    /// </returns>
     public async Task<MediaTrackMetadata> ReadPrimaryVideoMetadataAsync(
         string mkvMergePath,
         string inputFilePath,

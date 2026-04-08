@@ -326,14 +326,7 @@ public sealed partial class SeriesArchiveService
 
     private static ContainerTrackMetadata? FindExistingAudioDescription(IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
-        return existingAudioTracks.FirstOrDefault(IsAudioDescriptionTrack);
-    }
-
-    private static bool IsAudioDescriptionTrack(ContainerTrackMetadata track)
-    {
-        return track.IsVisualImpaired
-            || track.TrackName.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase)
-            || track.TrackName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase);
+        return existingAudioTracks.FirstOrDefault(AudioTrackClassifier.IsAudioDescriptionTrack);
     }
 
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
@@ -716,8 +709,7 @@ public sealed partial class SeriesArchiveService
     private static IReadOnlyList<ContainerTrackMetadata> GetRetainedNormalAudioTracks(
         IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
-        return existingAudioTracks
-            .Where(track => !IsAudioDescriptionTrack(track))
+        return AudioTrackClassifier.GetNormalAudioTracks(existingAudioTracks)
             .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
             .ThenBy(track => track.IsDefaultTrack ? 0 : 1)
             .ThenBy(track => track.TrackId)
