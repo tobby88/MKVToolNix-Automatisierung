@@ -345,28 +345,13 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        var cancellationSource = new CancellationTokenSource();
-        _selectedPlanSummaryRefreshCts = cancellationSource;
-
-        SelectedItemPlanSummaryRefreshTask = RefreshSelectedItemPlanSummaryDebouncedAsync(cancellationSource.Token);
+        _selectedPlanSummaryRefresh.Schedule(RefreshSelectedItemPlanSummaryAsync);
+        SelectedItemPlanSummaryRefreshTask = _selectedPlanSummaryRefresh.CurrentTask;
     }
 
-    private async Task RefreshSelectedItemPlanSummaryDebouncedAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(200, cancellationToken);
-            await RefreshSelectedItemPlanSummaryAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
-    private async Task RefreshSelectedItemPlanSummaryAsync(CancellationToken cancellationToken = default)
+    private async Task RefreshSelectedItemPlanSummaryAsync(int version, CancellationToken cancellationToken)
     {
         var item = SelectedEpisodeItem;
-        var version = Interlocked.Increment(ref _selectedPlanSummaryVersion);
         if (item is null)
         {
             return;
@@ -383,7 +368,7 @@ internal sealed partial class BatchMuxViewModel
         bool ShouldSkipPresentationUpdate()
         {
             return _isSelectedItemPlanSummaryFrozen
-                || version != _selectedPlanSummaryVersion
+                || !_selectedPlanSummaryRefresh.IsCurrent(version)
                 || !ReferenceEquals(SelectedEpisodeItem, item);
         }
 
@@ -422,14 +407,8 @@ internal sealed partial class BatchMuxViewModel
     /// </param>
     private void CancelSelectedItemPlanSummaryRefresh(bool invalidateInFlightRefreshes = false)
     {
-        _selectedPlanSummaryRefreshCts?.Cancel();
-        _selectedPlanSummaryRefreshCts?.Dispose();
-        _selectedPlanSummaryRefreshCts = null;
-
-        if (invalidateInFlightRefreshes)
-        {
-            Interlocked.Increment(ref _selectedPlanSummaryVersion);
-        }
+        _selectedPlanSummaryRefresh.Cancel(invalidateInFlightRefreshes);
+        SelectedItemPlanSummaryRefreshTask = null;
     }
 
 }

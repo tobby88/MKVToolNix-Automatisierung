@@ -320,31 +320,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void SchedulePlanSummaryRefresh()
     {
-        _planSummaryRefreshCts?.Cancel();
-        _planSummaryRefreshCts?.Dispose();
-
-        var cancellationSource = new CancellationTokenSource();
-        _planSummaryRefreshCts = cancellationSource;
-
-        _ = RefreshPlanSummaryDebouncedAsync(cancellationSource.Token);
+        _planSummaryRefresh.Schedule(RefreshPlanSummaryAsync);
     }
 
-    private async Task RefreshPlanSummaryDebouncedAsync(CancellationToken cancellationToken)
+    private async Task RefreshPlanSummaryAsync(int version, CancellationToken cancellationToken)
     {
-        try
-        {
-            await Task.Delay(250, cancellationToken);
-            await RefreshPlanSummaryAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-    }
-
-    private async Task RefreshPlanSummaryAsync(CancellationToken cancellationToken)
-    {
-        var version = Interlocked.Increment(ref _planSummaryVersion);
-
         if (string.IsNullOrWhiteSpace(MainVideoPath)
             || string.IsNullOrWhiteSpace(OutputPath)
             || string.IsNullOrWhiteSpace(Title))
@@ -358,7 +338,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         try
         {
             var plan = await GetOrBuildPlanAsync(cancellationToken);
-            if (version != _planSummaryVersion || cancellationToken.IsCancellationRequested)
+            if (!_planSummaryRefresh.IsCurrent(version) || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
@@ -374,7 +354,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         catch (Exception ex)
         {
-            if (version != _planSummaryVersion || cancellationToken.IsCancellationRequested)
+            if (!_planSummaryRefresh.IsCurrent(version) || cancellationToken.IsCancellationRequested)
             {
                 return;
             }

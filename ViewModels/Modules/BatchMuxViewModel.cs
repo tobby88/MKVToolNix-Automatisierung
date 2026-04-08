@@ -29,6 +29,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private readonly BatchExecutionRunner _executionRunner;
     private readonly BatchOperationController _operationController = new();
     private readonly EpisodePlanCache _planCache = new();
+    private readonly DebouncedRefreshController _selectedPlanSummaryRefresh = new(TimeSpan.FromMilliseconds(200));
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -38,8 +39,6 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private bool _isBusy;
     private bool _isSelectedItemPlanSummaryFrozen;
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
-    private int _selectedPlanSummaryVersion;
-    private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
 
     public BatchMuxViewModel(
         BatchModuleServices services,

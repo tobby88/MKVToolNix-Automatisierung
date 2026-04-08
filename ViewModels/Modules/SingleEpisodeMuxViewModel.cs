@@ -22,7 +22,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private readonly BufferedTextStore _previewOutputBuffer;
     private readonly IEpisodeReviewWorkflow _reviewWorkflow;
     private readonly EpisodePlanCache _planCache = new();
-    private CancellationTokenSource? _planSummaryRefreshCts;
+    private readonly DebouncedRefreshController _planSummaryRefresh = new(TimeSpan.FromMilliseconds(250));
     private CancellationTokenSource? _currentOperationCts;
 
     private string _previewText = string.Empty;
@@ -34,7 +34,6 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private string _outputTargetStatusText = string.Empty;
     private string _planRefreshProblemText = string.Empty;
     private SeriesEpisodeMuxPlan? _currentPlan;
-    private int _planSummaryVersion;
 
     public SingleEpisodeMuxViewModel(
         SingleEpisodeModuleServices services,
