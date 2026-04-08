@@ -12,3 +12,4 @@ Logs/
 # Generierter DocFX-Output wird lokal aufgebaut und vor jedem Docs-Build neu erzeugt.
 docs/_site/
 docs/api/
+artifacts/

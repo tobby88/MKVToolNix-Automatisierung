@@ -1,0 +1,101 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release-Version ohne v-Präfix, z. B. 1.4.0'
+        required: true
+        type: string
+      prerelease:
+        description: 'Release als Vorabversion markieren'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: manual-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate version input
+        shell: pwsh
+        run: |
+          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version muss im Format Major.Minor.Patch angegeben werden, z. B. 1.4.0."
+          }
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore app
+        run: dotnet restore .\MkvToolnixAutomatisierung.csproj
+
+      - name: Restore unit tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj
+
+      - name: Restore integration tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj
+
+      - name: Build app
+        run: dotnet build .\MkvToolnixAutomatisierung.csproj --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj --configuration Release --no-restore
+
+      - name: Run integration tests
+        run: dotnet test .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Publish single-file release
+        shell: pwsh
+        run: .\scripts\publish-release.ps1 -Version '${{ inputs.version }}' -RuntimeIdentifier 'win-x64'
+
+      - name: Create git tag
+        shell: pwsh
+        run: |
+          $tagName = 'v${{ inputs.version }}'
+          if (git rev-parse $tagName 2>$null) {
+            throw "Das Tag $tagName existiert bereits."
+          }
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag $tagName
+          git push origin $tagName
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tagName = 'v${{ inputs.version }}'
+          $assetPath = ".\artifacts\release\MkvToolnixAutomatisierung-v${{ inputs.version }}-win-x64.exe"
+          $releaseArgs = @(
+            'release',
+            'create',
+            $tagName,
+            $assetPath,
+            '--title',
+            $tagName,
+            '--generate-notes'
+          )
+
+          if ('${{ inputs.prerelease }}' -eq 'true') {
+            $releaseArgs += '--prerelease'
+          }
+
+          & gh @releaseArgs

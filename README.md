@@ -174,6 +174,48 @@ im Projektordner:
 
 `<dein-projektordner>\mkvtoolnix-Automatisierung`
 
+## Manuelle Releases
+
+Für gelegentliche Releases gibt es einen bewusst manuell ausgelösten GitHub-Workflow unter `.github/workflows/release.yml`.
+
+Der Workflow:
+
+- wird nicht bei jedem Push ausgelöst
+- baut die App in `Release`
+- führt Unit- und Integrationstests seriell aus
+- veröffentlicht anschließend eine selbst enthaltene Single-File-Exe für `win-x64`
+- erstellt dazu ein Git-Tag `v<Version>` und eine GitHub-Release-Seite
+
+Die Release-Datei enthält die Anwendung selbst samt .NET-Laufzeit in einer einzigen `.exe`.  
+Die externen Werkzeuge `mkvmerge.exe` und optional `ffprobe.exe` bleiben bewusst separate Tools und werden nicht in die Release-Datei eingebettet.
+
+### Versionsnummern
+
+Die Release-Version wird beim manuellen Start des Workflows eingegeben und folgt bewusst einfachem SemVer:
+
+- `Major`: nur erhöhen, wenn du bewusst einen harten Bruch einführst
+- `Minor`: für neue Funktionen und größere fachliche Erweiterungen
+- `Patch`: für Bugfixes, kleine Verbesserungen und Doku-/Pflege-Releases
+
+Typische Beispiele:
+
+- `1.0.0` für einen ersten echten Release-Stand
+- `1.1.0` für neue fachliche Fähigkeiten ohne harten Bruch
+- `1.1.1` für reine Korrekturen auf demselben Stand
+
+Die Action erwartet die Eingabe ohne `v`, also zum Beispiel `1.4.0`.  
+Das Git-Tag und der Release-Name werden dann automatisch als `v1.4.0` erzeugt.
+
+### Lokaler Release-Build
+
+Wenn du denselben Release-Typ lokal bauen willst:
+
+```powershell
+.\scripts\publish-release.ps1 -Version 1.4.0
+```
+
+Das Skript erzeugt eine selbst enthaltene Single-File-Exe unter `.\artifacts\release\`.
+
 ## Entwicklerdokumentation
 
 Das Projekt ist zusätzlich mit XML-Dokumentationskommentaren und einer DocFX-Konfiguration versehen.
