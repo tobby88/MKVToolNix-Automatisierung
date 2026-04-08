@@ -32,23 +32,6 @@ internal static class CompanionTextMetadataReader
         }
 
         var content = ReadTextWithFallback(filePath);
-        return ReadDetailedFromContent(content);
-    }
-
-    /// <summary>
-    /// Liest dieselben Detailmetadaten direkt aus bereits vorhandenem TXT-Inhalt.
-    /// Dieser Pfad wird für eingebettete Test- und Archiv-Anhänge genutzt, damit Dateiquellen und extrahierte Texte
-    /// dieselbe Parserlogik verwenden und Heuristiken nicht zwischen beiden Wegen auseinanderlaufen.
-    /// </summary>
-    /// <param name="content">Rohinhalt einer TXT-Begleitdatei.</param>
-    /// <returns>Gelesene Detailmetadaten oder <see cref="CompanionTextDetails.Empty"/>, wenn kein Inhalt vorliegt.</returns>
-    public static CompanionTextDetails ReadDetailedFromContent(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return CompanionTextDetails.Empty;
-        }
-
         return ParseDetailed(content);
     }
 
