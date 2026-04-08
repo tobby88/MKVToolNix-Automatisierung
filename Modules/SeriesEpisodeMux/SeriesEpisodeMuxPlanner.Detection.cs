@@ -187,7 +187,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var durationReferenceCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, durationReferenceCandidate);
         var primaryVideoCandidate = selectedVideoCandidates[0];
-        var subtitlePaths = CollectSubtitlePaths(selectedVideoCandidates, primaryVideoCandidate);
+        var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate);
         var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName);
 
         return new EpisodeDetectionContext(

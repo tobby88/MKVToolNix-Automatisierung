@@ -201,6 +201,53 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_PreservesMissingSubtitleKinds_FromNonSelectedDurationMatchedSource()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-supplement-subtitle-kinds");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-supplement-subtitle-kinds");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var zdfVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var srfVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-srf.mp4");
+        var zdfSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle-srt");
+        var srfSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-srf.vtt", "subtitle-vtt");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-srf.txt",
+            "Sender: SRF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            zdfVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            srfVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "3840x2160"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var detected = await service.DetectFromSelectedVideoAsync(zdfVideoPath);
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            detected.MainVideoPath,
+            detected.AudioDescriptionPath,
+            detected.SubtitlePaths,
+            detected.AttachmentPaths,
+            outputPath,
+            detected.SuggestedTitle));
+
+        Assert.Equal(srfVideoPath, detected.MainVideoPath);
+        Assert.Equal(new[] { zdfSubtitlePath, srfSubtitlePath }, detected.SubtitlePaths);
+        Assert.Equal(new[] { zdfSubtitlePath, srfSubtitlePath }, plan.SubtitleFiles.Select(subtitle => subtitle.FilePath));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_KeepingArchivePrimary_UsageSummary_KeepsExistingSrt_AndAddsMissingAss()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-usage-keep");

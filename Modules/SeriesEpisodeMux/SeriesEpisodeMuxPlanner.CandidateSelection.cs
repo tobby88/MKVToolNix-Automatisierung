@@ -140,12 +140,18 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static NormalVideoCandidate SelectBestNormalVideoCandidate(IEnumerable<NormalVideoCandidate> candidates)
     {
+        return OrderCandidatesByPreference(candidates)
+            .First();
+    }
+
+    private static IOrderedEnumerable<NormalVideoCandidate> OrderCandidatesByPreference(IEnumerable<NormalVideoCandidate> candidates)
+    {
         return candidates
             .OrderByDescending(candidate => candidate.VideoWidth)
             .ThenBy(candidate => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(candidate.VideoCodecLabel))
             .ThenByDescending(candidate => candidate.FileSizeBytes)
             .ThenBy(candidate => GetSenderPriority(candidate.Sender))
-            .First();
+            .ThenBy(candidate => candidate.FilePath, StringComparer.OrdinalIgnoreCase);
     }
 
     private static List<NormalVideoCandidate> SelectVideoCandidates(
@@ -268,14 +274,28 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return files.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// Sammelt externe Untertitel pro Untertiteltyp zunächst aus den tatsächlich ausgewählten
+    /// Videospuren und ergänzt fehlende Formate anschließend aus anderen laufzeitpassenden
+    /// Quellen derselben Episode. So bleibt eine bessere Hauptquelle bevorzugt, ohne dass
+    /// zusätzliche Untertitelarten wie etwa ein vorhandenes SRT einer verdrängten Quelle
+    /// verloren gehen.
+    /// </summary>
     private static List<string> CollectSubtitlePaths(
+        IReadOnlyList<NormalVideoCandidate> normalCandidates,
         IReadOnlyList<NormalVideoCandidate> selectedVideoCandidates,
         NormalVideoCandidate primaryVideoCandidate)
     {
-        var subtitlePaths = new List<string>();
-        var coveredKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var durationMatchedCandidates = FilterByDuration(normalCandidates, primaryVideoCandidate.DurationSeconds);
+        var selectedSourcePaths = new HashSet<string>(
+            selectedVideoCandidates.Select(candidate => candidate.FilePath),
+            StringComparer.OrdinalIgnoreCase);
+        var orderedCandidates = FilterByDuration(selectedVideoCandidates, primaryVideoCandidate.DurationSeconds)
+            .Concat(OrderCandidatesByPreference(durationMatchedCandidates.Where(candidate => !selectedSourcePaths.Contains(candidate.FilePath))))
+            .ToList();
+        var subtitlePathsByKind = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var candidate in FilterByDuration(selectedVideoCandidates, primaryVideoCandidate.DurationSeconds))
+        foreach (var candidate in orderedCandidates)
         {
             foreach (var subtitlePath in candidate.SubtitlePaths
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -283,15 +303,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 .ThenBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
                 var subtitleKind = SubtitleKind.FromExtension(Path.GetExtension(subtitlePath));
-                if (!coveredKinds.Add(subtitleKind.DisplayName))
-                {
-                    continue;
-                }
-
-                subtitlePaths.Add(subtitlePath);
+                subtitlePathsByKind.TryAdd(subtitleKind.DisplayName, subtitlePath);
             }
         }
 
-        return subtitlePaths;
+        return subtitlePathsByKind
+            .Values
+            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 }
