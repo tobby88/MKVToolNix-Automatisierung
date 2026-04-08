@@ -209,7 +209,7 @@
                     <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,12,4" Text="{Binding SeriesName, UpdateSourceTrigger=LostFocus}" />
                     <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenTvdbLookupCommand}" ToolTip="{Binding MetadataActionButtonTooltip, Mode=OneWay}" Content="{Binding MetadataActionButtonText, Mode=OneWay}" />
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Staffel / Folge(n)" />
                     <Grid Grid.Row="1" Grid.Column="1" Margin="0,4,12,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -225,9 +225,9 @@
                                  PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
                                  DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
                                  Text="{Binding SeasonNumber, UpdateSourceTrigger=LostFocus}" />
-                        <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
+                        <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge(n)" />
                         <TextBox Grid.Column="4"
-                                 Tag="Folge fehlt oder ist noch ungültig. Für Doppelfolgen ist auch 05-E06 möglich."
+                                 Tag="Folge fehlt oder ist noch ungültig. Für Doppelfolgen kannst du z. B. 05-06 eingeben; intern wird daraus 05-E06."
                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
                                  PreviewTextInput="EpisodeRangeTextBox_OnPreviewTextInput"
                                  DataObject.Pasting="EpisodeRangeTextBox_OnPasting"
