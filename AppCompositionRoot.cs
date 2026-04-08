@@ -1,3 +1,4 @@
+using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -18,84 +19,16 @@ internal sealed class AppCompositionRoot
     public AppComposition Create()
     {
         IUserDialogService dialogService = new UserDialogService();
-        var stores = CreateStores();
+        var stores = AppStoreCompositionModule.Create();
         var settingsLoadResult = stores.Settings.LoadWithDiagnostics();
-        var tooling = CreateTooling(stores);
-        var metadata = CreateMetadataServices(stores);
-        var muxServices = CreateMuxServices(stores, tooling, metadata);
-        var workflow = CreateWorkflowServices(muxServices);
+        var tooling = ToolingCompositionModule.Create(stores);
+        var metadata = MetadataCompositionModule.Create(stores);
+        var muxServices = MuxCompositionModule.Create(stores, tooling, metadata);
+        var workflow = WorkflowCompositionModule.Create(muxServices);
         var appServices = CreateAppServices(muxServices, metadata, workflow);
-        var mainWindowViewModel = CreateMainWindowViewModel(appServices, dialogService, stores, tooling);
+        var mainWindowViewModel = UiCompositionModule.CreateMainWindowViewModel(appServices, dialogService, stores, tooling);
 
         return new AppComposition(dialogService, settingsLoadResult, mainWindowViewModel, appServices);
-    }
-
-    private static AppSettingStores CreateStores()
-    {
-        var settingsStore = new AppSettingsStore();
-        return new AppSettingStores(
-            settingsStore,
-            new AppToolPathStore(settingsStore),
-            new AppArchiveSettingsStore(settingsStore),
-            new AppMetadataStore(settingsStore));
-    }
-
-    private static ToolingServices CreateTooling(AppSettingStores stores)
-    {
-        return new ToolingServices(
-            new MkvToolNixLocator(stores.ToolPaths),
-            new FfprobeLocator(stores.ToolPaths),
-            new MkvMergeProbeService());
-    }
-
-    private static MuxDomainServices CreateMuxServices(
-        AppSettingStores stores,
-        ToolingServices tooling,
-        MetadataServices metadata)
-    {
-        var archiveService = new SeriesArchiveService(tooling.Probe, stores.Archive);
-        var outputPathService = new EpisodeOutputPathService(archiveService);
-        var ffprobeDurationProbe = new FfprobeDurationProbe(tooling.FfprobeLocator);
-        var durationProbe = new PreferredMediaDurationProbe(
-            ffprobeDurationProbe,
-            new WindowsMediaDurationProbe());
-        var planner = new SeriesEpisodeMuxPlanner(
-            tooling.MkvToolNixLocator,
-            tooling.Probe,
-            archiveService,
-            durationProbe);
-        var muxService = new SeriesEpisodeMuxService(
-            planner,
-            new MuxExecutionService(),
-            new MkvMergeOutputParser());
-
-        return new MuxDomainServices(
-            muxService,
-            new EpisodePlanCoordinator(muxService),
-            new BatchScanCoordinator(
-                muxService,
-                metadata.Lookup,
-                outputPathService),
-            archiveService,
-            outputPathService,
-            new EpisodeCleanupFilePlanner(outputPathService));
-    }
-
-    private static MetadataServices CreateMetadataServices(AppSettingStores stores)
-    {
-        var tvdbClient = new TvdbClient();
-        return new MetadataServices(new EpisodeMetadataLookupService(stores.Metadata, tvdbClient));
-    }
-
-    private static WorkflowServices CreateWorkflowServices(MuxDomainServices muxServices)
-    {
-        var fileCopyService = new FileCopyService();
-        var cleanupService = new EpisodeCleanupService();
-        return new WorkflowServices(
-            fileCopyService,
-            cleanupService,
-            new MuxWorkflowCoordinator(muxServices.Mux, fileCopyService, cleanupService),
-            new BatchRunLogService());
     }
 
     private static AppServices CreateAppServices(
@@ -117,59 +50,6 @@ internal sealed class AppCompositionRoot
             workflow.BatchLogs);
     }
 
-    private static MainWindowViewModel CreateMainWindowViewModel(
-        AppServices appServices,
-        IUserDialogService dialogService,
-        AppSettingStores stores,
-        ToolingServices tooling)
-    {
-        var singleEpisode = new SingleEpisodeMuxViewModel(appServices, dialogService);
-        var batch = new BatchMuxViewModel(appServices, dialogService);
-
-        return new MainWindowViewModel(
-            [
-                new ModuleNavigationItem(
-                    "Einzelepisode",
-                    "Erkennen, prüfen, muxen",
-                    singleEpisode),
-                new ModuleNavigationItem(
-                    "Batch",
-                    "Ordner scannen und gesammelt muxen",
-                    batch)
-            ],
-            appServices,
-            dialogService,
-            stores.ToolPaths,
-            tooling.FfprobeLocator,
-            tooling.MkvToolNixLocator);
-    }
-
-    private sealed record AppSettingStores(
-        AppSettingsStore Settings,
-        AppToolPathStore ToolPaths,
-        AppArchiveSettingsStore Archive,
-        AppMetadataStore Metadata);
-
-    private sealed record ToolingServices(
-        MkvToolNixLocator MkvToolNixLocator,
-        FfprobeLocator FfprobeLocator,
-        MkvMergeProbeService Probe);
-
-    private sealed record MetadataServices(EpisodeMetadataLookupService Lookup);
-
-    private sealed record MuxDomainServices(
-        SeriesEpisodeMuxService Mux,
-        EpisodePlanCoordinator EpisodePlans,
-        BatchScanCoordinator BatchScan,
-        SeriesArchiveService Archive,
-        EpisodeOutputPathService OutputPaths,
-        EpisodeCleanupFilePlanner CleanupFiles);
-
-    private sealed record WorkflowServices(
-        IFileCopyService FileCopy,
-        IEpisodeCleanupService Cleanup,
-        IMuxWorkflowCoordinator MuxWorkflow,
-        BatchRunLogService BatchLogs);
 }
 
 /// <summary>
