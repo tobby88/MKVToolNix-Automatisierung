@@ -118,7 +118,7 @@ public sealed class SingleEpisodeMuxViewModelTests
     {
         var dialogService = new CapturingDialogService();
         var viewModel = new SingleEpisodeMuxViewModel(
-            ViewModelTestContext.CreateAppServices(),
+            ViewModelTestContext.CreateSingleEpisodeServices(),
             dialogService);
         var expectedDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-single-output");
 
@@ -133,7 +133,7 @@ public sealed class SingleEpisodeMuxViewModelTests
     private static SingleEpisodeMuxViewModel CreateViewModel()
     {
         return new SingleEpisodeMuxViewModel(
-            ViewModelTestContext.CreateAppServices(),
+            ViewModelTestContext.CreateSingleEpisodeServices(),
             new UserDialogService());
     }
 

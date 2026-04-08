@@ -117,16 +117,16 @@ public sealed class MainWindowViewModelTests : IDisposable
         IMkvToolNixLocator mkvToolNixLocator,
         IReadOnlyList<ModuleNavigationItem>? modules = null)
     {
-        var services = ViewModelTestContext.CreateAppServices();
+        var services = ViewModelTestContext.CreateMainWindowServices(
+            toolPathStore,
+            ffprobeLocator: ffprobeLocator,
+            mkvToolNixLocator: mkvToolNixLocator);
         services.Archive.ConfigureArchiveRootDirectory(_tempDirectory);
 
         return new MainWindowViewModel(
             modules ?? [new ModuleNavigationItem("Einzelepisode", "Erkennen", new object())],
             services,
-            new UserDialogService(),
-            toolPathStore,
-            ffprobeLocator,
-            mkvToolNixLocator);
+            new UserDialogService());
     }
 
     private string CreateFile(string relativePath, string content = "tool")

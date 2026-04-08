@@ -299,7 +299,7 @@ public sealed class BatchMetadataReviewTests
     private static BatchMuxViewModel CreateBatchViewModel(IEpisodeReviewWorkflow reviewWorkflow)
     {
         return new BatchMuxViewModel(
-            ViewModelTestContext.CreateAppServices(),
+            ViewModelTestContext.CreateBatchServices(),
             new FakeDialogService(),
             reviewWorkflow);
     }

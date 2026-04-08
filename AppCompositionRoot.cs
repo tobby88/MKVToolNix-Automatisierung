@@ -1,9 +1,6 @@
 using MkvToolnixAutomatisierung.Composition;
-using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
-using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
-using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung;
 
@@ -25,31 +22,18 @@ internal sealed class AppCompositionRoot
         var metadata = MetadataCompositionModule.Create(stores);
         var muxServices = MuxCompositionModule.Create(stores, tooling, metadata);
         var workflow = WorkflowCompositionModule.Create(muxServices);
-        var appServices = CreateAppServices(muxServices, metadata, workflow);
-        var mainWindowViewModel = UiCompositionModule.CreateMainWindowViewModel(appServices, dialogService, stores, tooling);
+        var sharedEpisodeServices = UiCompositionModule.CreateSharedEpisodeServices(muxServices, metadata);
+        var singleEpisodeServices = UiCompositionModule.CreateSingleEpisodeServices(sharedEpisodeServices, workflow);
+        var batchServices = UiCompositionModule.CreateBatchServices(sharedEpisodeServices, muxServices, workflow);
+        var mainWindowServices = UiCompositionModule.CreateMainWindowServices(muxServices, stores, tooling);
+        var mainWindowViewModel = UiCompositionModule.CreateMainWindowViewModel(
+            singleEpisodeServices,
+            batchServices,
+            mainWindowServices,
+            dialogService);
 
-        return new AppComposition(dialogService, settingsLoadResult, mainWindowViewModel, appServices);
+        return new AppComposition(dialogService, settingsLoadResult, mainWindowViewModel);
     }
-
-    private static AppServices CreateAppServices(
-        MuxDomainServices muxServices,
-        MetadataServices metadata,
-        WorkflowServices workflow)
-    {
-        return new AppServices(
-            muxServices.Mux,
-            muxServices.EpisodePlans,
-            muxServices.BatchScan,
-            muxServices.Archive,
-            muxServices.OutputPaths,
-            muxServices.CleanupFiles,
-            metadata.Lookup,
-            workflow.FileCopy,
-            workflow.Cleanup,
-            workflow.MuxWorkflow,
-            workflow.BatchLogs);
-    }
-
 }
 
 /// <summary>
@@ -58,5 +42,4 @@ internal sealed class AppCompositionRoot
 internal sealed record AppComposition(
     IUserDialogService DialogService,
     AppSettingsLoadResult SettingsLoadResult,
-    MainWindowViewModel MainWindowViewModel,
-    AppServices Services);
+    MainWindowViewModel MainWindowViewModel);

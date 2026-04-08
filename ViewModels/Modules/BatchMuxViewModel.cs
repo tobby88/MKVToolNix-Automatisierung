@@ -21,7 +21,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private const int AutomaticCompareProgressStart = 80;
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
-    private readonly AppServices _services;
+    private readonly BatchModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _logBuffer;
     private readonly IEpisodeReviewWorkflow _reviewWorkflow;
@@ -42,7 +42,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private CancellationTokenSource? _selectedPlanSummaryRefreshCts;
 
     public BatchMuxViewModel(
-        AppServices services,
+        BatchModuleServices services,
         IUserDialogService dialogService,
         IEpisodeReviewWorkflow? reviewWorkflow = null)
     {

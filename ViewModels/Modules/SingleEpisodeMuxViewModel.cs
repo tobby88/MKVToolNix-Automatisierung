@@ -17,7 +17,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 {
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
-    private readonly AppServices _services;
+    private readonly SingleEpisodeModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly BufferedTextStore _previewOutputBuffer;
     private readonly IEpisodeReviewWorkflow _reviewWorkflow;
@@ -37,7 +37,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private int _planSummaryVersion;
 
     public SingleEpisodeMuxViewModel(
-        AppServices services,
+        SingleEpisodeModuleServices services,
         IUserDialogService dialogService,
         IEpisodeReviewWorkflow? reviewWorkflow = null)
     {

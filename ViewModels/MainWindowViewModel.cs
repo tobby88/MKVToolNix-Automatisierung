@@ -13,11 +13,8 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 internal sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
-    private readonly AppServices _services;
+    private readonly MainWindowModuleServices _services;
     private readonly IUserDialogService _dialogService;
-    private readonly AppToolPathStore _toolPathStore;
-    private readonly IFfprobeLocator _ffprobeLocator;
-    private readonly IMkvToolNixLocator _mkvToolNixLocator;
     private bool _isFfprobeAvailable;
     private string? _ffprobePath;
     private string? _ffprobeStatusDetail;
@@ -29,17 +26,11 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public MainWindowViewModel(
         IReadOnlyList<ModuleNavigationItem> modules,
-        AppServices services,
-        IUserDialogService dialogService,
-        AppToolPathStore toolPathStore,
-        IFfprobeLocator ffprobeLocator,
-        IMkvToolNixLocator mkvToolNixLocator)
+        MainWindowModuleServices services,
+        IUserDialogService dialogService)
     {
         _services = services;
         _dialogService = dialogService;
-        _toolPathStore = toolPathStore;
-        _ffprobeLocator = ffprobeLocator;
-        _mkvToolNixLocator = mkvToolNixLocator;
         Modules = new ObservableCollection<ModuleNavigationItem>(modules);
         _selectedModule = Modules.First();
         SelectFfprobeCommand = new RelayCommand(SelectFfprobePath);
@@ -251,9 +242,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var settings = _toolPathStore.Load();
+        var settings = _services.ToolPaths.Load();
         settings.FfprobePath = selectedPath;
-        _toolPathStore.Save(settings);
+        _services.ToolPaths.Save(settings);
         RefreshToolStatus();
     }
 
@@ -269,9 +260,9 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
-        var settings = _toolPathStore.Load();
+        var settings = _services.ToolPaths.Load();
         settings.MkvToolNixDirectoryPath = selectedDirectory;
-        _toolPathStore.Save(settings);
+        _services.ToolPaths.Save(settings);
         RefreshToolStatus();
     }
 
@@ -308,8 +299,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void RefreshToolStatus()
     {
-        var settings = _toolPathStore.Load();
-        var detectedFfprobePath = _ffprobeLocator.TryFindFfprobePath();
+        var settings = _services.ToolPaths.Load();
+        var detectedFfprobePath = _services.FfprobeLocator.TryFindFfprobePath();
         // Fehlgeschlagene Auto-Erkennung darf den zuletzt gespeicherten Pfad nicht aus den Settings entfernen.
         var resolvedFfprobePath = !string.IsNullOrWhiteSpace(detectedFfprobePath)
             ? detectedFfprobePath
@@ -324,7 +315,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         Exception? mkvMergeError = null;
         try
         {
-            detectedMkvMergePath = _mkvToolNixLocator.FindMkvMergePath();
+            detectedMkvMergePath = _services.MkvToolNixLocator.FindMkvMergePath();
         }
         catch (Exception ex)
         {
@@ -361,7 +352,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
                 settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
             }
 
-            _toolPathStore.Save(settings);
+            _services.ToolPaths.Save(settings);
         }
     }
 
