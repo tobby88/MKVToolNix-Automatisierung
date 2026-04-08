@@ -55,22 +55,22 @@ internal static class Program
 
     private static int ExecuteIdentify(string inputFilePath)
     {
-        var probeResponse = LoadProbeResponse(inputFilePath);
-        WriteProbeInvocationLog(probeResponse.InvocationLogFilePath, inputFilePath);
-        if (probeResponse.DelayBeforeOutputMilliseconds > 0)
+        var (delayBeforeOutputMilliseconds, invocationLogFilePath, probeJson) = LoadProbeResponse(inputFilePath);
+        WriteProbeInvocationLog(invocationLogFilePath, inputFilePath);
+        if (delayBeforeOutputMilliseconds > 0)
         {
-            Thread.Sleep(probeResponse.DelayBeforeOutputMilliseconds);
+            Thread.Sleep(delayBeforeOutputMilliseconds);
         }
 
-        Console.Write(probeResponse.Json);
+        Console.Write(probeJson);
         return 0;
     }
 
     private static int ExecuteAttachmentExtraction(IReadOnlyList<string> args)
     {
         var containerPath = args[1];
-        var probeResponse = LoadProbeResponse(containerPath);
-        using var document = JsonDocument.Parse(probeResponse.Json);
+        var (_, _, probeJson) = LoadProbeResponse(containerPath);
+        using var document = JsonDocument.Parse(probeJson);
 
         for (var index = 2; index < args.Count; index++)
         {
@@ -188,7 +188,7 @@ internal static class Program
         return muxConfig.ExitCode;
     }
 
-    private static FakeProbeResponse LoadProbeResponse(string inputFilePath)
+    private static (int DelayBeforeOutputMilliseconds, string? InvocationLogFilePath, string Json) LoadProbeResponse(string inputFilePath)
     {
         var probeFilePath = inputFilePath + ".mkvmerge.json";
         if (!File.Exists(probeFilePath))
@@ -212,7 +212,7 @@ internal static class Program
             invocationLogFilePath = invocationLogElement.GetString();
         }
 
-        return new FakeProbeResponse(
+        return (
             delayBeforeOutputMilliseconds,
             invocationLogFilePath,
             json);
@@ -292,8 +292,3 @@ internal sealed class FakeMuxRunConfiguration
 
     public int DelayBeforeExitMilliseconds { get; init; }
 }
-
-internal sealed record FakeProbeResponse(
-    int DelayBeforeOutputMilliseconds,
-    string? InvocationLogFilePath,
-    string Json);

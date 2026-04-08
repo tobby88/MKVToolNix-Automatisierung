@@ -18,7 +18,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         ValidateRequest(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var planSources = ResolvePlanSourceSelection(request, cancellationToken);
+        var (planNotes, plannedVideoPaths) = ResolvePlanSourceSelection(request, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
         var subtitleFiles = request.SubtitlePaths
@@ -32,7 +32,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var archiveDecision = await _archiveService.PrepareAsync(
             mkvMergePath,
             request,
-            planSources.PlannedVideoPaths,
+            plannedVideoPaths,
             cancellationToken);
 
         if (archiveDecision.SkipMux)
@@ -55,7 +55,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var effectiveOutputPath = archiveDecision.OutputFilePath;
         var videoSelections = archiveDecision.VideoSelections.Count > 0
             ? archiveDecision.VideoSelections
-            : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, planSources.PlannedVideoPaths, cancellationToken);
+            : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
 
         var videoSources = videoSelections
             .Select((videoSelection, index) => new VideoSourcePlan(
@@ -108,7 +108,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 ? request.AttachmentPaths
                 : [];
 
-        var notes = planSources.Notes
+        var notes = planNotes
             .Concat(archiveDecision.Notes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -150,13 +150,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
     }
 
-    private PlanSourceSelectionResult ResolvePlanSourceSelection(
+    private (IReadOnlyList<string> Notes, IReadOnlyList<string> PlannedVideoPaths) ResolvePlanSourceSelection(
         SeriesEpisodeMuxRequest request,
         CancellationToken cancellationToken)
     {
         if (!request.HasPrimaryVideoSource)
         {
-            return new PlanSourceSelectionResult([], []);
+            return ([], []);
         }
 
         var plannedVideoPaths = request.PlannedVideoPaths?
@@ -165,7 +165,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
         if (plannedVideoPaths is { Count: > 0 })
         {
-            return new PlanSourceSelectionResult(
+            return (
                 request.DetectionNotes?
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList()
@@ -179,17 +179,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
             excludedSourcePaths: request.ExcludedSourcePaths,
             cancellationToken: cancellationToken);
 
-        return new PlanSourceSelectionResult(
+        return (
             detected.Notes,
             new[] { detected.MainVideoPath }
                 .Concat(detected.AdditionalVideoPaths)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList());
     }
-
-    private sealed record PlanSourceSelectionResult(
-        IReadOnlyList<string> Notes,
-        IReadOnlyList<string> PlannedVideoPaths);
 
     private async Task<IReadOnlyList<VideoTrackSelection>> BuildVideoSelectionsFromPlannedPathsAsync(
         string mkvMergePath,
