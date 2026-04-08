@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace MkvToolnixAutomatisierung.Composition;
 
 /// <summary>
@@ -8,7 +10,7 @@ internal static class AppCompositionModuleCatalog
     /// <summary>
     /// Baut das vollständige Anwendungsmodell auf Registrierungsbasis auf.
     /// </summary>
-    public static void RegisterAll(AppServiceRegistry services)
+    public static void RegisterAll(IServiceCollection services)
     {
         AppStoreCompositionModule.Register(services);
         ToolingCompositionModule.Register(services);

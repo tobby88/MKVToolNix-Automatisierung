@@ -9,17 +9,24 @@ namespace MkvToolnixAutomatisierung;
 /// <summary>
 /// Baut das Hauptfenster auf und zeigt Startwarnungen an, bevor die eigentliche UI sichtbar wird.
 /// </summary>
-internal sealed class AppBootstrapper
+internal sealed class AppBootstrapper : IDisposable
 {
+    private AppComposition? _composition;
+
     public MainWindow CreateMainWindow()
     {
-        var composition = new AppCompositionRoot().Create();
+        _composition = new AppCompositionRoot().Create();
 
-        if (composition.SettingsLoadResult.HasWarning)
+        if (_composition.SettingsLoadResult.HasWarning)
         {
-            composition.DialogService.ShowWarning("Portable Daten", composition.SettingsLoadResult.WarningMessage!);
+            _composition.DialogService.ShowWarning("Portable Daten", _composition.SettingsLoadResult.WarningMessage!);
         }
 
-        return new MainWindow(composition.MainWindowViewModel);
+        return new MainWindow(_composition.MainWindowViewModel);
+    }
+
+    public void Dispose()
+    {
+        _composition?.Dispose();
     }
 }

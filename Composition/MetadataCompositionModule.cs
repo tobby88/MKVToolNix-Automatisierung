@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Composition;
@@ -10,13 +11,13 @@ internal static class MetadataCompositionModule
     /// <summary>
     /// Registriert die Metadaten-Services der Anwendung.
     /// </summary>
-    public static void Register(AppServiceRegistry services)
+    public static void Register(IServiceCollection services)
     {
         services.AddSingleton<TvdbClient>(_ => new TvdbClient());
-        services.AddSingleton<ITvdbClient>(provider => provider.GetRequired<TvdbClient>());
+        services.AddSingleton<ITvdbClient>(provider => provider.GetRequiredService<TvdbClient>());
         services.AddSingleton<EpisodeMetadataLookupService>(provider => new EpisodeMetadataLookupService(
-            provider.GetRequired<IAppMetadataStore>(),
-            provider.GetRequired<ITvdbClient>()));
-        services.AddSingleton<MetadataServices>(provider => new MetadataServices(provider.GetRequired<EpisodeMetadataLookupService>()));
+            provider.GetRequiredService<IAppMetadataStore>(),
+            provider.GetRequiredService<ITvdbClient>()));
+        services.AddSingleton<MetadataServices>(provider => new MetadataServices(provider.GetRequiredService<EpisodeMetadataLookupService>()));
     }
 }

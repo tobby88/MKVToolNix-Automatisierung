@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 
@@ -11,22 +12,22 @@ internal static class WorkflowCompositionModule
     /// <summary>
     /// Registriert die Workflow-Services für Mux-Ausführung und Nachbereitung.
     /// </summary>
-    public static void Register(AppServiceRegistry services)
+    public static void Register(IServiceCollection services)
     {
         services.AddSingleton<FileCopyService>(_ => new FileCopyService());
-        services.AddSingleton<IFileCopyService>(provider => provider.GetRequired<FileCopyService>());
+        services.AddSingleton<IFileCopyService>(provider => provider.GetRequiredService<FileCopyService>());
         services.AddSingleton<EpisodeCleanupService>(_ => new EpisodeCleanupService());
-        services.AddSingleton<IEpisodeCleanupService>(provider => provider.GetRequired<EpisodeCleanupService>());
+        services.AddSingleton<IEpisodeCleanupService>(provider => provider.GetRequiredService<EpisodeCleanupService>());
         services.AddSingleton<MuxWorkflowCoordinator>(provider => new MuxWorkflowCoordinator(
-            provider.GetRequired<SeriesEpisodeMuxService>(),
-            provider.GetRequired<IFileCopyService>(),
-            provider.GetRequired<IEpisodeCleanupService>()));
-        services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequired<MuxWorkflowCoordinator>());
+            provider.GetRequiredService<SeriesEpisodeMuxService>(),
+            provider.GetRequiredService<IFileCopyService>(),
+            provider.GetRequiredService<IEpisodeCleanupService>()));
+        services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequiredService<MuxWorkflowCoordinator>());
         services.AddSingleton<BatchRunLogService>(_ => new BatchRunLogService());
         services.AddSingleton<WorkflowServices>(provider => new WorkflowServices(
-            provider.GetRequired<IFileCopyService>(),
-            provider.GetRequired<IEpisodeCleanupService>(),
-            provider.GetRequired<IMuxWorkflowCoordinator>(),
-            provider.GetRequired<BatchRunLogService>()));
+            provider.GetRequiredService<IFileCopyService>(),
+            provider.GetRequiredService<IEpisodeCleanupService>(),
+            provider.GetRequiredService<IMuxWorkflowCoordinator>(),
+            provider.GetRequiredService<BatchRunLogService>()));
     }
 }

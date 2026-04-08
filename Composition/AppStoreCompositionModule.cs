@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -11,18 +12,18 @@ internal static class AppStoreCompositionModule
     /// <summary>
     /// Registriert die Store-Gruppe für Toolpfade, Archiv und TVDB-Zugangsdaten.
     /// </summary>
-    public static void Register(AppServiceRegistry services)
+    public static void Register(IServiceCollection services)
     {
         services.AddSingleton<AppSettingsStore>(_ => new AppSettingsStore());
-        services.AddSingleton<AppToolPathStore>(provider => new AppToolPathStore(provider.GetRequired<AppSettingsStore>()));
-        services.AddSingleton<AppArchiveSettingsStore>(provider => new AppArchiveSettingsStore(provider.GetRequired<AppSettingsStore>()));
-        services.AddSingleton<AppMetadataStore>(provider => new AppMetadataStore(provider.GetRequired<AppSettingsStore>()));
-        services.AddSingleton<IAppMetadataStore>(provider => provider.GetRequired<AppMetadataStore>());
-        services.AddSingleton<AppSettingsLoadResult>(provider => provider.GetRequired<AppSettingsStore>().LoadWithDiagnostics());
+        services.AddSingleton<AppToolPathStore>(provider => new AppToolPathStore(provider.GetRequiredService<AppSettingsStore>()));
+        services.AddSingleton<AppArchiveSettingsStore>(provider => new AppArchiveSettingsStore(provider.GetRequiredService<AppSettingsStore>()));
+        services.AddSingleton<AppMetadataStore>(provider => new AppMetadataStore(provider.GetRequiredService<AppSettingsStore>()));
+        services.AddSingleton<IAppMetadataStore>(provider => provider.GetRequiredService<AppMetadataStore>());
+        services.AddSingleton<AppSettingsLoadResult>(provider => provider.GetRequiredService<AppSettingsStore>().LoadWithDiagnostics());
         services.AddSingleton<AppSettingStores>(provider => new AppSettingStores(
-            provider.GetRequired<AppSettingsStore>(),
-            provider.GetRequired<AppToolPathStore>(),
-            provider.GetRequired<AppArchiveSettingsStore>(),
-            provider.GetRequired<AppMetadataStore>()));
+            provider.GetRequiredService<AppSettingsStore>(),
+            provider.GetRequiredService<AppToolPathStore>(),
+            provider.GetRequiredService<AppArchiveSettingsStore>(),
+            provider.GetRequiredService<AppMetadataStore>()));
     }
 }

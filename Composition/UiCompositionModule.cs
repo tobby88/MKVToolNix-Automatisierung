@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -14,54 +15,50 @@ internal static class UiCompositionModule
     /// <summary>
     /// Registriert Service-Bundles und ViewModels der Benutzeroberfläche.
     /// </summary>
-    public static void Register(AppServiceRegistry services)
+    public static void Register(IServiceCollection services)
     {
         services.AddSingleton<IUserDialogService>(_ => new UserDialogService());
         services.AddSingleton<SharedEpisodeModuleServices>(provider => new SharedEpisodeModuleServices(
-            provider.GetRequired<SeriesEpisodeMuxService>(),
-            provider.GetRequired<EpisodePlanCoordinator>(),
-            provider.GetRequired<EpisodeOutputPathService>(),
-            provider.GetRequired<EpisodeCleanupFilePlanner>(),
-            provider.GetRequired<EpisodeMetadataLookupService>()));
+            provider.GetRequiredService<SeriesEpisodeMuxService>(),
+            provider.GetRequiredService<EpisodePlanCoordinator>(),
+            provider.GetRequiredService<EpisodeOutputPathService>(),
+            provider.GetRequiredService<EpisodeCleanupFilePlanner>(),
+            provider.GetRequiredService<EpisodeMetadataLookupService>()));
         services.AddSingleton<SingleEpisodeModuleServices>(provider => new SingleEpisodeModuleServices(
-            provider.GetRequired<SharedEpisodeModuleServices>(),
-            provider.GetRequired<IEpisodeCleanupService>(),
-            provider.GetRequired<IMuxWorkflowCoordinator>()));
+            provider.GetRequiredService<SharedEpisodeModuleServices>(),
+            provider.GetRequiredService<IEpisodeCleanupService>(),
+            provider.GetRequiredService<IMuxWorkflowCoordinator>()));
         services.AddSingleton<BatchModuleServices>(provider => new BatchModuleServices(
-            provider.GetRequired<SharedEpisodeModuleServices>(),
-            provider.GetRequired<BatchScanCoordinator>(),
-            provider.GetRequired<SeriesArchiveService>(),
-            provider.GetRequired<IFileCopyService>(),
-            provider.GetRequired<IEpisodeCleanupService>(),
-            provider.GetRequired<IMuxWorkflowCoordinator>(),
-            provider.GetRequired<BatchRunLogService>()));
+            provider.GetRequiredService<SharedEpisodeModuleServices>(),
+            provider.GetRequiredService<BatchScanCoordinator>(),
+            provider.GetRequiredService<SeriesArchiveService>(),
+            provider.GetRequiredService<IFileCopyService>(),
+            provider.GetRequiredService<IEpisodeCleanupService>(),
+            provider.GetRequiredService<IMuxWorkflowCoordinator>(),
+            provider.GetRequiredService<BatchRunLogService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
-            provider.GetRequired<SeriesArchiveService>(),
-            provider.GetRequired<AppToolPathStore>(),
-            provider.GetRequired<IFfprobeLocator>(),
-            provider.GetRequired<IMkvToolNixLocator>()));
+            provider.GetRequiredService<SeriesArchiveService>(),
+            provider.GetRequiredService<AppToolPathStore>(),
+            provider.GetRequiredService<IFfprobeLocator>(),
+            provider.GetRequiredService<IMkvToolNixLocator>()));
         services.AddSingleton<SingleEpisodeMuxViewModel>(provider => new SingleEpisodeMuxViewModel(
-            provider.GetRequired<SingleEpisodeModuleServices>(),
-            provider.GetRequired<IUserDialogService>()));
+            provider.GetRequiredService<SingleEpisodeModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<BatchMuxViewModel>(provider => new BatchMuxViewModel(
-            provider.GetRequired<BatchModuleServices>(),
-            provider.GetRequired<IUserDialogService>()));
+            provider.GetRequiredService<BatchModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
                     "Einzelepisode",
                     "Erkennen, prüfen, muxen",
-                    provider.GetRequired<SingleEpisodeMuxViewModel>()),
+                    provider.GetRequiredService<SingleEpisodeMuxViewModel>()),
                 new ModuleNavigationItem(
                     "Batch",
                     "Ordner scannen und gesammelt muxen",
-                    provider.GetRequired<BatchMuxViewModel>())
+                    provider.GetRequiredService<BatchMuxViewModel>())
             ],
-            provider.GetRequired<MainWindowModuleServices>(),
-            provider.GetRequired<IUserDialogService>()));
-        services.AddSingleton<AppComposition>(provider => new AppComposition(
-            provider.GetRequired<IUserDialogService>(),
-            provider.GetRequired<AppSettingsLoadResult>(),
-            provider.GetRequired<MainWindowViewModel>()));
+            provider.GetRequiredService<MainWindowModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
     }
 }

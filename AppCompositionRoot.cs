@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels;
@@ -15,16 +16,52 @@ internal sealed class AppCompositionRoot
     /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
     public AppComposition Create()
     {
-        var services = new AppServiceRegistry();
+        var services = new ServiceCollection();
         AppCompositionModuleCatalog.RegisterAll(services);
-        return services.GetRequired<AppComposition>();
+        var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+
+        return new AppComposition(
+            serviceProvider,
+            serviceProvider.GetRequiredService<IUserDialogService>(),
+            serviceProvider.GetRequiredService<AppSettingsLoadResult>(),
+            serviceProvider.GetRequiredService<MainWindowViewModel>());
     }
 }
 
 /// <summary>
 /// Bündelt das Ergebnis des Bootstrap-Vorgangs, damit Startcode und Fenstererzeugung nicht jede Abhängigkeit einzeln tragen müssen.
 /// </summary>
-internal sealed record AppComposition(
-    IUserDialogService DialogService,
-    AppSettingsLoadResult SettingsLoadResult,
-    MainWindowViewModel MainWindowViewModel);
+internal sealed class AppComposition : IDisposable
+{
+    public AppComposition(
+        ServiceProvider serviceProvider,
+        IUserDialogService dialogService,
+        AppSettingsLoadResult settingsLoadResult,
+        MainWindowViewModel mainWindowViewModel)
+    {
+        ServiceProvider = serviceProvider;
+        DialogService = dialogService;
+        SettingsLoadResult = settingsLoadResult;
+        MainWindowViewModel = mainWindowViewModel;
+    }
+
+    /// <summary>
+    /// Hält den Root-Provider über die App-Laufzeit am Leben und entsorgt künftige IDisposable-Singletons kontrolliert beim Shutdown.
+    /// </summary>
+    public ServiceProvider ServiceProvider { get; }
+
+    public IUserDialogService DialogService { get; }
+
+    public AppSettingsLoadResult SettingsLoadResult { get; }
+
+    public MainWindowViewModel MainWindowViewModel { get; }
+
+    public void Dispose()
+    {
+        ServiceProvider.Dispose();
+    }
+}
