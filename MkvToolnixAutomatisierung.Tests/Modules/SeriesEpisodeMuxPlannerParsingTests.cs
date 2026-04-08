@@ -16,10 +16,28 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void FindEpisodePattern_ParsesEpisodeRanges_FromArchiveStyleCode()
+    {
+        var match = Assert.IsType<Match>(SeriesEpisodeMuxPlanner.FindEpisodePattern("S2014E05-E06 - Rififi"));
+
+        Assert.True(match.Success);
+        Assert.Equal("2014", match.Groups["season"].Value);
+        Assert.Equal("05-E06", match.Groups["episode"].Value);
+    }
+
+    [Fact]
     public void NormalizeEpisodeTitle_RemovesYearBasedSeasonMarker()
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Beispieltitel (S2001 / E03)");
         Assert.Equal("Beispieltitel", normalizedTitle);
+    }
+
+    [Fact]
+    public void NormalizeEpisodeTitle_RemovesLeadingArchiveStyleEpisodeRangeCode()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("S2014E05-E06 - Rififi");
+
+        Assert.Equal("Rififi", normalizedTitle);
     }
 
     [Fact]

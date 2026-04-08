@@ -166,7 +166,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             lines.Add("Zu dieser Episode wurde noch keine frische Hauptvideoquelle gefunden.");
         }
 
-        lines.Add($"Erkannte Episode: {detected.SeriesName} - S{detected.SeasonNumber}E{detected.EpisodeNumber} - {detected.SuggestedTitle}");
+        lines.Add($"Erkannte Episode: {detected.SeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(detected.SeasonNumber, detected.EpisodeNumber)} - {detected.SuggestedTitle}");
 
         if (detected.AdditionalVideoPaths.Count > 0)
         {

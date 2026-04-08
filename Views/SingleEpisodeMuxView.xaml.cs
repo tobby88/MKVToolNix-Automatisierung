@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Views;
 
@@ -32,6 +33,31 @@ public partial class SingleEpisodeMuxView : UserControl
 
         var pastedText = e.DataObject.GetData(DataFormats.Text) as string;
         if (string.IsNullOrWhiteSpace(pastedText) || pastedText.Any(character => !char.IsDigit(character)))
+        {
+            e.CancelCommand();
+        }
+    }
+
+    private void EpisodeRangeTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = e.Text.Any(character =>
+            !char.IsDigit(character)
+            && character != '-'
+            && character != 'E'
+            && character != 'e');
+    }
+
+    private void EpisodeRangeTextBox_OnPasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(DataFormats.Text))
+        {
+            e.CancelCommand();
+            return;
+        }
+
+        var pastedText = e.DataObject.GetData(DataFormats.Text) as string;
+        if (string.IsNullOrWhiteSpace(pastedText)
+            || EpisodeFileNameHelper.NormalizeEpisodeNumber(pastedText) == "xx")
         {
             e.CancelCommand();
         }

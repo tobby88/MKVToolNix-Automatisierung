@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -224,7 +225,8 @@ internal sealed class EpisodeMetadataLookupService
                     QuerySucceeded: true);
             }
 
-            var requiresReview = EpisodeMetadataMatchingHeuristics.ShouldRequireReview(bestMatch);
+            var requiresReview = EpisodeFileNameHelper.IsEpisodeRange(guess.EpisodeNumber)
+                || EpisodeMetadataMatchingHeuristics.ShouldRequireReview(bestMatch);
             var statusText = EpisodeMetadataMatchingHeuristics.BuildStatusText(bestMatch, requiresReview);
 
             if (!requiresReview)

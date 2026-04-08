@@ -41,7 +41,7 @@ internal partial class EpisodeEditModel
         get => _seasonNumber;
         set
         {
-            var normalized = EpisodeMetadataMergeHelper.NormalizeEpisodeNumber(value);
+            var normalized = EpisodeMetadataMergeHelper.NormalizeSeasonNumber(value);
             if (_seasonNumber == normalized)
             {
                 return;
@@ -162,7 +162,7 @@ internal partial class EpisodeEditModel
 
     public string OutputFileName => Path.GetFileName(OutputPath);
 
-    public string EpisodeCodeDisplayText => $"S{SeasonNumber}E{EpisodeNumber}";
+    public string EpisodeCodeDisplayText => EpisodeFileNameHelper.BuildEpisodeCode(SeasonNumber, EpisodeNumber);
 
     public virtual string Title
     {

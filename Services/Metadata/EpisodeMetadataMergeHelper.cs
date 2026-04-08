@@ -21,7 +21,7 @@ public static class EpisodeMetadataMergeHelper
             ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
         var notes = detected.Notes
-            .Concat([$"TVDB: {selection.TvdbSeriesName} - S{selection.SeasonNumber}E{selection.EpisodeNumber} - {selection.EpisodeTitle}"])
+            .Concat([$"TVDB: {selection.TvdbSeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(selection.SeasonNumber, selection.EpisodeNumber)} - {selection.EpisodeTitle}"])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -77,5 +77,15 @@ public static class EpisodeMetadataMergeHelper
     public static string NormalizeEpisodeNumber(string? value)
     {
         return EpisodeFileNameHelper.NormalizeEpisodeNumber(value);
+    }
+
+    /// <summary>
+    /// Normalisiert eine lokale Staffelnummer auf das projektweit verwendete Format.
+    /// </summary>
+    /// <param name="value">Rohwert aus Dateiname, TVDB oder Benutzereingabe.</param>
+    /// <returns>Normalisierte Staffelnummer oder <c>xx</c> für unbekannte Werte.</returns>
+    public static string NormalizeSeasonNumber(string? value)
+    {
+        return EpisodeFileNameHelper.NormalizeSeasonNumber(value);
     }
 }

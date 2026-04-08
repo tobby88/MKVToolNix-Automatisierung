@@ -107,6 +107,28 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveExistingArchiveOutputPath_ReturnsExistingArchiveFile_ForEpisodeRanges()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 2014", "Beispielserie - S2014E05-E06 - Rififi.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var resolvedPath = service.TryResolveExistingArchiveOutputPath(
+            archiveRoot,
+            "Beispielserie",
+            "2014",
+            "05-E06",
+            "Rififi");
+
+        Assert.Equal(archiveFilePath, resolvedPath);
+    }
+
+    [Fact]
     public void TryResolveExistingArchiveOutputPath_FallsBackToUniqueTitleMatch_WhenExactCanonicalPathIsMissing()
     {
         var archiveRoot = Path.Combine(_tempDirectory, "archive-root");

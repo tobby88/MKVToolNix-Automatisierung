@@ -274,6 +274,30 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal("Pippi und die Seeräuber - Teil 2", result.Selection.EpisodeTitle);
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_RequiresReview_WhenLocalGuessUsesEpisodeRange()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Rififi", 2014, 5, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Beispielserie", "Rififi", "2014", "05-E06"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.NotNull(result.Selection);
+        Assert.Contains("TVDB-Vorschlag prüfen", result.StatusText);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

@@ -70,8 +70,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var episodeMatch = FindEpisodePattern(rawTitle);
         if (episodeMatch is not null)
         {
-            seasonNumber = episodeMatch.Groups["season"].Value.PadLeft(2, '0');
-            episodeNumber = episodeMatch.Groups["episode"].Value.PadLeft(2, '0');
+            seasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(episodeMatch.Groups["season"].Value);
+            episodeNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(episodeMatch.Groups["episode"].Value);
         }
 
         titlePart = string.IsNullOrWhiteSpace(titlePart) ? "Unbekannter Titel" : titlePart;
@@ -87,9 +87,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var patterns = new[]
         {
-            @"\(S(?<season>\d{1,4})\s*_\s*E(?<episode>\d{1,4})\)",
-            @"\(S(?<season>\d{1,4})\s*/\s*E(?<episode>\d{1,4})\)",
-            @"\(Staffel\s*(?<season>\d{1,4})\s*,\s*Folge\s*(?<episode>\d{1,4})\)"
+            @"\bS(?<season>\d{1,4})\s*E(?<episode>\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?)\b",
+            @"\(S(?<season>\d{1,4})\s*_\s*E(?<episode>\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?)\)",
+            @"\(S(?<season>\d{1,4})\s*/\s*E(?<episode>\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?)\)",
+            @"\(Staffel\s*(?<season>\d{1,4})\s*,\s*Folge\s*(?<episode>\d{1,4}(?:\s*-\s*\d{1,4})?)\)"
         };
 
         foreach (var pattern in patterns)
@@ -130,8 +131,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var normalized = NormalizeSeparators(value);
         normalized = RemoveEditorialLabels(normalized);
+        normalized = Regex.Replace(normalized, @"^\s*S\d{1,4}\s*E\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}(?:\s*-\s*\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();

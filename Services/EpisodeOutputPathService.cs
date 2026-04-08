@@ -158,7 +158,7 @@ internal sealed class EpisodeOutputPathService
             return null;
         }
 
-        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(seasonNumber);
+        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(seasonNumber);
         var normalizedEpisodeNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(episodeNumber);
         if (normalizedSeasonNumber != "xx" && normalizedEpisodeNumber != "xx")
         {

@@ -227,10 +227,10 @@
                                  Text="{Binding SeasonNumber, UpdateSourceTrigger=LostFocus}" />
                         <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="0,0,8,0" Text="Folge" />
                         <TextBox Grid.Column="4"
-                                 Tag="Folge fehlt oder ist noch ungültig."
+                                 Tag="Folge fehlt oder ist noch ungültig. Für Doppelfolgen ist auch 05-E06 möglich."
                                  Style="{StaticResource EpisodeIndexTextBoxStyle}"
-                                 PreviewTextInput="EpisodeIndexTextBox_OnPreviewTextInput"
-                                 DataObject.Pasting="EpisodeIndexTextBox_OnPasting"
+                                 PreviewTextInput="EpisodeRangeTextBox_OnPreviewTextInput"
+                                 DataObject.Pasting="EpisodeRangeTextBox_OnPasting"
                                  Text="{Binding EpisodeNumber, UpdateSourceTrigger=LostFocus}" />
                     </Grid>
                     <Button Grid.Row="1" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding RescanCommand}" ToolTip="{Binding RescanButtonTooltip, Mode=OneWay}" Content="Auto-Erkennung neu" />

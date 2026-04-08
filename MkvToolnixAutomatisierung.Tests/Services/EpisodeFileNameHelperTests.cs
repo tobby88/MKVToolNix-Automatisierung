@@ -17,10 +17,21 @@ public sealed class EpisodeFileNameHelperTests
     [Theory]
     [InlineData("1", "01")]
     [InlineData("2001", "2001")]
+    [InlineData("5-6", "05-E06")]
+    [InlineData("05-E06", "05-E06")]
     [InlineData("xx", "xx")]
-    public void NormalizeEpisodeNumber_HandlesStandardAndYearBasedValues(string value, string expected)
+    public void NormalizeEpisodeNumber_HandlesSingleAndRangeValues(string value, string expected)
     {
         Assert.Equal(expected, EpisodeFileNameHelper.NormalizeEpisodeNumber(value));
+    }
+
+    [Theory]
+    [InlineData("1", "01")]
+    [InlineData("2001", "2001")]
+    [InlineData("xx", "xx")]
+    public void NormalizeSeasonNumber_HandlesStandardAndYearBasedValues(string value, string expected)
+    {
+        Assert.Equal(expected, EpisodeFileNameHelper.NormalizeSeasonNumber(value));
     }
 
     [Fact]
@@ -29,6 +40,14 @@ public sealed class EpisodeFileNameHelperTests
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie:Test", "01", "02", "Pilot?");
 
         Assert.Equal("Serie_Test - S01E02 - Pilot_.mkv", fileName);
+    }
+
+    [Fact]
+    public void BuildEpisodeFileName_FormatsDoubleEpisodes()
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "2014", "05-E06", "Rififi");
+
+        Assert.Equal("Serie - S2014E05-E06 - Rififi.mkv", fileName);
     }
 
     [Fact]

@@ -7,6 +7,10 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal static class EpisodeFileNameHelper
 {
+    private static readonly Regex EpisodeRangePattern = new(
+        @"^\s*(?:E)?(?<start>\d{1,4})\s*-\s*(?:E)?(?<end>\d{1,4})\s*$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     // Windows behandelt Gerätedateinamen unabhängig von der Schreibweise als reserviert.
     private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -43,15 +47,39 @@ internal static class EpisodeFileNameHelper
 
     public static string NormalizeEpisodeNumber(string? value)
     {
+        // Doppelfolgen werden projektweit als "05-E06" geführt, damit die bestehende
+        // "SxxEyy"-Benennung mit minimalen Eingriffen zu "S2014E05-E06" erweiterbar bleibt.
+        if (TryNormalizeEpisodeRange(value, out var normalizedRange))
+        {
+            return normalizedRange;
+        }
+
         return int.TryParse(value, out var number) && number >= 0
             ? number.ToString("00")
             : "xx";
     }
 
+    public static string NormalizeSeasonNumber(string? value)
+    {
+        return int.TryParse(value, out var number) && number >= 0
+            ? number.ToString("00")
+            : "xx";
+    }
+
+    public static bool IsEpisodeRange(string? value)
+    {
+        return TryNormalizeEpisodeRange(value, out _);
+    }
+
+    public static string BuildEpisodeCode(string seasonNumber, string episodeNumber)
+    {
+        return $"S{NormalizeSeasonNumber(seasonNumber)}E{NormalizeEpisodeNumber(episodeNumber)}";
+    }
+
     public static string BuildEpisodeFileName(string seriesName, string seasonNumber, string episodeNumber, string title)
     {
         return SanitizeFileName(
-            $"{seriesName} - S{NormalizeEpisodeNumber(seasonNumber)}E{NormalizeEpisodeNumber(episodeNumber)} - {title}.mkv");
+            $"{seriesName} - {BuildEpisodeCode(seasonNumber, episodeNumber)} - {title}.mkv");
     }
 
     public static string SanitizeFileName(string fileName)
@@ -107,5 +135,33 @@ internal static class EpisodeFileNameHelper
         return string.IsNullOrWhiteSpace(extension)
             ? value + "_"
             : reservedNameProbe + "_" + extension;
+    }
+
+    private static bool TryNormalizeEpisodeRange(string? value, out string normalizedRange)
+    {
+        normalizedRange = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        // Akzeptiert sowohl "05-E06" als auch benutzerfreundliche Kurzformen wie "5-6".
+        var match = EpisodeRangePattern.Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var normalizedStart = NormalizeSeasonNumber(match.Groups["start"].Value);
+        var normalizedEnd = NormalizeSeasonNumber(match.Groups["end"].Value);
+        if (normalizedStart == "xx" || normalizedEnd == "xx")
+        {
+            return false;
+        }
+
+        normalizedRange = normalizedStart == normalizedEnd
+            ? normalizedStart
+            : $"{normalizedStart}-E{normalizedEnd}";
+        return true;
     }
 }

@@ -1,4 +1,5 @@
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.ViewModels;
 
@@ -9,7 +10,7 @@ internal static class TvdbLookupWindowTextFormatter
 {
     public static string BuildGuessSummaryText(EpisodeMetadataGuess guess)
     {
-        return $"Lokal erkannt: {guess.SeriesName} - S{NormalizeLocalNumber(guess.SeasonNumber)}E{NormalizeLocalNumber(guess.EpisodeNumber)} - {guess.EpisodeTitle}";
+        return $"Lokal erkannt: {guess.SeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(guess.SeasonNumber, guess.EpisodeNumber)} - {guess.EpisodeTitle}";
     }
 
     public static string BuildComparisonSummaryText(
@@ -36,14 +37,14 @@ internal static class TvdbLookupWindowTextFormatter
             differences.Add($"Serie: lokal '{guess.SeriesName}' -> TVDB '{selectedSeries.Name}'");
         }
 
-        if (!string.Equals(NormalizeLocalNumber(guess.SeasonNumber), selectedSeason, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(EpisodeFileNameHelper.NormalizeSeasonNumber(guess.SeasonNumber), selectedSeason, StringComparison.OrdinalIgnoreCase))
         {
-            differences.Add($"Staffel: lokal '{NormalizeLocalNumber(guess.SeasonNumber)}' -> TVDB '{selectedSeason}'");
+            differences.Add($"Staffel: lokal '{EpisodeFileNameHelper.NormalizeSeasonNumber(guess.SeasonNumber)}' -> TVDB '{selectedSeason}'");
         }
 
-        if (!string.Equals(NormalizeLocalNumber(guess.EpisodeNumber), selectedEpisodeNumber, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(EpisodeFileNameHelper.NormalizeEpisodeNumber(guess.EpisodeNumber), selectedEpisodeNumber, StringComparison.OrdinalIgnoreCase))
         {
-            differences.Add($"Folge: lokal '{NormalizeLocalNumber(guess.EpisodeNumber)}' -> TVDB '{selectedEpisodeNumber}'");
+            differences.Add($"Folge: lokal '{EpisodeFileNameHelper.NormalizeEpisodeNumber(guess.EpisodeNumber)}' -> TVDB '{selectedEpisodeNumber}'");
         }
 
         if (!string.Equals(guess.EpisodeTitle.Trim(), selectedEpisode.Name.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -66,11 +67,6 @@ internal static class TvdbLookupWindowTextFormatter
     public static string FormatEpisodeDisplayText(TvdbEpisodeRecord episode)
     {
         return $"S{FormatTvdbNumber(episode.SeasonNumber)}E{FormatTvdbNumber(episode.EpisodeNumber)} - {episode.Name}";
-    }
-
-    public static string NormalizeLocalNumber(string value)
-    {
-        return int.TryParse(value, out var number) && number >= 0 ? number.ToString("00") : "xx";
     }
 
     public static string FormatTvdbNumber(int? value)
