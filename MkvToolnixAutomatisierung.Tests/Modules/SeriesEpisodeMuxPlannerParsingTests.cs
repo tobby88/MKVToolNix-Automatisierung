@@ -32,6 +32,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeEpisodeTitle_RemovesShortFilmEditorialLabel()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Goldenes Blut - Kurzfilm");
+
+        Assert.Equal("Goldenes Blut", normalizedTitle);
+    }
+
+    [Fact]
     public void NormalizeSeparators_RepairsMojibakeAndUnicodeDashes()
     {
         var mojibake = "Stra\u00C3\u0178e \u2013 Teil 1";

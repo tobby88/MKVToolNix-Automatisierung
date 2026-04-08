@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -14,6 +15,7 @@ internal static class EpisodeMetadataMatchingHeuristics
         }
 
         var normalized = ReplaceGermanTransliterations(value.ToLowerInvariant());
+        normalized = NormalizeMultipartEpisodeMarkers(normalized);
         normalized = RemoveDiacritics(normalized);
         normalized = normalized.Replace("&", " und ");
         normalized = new string(normalized.Select(character => char.IsLetterOrDigit(character) ? character : ' ').ToArray());
@@ -43,6 +45,13 @@ internal static class EpisodeMetadataMatchingHeuristics
         }
 
         return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private static string NormalizeMultipartEpisodeMarkers(string value)
+    {
+        var normalized = Regex.Replace(value, @"\b(?<number>\d+)\s*\.?\s*teil\b", "teil ${number}", RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bteil\s*(?<number>\d+)\b", "teil ${number}", RegexOptions.IgnoreCase);
+        return normalized;
     }
 
     public static TvdbSeriesSearchResult? FindPreferredSeriesResult(

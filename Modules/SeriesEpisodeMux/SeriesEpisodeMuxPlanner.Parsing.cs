@@ -28,6 +28,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? fileNameParts.EpisodeNumber
             : txtTitleParts.EpisodeNumber;
 
+        title = RemoveRepeatedSeriesPrefixFromTitle(title, seriesName);
         title = string.IsNullOrWhiteSpace(title) ? "Unbekannter Titel" : title;
         seriesName = string.IsNullOrWhiteSpace(seriesName) ? "Unbekannte Serie" : seriesName;
 
@@ -144,7 +145,41 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*-\s*Der Samstagskrimi\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\s*-\s*Kurzfilm\b.*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*$", string.Empty, RegexOptions.IgnoreCase);
         return normalized.Trim();
+    }
+
+    /// <summary>
+    /// Entfernt einen redundant vorangestellten Seriennamen aus dem Episodentitel.
+    /// Das verbessert Dateinamen und TVDB-Matching bei Quellen wie
+    /// "Pippi Langstrumpf: Pippi und die Seeräuber 2. Teil".
+    /// </summary>
+    private static string RemoveRepeatedSeriesPrefixFromTitle(string title, string seriesName)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(seriesName))
+        {
+            return title;
+        }
+
+        var normalizedTitle = NormalizeDashCharacters(title).Trim();
+        var normalizedSeriesName = NormalizeDashCharacters(seriesName).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedSeriesName))
+        {
+            return normalizedTitle;
+        }
+
+        var trimmed = Regex.Replace(
+            normalizedTitle,
+            $"^\\s*{Regex.Escape(normalizedSeriesName)}\\s*(?::|-|_)\\s*",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        trimmed = Regex.Replace(trimmed, @"\s+", " ").Trim();
+
+        return string.IsNullOrWhiteSpace(trimmed)
+            ? normalizedTitle
+            : NormalizeEpisodeTitle(trimmed);
     }
 
     internal static string NormalizeSeparators(string value)

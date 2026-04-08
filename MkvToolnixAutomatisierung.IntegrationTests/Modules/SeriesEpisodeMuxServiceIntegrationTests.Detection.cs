@@ -399,4 +399,34 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             detected.SuggestedOutputFilePath,
             StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_RemovesRepeatedSeriesPrefix_FromTxtEpisodeTitles()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-repeated-series-prefix");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-repeated-series-prefix");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Pippi Langstrumpf-Pippi Langstrumpf_ Pippi und die Seeräuber 2. Teil.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Pippi Langstrumpf-Pippi Langstrumpf_ Pippi und die Seeräuber 2. Teil.txt",
+            "Sender: ORF\r\nThema: Pippi Langstrumpf\r\nTitel: Pippi Langstrumpf: Pippi und die Seeräuber 2. Teil\r\nDauer: 00:28:03");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "AAC"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(mainVideoPath);
+
+        Assert.Equal("Pippi Langstrumpf", detected.SeriesName);
+        Assert.Equal("Pippi und die Seeräuber 2. Teil", detected.SuggestedTitle);
+        Assert.EndsWith(
+            Path.Combine("Pippi Langstrumpf", "Season xx", "Pippi Langstrumpf - SxxExx - Pippi und die Seeräuber 2. Teil.mkv"),
+            detected.SuggestedOutputFilePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
 }

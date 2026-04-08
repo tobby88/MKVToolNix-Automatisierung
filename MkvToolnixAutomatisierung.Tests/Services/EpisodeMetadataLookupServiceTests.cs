@@ -245,6 +245,35 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal("Überraschung", result.Selection.EpisodeTitle);
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_PrefersMultipartEpisodeTitle_OverGenericSeriesLikeEpisode()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Pippi Långstrump", "1969", null)],
+            EpisodesResultFactory = _ =>
+            [
+                new TvdbEpisodeRecord(100, "Pippi Långstrump", 1, 1, "1969-02-08"),
+                new TvdbEpisodeRecord(101, "Pippi und die Seeräuber - Teil 2", 1, 2, "1969-02-15")
+            ]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Pippi Langstrumpf", "Pippi und die Seeräuber 2. Teil", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.False(result.RequiresReview);
+        Assert.NotNull(result.Selection);
+        Assert.Equal(101, result.Selection!.TvdbEpisodeId);
+        Assert.Equal("Pippi und die Seeräuber - Teil 2", result.Selection.EpisodeTitle);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

@@ -4,6 +4,7 @@
         xmlns:views="clr-namespace:MkvToolnixAutomatisierung.Views"
         xmlns:moduleVm="clr-namespace:MkvToolnixAutomatisierung.ViewModels.Modules"
         Title="MKVToolNix-Automatisierung Portable"
+        Icon="/Assets/AppIcon.ico"
         Width="1320"
         Height="900"
         MinWidth="1100"
