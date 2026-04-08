@@ -5,7 +5,26 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Kopiert vorhandene Archivdateien als lokale Arbeitskopien, bevor sie erweitert oder neu gemuxt werden.
 /// </summary>
-public class FileCopyService
+internal interface IFileCopyService
+{
+    /// <summary>
+    /// Prüft, ob die beschriebene Arbeitskopie tatsächlich neu erstellt oder aktualisiert werden muss.
+    /// </summary>
+    bool NeedsCopy(FileCopyPlan copyPlan);
+
+    /// <summary>
+    /// Erstellt oder aktualisiert eine lokale Arbeitskopie einer vorhandenen Archivdatei.
+    /// </summary>
+    Task CopyAsync(
+        FileCopyPlan copyPlan,
+        Action<long, long>? onProgress = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Standardimplementierung für Arbeitskopien vorhandener Archivdateien.
+/// </summary>
+internal sealed class FileCopyService : IFileCopyService
 {
     private const int BufferSize = 1024 * 1024;
 
@@ -14,7 +33,7 @@ public class FileCopyService
     /// </summary>
     /// <param name="copyPlan">Beschreibung der gewünschten Arbeitskopie.</param>
     /// <returns><see langword="true"/>, wenn eine Kopieroperation nötig ist.</returns>
-    public virtual bool NeedsCopy(FileCopyPlan copyPlan)
+    public bool NeedsCopy(FileCopyPlan copyPlan)
     {
         return !copyPlan.IsReusable;
     }
@@ -25,7 +44,7 @@ public class FileCopyService
     /// <param name="copyPlan">Beschreibung von Quell- und Zielpfad der Arbeitskopie.</param>
     /// <param name="onProgress">Optionaler Callback für bereits kopierte und gesamte Bytes.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
-    public virtual async Task CopyAsync(
+    public async Task CopyAsync(
         FileCopyPlan copyPlan,
         Action<long, long>? onProgress = null,
         CancellationToken cancellationToken = default)

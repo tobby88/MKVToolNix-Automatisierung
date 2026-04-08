@@ -146,7 +146,7 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal("Überraschung", result.Selection.EpisodeTitle);
     }
 
-    private sealed class FakeMetadataStore : AppMetadataStore
+    private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)
         {
@@ -157,19 +157,21 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public int SaveCallCount { get; private set; }
 
-        public override AppMetadataSettings Load()
+        public string SettingsFilePath => "test-settings.json";
+
+        public AppMetadataSettings Load()
         {
             return CurrentSettings.Clone();
         }
 
-        public override void Save(AppMetadataSettings settings)
+        public void Save(AppMetadataSettings settings)
         {
             SaveCallCount++;
             CurrentSettings = settings.Clone();
         }
     }
 
-    private sealed class FakeTvdbClient : TvdbClient
+    private sealed class FakeTvdbClient : ITvdbClient
     {
         public Func<string, IReadOnlyList<TvdbSeriesSearchResult>>? SearchSeriesResultFactory { get; init; }
 
@@ -181,7 +183,7 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public int LoadEpisodesCallCount { get; private set; }
 
-        public override Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
             string query,
@@ -198,7 +200,7 @@ public sealed class EpisodeMetadataLookupServiceTests
             return Task.FromResult(results);
         }
 
-        public override Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
             string apiKey,
             string? pin,
             int seriesId,
@@ -207,6 +209,10 @@ public sealed class EpisodeMetadataLookupServiceTests
             LoadEpisodesCallCount++;
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

@@ -2,7 +2,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels;
 
-public sealed partial class TvdbLookupWindowViewModel
+internal sealed partial class TvdbLookupWindowViewModel
 {
     /// <summary>
     /// UI-taugliche Serienzeile für die linke Trefferliste.

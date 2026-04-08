@@ -6,16 +6,44 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Verknüpft Arbeitskopie, Mux-Ausführung und temporäres Aufräumen zu einem robusten Einzellauf.
 /// </summary>
-internal class MuxWorkflowCoordinator
+internal interface IMuxWorkflowCoordinator
+{
+    /// <summary>
+    /// Prüft, ob vor dem Muxen eine Arbeitskopie vorbereitet werden muss.
+    /// </summary>
+    bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan);
+
+    /// <summary>
+    /// Erstellt oder aktualisiert die Arbeitskopie des Plans.
+    /// </summary>
+    Task PrepareWorkingCopyAsync(
+        SeriesEpisodeMuxPlan plan,
+        Action<WorkingCopyPreparationUpdate>? onUpdate = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Führt den eigentlichen Mux-Lauf aus.
+    /// </summary>
+    Task<MuxExecutionResult> ExecuteMuxAsync(
+        SeriesEpisodeMuxPlan plan,
+        Action<string>? onOutput = null,
+        Action<MuxExecutionUpdate>? onUpdate = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Standardworkflow für Arbeitskopie, Mux-Ausführung und temporäres Aufräumen.
+/// </summary>
+internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
-    private readonly FileCopyService _fileCopyService;
-    private readonly EpisodeCleanupService _cleanupService;
+    private readonly IFileCopyService _fileCopyService;
+    private readonly IEpisodeCleanupService _cleanupService;
 
     public MuxWorkflowCoordinator(
         SeriesEpisodeMuxService muxService,
-        FileCopyService fileCopyService,
-        EpisodeCleanupService cleanupService)
+        IFileCopyService fileCopyService,
+        IEpisodeCleanupService cleanupService)
     {
         _muxService = muxService;
         _fileCopyService = fileCopyService;
@@ -27,7 +55,7 @@ internal class MuxWorkflowCoordinator
     /// </summary>
     /// <param name="plan">Zu prüfender Mux-Plan.</param>
     /// <returns><see langword="true"/>, wenn die Arbeitskopie vorbereitet werden muss.</returns>
-    public virtual bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
+    public bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
     {
         return plan.WorkingCopy is not null && _fileCopyService.NeedsCopy(plan.WorkingCopy);
     }
@@ -38,7 +66,7 @@ internal class MuxWorkflowCoordinator
     /// <param name="plan">Mux-Plan mit optionaler Arbeitskopie.</param>
     /// <param name="onUpdate">Optionaler Callback für Fortschrittsmeldungen der Vorbereitung.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
-    public virtual async Task PrepareWorkingCopyAsync(
+    public async Task PrepareWorkingCopyAsync(
         SeriesEpisodeMuxPlan plan,
         Action<WorkingCopyPreparationUpdate>? onUpdate = null,
         CancellationToken cancellationToken = default)
@@ -78,7 +106,7 @@ internal class MuxWorkflowCoordinator
     /// <param name="onUpdate">Optionaler Callback für strukturierten Mux-Fortschritt.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Exitcode, Warnungsstatus und letzter bekannter Fortschritt.</returns>
-    public virtual async Task<MuxExecutionResult> ExecuteMuxAsync(
+    public async Task<MuxExecutionResult> ExecuteMuxAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
         Action<MuxExecutionUpdate>? onUpdate = null,

@@ -9,7 +9,31 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Schlanker TVDB-v4-Client mit gemeinsamem Auth-Token und Seiteniteration für Serien-/Episodenabfragen.
 /// </summary>
-public class TvdbClient : IDisposable
+internal interface ITvdbClient : IDisposable
+{
+    /// <summary>
+    /// Sucht TVDB-Serien über die v4-API.
+    /// </summary>
+    Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+        string apiKey,
+        string? pin,
+        string query,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lädt alle Episoden einer TVDB-Serie über die v4-API.
+    /// </summary>
+    Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+        string apiKey,
+        string? pin,
+        int seriesId,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Standardimplementierung des TVDB-v4-Clients.
+/// </summary>
+internal sealed class TvdbClient : ITvdbClient
 {
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
 
@@ -43,7 +67,7 @@ public class TvdbClient : IDisposable
     /// <param name="query">Freitext-Suchbegriff.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Gefundene TVDB-Serien.</returns>
-    public virtual async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+    public async Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
         string apiKey,
         string? pin,
         string query,
@@ -98,7 +122,7 @@ public class TvdbClient : IDisposable
     /// <param name="seriesId">TVDB-Serien-ID.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Alle geladenen Episoden der Serie.</returns>
-    public virtual async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+    public async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
         string apiKey,
         string? pin,
         int seriesId,

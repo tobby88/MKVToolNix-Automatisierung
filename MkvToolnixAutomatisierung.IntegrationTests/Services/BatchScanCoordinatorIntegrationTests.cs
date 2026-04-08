@@ -350,7 +350,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         }
     }
 
-    private sealed class StubTvdbClient : TvdbClient
+    private sealed class StubTvdbClient : ITvdbClient
     {
         public IReadOnlyList<TvdbSeriesSearchResult> SearchResults { get; init; } = [];
 
@@ -360,7 +360,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
 
         public Func<CancellationToken, Task<IReadOnlyList<TvdbEpisodeRecord>>>? GetSeriesEpisodesAsyncOverride { get; init; }
 
-        public override Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
             string query,
@@ -374,7 +374,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             return Task.FromResult(SearchResults);
         }
 
-        public override Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
             string apiKey,
             string? pin,
             int seriesId,
@@ -386,6 +386,10 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             }
 
             return Task.FromResult(Episodes);
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

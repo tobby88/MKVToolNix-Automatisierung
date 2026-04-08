@@ -5,10 +5,10 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Führt TVDB-Suche, Caching und automatische Auswahlregeln für Serien- und Episodenmetadaten zusammen.
 /// </summary>
-public sealed class EpisodeMetadataLookupService
+internal sealed class EpisodeMetadataLookupService
 {
-    private readonly AppMetadataStore _store;
-    private readonly TvdbClient _tvdbClient;
+    private readonly IAppMetadataStore _store;
+    private readonly ITvdbClient _tvdbClient;
     private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
     private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
 
@@ -17,7 +17,7 @@ public sealed class EpisodeMetadataLookupService
     /// </summary>
     /// <param name="store">Persistenter Store für Zugangsdaten und Serien-Mappings.</param>
     /// <param name="tvdbClient">HTTP-Client für TVDB-Serien- und Episodenabfragen.</param>
-    public EpisodeMetadataLookupService(AppMetadataStore store, TvdbClient tvdbClient)
+    public EpisodeMetadataLookupService(IAppMetadataStore store, ITvdbClient tvdbClient)
     {
         _store = store;
         _tvdbClient = tvdbClient;

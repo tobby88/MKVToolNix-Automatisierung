@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// <summary>
 /// Kapselt Zustand und Suchlogik des TVDB-Dialogs, damit das Fenster selbst nur noch UI-Ereignisse weiterreicht.
 /// </summary>
-public sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
+internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
 {
     private readonly EpisodeMetadataLookupService _lookupService;
     private readonly EpisodeMetadataGuess _guess;
@@ -31,7 +31,7 @@ public sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     /// </summary>
     /// <param name="lookupService">Service für Settings, Suche und Episodenabgleich.</param>
     /// <param name="guess">Lokal erkannter Ausgangspunkt für Serie, Staffel, Folge und Titel.</param>
-    public TvdbLookupWindowViewModel(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
+    internal TvdbLookupWindowViewModel(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
     {
         _lookupService = lookupService;
         _guess = guess;

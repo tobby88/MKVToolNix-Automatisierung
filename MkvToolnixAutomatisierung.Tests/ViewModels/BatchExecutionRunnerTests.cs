@@ -431,19 +431,19 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         return path;
     }
 
-    private sealed class StubFileCopyService : FileCopyService
+    private sealed class StubFileCopyService : IFileCopyService
     {
         public Func<FileCopyPlan, bool>? NeedsCopyOverride { get; init; }
         public Func<FileCopyPlan, CancellationToken, Task>? CopyOverride { get; init; }
 
         public List<FileCopyPlan> CopiedPlans { get; } = [];
 
-        public override bool NeedsCopy(FileCopyPlan copyPlan)
+        public bool NeedsCopy(FileCopyPlan copyPlan)
         {
-            return NeedsCopyOverride?.Invoke(copyPlan) ?? base.NeedsCopy(copyPlan);
+            return NeedsCopyOverride?.Invoke(copyPlan) ?? !copyPlan.IsReusable;
         }
 
-        public override Task CopyAsync(
+        public Task CopyAsync(
             FileCopyPlan copyPlan,
             Action<long, long>? onProgress = null,
             CancellationToken cancellationToken = default)
@@ -458,14 +458,14 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         }
     }
 
-    private sealed class StubCleanupService : EpisodeCleanupService
+    private sealed class StubCleanupService : IEpisodeCleanupService
     {
         public FileMoveResult MoveResult { get; init; } = new FileMoveResult([], []);
 
         public IReadOnlyList<string> LastMoveSourceFiles { get; private set; } = [];
         public string? LastDeleteEmptyParentRoot { get; private set; }
 
-        public override Task<FileMoveResult> MoveFilesToDirectoryAsync(
+        public Task<FileMoveResult> MoveFilesToDirectoryAsync(
             IReadOnlyList<string> sourceFilePaths,
             string targetDirectory,
             Action<int, int, string>? onProgress = null,
@@ -475,25 +475,47 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             return Task.FromResult(MoveResult);
         }
 
-        public override void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
+        public Task<FileRecycleResult> RecycleFilesAsync(
+            IReadOnlyList<string> filePaths,
+            Action<int, int, string>? onProgress = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new FileRecycleResult([], []));
+        }
+
+        public void DeleteTemporaryFile(string? filePath)
+        {
+        }
+
+        public void DeleteDirectoryIfEmpty(string? directoryPath)
+        {
+        }
+
+        public void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
         {
             LastDeleteEmptyParentRoot = stopAtRoot;
         }
     }
 
-    private sealed class StubMuxWorkflowCoordinator : MuxWorkflowCoordinator
+    private sealed class StubMuxWorkflowCoordinator : IMuxWorkflowCoordinator
     {
-        public StubMuxWorkflowCoordinator()
-            : base(
-                ViewModelTestContext.CreateAppServices().SeriesEpisodeMux,
-                new FileCopyService(),
-                new EpisodeCleanupService())
-        {
-        }
-
         public Func<SeriesEpisodeMuxPlan, CancellationToken, Task<MuxExecutionResult>>? ExecuteMuxOverride { get; init; }
 
-        public override Task<MuxExecutionResult> ExecuteMuxAsync(
+        public bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
+        {
+            return plan.WorkingCopy is not null && !plan.WorkingCopy.IsReusable;
+        }
+
+        public Task PrepareWorkingCopyAsync(
+            SeriesEpisodeMuxPlan plan,
+            Action<WorkingCopyPreparationUpdate>? onUpdate = null,
+            CancellationToken cancellationToken = default)
+        {
+            onUpdate?.Invoke(new WorkingCopyPreparationUpdate(100, ReusesExistingCopy: plan.WorkingCopy?.IsReusable ?? false));
+            return Task.CompletedTask;
+        }
+
+        public Task<MuxExecutionResult> ExecuteMuxAsync(
             SeriesEpisodeMuxPlan plan,
             Action<string>? onOutput = null,
             Action<MuxExecutionUpdate>? onUpdate = null,

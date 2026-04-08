@@ -3,7 +3,7 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels;
 
-public sealed partial class TvdbLookupWindowViewModel
+internal sealed partial class TvdbLookupWindowViewModel
 {
     /// <summary>
     /// Lädt beim ersten Öffnen direkt die vorbefüllte TVDB-Suche, sofern bereits ein API-Key vorhanden ist.

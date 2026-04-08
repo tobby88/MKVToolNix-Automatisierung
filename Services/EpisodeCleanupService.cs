@@ -5,9 +5,47 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Verschiebt oder löscht temporäre/verbrauchte Dateien nach erfolgreicher Verarbeitung.
 /// </summary>
-internal class EpisodeCleanupService
+internal interface IEpisodeCleanupService
 {
-    public virtual async Task<FileMoveResult> MoveFilesToDirectoryAsync(
+    /// <summary>
+    /// Verschiebt Dateien gesammelt in ein Zielverzeichnis.
+    /// </summary>
+    Task<FileMoveResult> MoveFilesToDirectoryAsync(
+        IReadOnlyList<string> sourceFilePaths,
+        string targetDirectory,
+        Action<int, int, string>? onProgress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verschiebt Dateien gesammelt in den Papierkorb.
+    /// </summary>
+    Task<FileRecycleResult> RecycleFilesAsync(
+        IReadOnlyList<string> filePaths,
+        Action<int, int, string>? onProgress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Entfernt eine temporäre Datei best effort.
+    /// </summary>
+    void DeleteTemporaryFile(string? filePath);
+
+    /// <summary>
+    /// Entfernt einen Ordner, wenn er leer ist.
+    /// </summary>
+    void DeleteDirectoryIfEmpty(string? directoryPath);
+
+    /// <summary>
+    /// Räumt leere Elternordner innerhalb eines Wurzelpfads auf.
+    /// </summary>
+    void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot);
+}
+
+/// <summary>
+/// Standardimplementierung für Verschieben, Recycling und Dateisystem-Aufräumen.
+/// </summary>
+internal sealed class EpisodeCleanupService : IEpisodeCleanupService
+{
+    public async Task<FileMoveResult> MoveFilesToDirectoryAsync(
         IReadOnlyList<string> sourceFilePaths,
         string targetDirectory,
         Action<int, int, string>? onProgress = null,
@@ -47,7 +85,7 @@ internal class EpisodeCleanupService
         }, cancellationToken);
     }
 
-    public virtual async Task<FileRecycleResult> RecycleFilesAsync(
+    public async Task<FileRecycleResult> RecycleFilesAsync(
         IReadOnlyList<string> filePaths,
         Action<int, int, string>? onProgress = null,
         CancellationToken cancellationToken = default)
@@ -86,7 +124,7 @@ internal class EpisodeCleanupService
         }, cancellationToken);
     }
 
-    public virtual void DeleteTemporaryFile(string? filePath)
+    public void DeleteTemporaryFile(string? filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
         {
@@ -102,7 +140,7 @@ internal class EpisodeCleanupService
         }
     }
 
-    public virtual void DeleteDirectoryIfEmpty(string? directoryPath)
+    public void DeleteDirectoryIfEmpty(string? directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
         {
@@ -123,7 +161,7 @@ internal class EpisodeCleanupService
         }
     }
 
-    public virtual void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
+    public void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
     {
         if (string.IsNullOrWhiteSpace(stopAtRoot) || !Directory.Exists(stopAtRoot))
         {

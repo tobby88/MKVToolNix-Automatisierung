@@ -18,7 +18,7 @@ public partial class TvdbLookupWindow : Window
     /// </summary>
     /// <param name="lookupService">Service für TVDB-Suche, Episodenladen und Settings-Persistenz.</param>
     /// <param name="guess">Lokal erkannter Startvorschlag für Serie, Staffel, Folge und Titel.</param>
-    public TvdbLookupWindow(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
+    internal TvdbLookupWindow(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
     {
         InitializeComponent();
         _viewModel = new TvdbLookupWindowViewModel(lookupService, guess);

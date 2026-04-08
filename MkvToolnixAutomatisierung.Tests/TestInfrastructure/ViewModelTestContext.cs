@@ -32,9 +32,9 @@ internal static class ViewModelTestContext
     /// <returns>Konsistent verdrahtete Service-Sammlung fuer Tests.</returns>
     public static AppServices CreateAppServices(
         EpisodeMetadataLookupService? episodeMetadata = null,
-        FileCopyService? fileCopy = null,
-        EpisodeCleanupService? cleanup = null,
-        MuxWorkflowCoordinator? muxWorkflow = null,
+        IFileCopyService? fileCopy = null,
+        IEpisodeCleanupService? cleanup = null,
+        IMuxWorkflowCoordinator? muxWorkflow = null,
         BatchRunLogService? batchLogs = null)
     {
         var settingsStore = new AppSettingsStore();

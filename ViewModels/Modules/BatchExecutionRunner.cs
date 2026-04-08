@@ -9,14 +9,14 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class BatchExecutionRunner
 {
-    private readonly FileCopyService _fileCopyService;
-    private readonly MuxWorkflowCoordinator _muxWorkflow;
-    private readonly EpisodeCleanupService _cleanupService;
+    private readonly IFileCopyService _fileCopyService;
+    private readonly IMuxWorkflowCoordinator _muxWorkflow;
+    private readonly IEpisodeCleanupService _cleanupService;
 
     public BatchExecutionRunner(
-        FileCopyService fileCopyService,
-        MuxWorkflowCoordinator muxWorkflow,
-        EpisodeCleanupService cleanupService)
+        IFileCopyService fileCopyService,
+        IMuxWorkflowCoordinator muxWorkflow,
+        IEpisodeCleanupService cleanupService)
     {
         _fileCopyService = fileCopyService;
         _muxWorkflow = muxWorkflow;

@@ -242,5 +242,9 @@ public sealed class EpisodePlanCacheTests : IDisposable
         public string TitleForMux { get; set; } = "Pilot";
 
         public IReadOnlyCollection<string> ExcludedSourcePaths { get; set; } = [@"C:\Temp\alt.mp4"];
+
+        public IReadOnlyList<string> PlannedVideoPaths { get; set; } = [@"C:\Temp\episode.mp4", @"C:\Temp\episode-alt.mp4"];
+
+        public IReadOnlyList<string> DetectionNotes { get; set; } = ["Hinweis"];
     }
 }

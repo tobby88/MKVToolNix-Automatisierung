@@ -166,9 +166,9 @@ internal sealed class AppCompositionRoot
         EpisodeCleanupFilePlanner CleanupFiles);
 
     private sealed record WorkflowServices(
-        FileCopyService FileCopy,
-        EpisodeCleanupService Cleanup,
-        MuxWorkflowCoordinator MuxWorkflow,
+        IFileCopyService FileCopy,
+        IEpisodeCleanupService Cleanup,
+        IMuxWorkflowCoordinator MuxWorkflow,
         BatchRunLogService BatchLogs);
 }
 

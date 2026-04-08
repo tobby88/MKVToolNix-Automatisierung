@@ -5,7 +5,28 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Liest und schreibt nur den Metadaten-Teil der kombinierten App-Einstellungen.
 /// </summary>
-public class AppMetadataStore
+internal interface IAppMetadataStore
+{
+    /// <summary>
+    /// Lädt ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
+    /// </summary>
+    AppMetadataSettings Load();
+
+    /// <summary>
+    /// Speichert ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
+    /// </summary>
+    void Save(AppMetadataSettings settings);
+
+    /// <summary>
+    /// Pfad der zugrunde liegenden portablen Settings-Datei.
+    /// </summary>
+    string SettingsFilePath { get; }
+}
+
+/// <summary>
+/// Standardimplementierung für den Metadaten-Teil der portablen App-Einstellungen.
+/// </summary>
+internal sealed class AppMetadataStore : IAppMetadataStore
 {
     private readonly AppSettingsStore _settingsStore;
 
@@ -30,7 +51,7 @@ public class AppMetadataStore
     /// Lädt ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
     /// </summary>
     /// <returns>Aktuelle Metadaten-Einstellungen oder Standardwerte.</returns>
-    public virtual AppMetadataSettings Load()
+    public AppMetadataSettings Load()
     {
         return _settingsStore.Load().Metadata?.Clone() ?? new AppMetadataSettings();
     }
@@ -39,7 +60,7 @@ public class AppMetadataStore
     /// Speichert ausschließlich den Metadaten-Teil der kombinierten Einstellungen.
     /// </summary>
     /// <param name="settings">Zu speichernde TVDB- und Mapping-Einstellungen.</param>
-    public virtual void Save(AppMetadataSettings settings)
+    public void Save(AppMetadataSettings settings)
     {
         var normalizedSettings = settings?.Clone() ?? new AppMetadataSettings();
         _settingsStore.Update(combinedSettings => combinedSettings.Metadata = normalizedSettings.Clone());
@@ -48,7 +69,7 @@ public class AppMetadataStore
     /// <summary>
     /// Pfad der zugrunde liegenden portablen Settings-Datei.
     /// </summary>
-    public virtual string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
+    public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
 /// <summary>

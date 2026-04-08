@@ -142,7 +142,7 @@ public sealed class TvdbLookupWindowViewModelTests
             });
     }
 
-    private sealed class FakeMetadataStore : AppMetadataStore
+    private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)
         {
@@ -151,18 +151,20 @@ public sealed class TvdbLookupWindowViewModelTests
 
         public AppMetadataSettings CurrentSettings { get; private set; }
 
-        public override AppMetadataSettings Load()
+        public string SettingsFilePath => "test-settings.json";
+
+        public AppMetadataSettings Load()
         {
             return CurrentSettings.Clone();
         }
 
-        public override void Save(AppMetadataSettings settings)
+        public void Save(AppMetadataSettings settings)
         {
             CurrentSettings = settings.Clone();
         }
     }
 
-    private sealed class FakeTvdbClient : TvdbClient
+    private sealed class FakeTvdbClient : ITvdbClient
     {
         public int SearchSeriesCallCount { get; private set; }
 
@@ -172,7 +174,7 @@ public sealed class TvdbLookupWindowViewModelTests
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
 
-        public override Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
             string query,
@@ -183,7 +185,7 @@ public sealed class TvdbLookupWindowViewModelTests
             return Task.FromResult(results);
         }
 
-        public override Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
             string apiKey,
             string? pin,
             int seriesId,
@@ -192,6 +194,10 @@ public sealed class TvdbLookupWindowViewModelTests
             GetSeriesEpisodesCallCount++;
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

@@ -14,7 +14,7 @@ internal sealed record AppServices(
     EpisodeOutputPathService OutputPaths,
     EpisodeCleanupFilePlanner CleanupFiles,
     EpisodeMetadataLookupService EpisodeMetadata,
-    FileCopyService FileCopy,
-    EpisodeCleanupService Cleanup,
-    MuxWorkflowCoordinator MuxWorkflow,
+    IFileCopyService FileCopy,
+    IEpisodeCleanupService Cleanup,
+    IMuxWorkflowCoordinator MuxWorkflow,
     BatchRunLogService BatchLogs);
