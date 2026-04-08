@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.Json;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -1077,7 +1076,12 @@ public sealed partial class SeriesArchiveService
         ContainerAttachmentMetadata attachment,
         CancellationToken cancellationToken)
     {
-        var probeSidecarContent = TryReadAttachmentTextFromProbeSidecar(containerPath, attachment);
+        // Integrationstests können eingebettete TXT-Inhalte über FakeMkvMerge-Sidecars liefern.
+        // Produktivläufe mit echtem mkvmerge verlassen sich weiterhin ausschließlich auf mkvextract.
+        var probeSidecarContent = FakeMkvMergeProbeSidecarReader.TryReadAttachmentTextContent(
+            mkvMergePath,
+            containerPath,
+            attachment);
         if (!string.IsNullOrWhiteSpace(probeSidecarContent))
         {
             return CompanionTextMetadataReader.ReadDetailedFromContent(probeSidecarContent);
@@ -1133,54 +1137,6 @@ public sealed partial class SeriesArchiveService
                 // Ein liegen gebliebener Temp-Ordner darf die eigentliche Planung nicht scheitern lassen.
             }
         }
-    }
-
-    private static string? TryReadAttachmentTextFromProbeSidecar(
-        string containerPath,
-        ContainerAttachmentMetadata attachment)
-    {
-        var probeSidecarPath = containerPath + ".mkvmerge.json";
-        if (!File.Exists(probeSidecarPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(probeSidecarPath));
-            if (!document.RootElement.TryGetProperty("attachments", out var attachmentsElement)
-                || attachmentsElement.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            var fallbackAttachmentId = 0;
-            foreach (var attachmentElement in attachmentsElement.EnumerateArray())
-            {
-                var candidateId = attachmentElement.TryGetProperty("id", out var idElement)
-                    && idElement.TryGetInt32(out var parsedAttachmentId)
-                        ? parsedAttachmentId
-                        : fallbackAttachmentId;
-                var candidateFileName = attachmentElement.TryGetProperty("file_name", out var fileNameElement)
-                    ? fileNameElement.GetString()
-                    : null;
-                if ((candidateId == attachment.Id
-                        || string.Equals(candidateFileName, attachment.FileName, StringComparison.OrdinalIgnoreCase))
-                    && attachmentElement.TryGetProperty("text_content", out var textContentElement)
-                    && textContentElement.ValueKind == JsonValueKind.String)
-                {
-                    return textContentElement.GetString();
-                }
-
-                fallbackAttachmentId++;
-            }
-        }
-        catch
-        {
-            return null;
-        }
-
-        return null;
     }
 
     private static string ResolveMkvExtractPath(string mkvMergePath)
