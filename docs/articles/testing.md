@@ -23,11 +23,10 @@ Das Projekt verwendet jetzt drei Testebenen:
 Die Integrationstests verwenden `TestTools/FakeMkvMerge`. Das Hilfsprogramm simuliert:
 
 - `mkvmerge --identify` über sidecar-Dateien `*.mkvmerge.json`
+- `mkvextract attachments` über dieselben Probe-Sidecars, sodass eingebettete TXT-Anhänge im Testpfad wie im Produktivpfad extrahiert werden
 - echte Mux-Läufe über `*.mkvmerge.run.json`
 
 Dadurch lassen sich Planung, Prozesssteuerung, Fortschrittsparsing und Cleanup reproduzierbar testen, ohne auf externe Binärdateien oder Live-Mediendateien angewiesen zu sein.
-
-Für eingebettete TXT-Anhänge gibt es zusätzlich eine bewusst isolierte Test-Seam: Nur wenn die aktuell verwendete Executable tatsächlich `FakeMkvMerge.exe` ist, darf die Fachlogik optionale `text_content`-Felder aus dem Probe-Sidecar lesen. Produktivläufe mit echtem `mkvmerge.exe` bleiben weiterhin auf `mkvextract` als reale Quelle für eingebettete TXT-Inhalte angewiesen.
 
 Der Integrationstest-Build stößt den Build dieses Hilfsprogramms automatisch mit derselben Konfiguration an. Die Tests bleiben damit auch ohne direkte Projekt-Referenz auf das Tool reproduzierbar.
 

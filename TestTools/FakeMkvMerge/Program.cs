@@ -26,23 +26,132 @@ internal static class Program
 
     private static int Execute(IReadOnlyList<string> args)
     {
-        if (args.Count >= 4
-            && string.Equals(args[0], "--identify", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(args[1], "--identification-format", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(args[2], "json", StringComparison.OrdinalIgnoreCase))
+        if (IsIdentifyCommand(args))
         {
-            var inputFilePath = args[^1];
-            var probeResponse = LoadProbeResponse(inputFilePath);
-            WriteProbeInvocationLog(probeResponse.InvocationLogFilePath, inputFilePath);
-            if (probeResponse.DelayBeforeOutputMilliseconds > 0)
-            {
-                Thread.Sleep(probeResponse.DelayBeforeOutputMilliseconds);
-            }
-
-            Console.Write(probeResponse.Json);
-            return 0;
+            return ExecuteIdentify(args[^1]);
         }
 
+        if (IsAttachmentExtractionCommand(args))
+        {
+            return ExecuteAttachmentExtraction(args);
+        }
+
+        return ExecuteMux(args);
+    }
+
+    private static bool IsIdentifyCommand(IReadOnlyList<string> args)
+    {
+        return args.Count >= 4
+            && string.Equals(args[0], "--identify", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(args[1], "--identification-format", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(args[2], "json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAttachmentExtractionCommand(IReadOnlyList<string> args)
+    {
+        return args.Count >= 3
+            && string.Equals(args[0], "attachments", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int ExecuteIdentify(string inputFilePath)
+    {
+        var probeResponse = LoadProbeResponse(inputFilePath);
+        WriteProbeInvocationLog(probeResponse.InvocationLogFilePath, inputFilePath);
+        if (probeResponse.DelayBeforeOutputMilliseconds > 0)
+        {
+            Thread.Sleep(probeResponse.DelayBeforeOutputMilliseconds);
+        }
+
+        Console.Write(probeResponse.Json);
+        return 0;
+    }
+
+    private static int ExecuteAttachmentExtraction(IReadOnlyList<string> args)
+    {
+        var containerPath = args[1];
+        var probeResponse = LoadProbeResponse(containerPath);
+        using var document = JsonDocument.Parse(probeResponse.Json);
+
+        for (var index = 2; index < args.Count; index++)
+        {
+            if (!TryParseAttachmentExtractionArgument(args[index], out var attachmentId, out var outputPath))
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Ungültiges attachments-Argument '{args[index]}'.");
+                return 3;
+            }
+
+            var textContent = FindAttachmentTextContent(document.RootElement, attachmentId);
+            WriteExtractedAttachment(outputPath, textContent ?? string.Empty);
+        }
+
+        return 0;
+    }
+
+    private static bool TryParseAttachmentExtractionArgument(
+        string value,
+        out int attachmentId,
+        out string outputPath)
+    {
+        attachmentId = 0;
+        outputPath = string.Empty;
+
+        var separatorIndex = value.IndexOf(':');
+        if (separatorIndex <= 0 || separatorIndex == value.Length - 1)
+        {
+            return false;
+        }
+
+        if (!int.TryParse(value[..separatorIndex], out attachmentId))
+        {
+            return false;
+        }
+
+        outputPath = value[(separatorIndex + 1)..];
+        return !string.IsNullOrWhiteSpace(outputPath);
+    }
+
+    private static string? FindAttachmentTextContent(JsonElement rootElement, int attachmentId)
+    {
+        if (!rootElement.TryGetProperty("attachments", out var attachmentsElement)
+            || attachmentsElement.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var fallbackAttachmentId = 0;
+        foreach (var attachmentElement in attachmentsElement.EnumerateArray())
+        {
+            var candidateId = attachmentElement.TryGetProperty("id", out var idElement)
+                && idElement.TryGetInt32(out var parsedAttachmentId)
+                    ? parsedAttachmentId
+                    : fallbackAttachmentId;
+            if (candidateId == attachmentId)
+            {
+                return attachmentElement.TryGetProperty("text_content", out var textContentElement)
+                    && textContentElement.ValueKind == JsonValueKind.String
+                    ? textContentElement.GetString()
+                    : null;
+            }
+
+            fallbackAttachmentId++;
+        }
+
+        return null;
+    }
+
+    private static void WriteExtractedAttachment(string outputPath, string content)
+    {
+        var directory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(outputPath, content);
+    }
+
+    private static int ExecuteMux(IReadOnlyList<string> args)
+    {
         var outputFilePath = FindArgumentValue(args, "--output");
         if (string.IsNullOrWhiteSpace(outputFilePath))
         {
@@ -96,6 +205,7 @@ internal static class Program
         {
             delayBeforeOutputMilliseconds = delayElement.GetInt32();
         }
+
         if (document.RootElement.TryGetProperty("invocationLogFilePath", out var invocationLogElement)
             && invocationLogElement.ValueKind == JsonValueKind.String)
         {

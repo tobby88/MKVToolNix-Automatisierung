@@ -319,18 +319,6 @@ public sealed partial class SeriesArchiveService
         ContainerAttachmentMetadata attachment,
         CancellationToken cancellationToken)
     {
-        // Der eigentliche Produktivpfad extrahiert eingebettete TXT-Anhänge über mkvextract.
-        // Solange die Integrationstests noch auf FakeMkvMerge-Sidecars basieren, bleibt dieser
-        // Übergangs-Hook hier bewusst erhalten und wird im nächsten, getrennten Schritt entfernt.
-        var probeSidecarContent = FakeMkvMergeProbeSidecarReader.TryReadAttachmentTextContent(
-            mkvMergePath,
-            containerPath,
-            attachment);
-        if (!string.IsNullOrWhiteSpace(probeSidecarContent))
-        {
-            return CompanionTextMetadataReader.ReadDetailedFromContent(probeSidecarContent);
-        }
-
         var mkvExtractPath = ResolveMkvExtractPath(mkvMergePath);
         if (!File.Exists(mkvExtractPath))
         {
