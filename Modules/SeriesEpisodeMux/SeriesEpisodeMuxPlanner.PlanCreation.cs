@@ -6,7 +6,7 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 // Dieser Partial kapselt die eigentliche Mux-Planerzeugung aus bereits erkannten UI-Eingaben und Archivdaten.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
-    private static readonly TimeSpan DurationHintProbeTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DurationHintProbeTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Erzeugt aus einer konkreten Episodeingabe einen vollständig aufgelösten Mux-Plan inklusive Archivintegration.
