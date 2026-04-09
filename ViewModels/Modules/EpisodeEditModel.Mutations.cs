@@ -176,9 +176,7 @@ internal partial class EpisodeEditModel
     protected void SetNotes(IEnumerable<string> notes)
     {
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        OnPropertyChanged(nameof(Notes));
-        OnPropertyChanged(nameof(HasNotes));
-        OnPropertyChanged(nameof(NotesDisplayText));
+        NotifyNotePropertiesChanged();
     }
 
     public void SetPlanNotes(IEnumerable<string> notes)
@@ -187,9 +185,7 @@ internal partial class EpisodeEditModel
             .Where(note => !string.IsNullOrWhiteSpace(note))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        OnPropertyChanged(nameof(Notes));
-        OnPropertyChanged(nameof(HasNotes));
-        OnPropertyChanged(nameof(NotesDisplayText));
+        NotifyNotePropertiesChanged();
     }
 
     protected void SetRequestedMainVideoPath(string path)
@@ -395,6 +391,18 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
         OnPropertyChanged(nameof(HasPendingChecks));
+    }
+
+    private void NotifyNotePropertiesChanged()
+    {
+        OnPropertyChanged(nameof(Notes));
+        OnPropertyChanged(nameof(HasNotes));
+        OnPropertyChanged(nameof(NotesDisplayText));
+        OnPropertyChanged(nameof(ActionablePlanNotes));
+        OnPropertyChanged(nameof(HasActionablePlanNotes));
+        OnPropertyChanged(nameof(PrimaryActionablePlanNote));
+        OnPropertyChanged(nameof(ActionablePlanNotesDisplayText));
+        NotifyReviewStatePropertiesChanged();
     }
 
 }

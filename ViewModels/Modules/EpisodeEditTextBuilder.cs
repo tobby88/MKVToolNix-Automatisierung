@@ -5,6 +5,13 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal static class EpisodeEditTextBuilder
 {
+    private static readonly string[] MultipartPlanReviewMarkers =
+    [
+        "doppelfolge",
+        "mehrfachfolge",
+        "gesplittete episodenvariante"
+    ];
+
     public static string BuildManualCheckText(bool requiresManualCheck, bool isManualCheckApproved)
     {
         if (!requiresManualCheck)
@@ -49,8 +56,19 @@ internal static class EpisodeEditTextBuilder
         return EpisodeReviewState.NoneNeeded;
     }
 
-    public static string BuildReviewHint(EpisodeReviewState reviewState)
+    public static string BuildReviewHint(EpisodeReviewState reviewState, string? planReviewLabel = null)
     {
+        if (!string.IsNullOrWhiteSpace(planReviewLabel))
+        {
+            return reviewState switch
+            {
+                EpisodeReviewState.ManualCheckPending => $"Quelle + {planReviewLabel}",
+                EpisodeReviewState.MetadataReviewPending => $"{planReviewLabel} + TVDB",
+                EpisodeReviewState.ManualAndMetadataPending => $"Quelle + {planReviewLabel} + TVDB",
+                _ => planReviewLabel
+            };
+        }
+
         return reviewState switch
         {
             EpisodeReviewState.Approved => "Freigegeben",
@@ -61,8 +79,35 @@ internal static class EpisodeEditTextBuilder
         };
     }
 
-    public static string BuildReviewHintTooltip(EpisodeReviewState reviewState)
+    public static string BuildReviewHintTooltip(
+        EpisodeReviewState reviewState,
+        string? planReviewLabel = null,
+        string? primaryPlanReviewNote = null)
     {
+        if (!string.IsNullOrWhiteSpace(planReviewLabel))
+        {
+            var parts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(primaryPlanReviewNote))
+            {
+                parts.Add(primaryPlanReviewNote.Trim());
+            }
+
+            parts.Add("Dieser Eintrag sollte vor dem Muxen fachlich noch geprüft werden.");
+
+            if (reviewState is EpisodeReviewState.ManualCheckPending or EpisodeReviewState.ManualAndMetadataPending)
+            {
+                parts.Add("Zusätzlich sollte die erkannte Quelle noch freigegeben werden.");
+            }
+
+            if (reviewState is EpisodeReviewState.MetadataReviewPending or EpisodeReviewState.ManualAndMetadataPending)
+            {
+                parts.Add("Danach sollte bei Bedarf noch die TVDB-Zuordnung geprüft werden.");
+            }
+
+            return string.Join(Environment.NewLine, parts);
+        }
+
         return reviewState switch
         {
             EpisodeReviewState.Approved => "Alle nötigen Quellen- und Metadatenprüfungen sind bereits erledigt.",
@@ -148,6 +193,7 @@ internal static class EpisodeEditTextBuilder
             BatchEpisodeStatusKind.Running => "Läuft",
             BatchEpisodeStatusKind.Cancelled => "Abgebrochen",
             BatchEpisodeStatusKind.ComparisonPending => "Vergleich offen",
+            BatchEpisodeStatusKind.ReviewPending => "Prüfung offen",
             BatchEpisodeStatusKind.Ready => "Bereit",
             BatchEpisodeStatusKind.UpToDate => "Ziel aktuell",
             BatchEpisodeStatusKind.Success => "Erfolgreich",
@@ -163,6 +209,7 @@ internal static class EpisodeEditTextBuilder
             BatchEpisodeStatusKind.Running => "Dieser Eintrag wird gerade geplant, kopiert oder gemuxt.",
             BatchEpisodeStatusKind.Cancelled => "Dieser Eintrag wurde durch Benutzerabbruch nicht vollständig verarbeitet und kann erneut gestartet werden.",
             BatchEpisodeStatusKind.ComparisonPending => "Für eine bereits vorhandene Bibliotheksdatei fehlt noch der aktuelle Vergleich.",
+            BatchEpisodeStatusKind.ReviewPending => "Der Vergleich ist abgeschlossen, aber vor dem Muxen sollte noch ein fachlicher Hinweis geprüft werden.",
             BatchEpisodeStatusKind.Ready => "Der Eintrag ist bereit für den Batch-Lauf.",
             BatchEpisodeStatusKind.UpToDate => "Die Zieldatei ist bereits vollständig vorhanden. Ein neuer Lauf ist normalerweise nicht nötig.",
             BatchEpisodeStatusKind.Success => "Der Eintrag wurde erfolgreich verarbeitet.",
@@ -177,6 +224,52 @@ internal static class EpisodeEditTextBuilder
             || string.Equals(normalizedStatus, BuildBatchStatusText(statusKind), StringComparison.Ordinal)
             ? explanation
             : $"{explanation}{Environment.NewLine}Status: {normalizedStatus}";
+    }
+
+    public static bool IsActionablePlanReviewNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return false;
+        }
+
+        return ContainsAny(note, MultipartPlanReviewMarkers)
+            || (note.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
+                && note.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
+            || (note.Contains("Bitte", StringComparison.OrdinalIgnoreCase)
+                && note.Contains("prüf", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string? GetPrimaryActionablePlanReviewNote(IEnumerable<string> notes)
+    {
+        return notes
+            .Where(IsActionablePlanReviewNote)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(GetPlanReviewPriority)
+            .ThenBy(note => note, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    public static string? BuildPlanReviewLabel(IEnumerable<string> notes)
+    {
+        var primaryNote = GetPrimaryActionablePlanReviewNote(notes);
+        if (string.IsNullOrWhiteSpace(primaryNote))
+        {
+            return null;
+        }
+
+        if (ContainsAny(primaryNote, MultipartPlanReviewMarkers))
+        {
+            return "Mehrfachfolge prüfen";
+        }
+
+        if (primaryNote.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
+            || primaryNote.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Archiv prüfen";
+        }
+
+        return "Hinweis prüfen";
     }
 
     public static string BuildNotesDisplayText(IReadOnlyList<string> notes)
@@ -196,5 +289,26 @@ internal static class EpisodeEditTextBuilder
         return list.Count == 0
             ? "(keine)"
             : string.Join(Environment.NewLine, list);
+    }
+
+    private static int GetPlanReviewPriority(string note)
+    {
+        if (ContainsAny(note, MultipartPlanReviewMarkers))
+        {
+            return 0;
+        }
+
+        if (note.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
+            || note.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return 2;
+    }
+
+    private static bool ContainsAny(string value, IEnumerable<string> needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
     }
 }

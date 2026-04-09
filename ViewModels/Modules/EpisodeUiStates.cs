@@ -78,7 +78,8 @@ internal enum BatchEpisodeStatusKind
     Running = 2,
     Cancelled = 3,
     ComparisonPending = 4,
-    Ready = 5,
-    UpToDate = 6,
-    Success = 7
+    ReviewPending = 5,
+    Ready = 6,
+    UpToDate = 7,
+    Success = 8
 }

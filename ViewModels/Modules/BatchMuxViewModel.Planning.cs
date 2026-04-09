@@ -153,7 +153,13 @@ internal sealed partial class BatchMuxViewModel
             item.SetPlanNotes(plan.Notes);
             item.SetUsageSummary(plan.BuildUsageSummary());
 
-            if (hasArchiveComparisonTarget)
+            var requiresPlanReview = item.HasActionablePlanNotes;
+
+            if (requiresPlanReview)
+            {
+                item.SetStatus(BatchEpisodeStatusKind.ReviewPending);
+            }
+            else if (hasArchiveComparisonTarget)
             {
                 item.SetStatus(plan.SkipMux ? BatchEpisodeStatusKind.UpToDate : BatchEpisodeStatusKind.Ready);
             }

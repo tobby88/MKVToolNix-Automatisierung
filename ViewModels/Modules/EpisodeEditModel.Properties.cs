@@ -315,21 +315,41 @@ internal partial class EpisodeEditModel
         RequiresMetadataReview,
         IsMetadataReviewApproved);
 
+    public IReadOnlyList<string> ActionablePlanNotes => _planNotes
+        .Where(EpisodeEditTextBuilder.IsActionablePlanReviewNote)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    public bool HasActionablePlanNotes => ActionablePlanNotes.Count > 0;
+
+    public string PrimaryActionablePlanNote => EpisodeEditTextBuilder.GetPrimaryActionablePlanReviewNote(_planNotes) ?? string.Empty;
+
+    public string ActionablePlanNotesDisplayText => EpisodeEditTextBuilder.BuildNotesDisplayText(ActionablePlanNotes);
+
     public bool UsesAutomaticOutputPath => !_outputPathWasManuallyChanged && !string.IsNullOrWhiteSpace(OutputPath);
 
     public string ReviewHint
     {
         get
         {
-            return EpisodeEditTextBuilder.BuildReviewHint(ReviewState);
+            return EpisodeEditTextBuilder.BuildReviewHint(
+                ReviewState,
+                EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes));
         }
     }
 
-    public string ReviewHintTooltip => EpisodeEditTextBuilder.BuildReviewHintTooltip(ReviewState);
+    public string ReviewHintTooltip => EpisodeEditTextBuilder.BuildReviewHintTooltip(
+        ReviewState,
+        EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes),
+        PrimaryActionablePlanNote);
 
-    public string ReviewBadgeBackground => EpisodeUiStyleBuilder.BuildReviewBadgeBackground(ReviewState);
+    public string ReviewBadgeBackground => HasActionablePlanNotes
+        ? "#FFF4D6"
+        : EpisodeUiStyleBuilder.BuildReviewBadgeBackground(ReviewState);
 
-    public string ReviewBadgeBorderBrush => EpisodeUiStyleBuilder.BuildReviewBadgeBorderBrush(ReviewState);
+    public string ReviewBadgeBorderBrush => HasActionablePlanNotes
+        ? "#D8B46A"
+        : EpisodeUiStyleBuilder.BuildReviewBadgeBorderBrush(ReviewState);
 
     public IReadOnlyList<string> Notes => _notes
         .Concat(_planNotes)

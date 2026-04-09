@@ -232,6 +232,36 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
+    {
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        item.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+        item.RefreshArchivePresence();
+
+        Assert.True(item.HasActionablePlanNotes);
+        Assert.Equal("Mehrfachfolge prüfen", item.ReviewHint);
+        Assert.Contains("Mehrfachfolge", item.ReviewHintTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(BatchEpisodeStatusKind.ReviewPending, item.StatusKind);
+    }
+
+    [Fact]
     public async Task FreezeSelectedItemPlanSummaryForExecution_CancelsPendingSelectionRefresh()
     {
         var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());

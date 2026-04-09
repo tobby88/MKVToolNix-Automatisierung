@@ -362,7 +362,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
         var hasArchiveComparisonTarget = HasArchiveComparisonTarget;
-        var effectiveStatus = statusOverride ?? ResolveDefaultStatus(hasArchiveComparisonTarget, HasPrimaryVideoSource);
+        var effectiveStatus = statusOverride ?? ResolveDefaultStatus(hasArchiveComparisonTarget, HasPrimaryVideoSource, HasActionablePlanNotes);
         var effectiveStatusText = string.IsNullOrWhiteSpace(statusText)
             && effectiveStatus == BatchEpisodeStatusKind.Warning
             && !HasPrimaryVideoSource
@@ -430,11 +430,19 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             "Neue MKV wird erstellt");
     }
 
-    private static BatchEpisodeStatusKind ResolveDefaultStatus(bool hasArchiveComparisonTarget, bool hasPrimaryVideoSource)
+    private static BatchEpisodeStatusKind ResolveDefaultStatus(
+        bool hasArchiveComparisonTarget,
+        bool hasPrimaryVideoSource,
+        bool hasActionablePlanNotes)
     {
         if (hasArchiveComparisonTarget)
         {
             return BatchEpisodeStatusKind.ComparisonPending;
+        }
+
+        if (hasActionablePlanNotes)
+        {
+            return BatchEpisodeStatusKind.ReviewPending;
         }
 
         return hasPrimaryVideoSource
