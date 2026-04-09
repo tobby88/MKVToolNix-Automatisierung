@@ -376,4 +376,53 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var arguments = plan.BuildArguments();
         AssertContainsSequence(arguments, "--track-name", "1:Deutsch - E-AC-3");
     }
+
+    [Fact]
+    public async Task CreatePlanAsync_AddsDurationMismatchNote_WhenArchiveLooksLikeDoubleEpisode()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-duration-mismatch");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-duration-mismatch");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Rififi (S2014_E05).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (S2014_E05).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (S2014_E05)\r\nDauer: 00:43:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Beispielserie",
+            "Season 2014",
+            "Beispielserie - S2014E05 - Rififi.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(
+            archiveDirectory,
+            new DictionaryDurationProbe(new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase)
+            {
+                [mainVideoPath] = TimeSpan.FromMinutes(86),
+                [outputPath] = TimeSpan.FromMinutes(43)
+            }));
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Rififi"));
+
+        Assert.Contains(plan.Notes, note => note.Contains("Doppelfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Notes, note => note.Contains("2-mal so lang", StringComparison.OrdinalIgnoreCase));
+    }
 }

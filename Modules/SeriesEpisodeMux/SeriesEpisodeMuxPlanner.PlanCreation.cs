@@ -112,6 +112,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Concat(archiveDecision.Notes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (request.HasPrimaryVideoSource)
+        {
+            var durationMismatchHint = TryBuildArchiveDurationMismatchHint(request.MainVideoPath, effectiveOutputPath);
+            if (!string.IsNullOrWhiteSpace(durationMismatchHint))
+            {
+                notes.Add(durationMismatchHint);
+            }
+        }
         if (!request.HasPrimaryVideoSource && !string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
         {
             notes.Insert(0, "Es liegt nur eine AD-Quelle vor. Die Hauptspuren werden aus der vorhandenen Archiv-MKV übernommen.");
@@ -148,6 +156,62 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.UsageComparison,
             archiveDecision.WorkingCopy,
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+    }
+
+    /// <summary>
+    /// Ergänzt bei bestehender Bibliotheksdatei einen konservativen Hinweis, wenn Quelle und Archivdatei
+    /// ungefähr ein ganzzahliges Laufzeitvielfaches voneinander abweichen. Genau dieses Muster tritt
+    /// typischerweise bei zusammengefassten Doppelfolgen oder Mehrfachfolgen auf.
+    /// </summary>
+    private string? TryBuildArchiveDurationMismatchHint(string? sourceFilePath, string? archiveOutputPath)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFilePath)
+            || string.IsNullOrWhiteSpace(archiveOutputPath)
+            || !_archiveService.IsArchivePath(archiveOutputPath)
+            || !File.Exists(sourceFilePath)
+            || !File.Exists(archiveOutputPath)
+            || PathComparisonHelper.AreSamePath(sourceFilePath, archiveOutputPath))
+        {
+            return null;
+        }
+
+        var sourceSeconds = ReadDurationSeconds(sourceFilePath, fallbackDuration: null);
+        var archiveSeconds = ReadDurationSeconds(archiveOutputPath, fallbackDuration: null);
+        var durationMultiple = TryFindNearIntegerMultiple(sourceSeconds, archiveSeconds);
+        if (durationMultiple is null)
+        {
+            return null;
+        }
+
+        var archiveIsLonger = archiveSeconds > sourceSeconds;
+        var relationText = archiveIsLonger
+            ? $"Die vorhandene Bibliotheksdatei ist ungefähr {durationMultiple}-mal so lang wie die aktuelle Quelle."
+            : $"Die aktuelle Quelle ist ungefähr {durationMultiple}-mal so lang wie die vorhandene Bibliotheksdatei.";
+        return relationText
+            + " Möglicherweise handelt es sich um eine Doppelfolge oder um einen Teil einer Mehrfachfolge. Bitte Archivtreffer und Episodencode prüfen.";
+    }
+
+    private static int? TryFindNearIntegerMultiple(int? firstSeconds, int? secondSeconds)
+    {
+        if (firstSeconds is null or <= 0 || secondSeconds is null or <= 0)
+        {
+            return null;
+        }
+
+        var shorter = Math.Min(firstSeconds.Value, secondSeconds.Value);
+        var longer = Math.Max(firstSeconds.Value, secondSeconds.Value);
+
+        for (var factor = 2; factor <= 4; factor++)
+        {
+            var expectedLonger = shorter * factor;
+            var toleranceSeconds = Math.Max(90, (int)Math.Round(expectedLonger * 0.08));
+            if (Math.Abs(longer - expectedLonger) <= toleranceSeconds)
+            {
+                return factor;
+            }
+        }
+
+        return null;
     }
 
     private (IReadOnlyList<string> Notes, IReadOnlyList<string> PlannedVideoPaths) ResolvePlanSourceSelection(

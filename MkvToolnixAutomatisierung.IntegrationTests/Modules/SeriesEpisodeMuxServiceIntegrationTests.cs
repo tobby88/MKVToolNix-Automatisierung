@@ -396,19 +396,22 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         }
     }
 
-    private SeriesEpisodeMuxService CreateMuxService(string archiveDirectory)
+    private SeriesEpisodeMuxService CreateMuxService(
+        string archiveDirectory,
+        IMediaDurationProbe? durationProbe = null)
     {
         var settingsStore = CreateSettingsStore();
         var probeService = new MkvMergeProbeService();
         var archiveService = new SeriesArchiveService(probeService, new AppArchiveSettingsStore(settingsStore));
         archiveService.ConfigureArchiveRootDirectory(archiveDirectory);
+        var effectiveDurationProbe = durationProbe ?? new NullDurationProbe();
 
         return new SeriesEpisodeMuxService(
             new SeriesEpisodeMuxPlanner(
                 new MkvToolNixLocator(new AppToolPathStore(settingsStore)),
                 probeService,
                 archiveService,
-                new NullDurationProbe()),
+                effectiveDurationProbe),
             new MuxExecutionService(),
             new MkvMergeOutputParser());
     }
@@ -567,6 +570,23 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         public TimeSpan? TryReadDuration(string filePath)
         {
             return null;
+        }
+    }
+
+    private sealed class DictionaryDurationProbe : IMediaDurationProbe
+    {
+        private readonly IReadOnlyDictionary<string, TimeSpan> _durations;
+
+        public DictionaryDurationProbe(IReadOnlyDictionary<string, TimeSpan> durations)
+        {
+            _durations = durations;
+        }
+
+        public TimeSpan? TryReadDuration(string filePath)
+        {
+            return _durations.TryGetValue(filePath, out var duration)
+                ? duration
+                : null;
         }
     }
 }

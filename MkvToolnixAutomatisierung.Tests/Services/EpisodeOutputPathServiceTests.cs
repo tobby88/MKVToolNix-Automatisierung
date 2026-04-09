@@ -225,82 +225,12 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
             outputPath);
     }
 
-    [Fact]
-    public void TryBuildArchiveDurationMismatchHint_ReturnsWarning_ForNearDoubleDuration()
-    {
-        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
-        var sourceFilePath = Path.Combine(_tempDirectory, "source", "episode.mp4");
-        var archiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E01 - Pilot.mkv");
-        Directory.CreateDirectory(Path.GetDirectoryName(sourceFilePath)!);
-        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
-        File.WriteAllText(sourceFilePath, "source");
-        File.WriteAllText(archiveFilePath, "archive");
-
-        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
-        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
-        var service = new EpisodeOutputPathService(
-            archiveService,
-            new DictionaryDurationProbe(new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase)
-            {
-                [sourceFilePath] = TimeSpan.FromMinutes(43),
-                [archiveFilePath] = TimeSpan.FromMinutes(86)
-            }));
-
-        var hint = service.TryBuildArchiveDurationMismatchHint(sourceFilePath, archiveFilePath);
-
-        Assert.NotNull(hint);
-        Assert.Contains("ungefähr 2-mal so lang", hint, StringComparison.Ordinal);
-        Assert.Contains("Doppelfolge", hint, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void TryBuildArchiveDurationMismatchHint_ReturnsNull_WhenDurationsAreSimilar()
-    {
-        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
-        var sourceFilePath = Path.Combine(_tempDirectory, "source", "episode.mp4");
-        var archiveFilePath = Path.Combine(archiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E01 - Pilot.mkv");
-        Directory.CreateDirectory(Path.GetDirectoryName(sourceFilePath)!);
-        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
-        File.WriteAllText(sourceFilePath, "source");
-        File.WriteAllText(archiveFilePath, "archive");
-
-        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
-        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
-        var service = new EpisodeOutputPathService(
-            archiveService,
-            new DictionaryDurationProbe(new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase)
-            {
-                [sourceFilePath] = TimeSpan.FromMinutes(43),
-                [archiveFilePath] = TimeSpan.FromMinutes(44)
-            }));
-
-        var hint = service.TryBuildArchiveDurationMismatchHint(sourceFilePath, archiveFilePath);
-
-        Assert.Null(hint);
-    }
 
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
         {
             Directory.Delete(_tempDirectory, recursive: true);
-        }
-    }
-
-    private sealed class DictionaryDurationProbe : IMediaDurationProbe
-    {
-        private readonly IReadOnlyDictionary<string, TimeSpan> _durations;
-
-        public DictionaryDurationProbe(IReadOnlyDictionary<string, TimeSpan> durations)
-        {
-            _durations = durations;
-        }
-
-        public TimeSpan? TryReadDuration(string filePath)
-        {
-            return _durations.TryGetValue(filePath, out var duration)
-                ? duration
-                : null;
         }
     }
 }

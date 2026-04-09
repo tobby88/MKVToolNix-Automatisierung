@@ -122,40 +122,7 @@ internal sealed class BatchScanCoordinator
                 ?? outputPath;
         }
 
-        if (detected.HasPrimaryVideoSource)
-        {
-            var durationMismatchHint = _outputPaths.TryBuildArchiveDurationMismatchHint(detected.MainVideoPath, outputPath);
-            if (!string.IsNullOrWhiteSpace(durationMismatchHint))
-            {
-                detected = detected with
-                {
-                    Notes = detected.Notes
-                        .Concat([durationMismatchHint])
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToList()
-                };
-                metadataResolution = metadataResolution with
-                {
-                    RequiresReview = true,
-                    StatusText = AppendDurationMismatchReviewHint(metadataResolution.StatusText)
-                };
-            }
-        }
-
         return new BatchScanCoordinatorResult(detected, localGuess, metadataResolution, outputPath);
-    }
-
-    private static string AppendDurationMismatchReviewHint(string statusText)
-    {
-        const string hint = "Auffällige Laufzeitdifferenz zum Archivtreffer. Bitte auf Doppelfolge oder Mehrfachfolge prüfen.";
-        if (string.IsNullOrWhiteSpace(statusText))
-        {
-            return hint;
-        }
-
-        return statusText.Contains("Laufzeitdifferenz", StringComparison.OrdinalIgnoreCase)
-            ? statusText
-            : statusText + " " + hint;
     }
 }
 
