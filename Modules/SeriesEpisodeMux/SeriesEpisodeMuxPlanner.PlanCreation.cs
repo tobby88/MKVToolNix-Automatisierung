@@ -6,6 +6,8 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 // Dieser Partial kapselt die eigentliche Mux-Planerzeugung aus bereits erkannten UI-Eingaben und Archivdaten.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
+    private static readonly TimeSpan DurationHintProbeTimeout = TimeSpan.FromSeconds(2);
+
     /// <summary>
     /// Erzeugt aus einer konkreten Episodeingabe einen vollständig aufgelösten Mux-Plan inklusive Archivintegration.
     /// </summary>
@@ -197,12 +199,24 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
-        var sourceDuration = CompanionTextMetadataReader.ReadForMediaFile(sourceFilePath).Duration;
-        var archiveDuration = await _archiveService.TryReadPrimaryEmbeddedTextDurationAsync(
+        var sourceTextDuration = CompanionTextMetadataReader.ReadForMediaFile(sourceFilePath).Duration;
+        var archiveTextDuration = await _archiveService.TryReadPrimaryEmbeddedTextDurationAsync(
             mkvMergePath,
             archiveOutputPath,
             primaryLanguageCode,
             cancellationToken);
+        var sourceDuration = sourceTextDuration;
+        var archiveDuration = archiveTextDuration;
+        if (sourceDuration is null)
+        {
+            sourceDuration = await TryReadDurationForHintAsync(sourceFilePath, cancellationToken);
+        }
+
+        if (archiveDuration is null)
+        {
+            archiveDuration = await TryReadDurationForHintAsync(archiveOutputPath, cancellationToken);
+        }
+
         int? sourceSeconds = sourceDuration is null
             ? null
             : (int)Math.Round(sourceDuration.Value.TotalSeconds);
@@ -213,6 +227,31 @@ public sealed partial class SeriesEpisodeMuxPlanner
         if (durationMultiple is null)
         {
             return null;
+        }
+
+        var hasConflictingDurationEvidence = false;
+        if (sourceDuration is not null
+            && sourceTextDuration is TimeSpan resolvedSourceTextDuration)
+        {
+            hasConflictingDurationEvidence = await HasConflictingDurationEvidenceAsync(
+                sourceFilePath,
+                resolvedSourceTextDuration,
+                cancellationToken);
+        }
+
+        if (!hasConflictingDurationEvidence
+            && archiveDuration is not null
+            && archiveTextDuration is TimeSpan resolvedArchiveTextDuration)
+        {
+            hasConflictingDurationEvidence = await HasConflictingDurationEvidenceAsync(
+                archiveOutputPath,
+                resolvedArchiveTextDuration,
+                cancellationToken);
+        }
+
+        if (hasConflictingDurationEvidence)
+        {
+            return "Begleit-TXT und ermittelte Dateilaufzeit widersprechen sich deutlich. Bitte Archivtreffer und Episodencode manuell prüfen.";
         }
 
         var archiveIsLonger = archiveSeconds > sourceSeconds;
@@ -378,6 +417,54 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         return null;
+    }
+
+    private async Task<TimeSpan?> TryReadDurationForHintAsync(
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        if (_ffprobeDurationProbe is null || string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await _ffprobeDurationProbe.TryReadDurationAsync(
+                filePath,
+                DurationHintProbeTimeout,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<bool> HasConflictingDurationEvidenceAsync(
+        string filePath,
+        TimeSpan textDuration,
+        CancellationToken cancellationToken)
+    {
+        var probedDuration = await TryReadDurationForHintAsync(filePath, cancellationToken);
+        if (probedDuration is null)
+        {
+            return false;
+        }
+
+        return !AreDurationsApproximatelyEqual(textDuration, probedDuration.Value);
+    }
+
+    private static bool AreDurationsApproximatelyEqual(TimeSpan left, TimeSpan right)
+    {
+        var differenceSeconds = Math.Abs((left - right).TotalSeconds);
+        var referenceSeconds = Math.Max(left.TotalSeconds, right.TotalSeconds);
+        var toleranceSeconds = Math.Max(45, Math.Round(referenceSeconds * 0.05));
+        return differenceSeconds <= toleranceSeconds;
     }
 
     private (IReadOnlyList<string> Notes, IReadOnlyList<string> PlannedVideoPaths) ResolvePlanSourceSelection(

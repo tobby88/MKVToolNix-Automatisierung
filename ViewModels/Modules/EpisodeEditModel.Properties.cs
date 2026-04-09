@@ -331,7 +331,12 @@ internal partial class EpisodeEditModel
 
     public string ReviewBadgeBorderBrush => EpisodeUiStyleBuilder.BuildReviewBadgeBorderBrush(ReviewState);
 
-    public IReadOnlyList<string> Notes => _notes;
+    public IReadOnlyList<string> Notes => _notes
+        .Concat(_planNotes)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    public bool HasNotes => Notes.Count > 0;
 
     public string DetectionSeedPath => _detectionSeedPath;
 
@@ -374,7 +379,7 @@ internal partial class EpisodeEditModel
 
     public virtual string AttachmentDisplayText => EpisodeEditTextBuilder.FormatPaths(_attachmentPaths);
 
-    public string NotesDisplayText => EpisodeEditTextBuilder.BuildNotesDisplayText(_notes);
+    public string NotesDisplayText => EpisodeEditTextBuilder.BuildNotesDisplayText(Notes);
 
     public IReadOnlyList<string> SourceFilePaths => EnumerateSourceFilePaths().ToList();
 
@@ -398,7 +403,7 @@ internal partial class EpisodeEditModel
 
     IReadOnlyList<string> IEpisodePlanInput.PlannedVideoPaths => BuildPlannedVideoPaths();
 
-    IReadOnlyList<string> IEpisodePlanInput.DetectionNotes => Notes;
+    IReadOnlyList<string> IEpisodePlanInput.DetectionNotes => _notes;
 
     private IReadOnlyList<string> BuildPlannedVideoPaths()
     {

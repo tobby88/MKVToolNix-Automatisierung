@@ -21,6 +21,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
+            SetPlanNotes(_currentPlan.Notes);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             UsageSummary = _currentPlan.BuildUsageSummary();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
@@ -52,6 +53,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
+            SetPlanNotes(_currentPlan.Notes);
             PlanSummaryText = _currentPlan.BuildCompactSummaryText();
             UsageSummary = _currentPlan.BuildUsageSummary();
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
@@ -330,6 +332,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             || string.IsNullOrWhiteSpace(Title))
         {
             PlanSummaryText = string.Empty;
+            SetPlanNotes([]);
             UsageSummary = null;
             PlanRefreshProblemText = string.Empty;
             return;
@@ -346,6 +349,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             _currentPlan = plan;
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(plan);
+            SetPlanNotes(plan.Notes);
             PlanSummaryText = plan.BuildCompactSummaryText();
             UsageSummary = plan.BuildUsageSummary();
         }

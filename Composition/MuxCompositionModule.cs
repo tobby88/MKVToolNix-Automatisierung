@@ -28,7 +28,8 @@ internal static class MuxCompositionModule
             provider.GetRequiredService<MkvToolNixLocator>(),
             provider.GetRequiredService<MkvMergeProbeService>(),
             provider.GetRequiredService<SeriesArchiveService>(),
-            provider.GetRequiredService<IMediaDurationProbe>()));
+            provider.GetRequiredService<IMediaDurationProbe>(),
+            provider.GetRequiredService<FfprobeDurationProbe>()));
         services.AddSingleton<SeriesEpisodeMuxService>(provider => new SeriesEpisodeMuxService(
             provider.GetRequiredService<SeriesEpisodeMuxPlanner>(),
             new MuxExecutionService(),

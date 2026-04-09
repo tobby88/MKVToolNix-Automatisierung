@@ -25,6 +25,7 @@ internal partial class EpisodeEditModel
         {
             _notes.Add("Weitere gefundene Quelldateien wurden dieser Episode automatisch zugeordnet.");
             OnPropertyChanged(nameof(Notes));
+            OnPropertyChanged(nameof(HasNotes));
             OnPropertyChanged(nameof(NotesDisplayText));
         }
 
@@ -60,6 +61,7 @@ internal partial class EpisodeEditModel
         SetMetadataResolutionState(metadataResolution);
         SetManualCheckFiles(detected.RequiresManualCheck, detected.ManualCheckFilePaths);
         SetNotes(detected.Notes);
+        SetPlanNotes([]);
         OnPropertyChanged(nameof(UsesAutomaticOutputPath));
     }
 
@@ -175,6 +177,18 @@ internal partial class EpisodeEditModel
     {
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         OnPropertyChanged(nameof(Notes));
+        OnPropertyChanged(nameof(HasNotes));
+        OnPropertyChanged(nameof(NotesDisplayText));
+    }
+
+    public void SetPlanNotes(IEnumerable<string> notes)
+    {
+        _planNotes = notes
+            .Where(note => !string.IsNullOrWhiteSpace(note))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        OnPropertyChanged(nameof(Notes));
+        OnPropertyChanged(nameof(HasNotes));
         OnPropertyChanged(nameof(NotesDisplayText));
     }
 

@@ -23,6 +23,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private readonly MkvMergeProbeService _probeService;
     private readonly SeriesArchiveService _archiveService;
     private readonly IMediaDurationProbe _durationProbe;
+    private readonly FfprobeDurationProbe? _ffprobeDurationProbe;
 
     /// <summary>
     /// Initialisiert den zentralen Planer für Dateierkennung, Archivabgleich und Mux-Planerzeugung.
@@ -31,16 +32,23 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// <param name="probeService">Liest Container- und Track-Metadaten aus vorhandenen Dateien.</param>
     /// <param name="archiveService">Entscheidet, wie vorhandene Archivdateien in neue Pläne integriert werden.</param>
     /// <param name="durationProbe">Liefert optionale Laufzeiten für Qualitäts- und Kandidatenvergleiche.</param>
+    /// <param name="ffprobeDurationProbe">
+    /// Optionaler direkter ffprobe-Zugriff für kurze Best-Effort-Laufzeitprüfungen im Planbau.
+    /// Solche Prüfungen dürfen die UI nicht blockieren und umgehen deshalb bewusst den breiteren
+    /// Windows-Fallback des allgemeinen Laufzeit-Probes.
+    /// </param>
     public SeriesEpisodeMuxPlanner(
         MkvToolNixLocator locator,
         MkvMergeProbeService probeService,
         SeriesArchiveService archiveService,
-        IMediaDurationProbe durationProbe)
+        IMediaDurationProbe durationProbe,
+        FfprobeDurationProbe? ffprobeDurationProbe = null)
     {
         _locator = locator;
         _probeService = probeService;
         _archiveService = archiveService;
         _durationProbe = durationProbe;
+        _ffprobeDurationProbe = ffprobeDurationProbe;
     }
 
     /// <summary>

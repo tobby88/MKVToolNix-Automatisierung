@@ -53,7 +53,37 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = ReadDurationCore(filePath, ffprobePath);
+        var duration = ReadDurationCore(filePath, ffprobePath, ProcessTimeout, CancellationToken.None);
+        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        return duration;
+    }
+
+    /// <summary>
+    /// Liest die Laufzeit einer Datei asynchron mit explizit begrenzter Dauerprobe.
+    /// Dieser Pfad ist für seltene Zusatzheuristiken gedacht, die die UI nicht länger blockieren dürfen.
+    /// </summary>
+    /// <param name="filePath">Zu prüfende Mediendatei.</param>
+    /// <param name="timeout">Maximal erlaubte Laufzeit für den ffprobe-Aufruf.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Die gelesene Laufzeit oder <see langword="null"/>, wenn der Aufruf fehlschlägt oder abläuft.</returns>
+    internal async Task<TimeSpan?> TryReadDurationAsync(
+        string filePath,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        var ffprobePath = GetCurrentFfprobePath();
+        var snapshot = FileStateSnapshot.TryCreate(filePath);
+        if (string.IsNullOrWhiteSpace(ffprobePath) || snapshot is null)
+        {
+            return null;
+        }
+
+        if (_cache.TryGetValue(filePath, out var cachedValue) && cachedValue.Matches(snapshot))
+        {
+            return cachedValue.Value;
+        }
+
+        var duration = await ReadDurationCoreAsync(filePath, ffprobePath, timeout, cancellationToken);
         _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
         return duration;
     }
@@ -93,12 +123,20 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         }
     }
 
-    private static TimeSpan? ReadDurationCore(string filePath, string ffprobePath)
+    private static TimeSpan? ReadDurationCore(
+        string filePath,
+        string ffprobePath,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
-        return ReadDurationCoreAsync(filePath, ffprobePath).GetAwaiter().GetResult();
+        return ReadDurationCoreAsync(filePath, ffprobePath, timeout, cancellationToken).GetAwaiter().GetResult();
     }
 
-    private static async Task<TimeSpan?> ReadDurationCoreAsync(string filePath, string ffprobePath)
+    private static async Task<TimeSpan?> ReadDurationCoreAsync(
+        string filePath,
+        string ffprobePath,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
         if (!File.Exists(filePath))
         {
@@ -133,16 +171,22 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
 
             var standardOutputTask = process.StandardOutput.ReadToEndAsync();
             var standardErrorTask = process.StandardError.ReadToEndAsync();
-            using var timeout = new CancellationTokenSource(ProcessTimeout);
+            using var timeoutSource = new CancellationTokenSource(timeout);
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
 
             try
             {
-                await process.WaitForExitAsync(timeout.Token);
+                await process.WaitForExitAsync(linkedCancellation.Token);
             }
             catch (OperationCanceledException)
             {
                 KillProcessTree(process);
                 await DrainProcessOutputAfterKillAsync(process, standardOutputTask, standardErrorTask);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+
                 return null;
             }
 

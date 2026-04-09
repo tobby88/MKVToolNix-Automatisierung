@@ -48,6 +48,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private bool _requiresManualCheck;
     private List<string> _manualCheckFilePaths = [];
     private List<string> _notes = [];
+    private List<string> _planNotes = [];
     private string _detectionSeedPath = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);

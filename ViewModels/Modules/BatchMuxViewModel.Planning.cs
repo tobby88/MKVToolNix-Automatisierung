@@ -93,6 +93,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             item.SetPlanSummary(string.Empty);
+            item.SetPlanNotes([]);
             return;
         }
 
@@ -132,6 +133,7 @@ internal sealed partial class BatchMuxViewModel
             item.SetPlanSummary(hasArchiveComparisonTarget
                 ? "Zielvergleich wird berechnet..."
                 : "Verwendungsplan wird berechnet...");
+            item.SetPlanNotes([]);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending(
                 hasArchiveComparisonTarget ? "Zielvergleich wird berechnet" : "Verwendungsplan wird berechnet",
                 hasArchiveComparisonTarget ? Path.GetFileName(item.OutputPath) : "Neue MKV wird erstellt"));
@@ -148,6 +150,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             item.SetPlanSummary(plan.BuildCompactSummaryText());
+            item.SetPlanNotes(plan.Notes);
             item.SetUsageSummary(plan.BuildUsageSummary());
 
             if (hasArchiveComparisonTarget)
@@ -171,6 +174,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
+            item.SetPlanNotes([]);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
             item.SetStatus(BatchEpisodeStatusKind.Warning);
         }
@@ -362,6 +366,7 @@ internal sealed partial class BatchMuxViewModel
             || string.IsNullOrWhiteSpace(item.TitleForMux))
         {
             item.SetPlanSummary(string.Empty);
+            item.SetPlanNotes([]);
             return;
         }
 
@@ -392,6 +397,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             item.SetPlanSummary("Plan konnte noch nicht berechnet werden: " + ex.Message);
+            item.SetPlanNotes([]);
             item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Plan konnte nicht berechnet werden", ex.Message));
         }
     }
