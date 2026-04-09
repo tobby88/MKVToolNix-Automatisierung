@@ -72,10 +72,8 @@ New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
 & dotnet publish $projectPath `
     -c Release `
     -r $RuntimeIdentifier `
-    --self-contained true `
+    --self-contained false `
     -p:PublishSingleFile=true `
-    -p:IncludeNativeLibrariesForSelfExtract=true `
-    -p:EnableCompressionInSingleFile=true `
     -p:PublishTrimmed=false `
     -p:DebugType=None `
     -p:DebugSymbols=false `

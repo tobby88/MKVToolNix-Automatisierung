@@ -183,10 +183,11 @@ Der Workflow:
 - wird nicht bei jedem Push ausgelöst
 - baut die App in `Release`
 - führt Unit- und Integrationstests seriell aus
-- veröffentlicht anschließend eine selbst enthaltene Single-File-Exe für `win-x64`
+- veröffentlicht anschließend eine framework-dependent Single-File-Exe für `win-x64`
 - erstellt dazu ein Git-Tag `v<Version>` und eine GitHub-Release-Seite
 
-Die Release-Datei enthält die Anwendung selbst samt .NET-Laufzeit in einer einzigen `.exe`.  
+Die Release-Datei bleibt eine einzige `.exe`, enthält aber nicht mehr die komplette .NET-Laufzeit.  
+Dadurch wird das Release kleiner, benötigt auf dem Zielsystem aber eine installierte `.NET Desktop Runtime 9` für `win-x64`.  
 Die externen Werkzeuge `mkvmerge.exe` und optional `ffprobe.exe` bleiben bewusst separate Tools und werden nicht in die Release-Datei eingebettet.
 
 ### Versionsnummern
@@ -214,7 +215,8 @@ Wenn du denselben Release-Typ lokal bauen willst:
 .\scripts\publish-release.ps1 -Version 1.4.0
 ```
 
-Das Skript erzeugt eine selbst enthaltene Single-File-Exe unter `.\artifacts\release\`.
+Das Skript erzeugt eine framework-dependent Single-File-Exe unter `.\artifacts\release\`.
+Das lokale Release ist ebenfalls framework-dependent und benötigt deshalb auf dem Zielsystem die passende `.NET Desktop Runtime 9`.
 
 ## Entwicklerdokumentation
 

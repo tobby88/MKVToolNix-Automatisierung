@@ -389,7 +389,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         CreateFile(
             sourceDirectory,
             "Beispielserie - Rififi (S2014_E05).txt",
-            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (S2014_E05)\r\nDauer: 00:43:00");
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (S2014_E05)\r\nDauer: 01:26:00");
         FakeMkvMergeTestHelper.WriteProbeFile(
             mainVideoPath,
             CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
