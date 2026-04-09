@@ -266,6 +266,49 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         Assert.Equal(archiveFilePath, result.OutputPath);
     }
 
+    [Fact]
+    public async Task ScanAsync_MarksExistingArchiveMatchForReview_WhenDurationLooksLikeDoubleEpisode()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "double-episode-source");
+        var archiveDirectory = Path.Combine(_tempDirectory, "double-episode-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E01).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E01).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E01)\r\nDauer: 00:43:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var archiveFilePath = Path.Combine(
+            archiveDirectory,
+            "Beispielserie",
+            "Season 1",
+            "Beispielserie - S01E01 - Pilot.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        CreateFile(Path.GetDirectoryName(archiveFilePath)!, Path.GetFileName(archiveFilePath), "archive");
+
+        var coordinator = CreateBatchScanCoordinator(
+            archiveDirectory,
+            new StubTvdbClient(),
+            new DictionaryDurationProbe(new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase)
+            {
+                [mainVideoPath] = TimeSpan.FromMinutes(43),
+                [archiveFilePath] = TimeSpan.FromMinutes(86)
+            }));
+
+        var result = await coordinator.ScanAsync(mainVideoPath, archiveDirectory);
+
+        Assert.Equal(archiveFilePath, result.OutputPath);
+        Assert.True(result.MetadataResolution.RequiresReview);
+        Assert.Contains("Laufzeitdifferenz", result.MetadataResolution.StatusText, StringComparison.Ordinal);
+        Assert.Contains(result.Detected.Notes, note => note.Contains("Doppelfolge", StringComparison.OrdinalIgnoreCase));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -274,7 +317,10 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         }
     }
 
-    private BatchScanCoordinator CreateBatchScanCoordinator(string archiveDirectory, StubTvdbClient tvdbClient)
+    private BatchScanCoordinator CreateBatchScanCoordinator(
+        string archiveDirectory,
+        StubTvdbClient tvdbClient,
+        IMediaDurationProbe? durationProbe = null)
     {
         var settingsStore = new AppSettingsStore();
         new AppToolPathStore(settingsStore).Save(new AppToolPathSettings
@@ -291,19 +337,20 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         var probeService = new MkvMergeProbeService();
         var archiveService = new SeriesArchiveService(probeService, new AppArchiveSettingsStore(settingsStore));
         archiveService.ConfigureArchiveRootDirectory(archiveDirectory);
+        var effectiveDurationProbe = durationProbe ?? new NullDurationProbe();
         var muxService = new SeriesEpisodeMuxService(
             new SeriesEpisodeMuxPlanner(
                 new MkvToolNixLocator(new AppToolPathStore(settingsStore)),
                 probeService,
                 archiveService,
-                new NullDurationProbe()),
+                effectiveDurationProbe),
             new MuxExecutionService(),
             new MkvMergeOutputParser());
 
         return new BatchScanCoordinator(
             muxService,
             new EpisodeMetadataLookupService(metadataStore, tvdbClient),
-            new EpisodeOutputPathService(archiveService));
+            new EpisodeOutputPathService(archiveService, effectiveDurationProbe));
     }
 
     private string CreateFile(string directory, string fileName, string content = "data")
@@ -347,6 +394,23 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         public TimeSpan? TryReadDuration(string filePath)
         {
             return null;
+        }
+    }
+
+    private sealed class DictionaryDurationProbe : IMediaDurationProbe
+    {
+        private readonly IReadOnlyDictionary<string, TimeSpan> _durations;
+
+        public DictionaryDurationProbe(IReadOnlyDictionary<string, TimeSpan> durations)
+        {
+            _durations = durations;
+        }
+
+        public TimeSpan? TryReadDuration(string filePath)
+        {
+            return _durations.TryGetValue(filePath, out var duration)
+                ? duration
+                : null;
         }
     }
 

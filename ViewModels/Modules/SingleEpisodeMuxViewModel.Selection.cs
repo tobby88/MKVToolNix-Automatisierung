@@ -508,7 +508,42 @@ internal sealed partial class SingleEpisodeMuxViewModel
             detected = EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
         }
 
+        if (detected.HasPrimaryVideoSource)
+        {
+            var durationMismatchHint = _services.OutputPaths.TryBuildArchiveDurationMismatchHint(
+                detected.MainVideoPath,
+                detected.SuggestedOutputFilePath);
+            if (!string.IsNullOrWhiteSpace(durationMismatchHint))
+            {
+                detected = detected with
+                {
+                    Notes = detected.Notes
+                        .Concat([durationMismatchHint])
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                };
+                resolution = resolution with
+                {
+                    RequiresReview = true,
+                    StatusText = AppendDurationMismatchReviewHint(resolution.StatusText)
+                };
+            }
+        }
+
         return (detected, resolution);
+    }
+
+    private static string AppendDurationMismatchReviewHint(string statusText)
+    {
+        const string hint = "Auffällige Laufzeitdifferenz zum Archivtreffer. Bitte auf Doppelfolge oder Mehrfachfolge prüfen.";
+        if (string.IsNullOrWhiteSpace(statusText))
+        {
+            return hint;
+        }
+
+        return statusText.Contains("Laufzeitdifferenz", StringComparison.OrdinalIgnoreCase)
+            ? statusText
+            : statusText + " " + hint;
     }
 
     private bool ShouldPreserveManualTitle(string selectedVideoPath)

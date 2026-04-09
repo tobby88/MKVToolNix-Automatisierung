@@ -6,10 +6,12 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class EpisodeOutputPathService
 {
     private readonly SeriesArchiveService _archiveService;
+    private readonly IMediaDurationProbe _durationProbe;
 
-    public EpisodeOutputPathService(SeriesArchiveService archiveService)
+    public EpisodeOutputPathService(SeriesArchiveService archiveService, IMediaDurationProbe? durationProbe = null)
     {
         _archiveService = archiveService;
+        _durationProbe = durationProbe ?? new NullMediaDurationProbe();
     }
 
     /// <summary>
@@ -125,6 +127,49 @@ internal sealed class EpisodeOutputPathService
     }
 
     /// <summary>
+    /// Prüft bestehende Archivtreffer auf eine auffällige Laufzeitabweichung gegenüber der aktuellen Quelle.
+    /// Die Heuristik ist bewusst konservativ: Sie meldet nur ungefähr ganzzahlige Vielfache, weil genau
+    /// diese Muster bei zusammengefassten Doppelfolgen oder Mehrfachfolgen fachlich relevant sind.
+    /// </summary>
+    /// <param name="sourceFilePath">Aktuelle frische Hauptquelle der Episode.</param>
+    /// <param name="archiveOutputPath">Bereits gewähltes oder gefundenes Archivziel.</param>
+    /// <returns>Warnhinweis für Review/GUI oder <see langword="null"/>, wenn keine belastbare Auffälligkeit vorliegt.</returns>
+    public string? TryBuildArchiveDurationMismatchHint(string? sourceFilePath, string? archiveOutputPath)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFilePath)
+            || string.IsNullOrWhiteSpace(archiveOutputPath)
+            || !IsArchivePath(archiveOutputPath)
+            || !File.Exists(sourceFilePath)
+            || !File.Exists(archiveOutputPath)
+            || PathComparisonHelper.AreSamePath(sourceFilePath, archiveOutputPath))
+        {
+            return null;
+        }
+
+        var sourceDuration = _durationProbe.TryReadDuration(sourceFilePath);
+        var archiveDuration = _durationProbe.TryReadDuration(archiveOutputPath);
+        if (sourceDuration is null || archiveDuration is null)
+        {
+            return null;
+        }
+
+        var sourceSeconds = (int)Math.Round(sourceDuration.Value.TotalSeconds);
+        var archiveSeconds = (int)Math.Round(archiveDuration.Value.TotalSeconds);
+        var durationMultiple = TryFindNearIntegerMultiple(sourceSeconds, archiveSeconds);
+        if (durationMultiple is null)
+        {
+            return null;
+        }
+
+        var archiveIsLonger = archiveSeconds > sourceSeconds;
+        var relationText = archiveIsLonger
+            ? $"Die vorhandene Bibliotheksdatei ist ungefähr {durationMultiple}-mal so lang wie die aktuelle Quelle."
+            : $"Die aktuelle Quelle ist ungefähr {durationMultiple}-mal so lang wie die vorhandene Bibliotheksdatei.";
+        return relationText
+            + " Möglicherweise handelt es sich um eine Doppelfolge oder um einen Teil einer Mehrfachfolge. Bitte Metadaten und Archivtreffer prüfen.";
+    }
+
+    /// <summary>
     /// Sucht innerhalb des Serienordners der Bibliothek nach genau einer passenden MKV mit gleichem Titel.
     /// Dieser konservative Fallback greift nur, wenn der exakte Sollpfad nicht existiert, die Episode aber
     /// dennoch bereits archiviert wurde und der aktuelle Scan noch keinen stabilen Staffel-/Episodencode liefert.
@@ -175,5 +220,36 @@ internal sealed class EpisodeOutputPathService
         return titleMatches.Count == 1
             ? titleMatches[0]
             : null;
+    }
+
+    private static int? TryFindNearIntegerMultiple(int firstSeconds, int secondSeconds)
+    {
+        if (firstSeconds <= 0 || secondSeconds <= 0)
+        {
+            return null;
+        }
+
+        var shorter = Math.Min(firstSeconds, secondSeconds);
+        var longer = Math.Max(firstSeconds, secondSeconds);
+
+        for (var factor = 2; factor <= 4; factor++)
+        {
+            var expectedLonger = shorter * factor;
+            var toleranceSeconds = Math.Max(90, (int)Math.Round(expectedLonger * 0.08));
+            if (Math.Abs(longer - expectedLonger) <= toleranceSeconds)
+            {
+                return factor;
+            }
+        }
+
+        return null;
+    }
+
+    private sealed class NullMediaDurationProbe : IMediaDurationProbe
+    {
+        public TimeSpan? TryReadDuration(string filePath)
+        {
+            return null;
+        }
     }
 }
