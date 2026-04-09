@@ -5,8 +5,6 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 // Dieser Partial kapselt die eigentliche Mux-Planerzeugung aus bereits erkannten UI-Eingaben und Archivdaten.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
-    private static readonly TimeSpan DurationMismatchProbeTimeout = TimeSpan.FromSeconds(3);
-
     /// <summary>
     /// Erzeugt aus einer konkreten Episodeingabe einen vollständig aufgelösten Mux-Plan inklusive Archivintegration.
     /// </summary>
@@ -117,6 +115,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         if (request.HasPrimaryVideoSource)
         {
             var durationMismatchHint = await TryBuildArchiveDurationMismatchHintAsync(
+                mkvMergePath,
                 request.MainVideoPath,
                 effectiveOutputPath,
                 cancellationToken);
@@ -167,10 +166,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// Ergänzt bei bestehender Bibliotheksdatei einen konservativen Hinweis, wenn Quelle und Archivdatei
     /// ungefähr ein ganzzahliges Laufzeitvielfaches voneinander abweichen. Genau dieses Muster tritt
     /// typischerweise bei zusammengefassten Doppelfolgen oder Mehrfachfolgen auf.
-    /// Die Heuristik ist bewusst best-effort: Langsame oder blockierende Laufzeitproben dürfen die
-    /// eigentliche Planerstellung nicht ausbremsen.
+    /// Die Heuristik arbeitet bewusst nur mit bereits vorhandenen Begleitmetadaten aus TXT-Dateien
+    /// oder eindeutigem eingebettetem TXT-Anhang. Sie soll helfen, darf aber die eigentliche
+    /// Planerstellung nicht mit zusätzlichen Medienprobes ausbremsen.
     /// </summary>
     private async Task<string?> TryBuildArchiveDurationMismatchHintAsync(
+        string mkvMergePath,
         string? sourceFilePath,
         string? archiveOutputPath,
         CancellationToken cancellationToken)
@@ -185,12 +186,17 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
-        var sourceDurationTask = TryReadDurationSecondsForDurationMismatchHintAsync(sourceFilePath, cancellationToken);
-        var archiveDurationTask = TryReadDurationSecondsForDurationMismatchHintAsync(archiveOutputPath, cancellationToken);
-        await Task.WhenAll(sourceDurationTask, archiveDurationTask);
-
-        var sourceSeconds = await sourceDurationTask;
-        var archiveSeconds = await archiveDurationTask;
+        var sourceDuration = CompanionTextMetadataReader.ReadForMediaFile(sourceFilePath).Duration;
+        var archiveDuration = await _archiveService.TryReadUniqueEmbeddedTextDurationAsync(
+            mkvMergePath,
+            archiveOutputPath,
+            cancellationToken);
+        int? sourceSeconds = sourceDuration is null
+            ? null
+            : (int)Math.Round(sourceDuration.Value.TotalSeconds);
+        int? archiveSeconds = archiveDuration is null
+            ? null
+            : (int)Math.Round(archiveDuration.Value.TotalSeconds);
         var durationMultiple = TryFindNearIntegerMultiple(sourceSeconds, archiveSeconds);
         if (durationMultiple is null)
         {
@@ -203,33 +209,6 @@ public sealed partial class SeriesEpisodeMuxPlanner
             : $"Die aktuelle Quelle ist ungefähr {durationMultiple}-mal so lang wie die vorhandene Bibliotheksdatei.";
         return relationText
             + " Möglicherweise handelt es sich um eine Doppelfolge oder um einen Teil einer Mehrfachfolge. Bitte Archivtreffer und Episodencode prüfen.";
-    }
-
-    /// <summary>
-    /// Liest für die Doppelfolgen-Heuristik bevorzugt die bereits vorhandene TXT-Laufzeit und fällt nur
-    /// best-effort auf die technische Medienprobe zurück. Ein langsamer Archivzugriff darf dabei die UI
-    /// nicht minutenlang blockieren.
-    /// </summary>
-    private async Task<int?> TryReadDurationSecondsForDurationMismatchHintAsync(
-        string filePath,
-        CancellationToken cancellationToken)
-    {
-        var companionDuration = CompanionTextMetadataReader.ReadForMediaFile(filePath).Duration;
-        if (companionDuration is not null)
-        {
-            return (int)Math.Round(companionDuration.Value.TotalSeconds);
-        }
-
-        var durationTask = Task.Run(() => ReadDurationSeconds(filePath, fallbackDuration: null));
-        var timeoutTask = Task.Delay(DurationMismatchProbeTimeout, cancellationToken);
-        var completedTask = await Task.WhenAny(durationTask, timeoutTask);
-        if (!ReferenceEquals(completedTask, durationTask))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return null;
-        }
-
-        return await durationTask;
     }
 
     private static int? TryFindNearIntegerMultiple(int? firstSeconds, int? secondSeconds)

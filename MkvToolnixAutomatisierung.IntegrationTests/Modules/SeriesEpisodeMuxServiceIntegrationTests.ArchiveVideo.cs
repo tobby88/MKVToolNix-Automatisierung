@@ -401,18 +401,17 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             "Season 2014",
             "Beispielserie - S2014E05 - Rififi.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
             outputPath,
+            [
+                CreateAttachment(
+                    "bestehend.txt",
+                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi\r\nDauer: 00:43:00")
+            ],
             CreateVideoTrack(0, "AVC/H.264", "1280x720"),
             CreateAudioTrack(1, "E-AC-3"));
 
-        var service = CreateMuxService(
-            archiveDirectory,
-            new DictionaryDurationProbe(new Dictionary<string, TimeSpan>(StringComparer.OrdinalIgnoreCase)
-            {
-                [mainVideoPath] = TimeSpan.FromMinutes(86),
-                [outputPath] = TimeSpan.FromMinutes(43)
-            }));
+        var service = CreateMuxService(archiveDirectory);
 
         var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
             mainVideoPath,

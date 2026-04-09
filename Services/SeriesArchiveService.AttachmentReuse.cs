@@ -8,6 +8,8 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
+    private static readonly TimeSpan AttachmentExtractionTimeout = TimeSpan.FromSeconds(10);
+
     /// <summary>
     /// Bestimmt, welche vorhandenen Attachments einer Archiv-MKV im finalen Mux-Plan erhalten bleiben dürfen.
     /// </summary>
@@ -116,6 +118,41 @@ public sealed partial class SeriesArchiveService
                 AttachmentSourcePath: outputPath,
                 AttachmentSourceAttachmentIds: preservedAttachments.Select(attachment => attachment.Id).ToList(),
                 PreservedAttachmentNames: preservedAttachmentNames);
+    }
+
+    /// <summary>
+    /// Liest für Doppelfolgen-Heuristiken konservativ nur dann eine eingebettete TXT-Laufzeit aus dem Archiv,
+    /// wenn genau ein TXT-Anhang vorhanden ist. Mehrdeutige Anhangssituationen werden bewusst ignoriert.
+    /// </summary>
+    /// <param name="mkvMergePath">Pfad zur verwendeten <c>mkvmerge.exe</c>.</param>
+    /// <param name="containerPath">Bereits vorhandene Archiv-MKV.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Die gefundene Laufzeit oder <see langword="null"/> bei fehlendem oder mehrdeutigem TXT-Anhang.</returns>
+    internal async Task<TimeSpan?> TryReadUniqueEmbeddedTextDurationAsync(
+        string mkvMergePath,
+        string containerPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(containerPath) || !File.Exists(containerPath))
+        {
+            return null;
+        }
+
+        var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, containerPath, cancellationToken);
+        var textAttachments = container.Attachments
+            .Where(attachment => IsTextAttachment(attachment.FileName))
+            .ToList();
+        if (textAttachments.Count != 1)
+        {
+            return null;
+        }
+
+        var details = await TryReadEmbeddedTextAttachmentDetailsAsync(
+            mkvMergePath,
+            containerPath,
+            textAttachments[0],
+            cancellationToken);
+        return details.Duration;
     }
 
     private async Task<IReadOnlyList<AttachmentTrackMatch>> MatchTextAttachmentsToExistingTracksAsync(
@@ -386,6 +423,8 @@ public sealed partial class SeriesArchiveService
         string outputPath,
         CancellationToken cancellationToken)
     {
+        using var timeout = new CancellationTokenSource(AttachmentExtractionTimeout);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -417,8 +456,30 @@ public sealed partial class SeriesArchiveService
             }
         });
 
-        await process.WaitForExitAsync(cancellationToken);
-        return process.ExitCode;
+        using var timeoutRegistration = linkedCancellation.Token.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+        });
+
+        try
+        {
+            await process.WaitForExitAsync(linkedCancellation.Token);
+            return process.ExitCode;
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            return -1;
+        }
+
     }
 
     private static bool IsTextAttachment(string fileName)
