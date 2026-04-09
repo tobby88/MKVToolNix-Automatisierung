@@ -54,8 +54,19 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             $"Audio: {summary.Audio.CurrentText}",
             $"AD: {summary.AudioDescription.CurrentText}",
             $"Untertitel: {summary.Subtitles.CurrentText}",
-            $"Anhänge: {summary.Attachments.CurrentText}"
+            $"Anhänge: {summary.Attachments.CurrentText}",
+            .. BuildCompactSummaryNotes(plan)
         ]);
+    }
+
+    private static IReadOnlyList<string> BuildCompactSummaryNotes(SeriesEpisodeMuxPlan plan)
+    {
+        if (plan.Notes.Count == 0)
+        {
+            return [];
+        }
+
+        return ["", "Hinweise:", .. plan.Notes.Select(note => "- " + note)];
     }
 
     public static IReadOnlyList<string> GetReferencedInputFiles(SeriesEpisodeMuxPlan plan)

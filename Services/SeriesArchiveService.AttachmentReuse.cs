@@ -121,16 +121,19 @@ public sealed partial class SeriesArchiveService
     }
 
     /// <summary>
-    /// Liest für Doppelfolgen-Heuristiken konservativ nur dann eine eingebettete TXT-Laufzeit aus dem Archiv,
-    /// wenn genau ein TXT-Anhang vorhanden ist. Mehrdeutige Anhangssituationen werden bewusst ignoriert.
+    /// Liest für Doppelfolgen-Heuristiken die Laufzeit des eingebetteten TXT-Anhangs, der am ehesten
+    /// zur primären Videospur der gewünschten Sprache gehört. Mehrdeutige Anhangssituationen bleiben
+    /// weiterhin bewusst ohne Ergebnis.
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten <c>mkvmerge.exe</c>.</param>
     /// <param name="containerPath">Bereits vorhandene Archiv-MKV.</param>
+    /// <param name="preferredLanguageCode">Bevorzugter Sprachcode der primären Videospur des neuen Plans.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
-    /// <returns>Die gefundene Laufzeit oder <see langword="null"/> bei fehlendem oder mehrdeutigem TXT-Anhang.</returns>
-    internal async Task<TimeSpan?> TryReadUniqueEmbeddedTextDurationAsync(
+    /// <returns>Die gefundene Laufzeit oder <see langword="null"/> bei fehlendem oder mehrdeutigem TXT-Kandidaten.</returns>
+    internal async Task<TimeSpan?> TryReadPrimaryEmbeddedTextDurationAsync(
         string mkvMergePath,
         string containerPath,
+        string preferredLanguageCode,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(containerPath) || !File.Exists(containerPath))
@@ -142,17 +145,54 @@ public sealed partial class SeriesArchiveService
         var textAttachments = container.Attachments
             .Where(attachment => IsTextAttachment(attachment.FileName))
             .ToList();
-        if (textAttachments.Count != 1)
+        if (textAttachments.Count == 0)
         {
             return null;
         }
 
-        var details = await TryReadEmbeddedTextAttachmentDetailsAsync(
-            mkvMergePath,
-            containerPath,
-            textAttachments[0],
-            cancellationToken);
-        return details.Duration;
+        var candidates = new List<EmbeddedTextDurationCandidate>();
+        foreach (var textAttachment in textAttachments)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var details = await TryReadEmbeddedTextAttachmentDetailsAsync(
+                mkvMergePath,
+                containerPath,
+                textAttachment,
+                cancellationToken);
+            if (details.Duration is null)
+            {
+                continue;
+            }
+
+            var titleSignals = string.Join(
+                " ",
+                new[] { textAttachment.FileName, details.Title, details.Topic, details.Sender }
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+            _ = TryInferExplicitLanguageCode(titleSignals, out var inferredLanguageCode);
+            var normalizedLanguageCode = inferredLanguageCode ?? "de";
+            var isAudioDescription = ContainsAny(titleSignals, "audiodeskrip", "sehbehinder");
+            candidates.Add(new EmbeddedTextDurationCandidate(
+                textAttachment.Id,
+                normalizedLanguageCode,
+                isAudioDescription,
+                details.Duration.Value));
+        }
+
+        var matchingCandidates = candidates
+            .Where(candidate => !candidate.IsAudioDescription
+                && string.Equals(candidate.LanguageCode, MediaLanguageHelper.NormalizeMuxLanguageCode(preferredLanguageCode), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (matchingCandidates.Count == 1)
+        {
+            return matchingCandidates[0].Duration;
+        }
+
+        var nonAdCandidates = candidates
+            .Where(candidate => !candidate.IsAudioDescription)
+            .ToList();
+        return nonAdCandidates.Count == 1
+            ? nonAdCandidates[0].Duration
+            : null;
     }
 
     private async Task<IReadOnlyList<AttachmentTrackMatch>> MatchTextAttachmentsToExistingTracksAsync(
@@ -527,4 +567,10 @@ public sealed partial class SeriesArchiveService
         string FileName,
         int? MatchedTrackId,
         bool IsStrongMatch);
+
+    private sealed record EmbeddedTextDurationCandidate(
+        int AttachmentId,
+        string LanguageCode,
+        bool IsAudioDescription,
+        TimeSpan Duration);
 }

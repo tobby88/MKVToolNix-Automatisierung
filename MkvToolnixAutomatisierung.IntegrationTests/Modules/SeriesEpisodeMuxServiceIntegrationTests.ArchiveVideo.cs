@@ -399,14 +399,20 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             archiveDirectory,
             "Beispielserie",
             "Season 2014",
-            "Beispielserie - S2014E05 - Rififi.mkv");
+            "Beispielserie - S2014E05 - Rififi (1).mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
         FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
             outputPath,
             [
                 CreateAttachment(
-                    "bestehend.txt",
-                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi\r\nDauer: 00:43:00")
+                    "Beispielserie-Rififi (1_2)-de.txt",
+                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (1/2)\r\nDauer: 00:43:00"),
+                CreateAttachment(
+                    "Beispielserie-Rififi (1_2) - Audiodeskription.txt",
+                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (1/2) - Audiodeskription\r\nDauer: 00:43:00"),
+                CreateAttachment(
+                    "Beispielserie-Büttenwarder op Platt_ Rififi (1_2).txt",
+                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Büttenwarder op Platt: Rififi (1/2)\r\nDauer: 00:42:50")
             ],
             CreateVideoTrack(0, "AVC/H.264", "1280x720"),
             CreateAudioTrack(1, "E-AC-3"));
@@ -419,9 +425,55 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             SubtitlePaths: [],
             AttachmentPaths: [],
             outputPath,
-            Title: "Rififi"));
+            Title: "Rififi (1)"));
 
         Assert.Contains(plan.Notes, note => note.Contains("Doppelfolge", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(plan.Notes, note => note.Contains("2-mal so lang", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_AddsVariantNote_WhenArchiveContainsMatchingMultipartEpisodeVariant()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-episode-variant");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-episode-variant");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Rififi (S2014_E05).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (S2014_E05).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (S2014_E05)\r\nDauer: 00:26:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var seasonDirectory = Path.Combine(archiveDirectory, "Beispielserie", "Season 2014");
+        var outputPath = Path.Combine(seasonDirectory, "Beispielserie - S2014E05 - Rififi (1).mkv");
+        var doubleEpisodePath = Path.Combine(seasonDirectory, "Beispielserie - S2014E05-E06 - Rififi.mkv");
+        CreateFile(seasonDirectory, Path.GetFileName(outputPath), "archive-single");
+        CreateFile(seasonDirectory, Path.GetFileName(doubleEpisodePath), "archive-double");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            doubleEpisodePath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Rififi (1)"));
+
+        Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
     }
 }

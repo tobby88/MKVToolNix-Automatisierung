@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -114,10 +115,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
         if (request.HasPrimaryVideoSource)
         {
+            var archiveEpisodeVariantHint = TryBuildArchiveEpisodeVariantHint(
+                effectiveOutputPath,
+                request.Title);
+            if (!string.IsNullOrWhiteSpace(archiveEpisodeVariantHint))
+            {
+                notes.Add(archiveEpisodeVariantHint);
+            }
+
             var durationMismatchHint = await TryBuildArchiveDurationMismatchHintAsync(
                 mkvMergePath,
                 request.MainVideoPath,
                 effectiveOutputPath,
+                videoSelections[0].LanguageCode,
                 cancellationToken);
             if (!string.IsNullOrWhiteSpace(durationMismatchHint))
             {
@@ -174,6 +184,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string mkvMergePath,
         string? sourceFilePath,
         string? archiveOutputPath,
+        string primaryLanguageCode,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(sourceFilePath)
@@ -187,9 +198,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         var sourceDuration = CompanionTextMetadataReader.ReadForMediaFile(sourceFilePath).Duration;
-        var archiveDuration = await _archiveService.TryReadUniqueEmbeddedTextDurationAsync(
+        var archiveDuration = await _archiveService.TryReadPrimaryEmbeddedTextDurationAsync(
             mkvMergePath,
             archiveOutputPath,
+            primaryLanguageCode,
             cancellationToken);
         int? sourceSeconds = sourceDuration is null
             ? null
@@ -209,6 +221,140 @@ public sealed partial class SeriesEpisodeMuxPlanner
             : $"Die aktuelle Quelle ist ungefähr {durationMultiple}-mal so lang wie die vorhandene Bibliotheksdatei.";
         return relationText
             + " Möglicherweise handelt es sich um eine Doppelfolge oder um einen Teil einer Mehrfachfolge. Bitte Archivtreffer und Episodencode prüfen.";
+    }
+
+    /// <summary>
+    /// Prüft den Archivordner auf gleichnamige Einzel- oder Mehrfachfolgen-Varianten derselben Staffel.
+    /// Das hilft bei Fällen wie "Rififi", bei denen eine Doppelfolge im Archiv bereits als
+    /// <c>S2014E05-E06</c> liegt, die aktuelle Quelle aber lokal zunächst als Einzelfolge interpretiert wird.
+    /// </summary>
+    private string? TryBuildArchiveEpisodeVariantHint(
+        string? archiveOutputPath,
+        string title)
+    {
+        if (string.IsNullOrWhiteSpace(archiveOutputPath)
+            || !_archiveService.IsArchivePath(archiveOutputPath))
+        {
+            return null;
+        }
+
+        var seasonDirectory = Path.GetDirectoryName(archiveOutputPath);
+        if (string.IsNullOrWhiteSpace(seasonDirectory) || !Directory.Exists(seasonDirectory))
+        {
+            return null;
+        }
+
+        var currentTitleKey = BuildEpisodeVariantTitleKey(title);
+        if (string.IsNullOrWhiteSpace(currentTitleKey))
+        {
+            return null;
+        }
+
+        var outputFileName = Path.GetFileNameWithoutExtension(archiveOutputPath);
+        var currentEpisodeMatch = FindEpisodePattern(outputFileName);
+        if (currentEpisodeMatch is null)
+        {
+            return null;
+        }
+
+        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(currentEpisodeMatch.Groups["season"].Value);
+        var normalizedEpisodeNumber = EpisodeFileNameHelper.NormalizeEpisodeNumber(currentEpisodeMatch.Groups["episode"].Value);
+        var currentIsRange = EpisodeFileNameHelper.IsEpisodeRange(normalizedEpisodeNumber);
+
+        var matchingEpisodeCodes = Directory.EnumerateFiles(seasonDirectory, "*.mkv", SearchOption.TopDirectoryOnly)
+            .Where(path => !PathComparisonHelper.AreSamePath(path, archiveOutputPath))
+            .Select(path => new
+            {
+                Path = path,
+                FileName = Path.GetFileNameWithoutExtension(path)
+            })
+            .Select(entry => new
+            {
+                entry.Path,
+                entry.FileName,
+                Match = FindEpisodePattern(entry.FileName)
+            })
+            .Where(entry => entry.Match is not null)
+            .Select(entry => new
+            {
+                entry.Path,
+                Match = entry.Match!,
+                entry.FileName,
+                TitleKey = BuildEpisodeVariantTitleKey(ExtractArchiveEpisodeTitle(entry.FileName, entry.Match!))
+            })
+            .Where(entry => string.Equals(entry.TitleKey, currentTitleKey, StringComparison.OrdinalIgnoreCase))
+            .Select(entry => new
+            {
+                Season = EpisodeFileNameHelper.NormalizeSeasonNumber(entry.Match.Groups["season"].Value),
+                Episode = EpisodeFileNameHelper.NormalizeEpisodeNumber(entry.Match.Groups["episode"].Value)
+            })
+            .Where(entry => string.Equals(entry.Season, normalizedSeasonNumber, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Episode, normalizedEpisodeNumber, StringComparison.OrdinalIgnoreCase))
+            .Select(entry => EpisodeFileNameHelper.BuildEpisodeCode(entry.Season, entry.Episode))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (matchingEpisodeCodes.Count == 0)
+        {
+            return null;
+        }
+
+        var rangeVariants = matchingEpisodeCodes
+            .Where(code => EpisodeFileNameHelper.IsEpisodeRange(code[(code.IndexOf('E') + 1)..]))
+            .ToList();
+        if (!currentIsRange && rangeVariants.Count > 0)
+        {
+            return $"In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel ({string.Join(", ", rangeVariants)}). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört.";
+        }
+
+        var singleVariants = matchingEpisodeCodes
+            .Where(code => !EpisodeFileNameHelper.IsEpisodeRange(code[(code.IndexOf('E') + 1)..]))
+            .ToList();
+        if (currentIsRange && singleVariants.Count > 0)
+        {
+            return $"In der Bibliothek existieren zusätzlich Einzelfolgen mit demselben Titel ({string.Join(", ", singleVariants)}). Bitte prüfen, ob statt der Mehrfachfolge eine gesplittete Episodenvariante gemeint ist.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reduziert Episodentitel auf eine gemeinsame Familienform, damit Einzelfolgen wie
+    /// "Rififi (1)" oder "Rififi ... es geht weiter (2)" gegen eine archivierte Doppelfolge
+    /// "Rififi" erkannt werden können. Die Heuristik ist bewusst konservativ und entfernt nur
+    /// typische Teilmarker am Ende des Titels.
+    /// </summary>
+    private static string BuildEpisodeVariantTitleKey(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        var normalized = NormalizeEpisodeTitle(title);
+        normalized = Regex.Replace(normalized, @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\s*(?:\d+\.\s*)?teil\s*\d+\s*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(
+            normalized,
+            @"\s*(?:\.{3}|-|:)?\s*es geht weiter(?:\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\))?\s*$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);
+        return normalized;
+    }
+
+    private static string ExtractArchiveEpisodeTitle(string fileNameWithoutExtension, Match episodeMatch)
+    {
+        if (episodeMatch.Index + episodeMatch.Length >= fileNameWithoutExtension.Length)
+        {
+            return string.Empty;
+        }
+
+        var titlePart = fileNameWithoutExtension[(episodeMatch.Index + episodeMatch.Length)..]
+            .TrimStart(' ', '-', ':', '_');
+        return NormalizeEpisodeTitle(titlePart);
     }
 
     private static int? TryFindNearIntegerMultiple(int? firstSeconds, int? secondSeconds)
