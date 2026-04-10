@@ -53,6 +53,7 @@ public sealed class BatchRunLogServiceTests
         var newFilesReportText = File.ReadAllText(result.NewOutputListPath!);
         Assert.Contains("Neu erzeugte Ausgabedateien", newFilesReportText);
         Assert.Contains(createdOutputFile, newFilesReportText);
+        Assert.Equal(result.NewOutputListPath, result.PreferredOpenPath);
     }
 
     [Fact]
@@ -74,6 +75,7 @@ public sealed class BatchRunLogServiceTests
         Assert.True(File.Exists(result.BatchLogPath));
         Assert.Null(result.NewOutputListPath);
         Assert.Empty(result.NewOutputFiles);
+        Assert.Equal(result.BatchLogPath, result.PreferredOpenPath);
 
         var batchLogText = File.ReadAllText(result.BatchLogPath);
         Assert.Contains("Neu erzeugte Ausgabedateien:", batchLogText);

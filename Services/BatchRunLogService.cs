@@ -140,7 +140,20 @@ public sealed class BatchRunLogService
 /// <summary>
 /// Beschreibt die geschriebenen Batch-Artefakte, damit die UI Pfade und neue Dateien anzeigen kann.
 /// </summary>
+/// <param name="BatchLogPath">Pfad zum vollständigen Batch-Protokoll.</param>
+/// <param name="NewOutputListPath">Optionale Liste nur der neu erzeugten Ausgabedateien.</param>
+/// <param name="NewOutputFiles">Normalisierte Menge der im Lauf neu erzeugten Dateien.</param>
 public sealed record BatchRunLogSaveResult(
     string BatchLogPath,
     string? NewOutputListPath,
-    IReadOnlyList<string> NewOutputFiles);
+    IReadOnlyList<string> NewOutputFiles)
+{
+    /// <summary>
+    /// Liefert den Pfad, der dem Benutzer nach Batch-Abschluss bevorzugt geöffnet werden soll.
+    /// Wenn eine separate Liste neuer Ausgabedateien existiert, ist sie für die direkte Kontrolle
+    /// hilfreicher als das vollständige Laufprotokoll und hat deshalb Vorrang.
+    /// </summary>
+    public string PreferredOpenPath => string.IsNullOrWhiteSpace(NewOutputListPath)
+        ? BatchLogPath
+        : NewOutputListPath!;
+}

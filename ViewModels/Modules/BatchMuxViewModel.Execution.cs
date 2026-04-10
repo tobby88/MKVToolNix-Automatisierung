@@ -248,5 +248,9 @@ internal sealed partial class BatchMuxViewModel
         }
 
         _dialogService.ShowInfo("Batch-Protokoll", string.Join(Environment.NewLine, lines));
+
+        // Der Info-Dialog ist modal. Erst nach der Bestätigung öffnen wir direkt die für den
+        // Benutzer nützlichste Auswertung des gerade abgeschlossenen Laufs.
+        _dialogService.OpenPathWithDefaultApp(logSaveResult.PreferredOpenPath);
     }
 }
