@@ -325,20 +325,27 @@
                              Value="{Binding ProgressValue, Mode=OneWay}" />
             </StackPanel>
 
-            <Expander x:Name="DetailsExpander"
-                      Grid.Row="5"
-                      Margin="0,6,0,0"
-                      Header="Korrekturen und Details"
-                      VerticalAlignment="Stretch"
-                      IsEnabled="{Binding IsInteractive, Mode=OneWay}"
-                      Expanded="DetailsExpander_OnExpanded"
-                      Collapsed="DetailsExpander_OnCollapsed"
-                      IsExpanded="False">
-                <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled"
-                                  MinHeight="260">
-                        <StackPanel Margin="8">
+            <Grid x:Name="DetailsHost"
+                  Grid.Row="5"
+                  Margin="0,6,0,0"
+                  SizeChanged="DetailsHost_OnSizeChanged">
+                <Expander x:Name="DetailsExpander"
+                          Header="Korrekturen und Details"
+                          VerticalAlignment="Stretch"
+                          IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                          Expanded="DetailsExpander_OnExpanded"
+                          Collapsed="DetailsExpander_OnCollapsed"
+                          IsExpanded="False">
+                    <Border Padding="8"
+                            BorderBrush="#D0D0D0"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            VerticalAlignment="Stretch">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      VerticalAlignment="Stretch"
+                                      MinHeight="260">
+                            <StackPanel Margin="8">
                             <GroupBox Margin="0,0,0,10" Header="Metadaten">
                                 <Grid Margin="8">
                                     <Grid.RowDefinitions>
@@ -540,10 +547,11 @@
                                     </Border>
                                 </Grid>
                             </GroupBox>
-                        </StackPanel>
-                    </ScrollViewer>
-                </Border>
-            </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Expander>
+            </Grid>
 
             <Expander Grid.Row="6"
                       Header="Batch-Protokoll"

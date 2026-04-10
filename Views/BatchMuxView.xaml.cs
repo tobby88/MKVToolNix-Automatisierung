@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -66,7 +67,11 @@ public partial class BatchMuxView : UserControl
         DetailsRowDefinition.Height = ExpandedDetailsRowHeight;
         SelectedUsageGroupBox.Visibility = Visibility.Collapsed;
         UsageGridSplitter.Visibility = Visibility.Collapsed;
-        DetailsExpander.BringIntoView();
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            UpdateExpandedDetailsHeight();
+            DetailsExpander.BringIntoView();
+        }));
     }
 
     private void DetailsExpander_OnCollapsed(object sender, RoutedEventArgs e)
@@ -76,11 +81,31 @@ public partial class BatchMuxView : UserControl
         SelectedUsageRowDefinition.Height = DefaultSelectedUsageRowHeight;
         UsageSplitterRowDefinition.Height = DefaultUsageSplitterRowHeight;
         DetailsRowDefinition.Height = GridLength.Auto;
+        DetailsExpander.Height = double.NaN;
         if (_restoreSelectedUsageAfterDetailsCollapse)
         {
             SelectedUsageGroupBox.Visibility = Visibility.Visible;
             UsageGridSplitter.Visibility = Visibility.Visible;
         }
+    }
+
+    private void DetailsHost_OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!DetailsExpander.IsExpanded)
+        {
+            return;
+        }
+
+        UpdateExpandedDetailsHeight();
+    }
+
+    /// <summary>
+    /// Der Detail-Expander soll im Fokusmodus die komplette verfuegbare Host-Hoehe nutzen,
+    /// damit der durch das Ausblenden der Verwendungsuebersicht frei gewordene Raum nicht leer bleibt.
+    /// </summary>
+    private void UpdateExpandedDetailsHeight()
+    {
+        DetailsExpander.Height = Math.Max(0d, DetailsHost.ActualHeight);
     }
 
     private void EpisodeIndexTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)

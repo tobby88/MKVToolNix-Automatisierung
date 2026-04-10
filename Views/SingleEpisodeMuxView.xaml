@@ -44,16 +44,19 @@
             </Style.Triggers>
         </Style>
     </UserControl.Resources>
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <DockPanel LastChildFill="True">
+        <!-- Untere Aktionsleiste bleibt sichtbar; die inhaltliche Arbeitsflaeche darueber darf komplett scrollen. -->
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding CreatePreviewCommand}" ToolTip="{Binding CreatePreviewButtonTooltip, Mode=OneWay}" Content="Vorschau erzeugen" />
+            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding ExecuteMuxCommand}" ToolTip="{Binding ExecuteMuxButtonTooltip, Mode=OneWay}" Content="Muxen" />
+            <Button Width="170" Padding="10,6" Command="{Binding CancelCurrentOperationCommand}" ToolTip="{Binding CancelCurrentOperationTooltip, Mode=OneWay}" Content="Abbrechen" />
+        </StackPanel>
 
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
         <!-- Oberer Bereich: Quellauswahl, automatische Erkennung und Review-Status. -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+        <StackPanel Margin="0,0,0,12">
             <GroupBox Header="Quelle"
                       Margin="0,0,0,12"
                       ToolTip="Hauptvideo w&#228;hlen. Passende AD-Dateien, Untertitel und Anh&#228;nge werden danach automatisch erkannt.">
@@ -293,17 +296,13 @@
             </GroupBox>
         </StackPanel>
 
-        <Expander Grid.Row="1"
+        <Expander
                   Header="Korrekturen und Ausgabe"
                   Margin="0,0,0,12"
                   ToolTip="Nur bei Bedarf &#246;ffnen, um automatische Zuordnungen oder die Ausgabedatei manuell anzupassen."
                   IsExpanded="False">
             <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
-                <!-- Die Eingriffe sollen intern scrollbar sein, ohne die kompakte Gesamtansicht zu verformen. -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              MaxHeight="360">
-                    <Grid Margin="8">
+                <Grid Margin="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -387,12 +386,11 @@
                     </Border.Style>
                     <TextBlock TextWrapping="Wrap" Text="{Binding OutputTargetStatusText, Mode=OneWay}" />
                 </Border>
-                    </Grid>
-                </ScrollViewer>
+                </Grid>
             </Border>
         </Expander>
 
-        <GroupBox Grid.Row="2" Header="Status und Details">
+        <GroupBox Header="Status und Details">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -418,11 +416,7 @@
             </Grid>
         </GroupBox>
 
-        <!-- Untere Aktionsleiste für Vorschau und echten Mux-Lauf. -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,12,0,0">
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding CreatePreviewCommand}" ToolTip="{Binding CreatePreviewButtonTooltip, Mode=OneWay}" Content="Vorschau erzeugen" />
-            <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding ExecuteMuxCommand}" ToolTip="{Binding ExecuteMuxButtonTooltip, Mode=OneWay}" Content="Muxen" />
-            <Button Width="170" Padding="10,6" Command="{Binding CancelCurrentOperationCommand}" ToolTip="{Binding CancelCurrentOperationTooltip, Mode=OneWay}" Content="Abbrechen" />
-        </StackPanel>
-    </Grid>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
 </UserControl>
