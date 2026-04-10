@@ -11,6 +11,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$maxExpectedFrameworkDependentSingleFileSizeBytes = 25MB
+
 function Resolve-AbsolutePath {
     param(
         [Parameter(Mandatory = $true)]
@@ -72,8 +74,10 @@ New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
 & dotnet publish $projectPath `
     -c Release `
     -r $RuntimeIdentifier `
-    --self-contained false `
+    --no-self-contained `
     -p:PublishSingleFile=true `
+    -p:SelfContained=false `
+    -p:PublishSelfContained=false `
     -p:PublishTrimmed=false `
     -p:DebugType=None `
     -p:DebugSymbols=false `
@@ -92,7 +96,13 @@ if (-not (Test-Path -LiteralPath $publishedExecutablePath)) {
     throw "Die erwartete veröffentlichte Exe wurde nicht gefunden: $publishedExecutablePath"
 }
 
+$publishedExecutableSize = (Get-Item -LiteralPath $publishedExecutablePath).Length
+if ($publishedExecutableSize -gt $maxExpectedFrameworkDependentSingleFileSizeBytes) {
+    throw "Die veröffentlichte Exe ist mit $publishedExecutableSize Bytes unerwartet groß. Der Publish sieht nach self-contained statt framework-dependent aus."
+}
+
 Copy-Item -LiteralPath $publishedExecutablePath -Destination $releaseFilePath -Force
 
 Write-Host "Release-Datei erstellt:"
 Write-Host $releaseFilePath
+Write-Host "Dateigröße (Bytes): $publishedExecutableSize"
