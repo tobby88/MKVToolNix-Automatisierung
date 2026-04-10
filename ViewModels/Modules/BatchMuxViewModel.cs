@@ -19,7 +19,6 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 {
     private const string DoneFolderName = "done";
     private const int AutomaticCompareProgressStart = 80;
-    private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly BatchModuleServices _services;
     private readonly IUserDialogService _dialogService;

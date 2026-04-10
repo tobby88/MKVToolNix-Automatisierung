@@ -37,6 +37,8 @@ internal static class UiCompositionModule
             provider.GetRequiredService<IEpisodeCleanupService>(),
             provider.GetRequiredService<IMuxWorkflowCoordinator>(),
             provider.GetRequiredService<BatchRunLogService>()));
+        services.AddSingleton<DownloadSortModuleServices>(provider => new DownloadSortModuleServices(
+            provider.GetRequiredService<DownloadSortService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),
@@ -48,6 +50,9 @@ internal static class UiCompositionModule
         services.AddSingleton<BatchMuxViewModel>(provider => new BatchMuxViewModel(
             provider.GetRequiredService<BatchModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
+        services.AddSingleton<DownloadSortViewModel>(provider => new DownloadSortViewModel(
+            provider.GetRequiredService<DownloadSortModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
@@ -57,7 +62,11 @@ internal static class UiCompositionModule
                 new ModuleNavigationItem(
                     "Batch",
                     "Ordner scannen und gesammelt muxen",
-                    provider.GetRequiredService<BatchMuxViewModel>())
+                    provider.GetRequiredService<BatchMuxViewModel>()),
+                new ModuleNavigationItem(
+                    "Downloads",
+                    "MediathekView-Dateien in Serienordner einsortieren",
+                    provider.GetRequiredService<DownloadSortViewModel>())
             ],
             provider.GetRequiredService<MainWindowModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));

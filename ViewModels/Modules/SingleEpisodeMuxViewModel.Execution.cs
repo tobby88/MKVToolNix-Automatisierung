@@ -367,14 +367,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private static string GetPreferredVideoDirectory()
     {
-        var downloadsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Downloads");
-        var preferredDirectory = PreferredDownloadsSubPath.Aggregate(downloadsDirectory, Path.Combine);
-
-        return Directory.Exists(preferredDirectory)
-            ? preferredDirectory
-            : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        return PreferredDownloadDirectoryHelper.GetPreferredMediathekDownloadsDirectory();
     }
 
     private void SchedulePlanSummaryRefresh()

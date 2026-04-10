@@ -18,7 +18,6 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private const int DetectionProgressStageEnd = 80;
     private const int MetadataProgressValue = 88;
     private const int InitialPlanProgressValue = 94;
-    private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly SingleEpisodeModuleServices _services;
     private readonly IUserDialogService _dialogService;

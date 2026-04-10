@@ -96,6 +96,13 @@ internal sealed record BatchModuleServices(
 }
 
 /// <summary>
+/// Buendelt nur die fuer das Einsortieren loser MediathekView-Downloads benoetigten Services.
+/// </summary>
+/// <param name="DownloadSort">Fachservice fuer Scan, Ordnervereinheitlichung und Verschiebungen.</param>
+internal sealed record DownloadSortModuleServices(
+    DownloadSortService DownloadSort);
+
+/// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.
 /// </summary>
 /// <param name="Archive">Archivdienst für globale Bibliothekskonfiguration und Verfügbarkeitsstatus.</param>

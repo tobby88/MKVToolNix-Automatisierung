@@ -1,0 +1,150 @@
+<UserControl x:Class="MkvToolnixAutomatisierung.Views.DownloadSortView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="160" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0,0,0,10" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="160" />
+                <ColumnDefinition Width="130" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Margin="0,8,12,8"
+                       VerticalAlignment="Center"
+                       Text="Downloadordner" />
+            <TextBox Grid.Column="1"
+                     Margin="0,4,12,4"
+                     IsReadOnly="True"
+                     Text="{Binding SourceDirectory, Mode=OneWay}" />
+            <Button Grid.Column="2"
+                    Margin="0,2,12,2"
+                    Padding="10,6"
+                    Command="{Binding SelectSourceDirectoryCommand}"
+                    Content="Ordner wählen" />
+            <Button Grid.Column="3"
+                    Margin="0,2,0,2"
+                    Padding="10,6"
+                    Command="{Binding ScanCommand}"
+                    ToolTip="{Binding ScanTooltip, Mode=OneWay}"
+                    Content="Neu scannen" />
+        </Grid>
+
+        <Border Grid.Row="1"
+                Margin="0,0,0,10"
+                Padding="10,8"
+                Background="#F8F4E8"
+                BorderBrush="#D9C28A"
+                BorderThickness="1"
+                CornerRadius="6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="{Binding SummaryText, Mode=OneWay}" />
+        </Border>
+
+        <GroupBox Grid.Row="2" Header="Lose Download-Pakete">
+            <DataGrid ItemsSource="{Binding Items}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      IsReadOnly="False"
+                      IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                      Margin="8"
+                      MinHeight="180">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="Auswahl"
+                                            Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="SizeToHeader" />
+                    <DataGridTextColumn Header="Download"
+                                        Binding="{Binding DisplayName}"
+                                        Width="2.3*"
+                                        MinWidth="220"
+                                        IsReadOnly="True" />
+                    <DataGridTextColumn Header="Serie erkannt"
+                                        Binding="{Binding DetectedSeriesName}"
+                                        Width="1.2*"
+                                        MinWidth="160"
+                                        IsReadOnly="True" />
+                    <DataGridTextColumn Header="Zielordner"
+                                        Binding="{Binding TargetFolderName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="1.2*"
+                                        MinWidth="180" />
+                    <DataGridTemplateColumn Header="Dateien"
+                                            Width="Auto"
+                                            MinWidth="84">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding FileCount}"
+                                           ToolTip="{Binding FilesDisplayText}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Status"
+                                        Binding="{Binding StatusText}"
+                                        Width="Auto"
+                                        MinWidth="72"
+                                        IsReadOnly="True" />
+                    <DataGridTextColumn Header="Hinweis"
+                                        Binding="{Binding Note}"
+                                        Width="2.5*"
+                                        MinWidth="280"
+                                        IsReadOnly="True" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </GroupBox>
+
+        <StackPanel Grid.Row="3"
+                    Margin="0,10,0,10"
+                    Orientation="Horizontal"
+                    IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+            <Button Margin="0,0,8,0"
+                    Padding="10,6"
+                    Command="{Binding SelectAllReadyCommand}"
+                    Content="Alle Bereiten wählen" />
+            <Button Margin="0,0,8,0"
+                    Padding="10,6"
+                    Command="{Binding DeselectAllCommand}"
+                    Content="Auswahl leeren" />
+            <Button Padding="10,6"
+                    Command="{Binding RunSortCommand}"
+                    ToolTip="{Binding RunSortTooltip, Mode=OneWay}"
+                    Content="Auswahl einsortieren" />
+        </StackPanel>
+
+        <GroupBox Grid.Row="4" Header="Protokoll">
+            <TextBox Margin="8"
+                     Text="{Binding LogText, Mode=OneWay}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled" />
+        </GroupBox>
+
+        <Grid Grid.Row="5" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="180" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Text="{Binding StatusText, Mode=OneWay}" />
+            <ProgressBar Grid.Column="1"
+                         Height="18"
+                         Margin="12,0,0,0"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="{Binding ProgressValue, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -25,10 +25,12 @@ internal static class WorkflowCompositionModule
             provider.GetRequiredService<IEpisodeCleanupService>()));
         services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequiredService<MuxWorkflowCoordinator>());
         services.AddSingleton<BatchRunLogService>(_ => new BatchRunLogService());
+        services.AddSingleton<DownloadSortService>(_ => new DownloadSortService());
         services.AddSingleton<WorkflowServices>(provider => new WorkflowServices(
             provider.GetRequiredService<IFileCopyService>(),
             provider.GetRequiredService<IEpisodeCleanupService>(),
             provider.GetRequiredService<IMuxWorkflowCoordinator>(),
-            provider.GetRequiredService<BatchRunLogService>()));
+            provider.GetRequiredService<BatchRunLogService>(),
+            provider.GetRequiredService<DownloadSortService>()));
     }
 }

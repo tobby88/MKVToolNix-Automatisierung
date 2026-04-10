@@ -191,9 +191,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get
         {
-            var moduleHint = string.Equals(SelectedModule.Title, "Batch", StringComparison.Ordinal)
-                ? "Batch: Quellordner wählen, scannen, offene Pflichtchecks klären, dann Batch starten."
-                : "Einzelepisode: Hauptvideo wählen, Erkennung prüfen, bei Bedarf TVDB öffnen, Vorschau erzeugen, dann muxen.";
+            var moduleHint = SelectedModule.Title switch
+            {
+                "Batch" => "Batch: Quellordner wählen, scannen, offene Pflichtchecks klären, dann Batch starten.",
+                "Downloads" => "Downloads: MediathekView-Ordner scannen, Zielordner prüfen und lose Dateien gesammelt einsortieren.",
+                _ => "Einzelepisode: Hauptvideo wählen, Erkennung prüfen, bei Bedarf TVDB öffnen, Vorschau erzeugen, dann muxen."
+            };
 
             return string.Join(
                 Environment.NewLine,

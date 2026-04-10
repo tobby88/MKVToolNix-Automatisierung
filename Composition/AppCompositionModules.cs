@@ -58,8 +58,10 @@ internal sealed record MuxDomainServices(
 /// <param name="Cleanup">Dienst für Papierkorb-/Move-Aufräumlogik.</param>
 /// <param name="MuxWorkflow">Koordinator für Arbeitskopie, Mux und temporäre Nachbereitung.</param>
 /// <param name="BatchLogs">Persistenzdienst für Batch-Protokolle und Dateilisten.</param>
+/// <param name="DownloadSort">Dienst für das Einsortieren loser MediathekView-Downloads.</param>
 internal sealed record WorkflowServices(
     IFileCopyService FileCopy,
     IEpisodeCleanupService Cleanup,
     IMuxWorkflowCoordinator MuxWorkflow,
-    BatchRunLogService BatchLogs);
+    BatchRunLogService BatchLogs,
+    DownloadSortService DownloadSort);

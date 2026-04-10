@@ -1,0 +1,669 @@
+using System.Text.RegularExpressions;
+using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services.Metadata;
+
+namespace MkvToolnixAutomatisierung.Services;
+
+/// <summary>
+/// Plant und fuehrt das Einsortieren loser MediathekView-Downloads in Serienunterordner aus.
+/// </summary>
+/// <remarks>
+/// Der Dienst arbeitet bewusst nur auf der obersten Ebene eines Downloadordners.
+/// Bereits einsortierte Unterordner werden nur untersucht, wenn daraus sichere
+/// Umbenennungen auf einen kanonischen Seriennamen abgeleitet werden koennen.
+/// </remarks>
+internal sealed class DownloadSortService
+{
+    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4",
+        ".txt",
+        ".srt",
+        ".ass",
+        ".vtt",
+        ".ttml"
+    };
+
+    private static readonly HashSet<string> GenericSeriesLabels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "backstage",
+        "der samstagskrimi",
+        "filme",
+        "riverboat"
+    };
+
+    private static readonly IReadOnlyList<DownloadSeriesAliasGroup> AliasGroups =
+    [
+        new(
+            "Der Kommissar und das Meer",
+            [
+                "Der Kommissar und das Meer",
+                "Der Kommissar und der See"
+            ]),
+        new(
+            "Ostfriesenkrimis",
+            [
+                "Ostfriesenkrimis",
+                "Ostfrieslandkrimis"
+            ]),
+        new(
+            "Pettersson und Findus",
+            [
+                "Pettersson und Findus"
+            ])
+    ];
+
+    /// <summary>
+    /// Analysiert die lose Wurzelebene eines Downloadordners und liefert Sortiervorschlaege.
+    /// </summary>
+    /// <param name="rootDirectory">Oberordner, in dessen Wurzel lose Mediathek-Dateien liegen.</param>
+    /// <returns>Scanergebnis inklusive Move-Kandidaten und sicherer Ordner-Umbenennungen.</returns>
+    public DownloadSortScanResult Scan(string rootDirectory)
+    {
+        EnsureDirectoryExists(rootDirectory);
+
+        var folderRenames = BuildFolderRenamePlans(rootDirectory);
+        var rootGroups = EnumerateLogicalGroups(rootDirectory);
+        var candidates = rootGroups
+            .Select(group => BuildCandidate(rootDirectory, group, folderRenames))
+            .OrderBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new DownloadSortScanResult(candidates, folderRenames);
+    }
+
+    /// <summary>
+    /// Bewertet einen Zielordner fuer einen bereits gescannten Dateigruppen-Kandidaten erneut.
+    /// </summary>
+    /// <param name="rootDirectory">Download-Wurzel, in der sich lose Dateien und Serienordner befinden.</param>
+    /// <param name="filePaths">Dateien des Kandidaten.</param>
+    /// <param name="targetFolderName">Aktuell gewaehlter Zielordnername.</param>
+    /// <param name="folderRenames">Beim Scan ermittelte sichere Ordnerumbenennungen.</param>
+    /// <returns>Aktueller Status mit Konflikt- oder Hinweistext.</returns>
+    public DownloadSortTargetEvaluation EvaluateTarget(
+        string rootDirectory,
+        IReadOnlyList<string> filePaths,
+        string? targetFolderName,
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
+    {
+        EnsureDirectoryExists(rootDirectory);
+        ArgumentNullException.ThrowIfNull(filePaths);
+        ArgumentNullException.ThrowIfNull(folderRenames);
+
+        if (filePaths.Count == 0)
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.NeedsReview,
+                "Zu diesem Eintrag wurden keine Dateien gefunden.");
+        }
+
+        var normalizedFolderName = NormalizeTargetFolderName(targetFolderName);
+        if (string.IsNullOrWhiteSpace(normalizedFolderName))
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.NeedsReview,
+                "Kein Zielordner erkannt. Bitte pruefen.");
+        }
+
+        var renamePlan = folderRenames.FirstOrDefault(plan =>
+            string.Equals(plan.TargetFolderName, normalizedFolderName, StringComparison.OrdinalIgnoreCase));
+
+        var effectiveExistingDirectory = Path.Combine(rootDirectory, normalizedFolderName);
+        if (!Directory.Exists(effectiveExistingDirectory)
+            && renamePlan is not null)
+        {
+            effectiveExistingDirectory = Path.Combine(rootDirectory, renamePlan.CurrentFolderName);
+        }
+
+        var conflictingFile = FindConflictingTargetFile(filePaths, effectiveExistingDirectory);
+        if (conflictingFile is not null)
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.Conflict,
+                $"Im Zielordner liegt bereits {Path.GetFileName(conflictingFile)}.");
+        }
+
+        if (renamePlan is not null)
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.Ready,
+                $"Vorhandener Serienordner wird vorab von '{renamePlan.CurrentFolderName}' nach '{renamePlan.TargetFolderName}' vereinheitlicht.");
+        }
+
+        return new DownloadSortTargetEvaluation(
+            DownloadSortItemState.Ready,
+            string.Empty);
+    }
+
+    /// <summary>
+    /// Fuehrt die geplanten Ordnerumbenennungen und Dateiverschiebungen aus.
+    /// </summary>
+    /// <param name="rootDirectory">Wurzel des Downloadordners.</param>
+    /// <param name="moveRequests">Ausgewaehlte Sortieroperationen.</param>
+    /// <param name="folderRenames">Vorab auszufuehrende sichere Ordnerumbenennungen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal zwischen einzelnen Gruppen.</param>
+    /// <returns>Kompakte Ausfuehrungszusammenfassung fuer GUI und Log.</returns>
+    public DownloadSortApplyResult Apply(
+        string rootDirectory,
+        IReadOnlyList<DownloadSortMoveRequest> moveRequests,
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureDirectoryExists(rootDirectory);
+        ArgumentNullException.ThrowIfNull(moveRequests);
+        ArgumentNullException.ThrowIfNull(folderRenames);
+
+        var logLines = new List<string>();
+        var renamedFolderCount = 0;
+        var movedGroupCount = 0;
+        var movedFileCount = 0;
+        var skippedGroupCount = 0;
+
+        foreach (var renamePlan in folderRenames
+                     .Where(plan => moveRequests.Any(request =>
+                         string.Equals(
+                             NormalizeTargetFolderName(request.TargetFolderName),
+                             plan.TargetFolderName,
+                             StringComparison.OrdinalIgnoreCase)))
+                     .DistinctBy(plan => plan.CurrentFolderName, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var sourcePath = Path.Combine(rootDirectory, renamePlan.CurrentFolderName);
+            var destinationPath = Path.Combine(rootDirectory, renamePlan.TargetFolderName);
+            if (!Directory.Exists(sourcePath))
+            {
+                continue;
+            }
+
+            if (Directory.Exists(destinationPath))
+            {
+                logLines.Add($"UEBERSPRUNGEN: Ordner '{renamePlan.CurrentFolderName}' wurde nicht umbenannt, weil '{renamePlan.TargetFolderName}' bereits existiert.");
+                continue;
+            }
+
+            Directory.Move(sourcePath, destinationPath);
+            renamedFolderCount++;
+            logLines.Add($"ORDNER: '{renamePlan.CurrentFolderName}' -> '{renamePlan.TargetFolderName}'");
+        }
+
+        foreach (var request in moveRequests)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var targetFolderName = NormalizeTargetFolderName(request.TargetFolderName);
+            if (string.IsNullOrWhiteSpace(targetFolderName))
+            {
+                skippedGroupCount++;
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> kein gueltiger Zielordner.");
+                continue;
+            }
+
+            var targetDirectory = Path.Combine(rootDirectory, targetFolderName);
+            Directory.CreateDirectory(targetDirectory);
+
+            var conflictingFile = FindConflictingTargetFile(request.FilePaths, targetDirectory);
+            if (conflictingFile is not null)
+            {
+                skippedGroupCount++;
+                logLines.Add($"KONFLIKT: {request.DisplayName} -> {Path.GetFileName(conflictingFile)} liegt bereits in '{targetFolderName}'.");
+                continue;
+            }
+
+            foreach (var filePath in request.FilePaths)
+            {
+                var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
+                if (Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                File.Move(filePath, destinationPath);
+                movedFileCount++;
+            }
+
+            movedGroupCount++;
+            logLines.Add($"SORTIERT: {request.DisplayName} -> {targetFolderName} ({request.FilePaths.Count} Datei(en))");
+        }
+
+        return new DownloadSortApplyResult(
+            movedGroupCount,
+            movedFileCount,
+            renamedFolderCount,
+            skippedGroupCount,
+            logLines);
+    }
+
+    private DownloadSortCandidate BuildCandidate(
+        string rootDirectory,
+        DownloadFileGroup group,
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
+    {
+        var proposal = DetectFolderProposal(group.FilePaths);
+        var evaluation = EvaluateTarget(rootDirectory, group.FilePaths, proposal.SuggestedFolderName, folderRenames);
+        var note = MergeNotes(proposal.Note, evaluation.Note);
+
+        return new DownloadSortCandidate(
+            group.DisplayName,
+            group.FilePaths,
+            proposal.DetectedSeriesName,
+            proposal.SuggestedFolderName,
+            evaluation.State,
+            note);
+    }
+
+    private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(string rootDirectory)
+    {
+        var existingDirectoryNames = Directory.GetDirectories(rootDirectory)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var renameCandidates = new List<DownloadSortFolderRenamePlan>();
+
+        foreach (var directoryPath in Directory.GetDirectories(rootDirectory))
+        {
+            var currentFolderName = Path.GetFileName(directoryPath);
+            if (string.IsNullOrWhiteSpace(currentFolderName))
+            {
+                continue;
+            }
+
+            var detectedFolderNames = EnumerateLogicalGroups(directoryPath)
+                .Select(group => DetectFolderProposal(group.FilePaths).SuggestedFolderName)
+                .Where(folderName => !string.IsNullOrWhiteSpace(folderName))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (detectedFolderNames.Count != 1)
+            {
+                continue;
+            }
+
+            var targetFolderName = detectedFolderNames[0];
+            if (string.Equals(currentFolderName, targetFolderName, StringComparison.OrdinalIgnoreCase)
+                || existingDirectoryNames.Contains(targetFolderName!))
+            {
+                continue;
+            }
+
+            renameCandidates.Add(new DownloadSortFolderRenamePlan(
+                currentFolderName,
+                targetFolderName!,
+                $"Ordnerinhalt passt fachlich zu '{targetFolderName}'."));
+        }
+
+        return renameCandidates
+            .GroupBy(candidate => candidate.TargetFolderName, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() == 1)
+            .Select(group => group.Single())
+            .OrderBy(plan => plan.CurrentFolderName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static DownloadFolderProposal DetectFolderProposal(IReadOnlyList<string> filePaths)
+    {
+        var representativePath = SelectRepresentativePath(filePaths);
+        var textFilePath = filePaths.FirstOrDefault(path => path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+        var textDetails = CompanionTextMetadataReader.ReadDetailed(textFilePath);
+        var fileParts = ParseDownloadFileName(representativePath);
+
+        var exactCandidates = new (string? Value, string Note)[]
+        {
+            (textDetails.Topic, "Serienordner aus TXT-Thema abgeleitet."),
+            (fileParts.SeriesPrefix, "Serienordner aus Dateiname abgeleitet."),
+            (TryExtractSeriesPrefix(textDetails.Title), "Serienordner aus TXT-Titel abgeleitet."),
+            (TryExtractSeriesPrefix(fileParts.Remainder), "Serienordner aus Titelprefix abgeleitet.")
+        };
+
+        foreach (var candidate in exactCandidates)
+        {
+            if (!TryResolveSpecificSeries(candidate.Value, out var resolvedSeriesName, out var aliasApplied))
+            {
+                continue;
+            }
+
+            return new DownloadFolderProposal(
+                resolvedSeriesName,
+                resolvedSeriesName,
+                aliasApplied
+                    ? $"{candidate.Note} Alias wurde auf den kanonischen Ordnernamen vereinheitlicht."
+                    : candidate.Note);
+        }
+
+        foreach (var fragment in new[] { textDetails.Title, fileParts.Remainder, Path.GetFileNameWithoutExtension(representativePath) })
+        {
+            if (!TryResolveSeriesFromContainedAlias(fragment, out var resolvedSeriesName))
+            {
+                continue;
+            }
+
+            return new DownloadFolderProposal(
+                resolvedSeriesName,
+                resolvedSeriesName,
+                "Serienordner aus einem bekannten Alias im Titel abgeleitet.");
+        }
+
+        return new DownloadFolderProposal(
+            null,
+            string.Empty,
+            "Serienordner konnte nicht sicher erkannt werden.");
+    }
+
+    private static bool TryResolveSpecificSeries(string? candidate, out string resolvedSeriesName, out bool aliasApplied)
+    {
+        aliasApplied = false;
+        resolvedSeriesName = string.Empty;
+
+        var normalizedCandidate = NormalizeSeriesCandidate(candidate);
+        if (string.IsNullOrWhiteSpace(normalizedCandidate))
+        {
+            return false;
+        }
+
+        if (IsGenericSeriesLabel(normalizedCandidate))
+        {
+            return false;
+        }
+
+        if (TryResolveExactAlias(normalizedCandidate, out var canonicalSeriesName))
+        {
+            resolvedSeriesName = canonicalSeriesName;
+            aliasApplied = !string.Equals(normalizedCandidate, canonicalSeriesName, StringComparison.OrdinalIgnoreCase);
+            return true;
+        }
+
+        resolvedSeriesName = normalizedCandidate;
+        return true;
+    }
+
+    private static bool TryResolveSeriesFromContainedAlias(string? fragment, out string resolvedSeriesName)
+    {
+        resolvedSeriesName = string.Empty;
+        if (string.IsNullOrWhiteSpace(fragment))
+        {
+            return false;
+        }
+
+        var normalizedFragment = EpisodeMetadataMatchingHeuristics.NormalizeText(fragment);
+        if (string.IsNullOrWhiteSpace(normalizedFragment))
+        {
+            return false;
+        }
+
+        var match = AliasGroups
+            .SelectMany(group => group.Aliases.Select(alias => new
+            {
+                group.CanonicalFolderName,
+                Alias = alias,
+                NormalizedAlias = EpisodeMetadataMatchingHeuristics.NormalizeText(alias)
+            }))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.NormalizedAlias)
+                && normalizedFragment.Contains(entry.NormalizedAlias, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(entry => entry.NormalizedAlias.Length)
+            .FirstOrDefault();
+
+        if (match is null)
+        {
+            return false;
+        }
+
+        resolvedSeriesName = match.CanonicalFolderName;
+        return true;
+    }
+
+    private static bool TryResolveExactAlias(string candidate, out string canonicalSeriesName)
+    {
+        var normalizedCandidate = EpisodeMetadataMatchingHeuristics.NormalizeText(candidate);
+        foreach (var group in AliasGroups)
+        {
+            if (group.Aliases.Any(alias =>
+                    string.Equals(
+                        EpisodeMetadataMatchingHeuristics.NormalizeText(alias),
+                        normalizedCandidate,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                canonicalSeriesName = group.CanonicalFolderName;
+                return true;
+            }
+        }
+
+        canonicalSeriesName = string.Empty;
+        return false;
+    }
+
+    private static string NormalizeSeriesCandidate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators(value);
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+        normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Filme\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Backstage\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Riverboat\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
+        return normalized.Trim();
+    }
+
+    private static bool IsGenericSeriesLabel(string value)
+    {
+        return GenericSeriesLabels.Contains(EpisodeMetadataMatchingHeuristics.NormalizeText(value));
+    }
+
+    private static string? TryExtractSeriesPrefix(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators(value);
+        var match = Regex.Match(
+            normalized,
+            @"^(?<series>.+?)(?:\s+-\s+|_\s*|:\s+)(?<title>.+)$",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return NormalizeSeriesCandidate(match.Groups["series"].Value);
+    }
+
+    private static ParsedDownloadName ParseDownloadFileName(string filePath)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(filePath);
+        var withoutId = Regex.Replace(fileName, @"-\d+$", string.Empty);
+        var separatorIndex = withoutId.IndexOf('-', StringComparison.Ordinal);
+        if (separatorIndex < 0)
+        {
+            return new ParsedDownloadName(
+                NormalizeSeriesCandidate(withoutId),
+                SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(withoutId));
+        }
+
+        var seriesPrefix = NormalizeSeriesCandidate(withoutId[..separatorIndex]);
+        var remainder = withoutId[(separatorIndex + 1)..].Trim();
+        return new ParsedDownloadName(
+            seriesPrefix,
+            SeriesEpisodeMuxPlanner.NormalizeSeparators(remainder));
+    }
+
+    private static IReadOnlyList<DownloadFileGroup> EnumerateLogicalGroups(string directoryPath)
+    {
+        return Directory.EnumerateFiles(directoryPath)
+            .Where(IsSupportedSortFile)
+            .GroupBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
+            .Select(group => new DownloadFileGroup(
+                BuildGroupDisplayName(group.Key),
+                group
+                    .OrderBy(GetExtensionPriority)
+                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList()))
+            .ToList();
+    }
+
+    private static bool IsSupportedSortFile(string filePath)
+    {
+        return SupportedExtensions.Contains(Path.GetExtension(filePath));
+    }
+
+    private static int GetExtensionPriority(string filePath)
+    {
+        return Path.GetExtension(filePath).ToLowerInvariant() switch
+        {
+            ".mp4" => 0,
+            ".txt" => 1,
+            ".srt" => 2,
+            ".ass" => 3,
+            ".vtt" => 4,
+            ".ttml" => 5,
+            _ => 9
+        };
+    }
+
+    private static string SelectRepresentativePath(IReadOnlyList<string> filePaths)
+    {
+        return filePaths
+            .OrderBy(GetExtensionPriority)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .First();
+    }
+
+    private static string BuildGroupDisplayName(string groupKey)
+    {
+        var withoutId = Regex.Replace(groupKey, @"-\d+$", string.Empty);
+        return SeriesEpisodeMuxPlanner.NormalizeSeparators(withoutId);
+    }
+
+    private static string NormalizeTargetFolderName(string? targetFolderName)
+    {
+        if (string.IsNullOrWhiteSpace(targetFolderName))
+        {
+            return string.Empty;
+        }
+
+        return EpisodeFileNameHelper.SanitizePathSegment(targetFolderName.Trim());
+    }
+
+    private static string? FindConflictingTargetFile(IReadOnlyList<string> filePaths, string targetDirectory)
+    {
+        if (!Directory.Exists(targetDirectory))
+        {
+            return null;
+        }
+
+        foreach (var filePath in filePaths)
+        {
+            var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
+            if (File.Exists(destinationPath)
+                && !Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+            {
+                return destinationPath;
+            }
+        }
+
+        return null;
+    }
+
+    private static string MergeNotes(string left, string right)
+    {
+        return string.IsNullOrWhiteSpace(left)
+            ? right
+            : string.IsNullOrWhiteSpace(right)
+                ? left
+                : left == right
+                    ? left
+                    : $"{left} {right}";
+    }
+
+    private static void EnsureDirectoryExists(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+        {
+            throw new DirectoryNotFoundException($"Download-Ordner nicht gefunden: {directoryPath}");
+        }
+    }
+
+    private sealed record DownloadSeriesAliasGroup(
+        string CanonicalFolderName,
+        IReadOnlyList<string> Aliases);
+
+    private sealed record ParsedDownloadName(
+        string SeriesPrefix,
+        string Remainder);
+
+    private sealed record DownloadFolderProposal(
+        string? DetectedSeriesName,
+        string SuggestedFolderName,
+        string Note);
+
+    private sealed record DownloadFileGroup(
+        string DisplayName,
+        IReadOnlyList<string> FilePaths);
+}
+
+/// <summary>
+/// Zustandsbewertung eines Sortierkandidaten.
+/// </summary>
+internal enum DownloadSortItemState
+{
+    Ready,
+    NeedsReview,
+    Conflict
+}
+
+/// <summary>
+/// Ergebnis eines kompletten Download-Scans.
+/// </summary>
+internal sealed record DownloadSortScanResult(
+    IReadOnlyList<DownloadSortCandidate> Items,
+    IReadOnlyList<DownloadSortFolderRenamePlan> FolderRenames);
+
+/// <summary>
+/// Vorschlag fuer einen losen Download mitsamt Zielordner und aktuellem Status.
+/// </summary>
+internal sealed record DownloadSortCandidate(
+    string DisplayName,
+    IReadOnlyList<string> FilePaths,
+    string? DetectedSeriesName,
+    string SuggestedFolderName,
+    DownloadSortItemState State,
+    string Note);
+
+/// <summary>
+/// Sichere Vorab-Umbenennung eines bestehenden Serienordners auf einen kanonischen Namen.
+/// </summary>
+internal sealed record DownloadSortFolderRenamePlan(
+    string CurrentFolderName,
+    string TargetFolderName,
+    string Reason);
+
+/// <summary>
+/// Erneute Statusbewertung fuer einen manuell angepassten Zielordner.
+/// </summary>
+internal sealed record DownloadSortTargetEvaluation(
+    DownloadSortItemState State,
+    string Note);
+
+/// <summary>
+/// Ausgewählte Dateigruppe, die in einen Zielordner verschoben werden soll.
+/// </summary>
+internal sealed record DownloadSortMoveRequest(
+    string DisplayName,
+    IReadOnlyList<string> FilePaths,
+    string TargetFolderName);
+
+/// <summary>
+/// Zusammenfassung eines ausgefuehrten Sortierlaufs.
+/// </summary>
+internal sealed record DownloadSortApplyResult(
+    int MovedGroupCount,
+    int MovedFileCount,
+    int RenamedFolderCount,
+    int SkippedGroupCount,
+    IReadOnlyList<string> LogLines);
