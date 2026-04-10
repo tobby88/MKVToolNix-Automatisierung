@@ -74,6 +74,17 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.Equal(MetadataBadgeState.Approved, badgeState);
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(50, 40)]
+    [InlineData(100, 80)]
+    public void ScaleDetectionProgressForOverallProgress_UsesOnlyDetectionStageSlice(int rawProgress, int expectedProgress)
+    {
+        Assert.Equal(
+            expectedProgress,
+            SingleEpisodeMuxViewModel.ScaleDetectionProgressForOverallProgress(rawProgress));
+    }
+
     [Fact]
     public void SubtitleDisplayText_ReturnsOnlyFileNames()
     {

@@ -15,6 +15,9 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchiveConfigurationAwareModule
 {
+    private const int DetectionProgressStageEnd = 80;
+    private const int MetadataProgressValue = 88;
+    private const int InitialPlanProgressValue = 94;
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     private readonly SingleEpisodeModuleServices _services;
@@ -34,6 +37,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private string _outputTargetStatusText = string.Empty;
     private string _planRefreshProblemText = string.Empty;
     private SeriesEpisodeMuxPlan? _currentPlan;
+    private int _detectionProgressVersion;
 
     public SingleEpisodeMuxViewModel(
         SingleEpisodeModuleServices services,
@@ -294,6 +298,27 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     {
         StatusText = text;
         ProgressValue = Math.Clamp(progressValue, 0, 100);
+    }
+
+    private int BeginDetectionProgressSession()
+    {
+        return Interlocked.Increment(ref _detectionProgressVersion);
+    }
+
+    private void CompleteDetectionProgressSession(int sessionVersion)
+    {
+        Interlocked.CompareExchange(ref _detectionProgressVersion, sessionVersion + 1, sessionVersion);
+    }
+
+    private bool IsDetectionProgressSessionCurrent(int sessionVersion)
+    {
+        return Volatile.Read(ref _detectionProgressVersion) == sessionVersion;
+    }
+
+    internal static int ScaleDetectionProgressForOverallProgress(int progressPercent)
+    {
+        var normalizedPercent = Math.Clamp(progressPercent, 0, 100);
+        return (int)Math.Round(DetectionProgressStageEnd * (normalizedPercent / 100d));
     }
 
     private void ResetPreviewOutputBuffer(string initialText)

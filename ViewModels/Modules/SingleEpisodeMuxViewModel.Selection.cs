@@ -85,22 +85,26 @@ internal sealed partial class SingleEpisodeMuxViewModel
         string selectedVideoPath,
         IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
+        var detectionProgressVersion = 0;
         try
         {
             SetBusy(true);
             SetStatus("Dateien werden erkannt...", 0);
             PreviewText = "Erkennung läuft...";
 
+            detectionProgressVersion = BeginDetectionProgressSession();
             var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
                 selectedVideoPath,
-                HandleDetectionUpdate,
+                update => HandleDetectionUpdate(detectionProgressVersion, update),
                 excludedSourcePaths);
+            CompleteDetectionProgressSession(detectionProgressVersion);
+            detectionProgressVersion = 0;
             var localGuess = new EpisodeMetadataGuess(
                 detected.SeriesName,
                 detected.SuggestedTitle,
                 detected.SeasonNumber,
                 detected.EpisodeNumber);
-            SetStatus("TVDB-Metadaten werden abgeglichen...", 88);
+            SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue);
             var automaticMetadata = await ApplyAutomaticMetadataAsync(detected);
             detected = automaticMetadata.Detected;
             var resolvedTitle = ShouldPreserveManualTitle(selectedVideoPath)
@@ -123,9 +127,19 @@ internal sealed partial class SingleEpisodeMuxViewModel
             InvalidateCurrentPlan();
             RefreshOutputTargetStatus();
             PreviewText = BuildDetectionPreview(detected);
-            SetStatus("Dateien erkannt", 100);
+            SetStatus("Zielvergleich wird berechnet...", InitialPlanProgressValue);
+            var planSummaryReady = await RefreshPlanSummaryImmediatelyAsync(CancellationToken.None);
+            if (!planSummaryReady)
+            {
+                SchedulePlanSummaryRefresh();
+            }
+
+            SetStatus(
+                planSummaryReady
+                    ? "Erkennung und Zielvergleich abgeschlossen"
+                    : "Erkennung abgeschlossen, Zielvergleich noch offen",
+                planSummaryReady ? 100 : InitialPlanProgressValue);
             RefreshCommands();
-            SchedulePlanSummaryRefresh();
             return true;
         }
         catch (Exception ex)
@@ -136,15 +150,25 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         finally
         {
+            if (detectionProgressVersion != 0)
+            {
+                CompleteDetectionProgressSession(detectionProgressVersion);
+            }
+
             SetBusy(false);
         }
     }
 
-    private void HandleDetectionUpdate(DetectionProgressUpdate update)
+    private void HandleDetectionUpdate(int detectionProgressVersion, DetectionProgressUpdate update)
     {
         _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            SetStatus(update.StatusText, update.ProgressPercent);
+            if (!IsDetectionProgressSessionCurrent(detectionProgressVersion))
+            {
+                return;
+            }
+
+            SetStatus(update.StatusText, ScaleDetectionProgressForOverallProgress(update.ProgressPercent));
             PreviewText = $"{update.StatusText}{Environment.NewLine}{Environment.NewLine}Bitte warten...";
         });
     }
