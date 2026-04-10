@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace FakeMkvMerge;
 
@@ -36,6 +37,11 @@ internal static class Program
             return ExecuteAttachmentExtraction(args);
         }
 
+        if (IsHeaderEditCommand(args))
+        {
+            return ExecuteHeaderEdit(args);
+        }
+
         return ExecuteMux(args);
     }
 
@@ -51,6 +57,14 @@ internal static class Program
     {
         return args.Count >= 3
             && string.Equals(args[0], "attachments", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsHeaderEditCommand(IReadOnlyList<string> args)
+    {
+        return args.Count >= 3
+            && !args[0].StartsWith("-", StringComparison.Ordinal)
+            && args.Contains("--edit", StringComparer.OrdinalIgnoreCase)
+            && args.Contains("--set", StringComparer.OrdinalIgnoreCase);
     }
 
     private static int ExecuteIdentify(string inputFilePath)
@@ -148,6 +162,106 @@ internal static class Program
         }
 
         File.WriteAllText(outputPath, content);
+    }
+
+    private static int ExecuteHeaderEdit(IReadOnlyList<string> args)
+    {
+        var inputFilePath = args[0];
+        var probeFilePath = inputFilePath + ".mkvmerge.json";
+        if (!File.Exists(probeFilePath))
+        {
+            Console.Error.WriteLine($"FakeMkvMerge: Probe-Datei für mkvpropedit fehlt: {probeFilePath}");
+            return 4;
+        }
+
+        var rootNode = JsonNode.Parse(File.ReadAllText(probeFilePath))?.AsObject();
+        var tracks = rootNode?["tracks"]?.AsArray();
+        if (rootNode is null || tracks is null)
+        {
+            Console.Error.WriteLine($"FakeMkvMerge: Ungültige Probe-Datei für mkvpropedit: {probeFilePath}");
+            return 4;
+        }
+
+        string? currentSelector = null;
+        for (var index = 1; index < args.Count; index++)
+        {
+            if (string.Equals(args[index], "--edit", StringComparison.OrdinalIgnoreCase))
+            {
+                if (index + 1 >= args.Count)
+                {
+                    Console.Error.WriteLine("FakeMkvMerge: --edit ohne Selektor.");
+                    return 5;
+                }
+
+                currentSelector = args[++index];
+                continue;
+            }
+
+            if (!string.Equals(args[index], "--set", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (currentSelector is null || index + 1 >= args.Count)
+            {
+                Console.Error.WriteLine("FakeMkvMerge: --set ohne vorherigen Selektor oder Wert.");
+                return 5;
+            }
+
+            var assignment = args[++index];
+            var separatorIndex = assignment.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Ungültiger --set-Wert '{assignment}'.");
+                return 5;
+            }
+
+            var propertyName = assignment[..separatorIndex];
+            var propertyValue = assignment[(separatorIndex + 1)..];
+            if (!string.Equals(propertyName, "name", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Nicht unterstützte Eigenschaft '{propertyName}'.");
+                return 5;
+            }
+
+            if (!TryResolveTrackArrayIndex(currentSelector, out var trackArrayIndex))
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Nicht unterstützter Track-Selektor '{currentSelector}'.");
+                return 5;
+            }
+
+            if (trackArrayIndex < 0 || trackArrayIndex >= tracks.Count || tracks[trackArrayIndex] is not JsonObject trackNode)
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Track-Selektor '{currentSelector}' liegt außerhalb der vorhandenen Trackliste.");
+                return 5;
+            }
+
+            var properties = trackNode["properties"] as JsonObject ?? new JsonObject();
+            trackNode["properties"] = properties;
+            properties["track_name"] = propertyValue;
+        }
+
+        File.WriteAllText(
+            probeFilePath,
+            rootNode.ToJsonString(new JsonSerializerOptions
+            {
+                WriteIndented = true
+            }));
+        return 0;
+    }
+
+    private static bool TryResolveTrackArrayIndex(string selector, out int trackArrayIndex)
+    {
+        trackArrayIndex = -1;
+        if (!selector.StartsWith("track:", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var trackText = selector["track:".Length..];
+        return int.TryParse(trackText, out var oneBasedTrackIndex)
+            && oneBasedTrackIndex > 0
+            && (trackArrayIndex = oneBasedTrackIndex - 1) >= 0;
     }
 
     private static int ExecuteMux(IReadOnlyList<string> args)

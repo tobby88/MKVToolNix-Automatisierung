@@ -95,6 +95,50 @@ public sealed class SeriesEpisodeMuxPlanTests
         Assert.Contains("0:English - SRT", arguments);
     }
 
+    [Fact]
+    public void BuildArguments_UsesMkvPropEditForDirectTrackHeaderEdits()
+    {
+        var plan = new SeriesEpisodeMuxPlan(
+            mkvMergePath: @"C:\Tools\mkvmerge.exe",
+            outputFilePath: @"C:\Temp\output.mkv",
+            title: "Pilot",
+            videoSources:
+            [
+                new VideoSourcePlan(@"C:\Temp\output.mkv", 0, "Deutsch - FHD - H.264", IsDefaultTrack: true)
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(@"C:\Temp\output.mkv", 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null,
+            mkvPropEditPath: @"C:\Tools\mkvpropedit.exe",
+            trackHeaderEdits:
+            [
+                new TrackHeaderEditOperation("track:2", "Audio 1", "Alter Audiotitel", "Deutsch - E-AC-3")
+            ],
+            notes: []);
+
+        var arguments = plan.BuildArguments();
+
+        Assert.Equal(@"C:\Temp\output.mkv", arguments[0]);
+        AssertContainsSequence(arguments, "--edit", "track:2", "--set", "name=Deutsch - E-AC-3");
+        Assert.Equal("mkvpropedit", plan.ExecutionToolDisplayName);
+    }
+
     private static SeriesEpisodeMuxPlan CreatePlan(IReadOnlyList<SubtitleFile> subtitleFiles)
     {
         return new SeriesEpisodeMuxPlan(
@@ -136,16 +180,26 @@ public sealed class SeriesEpisodeMuxPlanTests
         return path;
     }
 
-    private static void AssertContainsSequence(IReadOnlyList<string> values, string expectedKey, string expectedValue)
+    private static void AssertContainsSequence(IReadOnlyList<string> values, params string[] expectedSequence)
     {
-        for (var index = 0; index < values.Count - 1; index++)
+        for (var index = 0; index <= values.Count - expectedSequence.Length; index++)
         {
-            if (values[index] == expectedKey && values[index + 1] == expectedValue)
+            var matches = true;
+            for (var offset = 0; offset < expectedSequence.Length; offset++)
+            {
+                if (!string.Equals(values[index + offset], expectedSequence[offset], StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
             {
                 return;
             }
         }
 
-        throw new Xunit.Sdk.XunitException($"Sequenz '{expectedKey}', '{expectedValue}' wurde nicht gefunden.");
+        throw new Xunit.Sdk.XunitException($"Sequenz '{string.Join("', '", expectedSequence)}' wurde nicht gefunden.");
     }
 }

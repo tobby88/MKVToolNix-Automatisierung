@@ -3,7 +3,7 @@ using MkvToolnixAutomatisierung.Services;
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
-/// Fassadenservice über Planner und Prozessausführung für Erkennung, Vorschau und echten Mux-Lauf.
+/// Fassadenservice über Planner und Prozessausführung für Erkennung, Vorschau und echte MKVToolNix-Läufe.
 /// </summary>
 public sealed class SeriesEpisodeMuxService
 {
@@ -15,7 +15,7 @@ public sealed class SeriesEpisodeMuxService
     /// Initialisiert die Fassade für Erkennung, Planerzeugung und Mux-Ausführung.
     /// </summary>
     /// <param name="planner">Fachlicher Planer für Detection und Mux-Pläne.</param>
-    /// <param name="executionService">Prozessdienst zum Starten von <c>mkvmerge.exe</c>.</param>
+    /// <param name="executionService">Prozessdienst zum Starten der benötigten MKVToolNix-Werkzeuge.</param>
     /// <param name="outputParser">Übersetzer für rohe Prozessausgabe in strukturierte Updates.</param>
     public SeriesEpisodeMuxService(
         SeriesEpisodeMuxPlanner planner,
@@ -135,7 +135,7 @@ public sealed class SeriesEpisodeMuxService
     }
 
     /// <summary>
-    /// Führt den eigentlichen mkvmerge-Prozess aus und übersetzt dessen Konsolenausgabe in Fortschrittsereignisse.
+    /// Führt den zum Plan passenden MKVToolNix-Prozess aus und übersetzt dessen Konsolenausgabe in Fortschrittsereignisse.
     /// </summary>
     /// <param name="plan">Der auszuführende Mux-Plan.</param>
     /// <param name="onOutput">Optionaler Callback für rohe Prozessausgabe.</param>
@@ -148,14 +148,20 @@ public sealed class SeriesEpisodeMuxService
         Action<MuxExecutionUpdate>? onUpdate = null,
         CancellationToken cancellationToken = default)
     {
+        if (plan.HasTrackHeaderEdits)
+        {
+            return await ExecuteTrackHeaderEditAsync(plan, onOutput, onUpdate, cancellationToken);
+        }
+
         var hadWarning = false;
         int? latestProgressPercent = null;
 
         onUpdate?.Invoke(new MuxExecutionUpdate(0, false));
 
         var exitCode = await _executionService.ExecuteAsync(
-            plan.MkvMergePath,
+            plan.ExecutionToolPath,
             plan.BuildArguments(),
+            plan.ExecutionToolDisplayName,
             line =>
             {
                 onOutput?.Invoke(line);
@@ -181,6 +187,34 @@ public sealed class SeriesEpisodeMuxService
             cancellationToken);
 
         return new MuxExecutionResult(exitCode, hadWarning, latestProgressPercent);
+    }
+
+    private async Task<MuxExecutionResult> ExecuteTrackHeaderEditAsync(
+        SeriesEpisodeMuxPlan plan,
+        Action<string>? onOutput,
+        Action<MuxExecutionUpdate>? onUpdate,
+        CancellationToken cancellationToken)
+    {
+        var hadWarning = false;
+
+        onUpdate?.Invoke(new MuxExecutionUpdate(0, false));
+        var exitCode = await _executionService.ExecuteAsync(
+            plan.ExecutionToolPath,
+            plan.BuildArguments(),
+            plan.ExecutionToolDisplayName,
+            line =>
+            {
+                onOutput?.Invoke(line);
+                if (line.Contains("warning", StringComparison.OrdinalIgnoreCase)
+                    || line.Contains("warnung", StringComparison.OrdinalIgnoreCase))
+                {
+                    hadWarning = true;
+                }
+            },
+            cancellationToken);
+
+        onUpdate?.Invoke(new MuxExecutionUpdate(100, hadWarning));
+        return new MuxExecutionResult(exitCode, hadWarning, 100);
     }
 
     private static Action<DetectionProgressUpdate>? CreateCancelableProgressCallback(
@@ -250,11 +284,11 @@ public sealed class SeriesEpisodeMuxService
 }
 
 /// <summary>
-/// Fortschrittssignal während eines laufenden mkvmerge-Prozesses.
+/// Fortschrittssignal während eines laufenden MKVToolNix-Prozesses.
 /// </summary>
 public sealed record MuxExecutionUpdate(int? ProgressPercent, bool HasWarning);
 
 /// <summary>
-/// Verdichtetes Ergebnis eines abgeschlossenen mkvmerge-Prozesses.
+/// Verdichtetes Ergebnis eines abgeschlossenen MKVToolNix-Prozesses.
 /// </summary>
 public sealed record MuxExecutionResult(int ExitCode, bool HasWarning, int? LastProgressPercent);

@@ -360,12 +360,14 @@ public sealed partial class SeriesArchiveService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var needsManualAttachments = manualAttachmentPaths.Count > 0;
-        var requiresRelevantTrackNameNormalization = RequiresRelevantTrackNameNormalization(
+        var relevantTrackHeaderEdits = BuildRelevantTrackHeaderEdits(
+            existingArchive.Container.Tracks,
             videoPlan.RetainedExistingTracks,
             retainedNormalAudioTracks,
             existingAudioDescription,
             existingArchive.SubtitleTracks,
             subtitlePlan.EmbeddedPlans);
+        var requiresRelevantTrackNameNormalization = relevantTrackHeaderEdits.Count > 0;
 
         if (!needsAudioDescription
             && !needsSubtitleSupplement
@@ -385,6 +387,39 @@ public sealed partial class SeriesArchiveService
                     subtitlePlan,
                     attachmentReusePlan.PreservedAttachmentNames),
                 ["Zieldatei bereits vollständig. Alle relevanten Spurnamen sind bereits konsistent. Kein erneutes Muxen nötig."]);
+        }
+
+        if (!needsAudioDescription
+            && !needsSubtitleSupplement
+            && !needsAdditionalVideo
+            && !needsVideoCleanup
+            && !needsManualAttachments
+            && requiresRelevantTrackNameNormalization)
+        {
+            return new ArchiveIntegrationDecision(
+                OutputFilePath: outputPath,
+                SkipMux: false,
+                SkipReason: null,
+                SkipUsageSummary: null,
+                WorkingCopy: null,
+                PrimarySourcePath: outputPath,
+                VideoSelections: videoPlan.VideoSelections,
+                RetainedAudioTrackIds: retainedNormalAudioTracks.Select(track => track.TrackId).ToList(),
+                PrimarySubtitleTrackIds: subtitlePlan.FinalPlans.Count > 0 || replacedSubtitleTracks.Count > 0 ? [] : null,
+                PrimarySourceAttachmentIds: attachmentReusePlan.PrimarySourceAttachmentIds,
+                IncludePrimaryAttachments: attachmentReusePlan.IncludePrimarySourceAttachments,
+                AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
+                AttachmentSourceAttachmentIds: attachmentReusePlan.AttachmentSourceAttachmentIds,
+                AdditionalVideoPaths: [],
+                AudioDescriptionFilePath: existingAudioDescription is null ? null : outputPath,
+                AudioDescriptionTrackId: existingAudioDescription?.TrackId,
+                SubtitleFiles: subtitlePlan.FinalPlans,
+                AttachmentFilePaths: [],
+                FallbackToRequestAttachments: false,
+                PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
+                UsageComparison: ArchiveUsageComparison.Empty,
+                TrackHeaderEdits: relevantTrackHeaderEdits,
+                Notes: BuildTrackHeaderNormalizationOnlyNotes(bestExistingVideo));
         }
 
         var usageComparison = new ArchiveUsageComparison(
@@ -422,6 +457,7 @@ public sealed partial class SeriesArchiveService
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
+            TrackHeaderEdits: [],
             SkipUsageSummary: null,
             Notes: BuildKeepExistingPrimaryNotes(
                 bestExistingVideo,
@@ -526,6 +562,7 @@ public sealed partial class SeriesArchiveService
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
+            TrackHeaderEdits: [],
             Notes:
             [
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",

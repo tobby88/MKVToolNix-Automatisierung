@@ -60,7 +60,7 @@ public sealed class AppToolPathSettings
     public string FfprobePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Pfad zur mkvmerge-Executable oder zu ihrem Installationsordner.
+    /// Pfad zu einer MKVToolNix-Executable oder zu ihrem Installationsordner.
     /// </summary>
     public string MkvToolNixDirectoryPath { get; set; } = string.Empty;
 

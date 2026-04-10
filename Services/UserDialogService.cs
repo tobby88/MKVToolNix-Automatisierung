@@ -137,8 +137,8 @@ internal sealed class UserDialogService : IUserDialogService
     {
         return MessageBox.Show(
             GetOwner(),
-            "Soll der angezeigte mkvmerge-Aufruf jetzt ausgeführt werden?",
-            "Muxing starten",
+            "Soll der angezeigte MKVToolNix-Aufruf jetzt ausgeführt werden?",
+            "Verarbeitung starten",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }

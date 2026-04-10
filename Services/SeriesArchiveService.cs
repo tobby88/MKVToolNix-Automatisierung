@@ -179,6 +179,7 @@ public sealed record ArchiveIntegrationDecision(
     bool FallbackToRequestAttachments,
     IReadOnlyList<string> PreservedAttachmentNames,
     ArchiveUsageComparison UsageComparison,
+    IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits,
     IReadOnlyList<string> Notes)
 {
     /// <summary>
@@ -210,6 +211,7 @@ public sealed record ArchiveIntegrationDecision(
             FallbackToRequestAttachments: true,
             PreservedAttachmentNames: [],
             UsageComparison: ArchiveUsageComparison.Empty,
+            TrackHeaderEdits: [],
             Notes: []);
     }
 
@@ -249,6 +251,7 @@ public sealed record ArchiveIntegrationDecision(
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: [],
             UsageComparison: ArchiveUsageComparison.Empty,
+            TrackHeaderEdits: [],
             Notes: notes);
     }
 }

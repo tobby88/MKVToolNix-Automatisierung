@@ -20,6 +20,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? _ffprobeStatusDetail;
     private bool _isMkvToolNixAvailable;
     private string? _mkvMergePath;
+    private string? _mkvPropEditPath;
     private string? _mkvToolNixStatusDetail;
     private bool _isArchiveAvailable;
     private string? _archiveRootDirectory;
@@ -157,14 +158,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             : $"ffprobe aktuell nicht verfügbar:{Environment.NewLine}{FfprobePath}{Environment.NewLine}{Environment.NewLine}{_ffprobeStatusDetail}";
 
     public string MkvToolNixStatusText => IsMkvToolNixAvailable
-        ? "mkvmerge: bereit"
-        : "mkvmerge: fehlt";
+        ? "MKVToolNix: bereit"
+        : "MKVToolNix: fehlt";
 
     public string MkvToolNixStatusTooltip => IsMkvToolNixAvailable
-        ? $"mkvmerge gefunden:{Environment.NewLine}{MkvMergePath}"
+        ? $"MKVToolNix gefunden:{Environment.NewLine}{Path.GetDirectoryName(MkvMergePath ?? string.Empty) ?? MkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvmerge.exe:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvpropedit.exe:{Environment.NewLine}{_mkvPropEditPath}"
         : string.IsNullOrWhiteSpace(MkvMergePath)
-            ? "mkvmerge wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen."
-            : $"mkvmerge aktuell nicht verfügbar:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}{_mkvToolNixStatusDetail}";
+            ? "MKVToolNix wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen."
+            : $"MKVToolNix aktuell nicht vollständig verfügbar:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}{_mkvToolNixStatusDetail}";
 
     public string ArchiveStatusText => IsArchiveAvailable
         ? "Archiv: bereit"
@@ -197,7 +198,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             return string.Join(
                 Environment.NewLine,
                 "Erststart:",
-                "1. Prüfen, ob mkvmerge links unten bereit ist.",
+                "1. Prüfen, ob MKVToolNix links unten bereit ist.",
                 "2. Optional ffprobe auswählen, falls genauere Laufzeiten gewünscht sind.",
                 "3. Serienbibliothek links unten bei Bedarf anpassen.",
                 "4. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
@@ -312,24 +313,34 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             : "Der gespeicherte Pfad bleibt erhalten. Klicken, um ffprobe.exe neu auszuwählen oder den Windows-Fallback weiter zu nutzen.");
 
         string? detectedMkvMergePath = null;
-        Exception? mkvMergeError = null;
+        string? detectedMkvPropEditPath = null;
+        Exception? mkvToolNixError = null;
         try
         {
             detectedMkvMergePath = _services.MkvToolNixLocator.FindMkvMergePath();
+            detectedMkvPropEditPath = _services.MkvToolNixLocator.FindMkvPropEditPath();
         }
         catch (Exception ex)
         {
-            mkvMergeError = ex;
+            mkvToolNixError = ex;
         }
 
         var resolvedMkvMergePath = !string.IsNullOrWhiteSpace(detectedMkvMergePath)
             ? detectedMkvMergePath
             : NormalizeConfiguredExecutablePath(settings.MkvToolNixDirectoryPath, "mkvmerge.exe");
+        var resolvedMkvPropEditPath = !string.IsNullOrWhiteSpace(detectedMkvPropEditPath)
+            ? detectedMkvPropEditPath
+            : NormalizeConfiguredExecutablePath(settings.MkvToolNixDirectoryPath, "mkvpropedit.exe");
         MkvMergePath = resolvedMkvMergePath;
-        IsMkvToolNixAvailable = !string.IsNullOrWhiteSpace(detectedMkvMergePath) && File.Exists(detectedMkvMergePath);
+        _mkvPropEditPath = resolvedMkvPropEditPath;
+        OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
+        IsMkvToolNixAvailable = !string.IsNullOrWhiteSpace(detectedMkvMergePath)
+            && !string.IsNullOrWhiteSpace(detectedMkvPropEditPath)
+            && File.Exists(detectedMkvMergePath)
+            && File.Exists(detectedMkvPropEditPath);
         SetMkvToolNixStatusDetail(string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
             ? "Klicken, um den MKVToolNix-Ordner auszuwählen."
-            : $"Der gespeicherte Pfad bleibt erhalten. {mkvMergeError?.Message ?? "Klicken, um den MKVToolNix-Ordner neu auszuwählen."}");
+            : $"Der gespeicherte Pfad bleibt erhalten. {mkvToolNixError?.Message ?? "Klicken, um den MKVToolNix-Ordner neu auszuwählen."}");
 
         var normalizedFfprobePath = detectedFfprobePath;
         var normalizedMkvToolPath = string.IsNullOrWhiteSpace(detectedMkvMergePath)

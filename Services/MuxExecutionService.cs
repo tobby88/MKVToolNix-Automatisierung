@@ -4,21 +4,23 @@ using System.Text;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Startet den externen mkvmerge-Prozess und liefert seine Konsolenausgabe fortlaufend an den Aufrufer zurück.
+/// Startet externe MKVToolNix-Prozesse und liefert deren Konsolenausgabe fortlaufend an den Aufrufer zurück.
 /// </summary>
 public sealed class MuxExecutionService
 {
     /// <summary>
-    /// Startet mkvmerge mit einer vorbereiteten Argumentliste und liefert dessen Konsolenzeilen fortlaufend zurück.
+    /// Startet ein MKVToolNix-Werkzeug mit einer vorbereiteten Argumentliste und liefert dessen Konsolenzeilen fortlaufend zurück.
     /// </summary>
-    /// <param name="mkvMergePath">Pfad zur auszuführenden mkvmerge-Executable.</param>
+    /// <param name="executablePath">Pfad zur auszuführenden MKVToolNix-Executable.</param>
     /// <param name="arguments">Bereits aufgelöste Argumentliste des Plans.</param>
+    /// <param name="toolDisplayName">Lesbarer Name des gestarteten Werkzeugs für Fehlermeldungen.</param>
     /// <param name="onOutput">Optionaler Callback für Standardausgabe und Standardfehler.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal. Bei Abbruch wird der gestartete Prozess beendet.</param>
     /// <returns>Exitcode des Prozesses.</returns>
     public async Task<int> ExecuteAsync(
-        string mkvMergePath,
+        string executablePath,
         IReadOnlyList<string> arguments,
+        string toolDisplayName,
         Action<string>? onOutput = null,
         CancellationToken cancellationToken = default)
     {
@@ -26,7 +28,7 @@ public sealed class MuxExecutionService
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = mkvMergePath,
+            FileName = executablePath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -41,7 +43,7 @@ public sealed class MuxExecutionService
         }
 
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
+            ?? throw new InvalidOperationException($"{toolDisplayName} konnte nicht gestartet werden.");
         using var registration = cancellationToken.Register(() =>
         {
             try

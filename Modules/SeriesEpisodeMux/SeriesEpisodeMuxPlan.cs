@@ -3,12 +3,12 @@ using MkvToolnixAutomatisierung.Services;
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
-/// Vollständig aufgelöster Plan für einen einzelnen mkvmerge-Aufruf inklusive Archiv- und Zusatzspurenlogik.
+/// Vollständig aufgelöster Plan für einen einzelnen MKVToolNix-Aufruf inklusive Archiv- und Zusatzspurenlogik.
 /// </summary>
 public sealed class SeriesEpisodeMuxPlan
 {
     /// <summary>
-    /// Initialisiert einen vollständigen Mux-Plan für einen echten mkvmerge-Lauf.
+    /// Initialisiert einen vollständigen Plan für einen echten MKVToolNix-Lauf.
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten <c>mkvmerge.exe</c>.</param>
     /// <param name="outputFilePath">Finaler Ausgabepfad der Zieldatei.</param>
@@ -30,6 +30,15 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="preservedAttachmentNames">Namen wiederverwendeter Archiv-Anhänge für die GUI-Vorschau.</param>
     /// <param name="usageComparison">Vergleich zwischen bisheriger Ziel-MKV und geplanter Verwendung.</param>
     /// <param name="workingCopy">Optionale Arbeitskopie einer vorhandenen Archivdatei.</param>
+    /// <param name="mkvPropEditPath">
+    /// Optionaler Pfad zu <c>mkvpropedit.exe</c>. Wird nur für direkte Header-Anpassungen an
+    /// einer vorhandenen Zieldatei benötigt und bleibt bei regulären Remux-Plänen leer.
+    /// </param>
+    /// <param name="trackHeaderEdits">
+    /// Optionaler Satz direkter Header-Anpassungen. Ist diese Liste befüllt, bleibt die
+    /// Zieldatei inhaltlich unverändert und es werden nur ihre relevanten Tracknamen direkt
+    /// im Header vereinheitlicht.
+    /// </param>
     /// <param name="notes">Zusätzliche Hinweise für GUI und Vorschau.</param>
     public SeriesEpisodeMuxPlan(
         string mkvMergePath,
@@ -52,7 +61,9 @@ public sealed class SeriesEpisodeMuxPlan
         IReadOnlyList<string> preservedAttachmentNames,
         ArchiveUsageComparison usageComparison,
         FileCopyPlan? workingCopy,
-        IReadOnlyList<string> notes)
+        string? mkvPropEditPath = null,
+        IReadOnlyList<TrackHeaderEditOperation>? trackHeaderEdits = null,
+        IReadOnlyList<string>? notes = null)
     {
         if (videoSources.Count == 0)
         {
@@ -62,6 +73,11 @@ public sealed class SeriesEpisodeMuxPlan
         if (audioSources.Count == 0)
         {
             throw new ArgumentException("Mindestens eine normale Audiospur muss vorhanden sein.", nameof(audioSources));
+        }
+
+        if (trackHeaderEdits is { Count: > 0 } && string.IsNullOrWhiteSpace(mkvPropEditPath))
+        {
+            throw new ArgumentException("Für direkte Header-Anpassungen muss ein mkvpropedit-Pfad vorhanden sein.", nameof(mkvPropEditPath));
         }
 
         MkvMergePath = mkvMergePath;
@@ -87,7 +103,9 @@ public sealed class SeriesEpisodeMuxPlan
         UsageComparison = usageComparison;
         SkipUsageSummary = null;
         WorkingCopy = workingCopy;
-        Notes = notes;
+        MkvPropEditPath = mkvPropEditPath;
+        TrackHeaderEdits = trackHeaderEdits ?? [];
+        Notes = notes ?? [];
     }
 
     private SeriesEpisodeMuxPlan(
@@ -121,6 +139,8 @@ public sealed class SeriesEpisodeMuxPlan
         PreservedAttachmentNames = [];
         UsageComparison = ArchiveUsageComparison.Empty;
         WorkingCopy = null;
+        MkvPropEditPath = null;
+        TrackHeaderEdits = [];
         Notes = notes;
     }
 
@@ -128,6 +148,11 @@ public sealed class SeriesEpisodeMuxPlan
     /// Pfad zur verwendeten <c>mkvmerge.exe</c>.
     /// </summary>
     public string MkvMergePath { get; }
+
+    /// <summary>
+    /// Optionaler Pfad zur verwendeten <c>mkvpropedit.exe</c> für direkte Header-Anpassungen.
+    /// </summary>
+    public string? MkvPropEditPath { get; }
 
     /// <summary>
     /// Finaler Ausgabepfad der Zieldatei.
@@ -143,6 +168,28 @@ public sealed class SeriesEpisodeMuxPlan
     /// Kennzeichnet einen rein informativen Skip-Plan ohne echten Mux-Lauf.
     /// </summary>
     public bool SkipMux { get; }
+
+    /// <summary>
+    /// Kennzeichnet einen Plan, der nur Tracknamen im vorhandenen Zielcontainer direkt aktualisiert.
+    /// </summary>
+    public bool HasTrackHeaderEdits => TrackHeaderEdits.Count > 0;
+
+    /// <summary>
+    /// Liefert den Pfad zum für diesen Plan tatsächlich auszuführenden MKVToolNix-Werkzeug.
+    /// </summary>
+    public string ExecutionToolPath => HasTrackHeaderEdits
+        ? MkvPropEditPath ?? throw new InvalidOperationException("Für direkte Header-Anpassungen fehlt der mkvpropedit-Pfad.")
+        : MkvMergePath;
+
+    /// <summary>
+    /// Liefert den Dateinamen des für diesen Plan auszuführenden Werkzeugs.
+    /// </summary>
+    public string ExecutionToolFileName => Path.GetFileName(ExecutionToolPath);
+
+    /// <summary>
+    /// Liefert den Anzeigenamen des für diesen Plan auszuführenden Werkzeugs ohne Dateiendung.
+    /// </summary>
+    public string ExecutionToolDisplayName => Path.GetFileNameWithoutExtension(ExecutionToolPath);
 
     /// <summary>
     /// Fachliche Begründung, warum kein Mux-Lauf nötig ist.
@@ -245,6 +292,11 @@ public sealed class SeriesEpisodeMuxPlan
     public ArchiveUsageComparison UsageComparison { get; }
 
     /// <summary>
+    /// Optionale direkte Header-Anpassungen für den vorhandenen Zielcontainer.
+    /// </summary>
+    public IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits { get; }
+
+    /// <summary>
     /// Optionale Arbeitskopie einer vorhandenen Archivdatei.
     /// </summary>
     public FileCopyPlan? WorkingCopy { get; }
@@ -276,18 +328,20 @@ public sealed class SeriesEpisodeMuxPlan
     }
 
     /// <summary>
-    /// Baut aus dem Plan die vollständige mkvmerge-Argumentliste für den echten Prozessaufruf.
+    /// Baut aus dem Plan die vollständige Argumentliste für den echten Prozessaufruf.
     /// </summary>
-    /// <returns>Argumentliste für <c>mkvmerge.exe</c>.</returns>
+    /// <returns>Argumentliste für das zum Plan passende MKVToolNix-Werkzeug.</returns>
     public IReadOnlyList<string> BuildArguments()
     {
-        return SeriesEpisodeMuxArgumentBuilder.Build(this);
+        return HasTrackHeaderEdits
+            ? SeriesEpisodeMuxHeaderEditArgumentBuilder.Build(this)
+            : SeriesEpisodeMuxArgumentBuilder.Build(this);
     }
 
     /// <summary>
     /// Liefert die Argumentliste als lesbare Vorschau mit einfachen Shell-Escapes.
     /// </summary>
-    /// <returns>Mehrzeilige Darstellung der mkvmerge-Argumente.</returns>
+    /// <returns>Mehrzeilige Darstellung der zum Plan passenden Werkzeug-Argumente.</returns>
     public string GetCommandLinePreview()
     {
         return SeriesEpisodeMuxPresentationBuilder.BuildCommandLinePreview(this);

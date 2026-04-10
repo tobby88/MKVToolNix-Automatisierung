@@ -222,9 +222,9 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 
     public string RescanButtonTooltip => "Erkennt Quellen, Begleitdateien und Ausgabeziel erneut ausgehend vom aktuellen Hauptvideo.";
 
-    public string CreatePreviewButtonTooltip => "Erstellt den geplanten mkvmerge-Aufruf und zeigt die Details an, ohne eine MKV zu schreiben.";
+    public string CreatePreviewButtonTooltip => "Erstellt den geplanten MKVToolNix-Aufruf und zeigt die Details an, ohne eine MKV zu schreiben.";
 
-    public string ExecuteMuxButtonTooltip => "Startet das eigentliche Muxing mit der aktuellen Planung.";
+    public string ExecuteMuxButtonTooltip => "Startet die aktuelle Planung mit dem passenden MKVToolNix-Werkzeug.";
 
     public bool CanCancelCurrentOperation => _currentOperationCts is { IsCancellationRequested: false };
 

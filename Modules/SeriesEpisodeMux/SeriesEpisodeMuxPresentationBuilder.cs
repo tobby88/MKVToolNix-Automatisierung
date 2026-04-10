@@ -105,7 +105,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
     public static string BuildPreviewText(SeriesEpisodeMuxPlan plan)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"mkvmerge.exe: {plan.MkvMergePath}");
+        builder.AppendLine($"{plan.ExecutionToolFileName}: {plan.ExecutionToolPath}");
         builder.AppendLine();
         builder.AppendLine($"Titel: {plan.Title}");
         builder.AppendLine($"Ausgabe: {plan.OutputFilePath}");
@@ -136,7 +136,18 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             builder.AppendLine($"Untertitel: {(plan.SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", plan.SubtitleFiles.Select(file => file.PreviewLabel)))}");
             builder.AppendLine($"Anhänge: {BuildAttachmentPreview(plan)}");
 
-            if (plan.WorkingCopy is not null)
+            if (plan.HasTrackHeaderEdits)
+            {
+                builder.AppendLine("Direkte Header-Anpassungen:");
+                foreach (var headerEdit in plan.TrackHeaderEdits)
+                {
+                    var currentName = string.IsNullOrWhiteSpace(headerEdit.CurrentTrackName)
+                        ? "(leer)"
+                        : headerEdit.CurrentTrackName;
+                    builder.AppendLine($"- {headerEdit.DisplayLabel}: {currentName} -> {headerEdit.ExpectedTrackName}");
+                }
+            }
+            else if (plan.WorkingCopy is not null)
             {
                 builder.AppendLine($"Arbeitskopie vorab: {plan.WorkingCopy.SourceFilePath} -> {plan.WorkingCopy.DestinationFilePath}");
             }
@@ -166,11 +177,11 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
     private static (string ArchiveAction, string ArchiveDetails) BuildArchiveStatus(SeriesEpisodeMuxPlan plan)
     {
-        if (IsTrackNameNormalizationOnlyPlan(plan))
+        if (plan.HasTrackHeaderEdits)
         {
             return (
                 "Zieldatei bleibt inhaltlich unverändert",
-                "Es werden nur die Benennungen der relevanten Spuren vereinheitlicht");
+                "Es werden nur die Benennungen der relevanten Spuren direkt im Header vereinheitlicht");
         }
 
         var archiveAction = plan.WorkingCopy is not null
@@ -259,20 +270,6 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             .Cast<string>());
 
         return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
-    }
-
-    private static bool IsTrackNameNormalizationOnlyPlan(SeriesEpisodeMuxPlan plan)
-    {
-        return plan.WorkingCopy is not null
-            && plan.VideoSources.Count > 0
-            && plan.VideoSources.All(video => string.Equals(video.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            && plan.AudioSources.All(audio => string.Equals(audio.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            && (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath)
-                || string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            && plan.SubtitleFiles.All(subtitle => subtitle.IsEmbedded && string.Equals(subtitle.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
-            && plan.AttachmentFilePaths.Count == 0
-            && string.IsNullOrWhiteSpace(plan.AttachmentSourcePath)
-            && plan.UsageComparison == ArchiveUsageComparison.Empty;
     }
 
     private static string BuildExistingTargetDisplayText(string value)

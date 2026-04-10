@@ -59,7 +59,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
                 + Environment.NewLine
                 + Environment.NewLine
-                + "mkvmerge-Ausgabe:"
+                + "MKVToolNix-Ausgabe:"
                 + Environment.NewLine;
             ResetPreviewOutputBuffer(PreviewText);
 
@@ -96,7 +96,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 return;
             }
 
-            SetStatus("Muxing läuft...", 0);
+            SetStatus(
+                _currentPlan.HasTrackHeaderEdits
+                    ? "Header-Metadaten werden aktualisiert..."
+                    : "Muxing läuft...",
+                0);
             var result = await _services.MuxWorkflow.ExecuteMuxAsync(
                 _currentPlan,
                 HandleMuxOutput,
@@ -105,21 +109,41 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
             if (result.ExitCode == 0 && !result.HasWarning)
             {
-                SetStatus("Muxing erfolgreich abgeschlossen", 100);
-                _dialogService.ShowInfo("Erfolg", $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
+                SetStatus(
+                    _currentPlan.HasTrackHeaderEdits
+                        ? "Header-Metadaten erfolgreich aktualisiert"
+                        : "Muxing erfolgreich abgeschlossen",
+                    100);
+                _dialogService.ShowInfo(
+                    "Erfolg",
+                    _currentPlan.HasTrackHeaderEdits
+                        ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{_currentPlan.OutputFilePath}"
+                        : $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else if ((result.ExitCode == 0 && result.HasWarning)
                 || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
             {
-                SetStatus("Muxing mit Warnungen abgeschlossen", 100);
-                _dialogService.ShowWarning("Warnung", $"Die MKV wurde erstellt, aber mkvmerge hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
+                SetStatus(
+                    _currentPlan.HasTrackHeaderEdits
+                        ? "Header-Metadaten mit Warnungen aktualisiert"
+                        : "Muxing mit Warnungen abgeschlossen",
+                    100);
+                _dialogService.ShowWarning(
+                    "Warnung",
+                    _currentPlan.HasTrackHeaderEdits
+                        ? $"Die Header-Metadaten wurden aktualisiert, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}"
+                        : $"Die MKV wurde erstellt, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else
             {
-                SetStatus($"Muxing fehlgeschlagen (Exit-Code {result.ExitCode})", 0);
-                _dialogService.ShowWarning("Hinweis", $"mkvmerge wurde mit Exit-Code {result.ExitCode} beendet.");
+                SetStatus(
+                    _currentPlan.HasTrackHeaderEdits
+                        ? $"Header-Aktualisierung fehlgeschlagen (Exit-Code {result.ExitCode})"
+                        : $"Muxing fehlgeschlagen (Exit-Code {result.ExitCode})",
+                    0);
+                _dialogService.ShowWarning("Hinweis", $"{_currentPlan.ExecutionToolDisplayName} wurde mit Exit-Code {result.ExitCode} beendet.");
             }
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
@@ -199,6 +223,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
             return;
         }
 
+        if (plan.HasTrackHeaderEdits)
+        {
+            OutputTargetStatusText = "Am Ziel liegt bereits eine passende MKV. Es werden nur die relevanten Spurnamen direkt im Matroska-Header vereinheitlicht; eine Arbeitskopie und ein kompletter Remux sind nicht nötig.";
+            return;
+        }
+
         if (plan.WorkingCopy is not null)
         {
             OutputTargetStatusText = plan.WorkingCopy.IsReusable
@@ -254,9 +284,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
         _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
             var progressValue = update.ProgressPercent ?? ProgressValue;
-            var statusText = update.ProgressPercent is int progressPercent
-                ? $"Muxing läuft... {progressPercent}%"
+            var baseText = _currentPlan?.HasTrackHeaderEdits == true
+                ? "Header-Metadaten werden aktualisiert..."
                 : "Muxing läuft...";
+            var statusText = update.ProgressPercent is int progressPercent
+                ? $"{baseText} {progressPercent}%"
+                : baseText;
 
             if (update.HasWarning)
             {

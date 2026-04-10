@@ -141,6 +141,65 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteMuxAsync_HeaderEditOnly_UsesMkvPropEditWithoutWorkingCopy()
+    {
+        var outputPath = CreateFile("header-edit", "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel"));
+
+        var muxService = CreateMuxService();
+        var coordinator = new MuxWorkflowCoordinator(muxService, new FileCopyService(), new EpisodeCleanupService());
+        var mkvPropEditPath = Path.Combine(
+            Path.GetDirectoryName(FakeMkvMergeTestHelper.ResolveExecutablePath())
+                ?? throw new DirectoryNotFoundException("Kein Verzeichnis für FakeMkvMerge gefunden."),
+            "mkvpropedit.exe");
+        var plan = new SeriesEpisodeMuxPlan(
+            mkvMergePath: FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            outputFilePath: outputPath,
+            title: "Episode",
+            videoSources:
+            [
+                new VideoSourcePlan(outputPath, 0, "Deutsch - FHD - H.264", IsDefaultTrack: true)
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(outputPath, 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null,
+            mkvPropEditPath: mkvPropEditPath,
+            trackHeaderEdits:
+            [
+                new TrackHeaderEditOperation("track:2", "Alter Audiotitel", "Alter Audiotitel", "Deutsch - E-AC-3")
+            ],
+            notes: ["Nur Header-Update"]);
+
+        var result = await coordinator.ExecuteMuxAsync(plan);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.False(result.HasWarning);
+        Assert.Equal("archive", File.ReadAllText(outputPath));
+        var updatedProbeJson = File.ReadAllText(outputPath + ".mkvmerge.json");
+        Assert.Contains("Deutsch - E-AC-3", updatedProbeJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("Alter Audiotitel", updatedProbeJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExecuteMuxAsync_CancellationStopsProcess_AndCleansTemporaryCopy()
     {
         var sourceVideoPath = CreateFile("cancel-source.mp4");
@@ -239,7 +298,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
         return path;
     }
 
-    private static object CreateVideoTrack(int id, string codec, string pixelDimensions)
+    private static object CreateVideoTrack(int id, string codec, string pixelDimensions, string trackName = "")
     {
         return new
         {
@@ -249,12 +308,13 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             properties = new
             {
                 pixel_dimensions = pixelDimensions,
-                language_ietf = "de"
+                language_ietf = "de",
+                track_name = trackName
             }
         };
     }
 
-    private static object CreateAudioTrack(int id, string codec)
+    private static object CreateAudioTrack(int id, string codec, string trackName = "")
     {
         return new
         {
@@ -263,7 +323,8 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             codec,
             properties = new
             {
-                language_ietf = "de"
+                language_ietf = "de",
+                track_name = trackName
             }
         };
     }

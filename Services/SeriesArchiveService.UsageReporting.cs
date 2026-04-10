@@ -7,6 +7,18 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
+    private static IReadOnlyList<string> BuildTrackHeaderNormalizationOnlyNotes(ContainerTrackMetadata? bestExistingVideo)
+    {
+        return
+        [
+            "Archiv-MKV bereits vorhanden. Die Datei bleibt inhaltlich unverändert; nur die Benennungen der relevanten Spuren werden direkt im Matroska-Header vereinheitlicht.",
+            bestExistingVideo is null
+                ? "Die vorhandene Archivdatei liefert weiterhin alle Hauptspuren."
+                : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}.",
+            "Es wird weder eine Arbeitskopie erstellt noch ein kompletter Remux-Lauf ausgefuehrt."
+        ];
+    }
+
     private static IReadOnlyList<string> BuildKeepExistingPrimaryNotes(
         ContainerTrackMetadata? bestExistingVideo,
         bool needsAudioDescription,
@@ -103,35 +115,53 @@ public sealed partial class SeriesArchiveService
                 null));
     }
 
-    private static bool RequiresRelevantTrackNameNormalization(
+    /// <summary>
+    /// Baut die konkreten <c>mkvpropedit</c>-Operationen fuer bereits vorhandene Tracks auf.
+    /// Nur solche Spuren werden betrachtet, die die aktuelle Planung tatsaechlich weiterverwendet.
+    /// Dadurch bleibt der direkte Header-Edit-Pfad fachlich deckungsgleich mit dem Vergleich, der
+    /// zuvor auch den reinen "Tracknamen-Normalisierung"-Sonderfall erkannt hat.
+    /// </summary>
+    private static IReadOnlyList<TrackHeaderEditOperation> BuildRelevantTrackHeaderEdits(
+        IReadOnlyList<ContainerTrackMetadata> allExistingTracks,
         IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
         IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
         ContainerTrackMetadata? existingAudioDescription,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
     {
+        var selectorByTrackId = allExistingTracks
+            .Select((track, index) => new KeyValuePair<int, string>(track.TrackId, $"track:{index + 1}"))
+            .ToDictionary(entry => entry.Key, entry => entry.Value);
+        var operations = new List<TrackHeaderEditOperation>();
+
         foreach (var existingVideoTrack in retainedExistingVideoTracks)
         {
-            if (!HasConsistentTrackName(existingVideoTrack.TrackName, BuildExpectedVideoTrackName(existingVideoTrack)))
-            {
-                return true;
-            }
+            TryAppendTrackHeaderEdit(
+                operations,
+                selectorByTrackId,
+                existingVideoTrack,
+                BuildExpectedVideoTrackName(existingVideoTrack),
+                $"Video {existingVideoTrack.TrackId}");
         }
 
         foreach (var retainedNormalAudioTrack in retainedNormalAudioTracks)
         {
-            if (!HasConsistentTrackName(retainedNormalAudioTrack.TrackName, BuildExpectedAudioTrackName(retainedNormalAudioTrack)))
-            {
-                return true;
-            }
+            TryAppendTrackHeaderEdit(
+                operations,
+                selectorByTrackId,
+                retainedNormalAudioTrack,
+                BuildExpectedAudioTrackName(retainedNormalAudioTrack),
+                $"Audio {retainedNormalAudioTrack.TrackId}");
         }
 
-        if (existingAudioDescription is not null
-            && !HasConsistentTrackName(
-                existingAudioDescription.TrackName,
-                BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language)))
+        if (existingAudioDescription is not null)
         {
-            return true;
+            TryAppendTrackHeaderEdit(
+                operations,
+                selectorByTrackId,
+                existingAudioDescription,
+                BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language),
+                $"Audiodeskription {existingAudioDescription.TrackId}");
         }
 
         foreach (var subtitlePlan in embeddedSubtitlePlans)
@@ -142,13 +172,20 @@ public sealed partial class SeriesArchiveService
             }
 
             var existingTrack = existingSubtitleTracks.FirstOrDefault(track => track.TrackId == embeddedTrackId);
-            if (existingTrack is not null && !HasConsistentTrackName(existingTrack.TrackName, subtitlePlan.TrackName))
+            if (existingTrack is null)
             {
-                return true;
+                continue;
             }
+
+            TryAppendTrackHeaderEdit(
+                operations,
+                selectorByTrackId,
+                existingTrack,
+                subtitlePlan.TrackName,
+                $"Untertitel {embeddedTrackId}");
         }
 
-        return false;
+        return operations;
     }
 
     private static bool HasConsistentTrackName(string? currentTrackName, string expectedTrackName)
@@ -307,5 +344,28 @@ public sealed partial class SeriesArchiveService
             ? (string.IsNullOrWhiteSpace(track.TrackName) ? track.CodecLabel : track.TrackName)
             : BuildEmbeddedSubtitleLabel(track, kind);
         return $"{Path.GetFileName(outputPath)} -> {label}";
+    }
+
+    private static void TryAppendTrackHeaderEdit(
+        ICollection<TrackHeaderEditOperation> operations,
+        IReadOnlyDictionary<int, string> selectorByTrackId,
+        ContainerTrackMetadata track,
+        string expectedTrackName,
+        string fallbackDisplayLabel)
+    {
+        if (HasConsistentTrackName(track.TrackName, expectedTrackName)
+            || !selectorByTrackId.TryGetValue(track.TrackId, out var selector))
+        {
+            return;
+        }
+
+        var displayLabel = string.IsNullOrWhiteSpace(track.TrackName)
+            ? fallbackDisplayLabel
+            : track.TrackName;
+        operations.Add(new TrackHeaderEditOperation(
+            selector,
+            displayLabel,
+            track.TrackName,
+            expectedTrackName));
     }
 }

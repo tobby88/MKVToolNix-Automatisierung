@@ -57,6 +57,7 @@ public sealed class MainWindowViewModelTests : IDisposable
     {
         var ffprobePath = CreateFile(Path.Combine("ffmpeg", "ffprobe.exe"));
         var mkvMergePath = CreateFile(Path.Combine("mkvtoolnix", "mkvmerge.exe"));
+        _ = CreateFile(Path.Combine("mkvtoolnix", "mkvpropedit.exe"));
         var toolPathStore = CreateToolPathStore();
         toolPathStore.Save(new AppToolPathSettings
         {
@@ -160,6 +161,23 @@ public sealed class MainWindowViewModelTests : IDisposable
             }
 
             return resolvedPath ?? throw new InvalidOperationException("Kein mkvmerge-Pfad gesetzt.");
+        }
+
+        public string FindMkvPropEditPath()
+        {
+            if (exception is not null)
+            {
+                throw exception;
+            }
+
+            if (string.IsNullOrWhiteSpace(resolvedPath))
+            {
+                throw new InvalidOperationException("Kein mkvmerge-Pfad gesetzt.");
+            }
+
+            var directory = Path.GetDirectoryName(resolvedPath)
+                ?? throw new InvalidOperationException("Kein Verzeichnis für den MKVToolNix-Pfad vorhanden.");
+            return Path.Combine(directory, "mkvpropedit.exe");
         }
     }
 

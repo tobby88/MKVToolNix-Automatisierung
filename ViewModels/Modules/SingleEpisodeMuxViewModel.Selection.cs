@@ -177,7 +177,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
     {
         var lines = new List<string>
         {
-            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den mkvmerge-Aufruf prüfen."
+            "Dateien wurden automatisch erkannt. Mit 'Vorschau erzeugen' kannst du den geplanten MKVToolNix-Aufruf prüfen."
         };
 
         if (detected.HasPrimaryVideoSource)

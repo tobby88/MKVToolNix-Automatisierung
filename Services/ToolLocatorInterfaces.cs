@@ -13,7 +13,7 @@ public interface IFfprobeLocator
 }
 
 /// <summary>
-/// Liefert einen benutzbaren Pfad zur erforderlichen <c>mkvmerge.exe</c>.
+/// Liefert benutzbare Pfade zu den fuer dieses Projekt erforderlichen MKVToolNix-Werkzeugen.
 /// </summary>
 public interface IMkvToolNixLocator
 {
@@ -22,4 +22,10 @@ public interface IMkvToolNixLocator
     /// </summary>
     /// <returns>Vollständiger Pfad zur auszuführenden Executable.</returns>
     string FindMkvMergePath();
+
+    /// <summary>
+    /// Ermittelt den Pfad zur verwendbaren <c>mkvpropedit.exe</c>.
+    /// </summary>
+    /// <returns>Vollständiger Pfad zur auszuführenden Executable.</returns>
+    string FindMkvPropEditPath();
 }

@@ -162,7 +162,7 @@ internal sealed class BatchExecutionRunner
                     || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
                 {
                     warningCount++;
-                    var warningStatusText = BuildWarningStatusText(result);
+                    var warningStatusText = BuildWarningStatusText(plan, result);
                     item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning, warningStatusText);
                     appendLog($"  WARNUNG: {warningStatusText}");
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
@@ -250,11 +250,13 @@ internal sealed class BatchExecutionRunner
         return moveResult.MovedFiles;
     }
 
-    private static string BuildWarningStatusText(MuxExecutionResult result)
+    private static string BuildWarningStatusText(SeriesEpisodeMuxPlan plan, MuxExecutionResult result)
     {
         return result.HasWarning
-            ? "Warnung (mkvmerge meldet Warnungen)"
-            : "Warnung (Datei erstellt, Exit-Code 1)";
+            ? $"Warnung ({plan.ExecutionToolDisplayName} meldet Warnungen)"
+            : plan.HasTrackHeaderEdits
+                ? "Warnung (Header aktualisiert, Exit-Code 1)"
+                : "Warnung (Datei erstellt, Exit-Code 1)";
     }
 }
 

@@ -12,6 +12,11 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             return [];
         }
 
+        if (plan.HasTrackHeaderEdits)
+        {
+            throw new InvalidOperationException("Für direkte Header-Anpassungen muss der mkvpropedit-Argument-Builder verwendet werden.");
+        }
+
         var arguments = new List<string>
         {
             "--output",

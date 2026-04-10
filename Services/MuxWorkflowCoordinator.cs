@@ -4,7 +4,7 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Verknüpft Arbeitskopie, Mux-Ausführung und temporäres Aufräumen zu einem robusten Einzellauf.
+/// Verknüpft Arbeitskopie, MKVToolNix-Ausführung und temporäres Aufräumen zu einem robusten Einzellauf.
 /// </summary>
 internal interface IMuxWorkflowCoordinator
 {
@@ -22,7 +22,7 @@ internal interface IMuxWorkflowCoordinator
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Führt den eigentlichen Mux-Lauf aus.
+    /// Führt den zum Plan passenden MKVToolNix-Lauf aus.
     /// </summary>
     Task<MuxExecutionResult> ExecuteMuxAsync(
         SeriesEpisodeMuxPlan plan,
@@ -32,7 +32,7 @@ internal interface IMuxWorkflowCoordinator
 }
 
 /// <summary>
-/// Standardworkflow für Arbeitskopie, Mux-Ausführung und temporäres Aufräumen.
+/// Standardworkflow für Arbeitskopie, MKVToolNix-Ausführung und temporäres Aufräumen.
 /// </summary>
 internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
 {
@@ -51,7 +51,7 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
     }
 
     /// <summary>
-    /// Prüft, ob vor dem eigentlichen Mux-Lauf zunächst eine lokale Arbeitskopie angelegt oder aktualisiert werden muss.
+    /// Prüft, ob vor dem eigentlichen Lauf zunächst eine lokale Arbeitskopie angelegt oder aktualisiert werden muss.
     /// </summary>
     /// <param name="plan">Zu prüfender Mux-Plan.</param>
     /// <returns><see langword="true"/>, wenn die Arbeitskopie vorbereitet werden muss.</returns>
@@ -99,7 +99,7 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
     }
 
     /// <summary>
-    /// Führt den eigentlichen Mux-Lauf aus, invalidiert danach Probe-Caches und entfernt temporäre Arbeitskopien.
+    /// Führt den zum Plan passenden Lauf aus, invalidiert danach Probe-Caches und entfernt temporäre Arbeitskopien.
     /// </summary>
     /// <param name="plan">Auszuführender Mux-Plan.</param>
     /// <param name="onOutput">Optionaler Callback für rohe Prozessausgabe.</param>
@@ -134,7 +134,7 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
             throw new DirectoryNotFoundException($"Ausgabeziel konnte nicht bestimmt werden: {plan.OutputFilePath}");
         }
 
-        // Zielordner erst unmittelbar vor dem echten mkvmerge-Lauf anlegen,
+        // Zielordner erst unmittelbar vor dem echten Werkzeuglauf anlegen,
         // damit Vorschau und Planaktualisierung keine Dateisystem-Seiteneffekte auslösen.
         Directory.CreateDirectory(outputDirectory);
     }

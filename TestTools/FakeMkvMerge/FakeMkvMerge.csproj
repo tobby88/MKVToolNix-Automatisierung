@@ -13,5 +13,9 @@
       SourceFiles="$(TargetDir)FakeMkvMerge.exe"
       DestinationFiles="$(TargetDir)mkvextract.exe"
       SkipUnchangedFiles="true" />
+    <Copy
+      SourceFiles="$(TargetDir)FakeMkvMerge.exe"
+      DestinationFiles="$(TargetDir)mkvpropedit.exe"
+      SkipUnchangedFiles="true" />
   </Target>
 </Project>

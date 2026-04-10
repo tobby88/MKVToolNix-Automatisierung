@@ -320,7 +320,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_KeepingArchivePrimary_WithoutNewContent_RemuxesOnlyForTrackNameNormalization()
+    public async Task CreatePlanAsync_KeepingArchivePrimary_WithoutNewContent_UsesDirectHeaderEditForTrackNameNormalization()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-rename-only");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-rename-only");
@@ -359,14 +359,16 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             Title: "Pilot"));
 
         Assert.False(plan.SkipMux);
-        Assert.NotNull(plan.WorkingCopy);
+        Assert.True(plan.HasTrackHeaderEdits);
+        Assert.Null(plan.WorkingCopy);
+        Assert.Equal("mkvpropedit", plan.ExecutionToolDisplayName);
         Assert.Contains(
             plan.Notes,
             note => note.Contains("Benennungen der relevanten Spuren", StringComparison.OrdinalIgnoreCase));
 
         var summary = plan.BuildUsageSummary();
         Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);
-        Assert.Equal("Es werden nur die Benennungen der relevanten Spuren vereinheitlicht", summary.ArchiveDetails);
+        Assert.Equal("Es werden nur die Benennungen der relevanten Spuren direkt im Header vereinheitlicht", summary.ArchiveDetails);
         Assert.Equal("Aus Zieldatei: Deutsch - FHD - H.264", summary.MainVideo.CurrentText);
         Assert.Equal("Aus Zieldatei: Deutsch - E-AC-3", summary.Audio.CurrentText);
         Assert.Equal("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", summary.AudioDescription.CurrentText);
@@ -374,7 +376,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains("Aus Zieldatei: cover.jpg", summary.Attachments.CurrentText, StringComparison.Ordinal);
 
         var arguments = plan.BuildArguments();
-        AssertContainsSequence(arguments, "--track-name", "1:Deutsch - E-AC-3");
+        Assert.Equal(outputPath, arguments[0]);
+        AssertContainsSequence(arguments, "--edit", "track:2", "--set", "name=Deutsch - E-AC-3");
     }
 
     [Fact]

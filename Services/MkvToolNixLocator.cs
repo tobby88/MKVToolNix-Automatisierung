@@ -1,13 +1,13 @@
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Findet die mkvmerge.exe aus den gespeicherten Toolpfaden.
+/// Findet die fuer das Projekt benoetigten MKVToolNix-Executables aus den gespeicherten Toolpfaden.
 /// </summary>
 public sealed class MkvToolNixLocator : IMkvToolNixLocator
 {
     private const string DownloadsFolderName = "Downloads";
     private const string DirectoryPrefix = "mkvtoolnix-64-bit-";
-    private const string RelativeMkvMergePath = "mkvtoolnix\\mkvmerge.exe";
+    private const string RelativeToolDirectory = "mkvtoolnix";
     private readonly AppToolPathStore _toolPathStore;
 
     /// <summary>
@@ -33,16 +33,29 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
     /// <returns>Vollständiger Pfad zur auszuführenden mkvmerge-Executable.</returns>
     public string FindMkvMergePath()
     {
-        var configuredDirectory = _toolPathStore.Load().MkvToolNixDirectoryPath;
-        if (!string.IsNullOrWhiteSpace(configuredDirectory))
-        {
-            var configuredExecutable = File.Exists(configuredDirectory)
-                ? configuredDirectory
-                : Path.Combine(configuredDirectory, "mkvmerge.exe");
+        return FindToolPath("mkvmerge.exe");
+    }
 
-            if (File.Exists(configuredExecutable))
+    /// <summary>
+    /// Ermittelt den Pfad zur verwendbaren <c>mkvpropedit.exe</c> aus Settings oder Download-Ordnern.
+    /// </summary>
+    /// <returns>Vollständiger Pfad zur auszuführenden mkvpropedit-Executable.</returns>
+    public string FindMkvPropEditPath()
+    {
+        return FindToolPath("mkvpropedit.exe");
+    }
+
+    private string FindToolPath(string executableName)
+    {
+        var configuredPath = _toolPathStore.Load().MkvToolNixDirectoryPath;
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            foreach (var configuredExecutable in EnumerateConfiguredExecutableCandidates(configuredPath, executableName))
             {
-                return configuredExecutable;
+                if (File.Exists(configuredExecutable))
+                {
+                    return configuredExecutable;
+                }
             }
         }
 
@@ -58,14 +71,43 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
             .GetDirectories(downloadsDirectory, $"{DirectoryPrefix}*")
             .Select(path => new DirectoryInfo(path))
             .OrderByDescending(directory => directory.LastWriteTimeUtc)
-            .Select(directory => Path.Combine(directory.FullName, RelativeMkvMergePath))
+            .Select(directory => Path.Combine(directory.FullName, RelativeToolDirectory, executableName))
             .FirstOrDefault(File.Exists);
 
         if (candidate is null)
         {
-            throw new FileNotFoundException("Es wurde keine mkvmerge.exe in einem mkvtoolnix-Download-Ordner gefunden.");
+            throw new FileNotFoundException($"Es wurde keine {executableName} in einem mkvtoolnix-Download-Ordner gefunden.");
         }
 
         return candidate;
+    }
+
+    private static IEnumerable<string> EnumerateConfiguredExecutableCandidates(string configuredPath, string executableName)
+    {
+        if (configuredPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(Path.GetFileName(configuredPath), executableName, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return configuredPath;
+                yield break;
+            }
+
+            if (string.Equals(executableName, "mkvmerge.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                // Bestehende Konfigurationen und Test-Setups dürfen weiterhin direkt auf eine
+                // mkvmerge-kompatible Executable zeigen, auch wenn sie nicht exakt so heißt.
+                yield return configuredPath;
+            }
+
+            var configuredDirectory = Path.GetDirectoryName(configuredPath);
+            if (!string.IsNullOrWhiteSpace(configuredDirectory))
+            {
+                yield return Path.Combine(configuredDirectory, executableName);
+            }
+
+            yield break;
+        }
+
+        yield return Path.Combine(configuredPath, executableName);
     }
 }
