@@ -10,12 +10,6 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class SingleEpisodeMuxView : UserControl
 {
-    private static readonly GridLength DefaultOverviewRowHeight = new(1, GridUnitType.Star);
-    private static readonly GridLength ExpandedOverviewRowHeight = new(0.95, GridUnitType.Star);
-    private static readonly GridLength ExpandedCorrectionsRowHeight = new(1.25, GridUnitType.Star);
-    private static readonly GridLength DefaultStatusRowHeight = new(1, GridUnitType.Star);
-    private static readonly GridLength ExpandedStatusRowHeight = new(0.9, GridUnitType.Star);
-
     /// <summary>
     /// Initialisiert die Einzelmodus-Ansicht mit ihren XAML-Komponenten.
     /// </summary>
@@ -67,23 +61,5 @@ public partial class SingleEpisodeMuxView : UserControl
         {
             e.CancelCommand();
         }
-    }
-
-    private void CorrectionExpander_OnExpanded(object sender, RoutedEventArgs e)
-    {
-        // Der Korrekturbereich soll beim Oeffnen echten Arbeitsraum bekommen, ohne dass die
-        // restliche Ansicht komplett verschwindet. Deshalb verteilen wir die Sternzeilen neu.
-        OverviewRowDefinition.Height = ExpandedOverviewRowHeight;
-        CorrectionsRowDefinition.Height = ExpandedCorrectionsRowHeight;
-        StatusRowDefinition.Height = ExpandedStatusRowHeight;
-        CorrectionExpander.BringIntoView();
-    }
-
-    private void CorrectionExpander_OnCollapsed(object sender, RoutedEventArgs e)
-    {
-        // Im Ruhezustand kehrt die kompakte Standardaufteilung zurueck.
-        OverviewRowDefinition.Height = DefaultOverviewRowHeight;
-        CorrectionsRowDefinition.Height = GridLength.Auto;
-        StatusRowDefinition.Height = DefaultStatusRowHeight;
     }
 }

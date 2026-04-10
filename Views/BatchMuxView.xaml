@@ -107,7 +107,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition x:Name="EpisodeListRowDefinition" Height="1.2*" MinHeight="150" />
-                <RowDefinition Height="6" />
+                <RowDefinition x:Name="UsageSplitterRowDefinition" Height="6" />
                 <RowDefinition x:Name="SelectedUsageRowDefinition" Height="1.15*" MinHeight="150" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition x:Name="DetailsRowDefinition" Height="Auto" />
@@ -208,7 +208,8 @@
                 </DataGrid>
             </GroupBox>
 
-            <GridSplitter Grid.Row="2"
+            <GridSplitter x:Name="UsageGridSplitter"
+                          Grid.Row="2"
                           Height="8"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
@@ -328,12 +329,15 @@
                       Grid.Row="5"
                       Margin="0,6,0,0"
                       Header="Korrekturen und Details"
+                      VerticalAlignment="Stretch"
                       IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                       Expanded="DetailsExpander_OnExpanded"
                       Collapsed="DetailsExpander_OnCollapsed"
                       IsExpanded="False">
                 <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  MinHeight="260">
                         <StackPanel Margin="8">
                             <GroupBox Margin="0,0,0,10" Header="Metadaten">
                                 <Grid Margin="8">

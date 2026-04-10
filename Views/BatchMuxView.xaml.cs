@@ -12,12 +12,12 @@ namespace MkvToolnixAutomatisierung.Views;
 public partial class BatchMuxView : UserControl
 {
     private static readonly GridLength DefaultEpisodeListRowHeight = new(1.2, GridUnitType.Star);
-    private static readonly GridLength ExpandedEpisodeListRowHeight = new(0.95, GridUnitType.Star);
+    private static readonly GridLength ExpandedEpisodeListRowHeight = new(0.9, GridUnitType.Star);
     private static readonly GridLength DefaultSelectedUsageRowHeight = new(1.15, GridUnitType.Star);
-    private static readonly GridLength ExpandedSelectedUsageRowHeight = new(0.7, GridUnitType.Star);
-    private static readonly GridLength ExpandedDetailsRowHeight = new(1.3, GridUnitType.Star);
-    private const double DefaultSelectedUsageMaxHeight = 380d;
-    private const double ExpandedSelectedUsageMaxHeight = 220d;
+    private static readonly GridLength HiddenRowHeight = new(0d);
+    private static readonly GridLength DefaultUsageSplitterRowHeight = new(6d);
+    private static readonly GridLength ExpandedDetailsRowHeight = new(1.45, GridUnitType.Star);
+    private bool _restoreSelectedUsageAfterDetailsCollapse = true;
 
     /// <summary>
     /// Initialisiert die Batch-Ansicht mit ihren XAML-Komponenten.
@@ -56,23 +56,31 @@ public partial class BatchMuxView : UserControl
 
     private void DetailsExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
-        // Die Detailpflege braucht im Batch deutlich mehr Raum als der Standardzustand.
-        // Beim Oeffnen schrumpfen deshalb Liste und Verwendungsuebersicht kontrolliert,
-        // waehrend der eigentliche Detailblock den frei gewordenen Platz erhaelt.
+        // Im Batch bringt ein bisschen Umverteilung kaum etwas, weil die Verwendungsuebersicht
+        // sehr hoch werden kann. Beim Oeffnen der Korrekturen blenden wir diesen Block daher
+        // temporaer aus und geben den Platz gezielt an die eigentliche Bearbeitung weiter.
+        _restoreSelectedUsageAfterDetailsCollapse = SelectedUsageGroupBox.Visibility == Visibility.Visible;
         EpisodeListRowDefinition.Height = ExpandedEpisodeListRowHeight;
-        SelectedUsageRowDefinition.Height = ExpandedSelectedUsageRowHeight;
+        SelectedUsageRowDefinition.Height = HiddenRowHeight;
+        UsageSplitterRowDefinition.Height = HiddenRowHeight;
         DetailsRowDefinition.Height = ExpandedDetailsRowHeight;
-        SelectedUsageGroupBox.MaxHeight = ExpandedSelectedUsageMaxHeight;
+        SelectedUsageGroupBox.Visibility = Visibility.Collapsed;
+        UsageGridSplitter.Visibility = Visibility.Collapsed;
         DetailsExpander.BringIntoView();
     }
 
     private void DetailsExpander_OnCollapsed(object sender, RoutedEventArgs e)
     {
-        // Nach dem Schliessen stellen wir die ruhige Standardaufteilung wieder her.
+        // Nach dem Schliessen stellen wir die normale Uebersicht wieder her.
         EpisodeListRowDefinition.Height = DefaultEpisodeListRowHeight;
         SelectedUsageRowDefinition.Height = DefaultSelectedUsageRowHeight;
+        UsageSplitterRowDefinition.Height = DefaultUsageSplitterRowHeight;
         DetailsRowDefinition.Height = GridLength.Auto;
-        SelectedUsageGroupBox.MaxHeight = DefaultSelectedUsageMaxHeight;
+        if (_restoreSelectedUsageAfterDetailsCollapse)
+        {
+            SelectedUsageGroupBox.Visibility = Visibility.Visible;
+            UsageGridSplitter.Visibility = Visibility.Visible;
+        }
     }
 
     private void EpisodeIndexTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)
