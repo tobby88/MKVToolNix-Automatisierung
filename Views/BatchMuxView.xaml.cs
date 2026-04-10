@@ -12,12 +12,14 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class BatchMuxView : UserControl
 {
+    private const double DefaultSelectedUsageMinHeight = 150d;
     private static readonly GridLength DefaultEpisodeListRowHeight = new(1.2, GridUnitType.Star);
     private static readonly GridLength ExpandedEpisodeListRowHeight = new(0.9, GridUnitType.Star);
-    private static readonly GridLength DefaultSelectedUsageRowHeight = new(1.15, GridUnitType.Star);
+    private static readonly GridLength DefaultDetailPanelRowHeight = new(1.15, GridUnitType.Star);
+    private static readonly GridLength ExpandedDetailPanelRowHeight = new(1.45, GridUnitType.Star);
+    private static readonly GridLength DefaultSelectedUsageRowHeight = new(1, GridUnitType.Star);
     private static readonly GridLength HiddenRowHeight = new(0d);
-    private static readonly GridLength DefaultUsageSplitterRowHeight = new(6d);
-    private static readonly GridLength ExpandedDetailsRowHeight = new(1.45, GridUnitType.Star);
+    private static readonly GridLength ExpandedDetailsRowHeight = new(1, GridUnitType.Star);
     private bool _restoreSelectedUsageAfterDetailsCollapse = true;
 
     /// <summary>
@@ -57,16 +59,16 @@ public partial class BatchMuxView : UserControl
 
     private void DetailsExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
-        // Im Batch bringt ein bisschen Umverteilung kaum etwas, weil die Verwendungsuebersicht
-        // sehr hoch werden kann. Beim Oeffnen der Korrekturen blenden wir diesen Block daher
-        // temporaer aus und geben den Platz gezielt an die eigentliche Bearbeitung weiter.
+        // Der grobe Trenner bleibt zwischen Episodenliste und gesamtem Detailbereich erhalten.
+        // Innerhalb des unteren Panels blenden wir nur die Verwendungsuebersicht aus, damit der
+        // frei werdende Raum wirklich dem Bearbeitungsbereich zugutekommt.
         _restoreSelectedUsageAfterDetailsCollapse = SelectedUsageGroupBox.Visibility == Visibility.Visible;
         EpisodeListRowDefinition.Height = ExpandedEpisodeListRowHeight;
+        DetailPanelRowDefinition.Height = ExpandedDetailPanelRowHeight;
         SelectedUsageRowDefinition.Height = HiddenRowHeight;
-        UsageSplitterRowDefinition.Height = HiddenRowHeight;
+        SelectedUsageRowDefinition.MinHeight = 0d;
         DetailsRowDefinition.Height = ExpandedDetailsRowHeight;
         SelectedUsageGroupBox.Visibility = Visibility.Collapsed;
-        UsageGridSplitter.Visibility = Visibility.Collapsed;
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             UpdateExpandedDetailsHeight();
@@ -78,14 +80,14 @@ public partial class BatchMuxView : UserControl
     {
         // Nach dem Schliessen stellen wir die normale Uebersicht wieder her.
         EpisodeListRowDefinition.Height = DefaultEpisodeListRowHeight;
+        DetailPanelRowDefinition.Height = DefaultDetailPanelRowHeight;
         SelectedUsageRowDefinition.Height = DefaultSelectedUsageRowHeight;
-        UsageSplitterRowDefinition.Height = DefaultUsageSplitterRowHeight;
+        SelectedUsageRowDefinition.MinHeight = DefaultSelectedUsageMinHeight;
         DetailsRowDefinition.Height = GridLength.Auto;
         DetailsExpander.Height = double.NaN;
         if (_restoreSelectedUsageAfterDetailsCollapse)
         {
             SelectedUsageGroupBox.Visibility = Visibility.Visible;
-            UsageGridSplitter.Visibility = Visibility.Visible;
         }
     }
 
