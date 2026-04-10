@@ -335,18 +335,43 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             return;
         }
 
-        var dispatcher = Application.Current?.Dispatcher;
+        var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         if (dispatcher is null)
         {
-            _view.Refresh();
+            if (!HasOpenEditTransaction(_view))
+            {
+                _view.Refresh();
+            }
+
             return;
         }
 
         _viewRefreshPending = true;
-        _ = dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        _ = dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(ProcessPendingViewRefresh));
+    }
+
+    /// <summary>
+    /// WPF-DataGrid hält Checkbox- und Zelländerungen kurz in einer Edit-Transaktion.
+    /// Ein Refresh der CollectionView in genau diesem Moment löst die bekannte
+    /// "Refresh ist während einer AddNew- oder EditItem-Transaktion nicht zulässig"-Exception aus.
+    /// Deshalb verschieben wir den Refresh so lange, bis die laufende Bearbeitung sauber committed ist.
+    /// </summary>
+    internal static bool HasOpenEditTransaction(ICollectionView view)
+    {
+        return view is IEditableCollectionView editableCollectionView
+            && (editableCollectionView.IsAddingNew || editableCollectionView.IsEditingItem);
+    }
+
+    private void ProcessPendingViewRefresh()
+    {
+        var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        if (dispatcher is not null && HasOpenEditTransaction(_view))
         {
-            _viewRefreshPending = false;
-            _view.Refresh();
-        }));
+            _ = dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(ProcessPendingViewRefresh));
+            return;
+        }
+
+        _viewRefreshPending = false;
+        _view.Refresh();
     }
 }
