@@ -9,6 +9,7 @@
         Height="900"
         MinWidth="1100"
         MinHeight="760"
+        Background="#F3F4F6"
         WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <!-- Verknüpft Modul-ViewModels mit ihren Ansichten, damit die rechte Seite rein datengetrieben umschaltet. -->

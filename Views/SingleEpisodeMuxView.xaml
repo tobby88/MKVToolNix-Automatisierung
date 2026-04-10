@@ -46,14 +46,18 @@
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition x:Name="OverviewRowDefinition" Height="*" MinHeight="220" />
+            <RowDefinition x:Name="CorrectionsRowDefinition" Height="Auto" />
+            <RowDefinition x:Name="StatusRowDefinition" Height="*" MinHeight="180" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Oberer Bereich: Quellauswahl, automatische Erkennung und Review-Status. -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+        <ScrollViewer Grid.Row="0"
+                      Margin="0,0,0,12"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
             <GroupBox Header="Quelle"
                       Margin="0,0,0,12"
                       ToolTip="Hauptvideo w&#228;hlen. Passende AD-Dateien, Untertitel und Anh&#228;nge werden danach automatisch erkannt.">
@@ -291,14 +295,20 @@
                     </Border>
                 </Grid>
             </GroupBox>
-        </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
 
-        <Expander Grid.Row="1"
+        <Expander x:Name="CorrectionExpander"
+                  Grid.Row="1"
                   Header="Korrekturen und Ausgabe"
                   Margin="0,0,0,12"
                   ToolTip="Nur bei Bedarf &#246;ffnen, um automatische Zuordnungen oder die Ausgabedatei manuell anzupassen."
+                  Expanded="CorrectionExpander_OnExpanded"
+                  Collapsed="CorrectionExpander_OnCollapsed"
                   IsExpanded="False">
-            <Grid Margin="8">
+            <Border Padding="8" BorderBrush="#D0D0D0" BorderThickness="1" CornerRadius="4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid Margin="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -382,7 +392,9 @@
                     </Border.Style>
                     <TextBlock TextWrapping="Wrap" Text="{Binding OutputTargetStatusText, Mode=OneWay}" />
                 </Border>
-            </Grid>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
         </Expander>
 
         <GroupBox Grid.Row="2" Header="Status und Details">

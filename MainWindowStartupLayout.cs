@@ -48,8 +48,9 @@ internal static class MainWindowStartupLayout
         ArgumentNullException.ThrowIfNull(window);
 
         var bounds = Constrain(window.Width, window.Height, window.MinWidth, window.MinHeight, workArea);
-        window.MaxWidth = bounds.MaxWidth;
-        window.MaxHeight = bounds.MaxHeight;
+        // Die Begrenzung soll nur die Startgroesse sichern. Maximierte Fenster duerfen die
+        // normalen Systemgrenzen weiter nutzen, sonst koennen auf manchen Setups sichtbare
+        // Reststreifen am rechten oder unteren Rand entstehen.
         window.MinWidth = bounds.MinWidth;
         window.MinHeight = bounds.MinHeight;
         window.Width = bounds.Width;
