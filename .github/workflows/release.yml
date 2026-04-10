@@ -68,7 +68,8 @@ jobs:
         shell: pwsh
         run: |
           $tagName = 'v${{ inputs.version }}'
-          if (git rev-parse $tagName 2>$null) {
+          git show-ref --verify --quiet "refs/tags/$tagName"
+          if ($LASTEXITCODE -eq 0) {
             throw "Das Tag $tagName existiert bereits."
           }
 
