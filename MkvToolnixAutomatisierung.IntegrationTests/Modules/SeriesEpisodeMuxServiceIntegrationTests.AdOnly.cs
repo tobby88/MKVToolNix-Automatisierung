@@ -62,6 +62,39 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_AudioDescriptionOnly_ParsesLegacyHoerfassungFileName_WithoutTxt()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-hoerfassung", "Der Kommissar und");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-hoerfassung");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(
+            sourceDirectory,
+            "Der Kommissar und das Meer-Hörfassung_ In einem kalten Land - Der Samstagskrimi (Audiodeskriptio.mp4");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(audioDescriptionPath);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal("Der Kommissar und das Meer", detected.SeriesName);
+        Assert.Equal("In einem kalten Land", detected.SuggestedTitle);
+        Assert.Equal("xx", detected.SeasonNumber);
+        Assert.Equal("xx", detected.EpisodeNumber);
+        Assert.EndsWith(
+            Path.Combine(
+                "Der Kommissar und das Meer",
+                "Season xx",
+                "Der Kommissar und das Meer - SxxExx - In einem kalten Land.mkv"),
+            detected.SuggestedOutputFilePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_WithExistingArchiveTarget_UsesArchiveAsPrimarySource()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-existing");

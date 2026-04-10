@@ -46,6 +46,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private static EpisodeNameParts ParseEpisodeName(string filePath)
     {
         var normalizedName = StripPresentationMarkers(Path.GetFileNameWithoutExtension(filePath));
+
+        if (TryParseLegacyAudioDescriptionEpisodeName(normalizedName, out var legacyAudioDescriptionParts))
+        {
+            return legacyAudioDescriptionParts;
+        }
+
         var splitIndex = normalizedName.IndexOf(" - ", StringComparison.Ordinal);
 
         if (splitIndex < 0)
@@ -64,6 +70,39 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var seriesName = NormalizeSeriesName(normalizedName[..splitIndex]);
         var titleDetails = ParseTitleDetails(normalizedName[(splitIndex + 3)..]);
         return new EpisodeNameParts(seriesName, titleDetails.Title, titleDetails.SeasonNumber, titleDetails.EpisodeNumber);
+    }
+
+    private static bool TryParseLegacyAudioDescriptionEpisodeName(
+        string normalizedName,
+        out EpisodeNameParts episodeNameParts)
+    {
+        episodeNameParts = default!;
+
+        // Manche aelteren AD-Dateien kommen als "Serie-Hoerfassung_ Titel - Der Samstagskrimi ..."
+        // ohne normalen "Serie - Titel"-Trenner. Diese Struktur erkennen wir vor der generischen
+        // Split-Logik gezielt, damit Serie und Episodentitel nicht vertauscht werden.
+        var legacyMatch = Regex.Match(
+            normalizedName,
+            @"^(?<series>.+?)-H(?:ö|oe)rfassung[_:]\s*(?<title>.+)$",
+            RegexOptions.IgnoreCase);
+        if (!legacyMatch.Success)
+        {
+            return false;
+        }
+
+        var seriesName = NormalizeSeriesName(legacyMatch.Groups["series"].Value);
+        var titleDetails = ParseTitleDetails(legacyMatch.Groups["title"].Value);
+        if (string.IsNullOrWhiteSpace(seriesName) || string.IsNullOrWhiteSpace(titleDetails.Title))
+        {
+            return false;
+        }
+
+        episodeNameParts = new EpisodeNameParts(
+            seriesName,
+            titleDetails.Title,
+            titleDetails.SeasonNumber,
+            titleDetails.EpisodeNumber);
+        return true;
     }
 
     private static bool TryParseEpisodeNameFromSeriesDirectory(
@@ -167,7 +206,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         name = NormalizeDashCharacters(name);
         name = Regex.Replace(name, @"-\d+$", string.Empty);
         name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*$", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\bAudiodeskrip\w*\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAD\b", string.Empty, RegexOptions.IgnoreCase);
         return Regex.Replace(name, @"\s+", " ").Trim();
     }
