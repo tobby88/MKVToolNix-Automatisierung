@@ -11,12 +11,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         var fileNameParts = ParseEpisodeName(filePath);
         var txtTitleParts = ParseTitleDetails(textMetadata.Title);
+        var hasExplicitTxtTitle = !string.IsNullOrWhiteSpace(textMetadata.Title);
 
         var seriesName = !string.IsNullOrWhiteSpace(textMetadata.Topic)
             ? NormalizeSeriesName(textMetadata.Topic!)
             : NormalizeSeriesName(fileNameParts.SeriesName);
 
-        var title = !string.IsNullOrWhiteSpace(txtTitleParts.Title)
+        // Leere oder fehlende TXT-Metadaten duerfen keinen unbekannten Platzhalter ueber den
+        // sauber erkannten Dateinamen legen. Der TXT-Titel hat nur dann Vorrang, wenn er
+        // tatsaechlich explizit vorhanden war.
+        var title = hasExplicitTxtTitle && !string.IsNullOrWhiteSpace(txtTitleParts.Title)
             ? txtTitleParts.Title
             : fileNameParts.Title;
 
@@ -46,12 +50,58 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         if (splitIndex < 0)
         {
+            // Aeltere Mediathek-Dateien nutzen teilweise keinen sauber umgebrochenen Trenner
+            // zwischen Serienname und Titel. Wenn der Dateiname mit dem Serienordner beginnt,
+            // nehmen wir diesen Ordnernamen konservativ als Serienprefix-Fallback.
+            if (TryParseEpisodeNameFromSeriesDirectory(filePath, normalizedName, out var directoryFallback))
+            {
+                return directoryFallback;
+            }
+
             return new EpisodeNameParts("Unbekannte Serie", NormalizeNameForParsing(normalizedName), "xx", "xx");
         }
 
         var seriesName = NormalizeSeriesName(normalizedName[..splitIndex]);
         var titleDetails = ParseTitleDetails(normalizedName[(splitIndex + 3)..]);
         return new EpisodeNameParts(seriesName, titleDetails.Title, titleDetails.SeasonNumber, titleDetails.EpisodeNumber);
+    }
+
+    private static bool TryParseEpisodeNameFromSeriesDirectory(
+        string filePath,
+        string normalizedName,
+        out EpisodeNameParts episodeNameParts)
+    {
+        episodeNameParts = default!;
+
+        var directoryPath = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrWhiteSpace(directoryPath))
+        {
+            return false;
+        }
+
+        var directoryName = Path.GetFileName(directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var normalizedSeriesName = NormalizeSeriesName(directoryName);
+        if (string.IsNullOrWhiteSpace(normalizedSeriesName)
+            || !normalizedName.StartsWith(normalizedSeriesName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var titleRemainder = normalizedName[normalizedSeriesName.Length..];
+        titleRemainder = Regex.Replace(titleRemainder, @"^\s*[-:_]\s*", string.Empty);
+        titleRemainder = NormalizeNameForParsing(titleRemainder);
+        if (string.IsNullOrWhiteSpace(titleRemainder))
+        {
+            return false;
+        }
+
+        var titleDetails = ParseTitleDetails(titleRemainder);
+        episodeNameParts = new EpisodeNameParts(
+            normalizedSeriesName,
+            titleDetails.Title,
+            titleDetails.SeasonNumber,
+            titleDetails.EpisodeNumber);
+        return true;
     }
 
     private static string NormalizeSeriesName(string rawSeriesName)

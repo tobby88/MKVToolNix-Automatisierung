@@ -34,6 +34,34 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_AudioDescriptionOnly_UsesSeriesDirectoryFallback_ForLegacyFileNamesWithoutTxt()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-legacy", "SOKO Köln");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-legacy");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "SOKO Köln-Der Bienenkönig (Audiodeskription)-1427732091.mp4");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(audioDescriptionPath);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal("SOKO Köln", detected.SeriesName);
+        Assert.Equal("Der Bienenkönig", detected.SuggestedTitle);
+        Assert.Equal("xx", detected.SeasonNumber);
+        Assert.Equal("xx", detected.EpisodeNumber);
+        Assert.EndsWith(
+            Path.Combine("SOKO Köln", "Season xx", "SOKO Köln - SxxExx - Der Bienenkönig.mkv"),
+            detected.SuggestedOutputFilePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_WithExistingArchiveTarget_UsesArchiveAsPrimarySource()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-existing");
