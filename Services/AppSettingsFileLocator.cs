@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -147,6 +148,7 @@ public static class AppSettingsFileLocator
             settings.Metadata ??= new AppMetadataSettings();
             settings.ToolPaths ??= new AppToolPathSettings();
             settings.Archive ??= new AppArchiveSettings();
+            settings.Emby ??= new AppEmbySettings();
             return new AppSettingsLoadAttempt(filePath, Exists: true, Success: true, Settings: settings, ErrorMessage: null);
         }
         catch (Exception ex)
@@ -289,6 +291,11 @@ public sealed class CombinedAppSettings
     public AppArchiveSettings? Archive { get; set; } = new();
 
     /// <summary>
+    /// Persistente Einstellungen für die optionale Emby-Nachbearbeitung.
+    /// </summary>
+    public AppEmbySettings? Emby { get; set; } = new();
+
+    /// <summary>
     /// Erzeugt eine tiefe Kopie des kombinierten Einstellungssatzes.
     /// </summary>
     /// <returns>Neues Objekt mit geklonten Teilbereichen.</returns>
@@ -298,7 +305,8 @@ public sealed class CombinedAppSettings
         {
             Metadata = Metadata?.Clone() ?? new AppMetadataSettings(),
             ToolPaths = ToolPaths?.Clone() ?? new AppToolPathSettings(),
-            Archive = Archive?.Clone() ?? new AppArchiveSettings()
+            Archive = Archive?.Clone() ?? new AppArchiveSettings(),
+            Emby = Emby?.Clone() ?? new AppEmbySettings()
         };
     }
 }

@@ -173,6 +173,8 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
 
+        public string? SelectFile(string title, string filter, string initialDirectory) => throw new NotSupportedException();
+
         public MessageBoxResult AskAudioDescriptionChoice() => throw new NotSupportedException();
 
         public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();

@@ -1,4 +1,5 @@
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -101,6 +102,15 @@ internal sealed record BatchModuleServices(
 /// <param name="DownloadSort">Fachservice fuer Scan, Ordnervereinheitlichung und Verschiebungen.</param>
 internal sealed record DownloadSortModuleServices(
     DownloadSortService DownloadSort);
+
+/// <summary>
+/// Buendelt nur die Services fuer den nachgelagerten Emby-/NFO-Abgleich.
+/// </summary>
+/// <param name="Settings">Persistenter Store fuer Emby-Adresse und API-Key.</param>
+/// <param name="Sync">Fachservice fuer Dateilistenimport, NFO-Provider-IDs und Emby-API-Aktionen.</param>
+internal sealed record EmbyModuleServices(
+    AppEmbySettingsStore Settings,
+    EmbyMetadataSyncService Sync);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.

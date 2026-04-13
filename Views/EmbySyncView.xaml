@@ -1,0 +1,218 @@
+<UserControl x:Class="MkvToolnixAutomatisierung.Views.EmbySyncView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="150" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <GroupBox Grid.Row="0"
+                  Header="Emby-Verbindung"
+                  IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+            <Grid Margin="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="150" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0"
+                           Grid.Column="0"
+                           Margin="0,8,12,8"
+                           VerticalAlignment="Center"
+                           Text="Server" />
+                <TextBox Grid.Row="0"
+                         Grid.Column="1"
+                         Margin="0,4,12,4"
+                         Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="Basisadresse des Emby-Servers, z. B. http://t-emby:8096" />
+                <Button Grid.Row="0"
+                        Grid.Column="2"
+                        Margin="0,2,12,2"
+                        Padding="10,6"
+                        Command="{Binding SaveSettingsCommand}"
+                        Content="Speichern" />
+                <Button Grid.Row="0"
+                        Grid.Column="3"
+                        Margin="0,2,0,2"
+                        Padding="10,6"
+                        Command="{Binding TestConnectionCommand}"
+                        Content="Verbindung testen" />
+
+                <TextBlock Grid.Row="1"
+                           Grid.Column="0"
+                           Margin="0,8,12,8"
+                           VerticalAlignment="Center"
+                           Text="API-Key" />
+                <TextBox Grid.Row="1"
+                         Grid.Column="1"
+                         Grid.ColumnSpan="3"
+                         Margin="0,4,0,4"
+                         Text="{Binding ApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="API-Key aus dem Emby-Dashboard. Er wird nur lokal in Data\settings.json gespeichert." />
+            </Grid>
+        </GroupBox>
+
+        <Border Grid.Row="1"
+                Margin="0,10,0,10"
+                Padding="10,8"
+                Background="#F3F6FA"
+                BorderBrush="#C7D1DC"
+                BorderThickness="1"
+                CornerRadius="6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="{Binding SettingsHintText, Mode=OneWay}" />
+        </Border>
+
+        <Grid Grid.Row="2"
+              Margin="0,0,0,10"
+              IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="170" />
+                <ColumnDefinition Width="150" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Margin="0,8,12,8"
+                       VerticalAlignment="Center"
+                       Text="Neue-Dateien-Liste" />
+            <TextBox Grid.Column="1"
+                     Margin="0,4,12,4"
+                     IsReadOnly="True"
+                     Text="{Binding ReportPath, Mode=OneWay}" />
+            <Button Grid.Column="2"
+                    Margin="0,2,12,2"
+                    Padding="10,6"
+                    Command="{Binding SelectReportCommand}"
+                    Content="Liste wählen" />
+            <Button Grid.Column="3"
+                    Margin="0,2,12,2"
+                    Padding="10,6"
+                    Command="{Binding LoadReportCommand}"
+                    Content="Laden" />
+            <Button Grid.Column="4"
+                    Margin="0,2,12,2"
+                    Padding="10,6"
+                    Command="{Binding AnalyzeItemsCommand}"
+                    Content="NFO/Emby prüfen" />
+            <Button Grid.Column="5"
+                    Margin="0,2,0,2"
+                    Padding="10,6"
+                    Command="{Binding RunSyncCommand}"
+                    Content="Abgleich starten" />
+        </Grid>
+
+        <GroupBox Grid.Row="3" Header="Neue MKV-Dateien">
+            <DataGrid ItemsSource="{Binding Items}"
+                      AutoGenerateColumns="False"
+                      CanUserResizeColumns="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      HorizontalScrollBarVisibility="Auto"
+                      IsReadOnly="False"
+                      ColumnWidth="*"
+                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                      Margin="8"
+                      MinHeight="220">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="Auswahl"
+                                            Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            Width="SizeToHeader" />
+                    <DataGridTextColumn Header="MKV"
+                                        Binding="{Binding MediaFileName}"
+                                        Width="1.6*"
+                                        MinWidth="180"
+                                        IsReadOnly="True" />
+                    <DataGridTextColumn Header="TVDB"
+                                        Binding="{Binding TvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="0.7*"
+                                        MinWidth="90" />
+                    <DataGridTextColumn Header="IMDB"
+                                        Binding="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Width="0.8*"
+                                        MinWidth="110" />
+                    <DataGridTextColumn Header="Emby"
+                                        Binding="{Binding EmbyItemId}"
+                                        Width="0.7*"
+                                        MinWidth="90"
+                                        IsReadOnly="True" />
+                    <DataGridTextColumn Header="Status"
+                                        Binding="{Binding StatusText}"
+                                        Width="Auto"
+                                        MinWidth="100"
+                                        IsReadOnly="True" />
+                    <DataGridTemplateColumn Header="Hinweis"
+                                            Width="2.2*"
+                                            MinWidth="260"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="4,2"
+                                           Text="{Binding Note}"
+                                           TextWrapping="Wrap"
+                                           ToolTip="{Binding Note}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="4"
+                  Margin="0,10,0,0"
+                  Header="Protokoll">
+            <TextBox Margin="8"
+                     Text="{Binding LogText, Mode=OneWay}"
+                     IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled" />
+        </GroupBox>
+
+        <Grid Grid.Row="5" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="180" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Text="{Binding SummaryText, Mode=OneWay}" />
+            <Button Grid.Column="1"
+                    Margin="12,0,8,0"
+                    Padding="10,6"
+                    Command="{Binding SelectAllCommand}"
+                    IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                    Content="Alle wählen" />
+            <Button Grid.Column="2"
+                    Margin="0,0,12,0"
+                    Padding="10,6"
+                    Command="{Binding DeselectAllCommand}"
+                    IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                    Content="Auswahl leeren" />
+            <ProgressBar Grid.Column="3"
+                         Height="18"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="{Binding ProgressValue, Mode=OneWay}"
+                         ToolTip="{Binding StatusText, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</UserControl>

@@ -28,6 +28,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `Einzel-Mux`: für einen einzelnen Fall mit Vorschau, manueller Korrektur und anschließendem Mux
 - `Batch-Mux`: für einen kompletten Ordner mit Scan, Pflichtchecks, Ausführung, Cleanup und Protokoll
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
+- `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 
 ## Voraussetzungen
 
@@ -35,6 +36,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `mkvmerge.exe` aus MKVToolNix ist für das eigentliche Muxing erforderlich.
 - `ffprobe.exe` ist optional. Wenn `ffprobe` fehlt, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
+- Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
 ## Portable Modus
 
@@ -54,7 +56,8 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 3. Optional `ffprobe` auswählen, wenn Laufzeiten möglichst zuverlässig über `ffprobe` ermittelt werden sollen.
 4. Bei Bedarf links unten die Standard-Serienbibliothek anpassen.
 5. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
-6. Danach mit `Einzel-Mux`, `Batch-Mux` oder `Einsortieren` arbeiten.
+6. Bei Bedarf im Modul `Emby-Abgleich` Emby-Server und API-Key eintragen.
+7. Danach mit `Einzel-Mux`, `Batch-Mux`, `Einsortieren` oder `Emby-Abgleich` arbeiten.
 
 ## Typischer Workflow: Einzel-Mux
 
@@ -87,6 +90,16 @@ Nach jedem Batch-Lauf:
 3. Zielordner und Hinweise prüfen.
 4. Bei Bedarf Zielordner manuell korrigieren oder einzelne Einträge abwählen.
 5. `Auswahl einsortieren`, um die Dateien in die Serienunterordner zu verschieben.
+
+## Typischer Workflow: Emby-Abgleich
+
+1. Emby-Serveradresse und API-Key eintragen und `Verbindung testen`.
+2. Die nach einem Batch-Lauf erzeugte Liste `Neu erzeugte Ausgabedateien - ...txt` laden.
+3. `NFO/Emby prüfen`, um vorhandene Provider-IDs aus NFO und Emby-Item zu übernehmen.
+4. Fehlende TVDB-/IMDB-IDs bei Bedarf manuell ergänzen.
+5. `Abgleich starten`, um einen Emby-Library-Scan anzustoßen, NFO-Provider-IDs zu schreiben und geänderte Items gezielt zu refreshen.
+
+Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs.
 
 ## Unterstützte Dateien
 
@@ -222,6 +235,7 @@ Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.
 - `Views/`: WPF-Views für die einzelnen Module
 - `ViewModels/Modules/`: ViewModels der einzelnen Module
 - `Services/`: technische Dienste wie Dialoge, Toolsuche und Prozessausführung
+- `Services/Emby/`: Emby-API-Zugriff, NFO-Provider-ID-Abgleich und Emby-Settings
 - `Services/AppModuleServices.cs`: kleinere Service-Bundles für Einzelmodus, Batch und Shell statt eines globalen Sammelobjekts
 - `Modules/SeriesEpisodeMux/`: Fachlogik für Erkennung, Planung, Archivabgleich und Muxing
 

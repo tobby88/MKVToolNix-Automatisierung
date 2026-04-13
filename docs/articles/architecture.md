@@ -17,8 +17,11 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
 - `Services/Metadata`
   - kapselt TVDB-Zugriff, Caching und lokale Serien-Zuordnungen
   - legt identische gleichzeitige TVDB-Suchen und Episoden-Loads pro Cache-Schlüssel zusammen, damit Batch-Scans keine vermeidbaren Doppelanfragen erzeugen
+- `Services/Emby`
+  - kapselt den optionalen Emby-API-Zugriff für Verbindungstest, Library-Scan, Item-Suche und gezielten Metadaten-Refresh
+  - trennt den NFO-Provider-ID-Abgleich von der UI, damit XML-Schreiblogik nicht in ViewModels landet
 - `ViewModels/Modules`
-  - stellt Einzel- und Batch-Workflow für die GUI bereit
+  - stellt Einzel-, Batch-, Einsortier- und Emby-Abgleichs-Workflows für die GUI bereit
 
 ## Composition und DI
 
@@ -52,6 +55,8 @@ Wichtig dabei:
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
 7. `BatchRunLogService` schreibt bei Batch-Läufen Log- und Reportdateien in `.\Logs`.
    - Der persistierte Log sammelt gezielt den aktuellen Batch-Lauf, damit Planung, Arbeitskopien und Mux-Ausführung zusammen diagnostizierbar bleiben.
+8. Das optionale Emby-Modul kann die Liste neu erzeugter Batch-Ausgabedateien laden, Emby nach den neuen Items fragen und Provider-IDs in die nebenliegenden NFO-Dateien schreiben.
+   - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
 
 ## Warum DocFX
 

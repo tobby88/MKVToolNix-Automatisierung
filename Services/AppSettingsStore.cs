@@ -1,3 +1,4 @@
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -98,6 +99,7 @@ public sealed class AppSettingsStore
         settings.Metadata ??= new AppMetadataSettings();
         settings.ToolPaths ??= new AppToolPathSettings();
         settings.Archive ??= new AppArchiveSettings();
+        settings.Emby ??= new AppEmbySettings();
         return settings;
     }
 }

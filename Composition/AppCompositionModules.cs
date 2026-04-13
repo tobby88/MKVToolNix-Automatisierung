@@ -1,5 +1,6 @@
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Composition;
@@ -11,11 +12,13 @@ namespace MkvToolnixAutomatisierung.Composition;
 /// <param name="ToolPaths">Teilstore für Pfade zu mkvmerge und ffprobe.</param>
 /// <param name="Archive">Teilstore für die Standard-Serienbibliothek.</param>
 /// <param name="Metadata">Teilstore für TVDB-Zugangsdaten und Mappings.</param>
+/// <param name="Emby">Teilstore für Emby-Adresse und API-Key.</param>
 internal sealed record AppSettingStores(
     AppSettingsStore Settings,
     AppToolPathStore ToolPaths,
     AppArchiveSettingsStore Archive,
-    AppMetadataStore Metadata);
+    AppMetadataStore Metadata,
+    AppEmbySettingsStore Emby);
 
 /// <summary>
 /// Bündelt Tool-Locatoren und Probe-Services, die für Erkennung und Toolstatus gemeinsam benötigt werden.
@@ -59,9 +62,11 @@ internal sealed record MuxDomainServices(
 /// <param name="MuxWorkflow">Koordinator für Arbeitskopie, Mux und temporäre Nachbereitung.</param>
 /// <param name="BatchLogs">Persistenzdienst für Batch-Protokolle und Dateilisten.</param>
 /// <param name="DownloadSort">Dienst für das Einsortieren loser MediathekView-Downloads.</param>
+/// <param name="EmbyMetadataSync">Dienst für den Emby-/NFO-Provider-ID-Abgleich nach neuen Mux-Läufen.</param>
 internal sealed record WorkflowServices(
     IFileCopyService FileCopy,
     IEpisodeCleanupService Cleanup,
     IMuxWorkflowCoordinator MuxWorkflow,
     BatchRunLogService BatchLogs,
-    DownloadSortService DownloadSort);
+    DownloadSortService DownloadSort,
+    EmbyMetadataSyncService EmbyMetadataSync);

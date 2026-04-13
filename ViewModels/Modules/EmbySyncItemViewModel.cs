@@ -1,0 +1,231 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using MkvToolnixAutomatisierung.Services.Emby;
+
+namespace MkvToolnixAutomatisierung.ViewModels.Modules;
+
+/// <summary>
+/// Bindbare Zeile des Emby-Abgleichs für eine neu erzeugte MKV.
+/// </summary>
+internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged
+{
+    private bool _isSelected = true;
+    private string _tvdbId = string.Empty;
+    private string _imdbId = string.Empty;
+    private string _embyItemId = string.Empty;
+    private string _statusText = "Noch nicht geprüft";
+    private string _note = string.Empty;
+
+    public EmbySyncItemViewModel(string mediaFilePath)
+    {
+        MediaFilePath = mediaFilePath;
+        NfoPath = Path.ChangeExtension(mediaFilePath, ".nfo");
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value)
+            {
+                return;
+            }
+
+            _isSelected = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string MediaFilePath { get; }
+
+    public string MediaFileName => Path.GetFileName(MediaFilePath);
+
+    public string NfoPath { get; private set; }
+
+    public string TvdbId
+    {
+        get => _tvdbId;
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (_tvdbId == normalized)
+            {
+                return;
+            }
+
+            _tvdbId = normalized;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasProviderIds));
+        }
+    }
+
+    public string ImdbId
+    {
+        get => _imdbId;
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (_imdbId == normalized)
+            {
+                return;
+            }
+
+            _imdbId = normalized;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasProviderIds));
+        }
+    }
+
+    public string EmbyItemId
+    {
+        get => _embyItemId;
+        private set
+        {
+            if (_embyItemId == value)
+            {
+                return;
+            }
+
+            _embyItemId = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string StatusText
+    {
+        get => _statusText;
+        private set
+        {
+            if (_statusText == value)
+            {
+                return;
+            }
+
+            _statusText = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string Note
+    {
+        get => _note;
+        private set
+        {
+            if (_note == value)
+            {
+                return;
+            }
+
+            _note = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool HasProviderIds => !string.IsNullOrWhiteSpace(TvdbId) || !string.IsNullOrWhiteSpace(ImdbId);
+
+    public EmbyProviderIds ProviderIds => new(
+        string.IsNullOrWhiteSpace(TvdbId) ? null : TvdbId,
+        string.IsNullOrWhiteSpace(ImdbId) ? null : ImdbId);
+
+    public void ApplyAnalysis(EmbyFileAnalysis analysis)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+
+        NfoPath = analysis.NfoPath;
+        OnPropertyChanged(nameof(NfoPath));
+
+        var providerIds = analysis.EffectiveProviderIds;
+        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
+        {
+            TvdbId = providerIds.TvdbId!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(providerIds.ImdbId))
+        {
+            ImdbId = providerIds.ImdbId!;
+        }
+
+        EmbyItemId = analysis.EmbyItem?.Id ?? string.Empty;
+        if (!analysis.MediaFileExists)
+        {
+            SetStatus("Fehlt", "Die MKV-Datei wurde nicht gefunden.");
+            IsSelected = false;
+            return;
+        }
+
+        if (!analysis.NfoExists)
+        {
+            SetStatus("NFO fehlt", "Bitte Emby zuerst scannen lassen, damit die Episoden-NFO angelegt wird.");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(analysis.WarningMessage))
+        {
+            SetStatus("NFO prüfen", analysis.WarningMessage!);
+            return;
+        }
+
+        if (analysis.EmbyItem is null)
+        {
+            SetStatus(
+                HasProviderIds ? "Lokal bereit" : "IDs fehlen",
+                HasProviderIds
+                    ? "Provider-IDs liegen lokal vor; Emby-Item wurde noch nicht gefunden."
+                    : "Weder NFO noch Emby liefern TVDB-/IMDB-IDs. IDs bitte manuell ergänzen oder Emby-Metadaten prüfen.");
+            return;
+        }
+
+        SetStatus(
+            HasProviderIds ? "Bereit" : "IDs fehlen",
+            HasProviderIds
+                ? $"Emby-Item gefunden: {analysis.EmbyItem.Name}"
+                : "Emby-Item gefunden, aber ohne TVDB-/IMDB-ID.");
+    }
+
+    public void ApplyEmbyItem(EmbyItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        EmbyItemId = item.Id;
+        var providerIds = new EmbyProviderIds(
+            item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
+            item.GetProviderId("Imdb"));
+        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId) && string.IsNullOrWhiteSpace(TvdbId))
+        {
+            TvdbId = providerIds.TvdbId!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(providerIds.ImdbId) && string.IsNullOrWhiteSpace(ImdbId))
+        {
+            ImdbId = providerIds.ImdbId!;
+        }
+
+        SetStatus(HasProviderIds ? "Bereit" : "IDs fehlen", $"Emby-Item gefunden: {item.Name}");
+    }
+
+    public void SetStatus(string statusText, string note)
+    {
+        StatusText = statusText;
+        Note = note;
+    }
+
+    public void MarkUpdated(bool metadataRefreshTriggered)
+    {
+        SetStatus(
+            "Aktualisiert",
+            metadataRefreshTriggered
+                ? "NFO aktualisiert und Emby-Metadatenrefresh angestoßen."
+                : "NFO aktualisiert. Emby-Item wurde noch nicht gefunden, daher kein gezielter Refresh.");
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+}

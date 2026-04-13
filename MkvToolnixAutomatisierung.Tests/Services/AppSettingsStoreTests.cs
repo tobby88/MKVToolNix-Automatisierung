@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using Xunit;
@@ -28,9 +29,11 @@ public sealed class AppSettingsStoreTests
         Assert.NotNull(settings.Metadata);
         Assert.NotNull(settings.ToolPaths);
         Assert.NotNull(settings.Archive);
+        Assert.NotNull(settings.Emby);
         Assert.Equal(string.Empty, settings.Metadata!.TvdbApiKey);
         Assert.Equal(string.Empty, settings.ToolPaths!.FfprobePath);
         Assert.Equal(SeriesArchiveService.DefaultArchiveRootDirectory, settings.Archive!.DefaultSeriesArchiveRootPath);
+        Assert.Equal("http://t-emby:8096", settings.Emby!.ServerUrl);
     }
 
     [Fact]
@@ -52,6 +55,11 @@ public sealed class AppSettingsStoreTests
             Archive = new AppArchiveSettings
             {
                 DefaultSeriesArchiveRootPath = @"Z:\Serien"
+            },
+            Emby = new AppEmbySettings
+            {
+                ServerUrl = "http://emby.local:8096",
+                ApiKey = "emby-key"
             }
         };
 
@@ -66,6 +74,8 @@ public sealed class AppSettingsStoreTests
         Assert.Equal("abc", persisted!.Metadata!.TvdbApiKey);
         Assert.Equal(@"C:\Tools\ffprobe.exe", persisted.ToolPaths!.FfprobePath);
         Assert.Equal(@"Z:\Serien", persisted.Archive!.DefaultSeriesArchiveRootPath);
+        Assert.Equal("http://emby.local:8096", persisted.Emby!.ServerUrl);
+        Assert.Equal("emby-key", persisted.Emby.ApiKey);
     }
 
     [Fact]
@@ -90,6 +100,7 @@ public sealed class AppSettingsStoreTests
         {
             settings.Metadata!.TvdbPin = "9999";
             settings.Archive!.DefaultSeriesArchiveRootPath = @"Y:\Archiv";
+            settings.Emby!.ApiKey = "emby-updated";
         });
 
         var reloaded = JsonSerializer.Deserialize<CombinedAppSettings>(
@@ -101,5 +112,6 @@ public sealed class AppSettingsStoreTests
         Assert.Equal("9999", reloaded.Metadata.TvdbPin);
         Assert.Equal(@"C:\Tools\MKVToolNix", reloaded.ToolPaths!.MkvToolNixDirectoryPath);
         Assert.Equal(@"Y:\Archiv", reloaded.Archive!.DefaultSeriesArchiveRootPath);
+        Assert.Equal("emby-updated", reloaded.Emby!.ApiKey);
     }
 }

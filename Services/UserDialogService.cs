@@ -106,6 +106,20 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    public string? SelectFile(string title, string filter, string initialDirectory)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            CheckFileExists = true,
+            Multiselect = false,
+            InitialDirectory = initialDirectory
+        };
+
+        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+    }
+
     public MessageBoxResult AskAudioDescriptionChoice()
     {
         return AskSelectionOrClearChoice(

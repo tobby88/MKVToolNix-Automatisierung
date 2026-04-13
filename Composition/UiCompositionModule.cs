@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -39,6 +40,9 @@ internal static class UiCompositionModule
             provider.GetRequiredService<BatchRunLogService>()));
         services.AddSingleton<DownloadSortModuleServices>(provider => new DownloadSortModuleServices(
             provider.GetRequiredService<DownloadSortService>()));
+        services.AddSingleton<EmbyModuleServices>(provider => new EmbyModuleServices(
+            provider.GetRequiredService<AppEmbySettingsStore>(),
+            provider.GetRequiredService<EmbyMetadataSyncService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),
@@ -53,6 +57,9 @@ internal static class UiCompositionModule
         services.AddSingleton<DownloadSortViewModel>(provider => new DownloadSortViewModel(
             provider.GetRequiredService<DownloadSortModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
+        services.AddSingleton<EmbySyncViewModel>(provider => new EmbySyncViewModel(
+            provider.GetRequiredService<EmbyModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
@@ -66,7 +73,11 @@ internal static class UiCompositionModule
                 new ModuleNavigationItem(
                     "Einsortieren",
                     "MediathekView-Dateien in Serienordner einsortieren",
-                    provider.GetRequiredService<DownloadSortViewModel>())
+                    provider.GetRequiredService<DownloadSortViewModel>()),
+                new ModuleNavigationItem(
+                    "Emby-Abgleich",
+                    "Neue MKV-Dateien scannen und NFO-IDs abgleichen",
+                    provider.GetRequiredService<EmbySyncViewModel>())
             ],
             provider.GetRequiredService<MainWindowModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));

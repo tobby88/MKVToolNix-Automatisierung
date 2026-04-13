@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Composition;
@@ -20,11 +21,13 @@ internal static class AppStoreCompositionModule
         services.AddSingleton<AppArchiveSettingsStore>(provider => new AppArchiveSettingsStore(provider.GetRequiredService<AppSettingsStore>()));
         services.AddSingleton<AppMetadataStore>(provider => new AppMetadataStore(provider.GetRequiredService<AppSettingsStore>()));
         services.AddSingleton<IAppMetadataStore>(provider => provider.GetRequiredService<AppMetadataStore>());
+        services.AddSingleton<AppEmbySettingsStore>(provider => new AppEmbySettingsStore(provider.GetRequiredService<AppSettingsStore>()));
         services.AddSingleton<AppSettingsLoadResult>(provider => provider.GetRequiredService<AppSettingsStore>().LoadWithDiagnostics());
         services.AddSingleton<AppSettingStores>(provider => new AppSettingStores(
             provider.GetRequiredService<AppSettingsStore>(),
             provider.GetRequiredService<AppToolPathStore>(),
             provider.GetRequiredService<AppArchiveSettingsStore>(),
-            provider.GetRequiredService<AppMetadataStore>()));
+            provider.GetRequiredService<AppMetadataStore>(),
+            provider.GetRequiredService<AppEmbySettingsStore>()));
     }
 }

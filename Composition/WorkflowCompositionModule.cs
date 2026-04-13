@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 
 namespace MkvToolnixAutomatisierung.Composition;
 
@@ -26,11 +27,18 @@ internal static class WorkflowCompositionModule
         services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequiredService<MuxWorkflowCoordinator>());
         services.AddSingleton<BatchRunLogService>(_ => new BatchRunLogService());
         services.AddSingleton<DownloadSortService>(_ => new DownloadSortService());
+        services.AddSingleton<EmbyNfoProviderIdService>(_ => new EmbyNfoProviderIdService());
+        services.AddSingleton<EmbyClient>(_ => new EmbyClient());
+        services.AddSingleton<IEmbyClient>(provider => provider.GetRequiredService<EmbyClient>());
+        services.AddSingleton<EmbyMetadataSyncService>(provider => new EmbyMetadataSyncService(
+            provider.GetRequiredService<IEmbyClient>(),
+            provider.GetRequiredService<EmbyNfoProviderIdService>()));
         services.AddSingleton<WorkflowServices>(provider => new WorkflowServices(
             provider.GetRequiredService<IFileCopyService>(),
             provider.GetRequiredService<IEpisodeCleanupService>(),
             provider.GetRequiredService<IMuxWorkflowCoordinator>(),
             provider.GetRequiredService<BatchRunLogService>(),
-            provider.GetRequiredService<DownloadSortService>()));
+            provider.GetRequiredService<DownloadSortService>(),
+            provider.GetRequiredService<EmbyMetadataSyncService>()));
     }
 }
