@@ -18,6 +18,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     {
         DisplayName = candidate.DisplayName;
         FilePaths = candidate.FilePaths;
+        InitialTargetFolderName = candidate.SuggestedFolderName;
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
         _note = candidate.Note;
@@ -29,6 +30,13 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public string DisplayName { get; }
 
     public IReadOnlyList<string> FilePaths { get; }
+
+    /// <summary>
+    /// Ursprünglich automatisch erkannter Zielordner; bleibt stabil, damit ein manuell
+    /// korrigierter Zielordner gezielt auf weitere Einträge derselben Erkennungsgruppe
+    /// übertragen werden kann.
+    /// </summary>
+    public string InitialTargetFolderName { get; }
 
     public bool IsSelected
     {

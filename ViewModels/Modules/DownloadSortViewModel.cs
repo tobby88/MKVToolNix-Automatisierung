@@ -14,8 +14,10 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private readonly DownloadSortModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly ObservableCollection<DownloadSortItemViewModel> _items = [];
+    private readonly ObservableCollection<string> _targetFolderOptions = [];
 
     private IReadOnlyList<DownloadSortFolderRenamePlan> _currentFolderRenames = [];
+    private DownloadSortItemViewModel? _selectedItem;
     private string _sourceDirectory;
     private string _statusText = "Bereit";
     private string _logText = string.Empty;
@@ -35,6 +37,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, unexpectedCommandErrorHandler);
         SelectAllReadyCommand = new RelayCommand(SelectAllReady, () => !_isBusy && Items.Any(item => item.State == DownloadSortItemState.Ready && !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
+        ApplyTargetFolderToMatchingItemsCommand = new RelayCommand(ApplySelectedTargetFolderToMatchingItems, CanApplySelectedTargetFolderToMatchingItems);
         RunSortCommand = new AsyncRelayCommand(RunSortAsync, CanRunSort, unexpectedCommandErrorHandler);
     }
 
@@ -48,9 +51,29 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public RelayCommand DeselectAllCommand { get; }
 
+    public RelayCommand ApplyTargetFolderToMatchingItemsCommand { get; }
+
     public AsyncRelayCommand RunSortCommand { get; }
 
     public ObservableCollection<DownloadSortItemViewModel> Items => _items;
+
+    public ObservableCollection<string> TargetFolderOptions => _targetFolderOptions;
+
+    public DownloadSortItemViewModel? SelectedItem
+    {
+        get => _selectedItem;
+        set
+        {
+            if (_selectedItem == value)
+            {
+                return;
+            }
+
+            _selectedItem = value;
+            OnPropertyChanged();
+            ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
+        }
+    }
 
     public string SourceDirectory
     {
@@ -183,6 +206,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
         _currentFolderRenames = scanResult.FolderRenames;
         Items.Clear();
+        RefreshTargetFolderOptions(scanResult);
 
         foreach (var candidate in scanResult.Items)
         {
@@ -190,6 +214,8 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             item.PropertyChanged += ItemOnPropertyChanged;
             Items.Add(item);
         }
+
+        SelectedItem = Items.FirstOrDefault();
 
         var logLines = new List<string>();
         if (_currentFolderRenames.Count > 0)
@@ -265,6 +291,29 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    private void ApplySelectedTargetFolderToMatchingItems()
+    {
+        var selectedItem = SelectedItem;
+        if (selectedItem is null || string.IsNullOrWhiteSpace(selectedItem.InitialTargetFolderName))
+        {
+            return;
+        }
+
+        var appliedCount = 0;
+        foreach (var item in Items.Where(item => ShouldApplyTargetFolderFromSelectedItem(selectedItem, item)))
+        {
+            item.TargetFolderName = selectedItem.TargetFolderName;
+            appliedCount++;
+        }
+
+        if (appliedCount > 0)
+        {
+            StatusText = $"Zielordner auf {appliedCount} weitere Paket(e) übernommen.";
+        }
+
+        RefreshSummaryAndCommands();
+    }
+
     private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DownloadSortItemViewModel item)
@@ -274,6 +323,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
         if (e.PropertyName is nameof(DownloadSortItemViewModel.TargetFolderName))
         {
+            EnsureTargetFolderOption(item.TargetFolderName);
             var evaluation = _services.DownloadSort.EvaluateTarget(
                 SourceDirectory,
                 item.FilePaths,
@@ -287,6 +337,31 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         {
             RefreshSummaryAndCommands();
         }
+    }
+
+    private bool CanApplySelectedTargetFolderToMatchingItems()
+    {
+        var selectedItem = SelectedItem;
+        return !_isBusy
+            && selectedItem is not null
+            && !string.IsNullOrWhiteSpace(selectedItem.InitialTargetFolderName)
+            && !string.IsNullOrWhiteSpace(selectedItem.TargetFolderName)
+            && Items.Any(item => ShouldApplyTargetFolderFromSelectedItem(selectedItem, item));
+    }
+
+    private static bool ShouldApplyTargetFolderFromSelectedItem(
+        DownloadSortItemViewModel selectedItem,
+        DownloadSortItemViewModel candidate)
+    {
+        // Gruppiert absichtlich über den ursprünglichen Zielvorschlag, nicht über den aktuellen
+        // Zielordner. Dadurch kann eine manuelle Korrektur von "Serie A" auf "Serie B" gesammelt
+        // auf weitere falsch erkannte Einträge angewendet werden.
+        return !ReferenceEquals(selectedItem, candidate)
+            && string.Equals(
+                candidate.InitialTargetFolderName,
+                selectedItem.InitialTargetFolderName,
+                StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(candidate.TargetFolderName, selectedItem.TargetFolderName, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool CanScan()
@@ -325,7 +400,60 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ScanCommand.RaiseCanExecuteChanged();
         SelectAllReadyCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
+        ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
         RunSortCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshTargetFolderOptions(DownloadSortScanResult scanResult)
+    {
+        var options = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (Directory.Exists(SourceDirectory))
+        {
+            foreach (var folderName in Directory.GetDirectories(SourceDirectory)
+                         .Select(Path.GetFileName)
+                         .Where(folderName => !string.IsNullOrWhiteSpace(folderName))
+                         .Cast<string>())
+            {
+                options.Add(folderName);
+            }
+        }
+
+        foreach (var folderName in scanResult.Items.Select(item => item.SuggestedFolderName))
+        {
+            AddTargetFolderOption(options, folderName);
+        }
+
+        foreach (var renamePlan in scanResult.FolderRenames)
+        {
+            AddTargetFolderOption(options, renamePlan.CurrentFolderName);
+            AddTargetFolderOption(options, renamePlan.TargetFolderName);
+        }
+
+        _targetFolderOptions.Clear();
+        foreach (var option in options)
+        {
+            _targetFolderOptions.Add(option);
+        }
+    }
+
+    private void EnsureTargetFolderOption(string? folderName)
+    {
+        if (string.IsNullOrWhiteSpace(folderName)
+            || _targetFolderOptions.Contains(folderName, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _targetFolderOptions.Add(folderName);
+    }
+
+    private static void AddTargetFolderOption(ISet<string> options, string? folderName)
+    {
+        if (!string.IsNullOrWhiteSpace(folderName))
+        {
+            options.Add(folderName);
+        }
     }
 
     private void AppendLog(IEnumerable<string> lines)

@@ -61,6 +61,7 @@
                       IsReadOnly="False"
                       IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                       ColumnWidth="*"
+                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                       Margin="8"
                       MinHeight="180">
                 <DataGrid.Columns>
@@ -69,17 +70,28 @@
                                             Width="SizeToHeader" />
                     <DataGridTextColumn Header="Download"
                                         Binding="{Binding DisplayName}"
-                                        Width="2.4*"
-                                        MinWidth="240"
+                                        Width="2.2*"
+                                        MinWidth="150"
                                         IsReadOnly="True" />
-                    <DataGridTextColumn Header="Zielordner"
-                                        Binding="{Binding TargetFolderName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        Width="1.5*"
-                                        MinWidth="220" />
+                    <DataGridTemplateColumn Header="Zielordner"
+                                            Width="1.3*"
+                                            MinWidth="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox Margin="0,1"
+                                          Padding="4,1"
+                                          IsEditable="True"
+                                          IsTextSearchEnabled="True"
+                                          ItemsSource="{Binding DataContext.TargetFolderOptions, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                          Text="{Binding TargetFolderName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          ToolTip="Zielordner auswählen oder frei eintippen. Der Wert wird vor dem Einsortieren erneut geprüft." />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Status"
                                         Binding="{Binding StatusText}"
                                         Width="Auto"
-                                        MinWidth="72"
+                                        MinWidth="56"
                                         IsReadOnly="True" />
                     <DataGridTemplateColumn Header="Hinweis"
                                             Width="2.5*"
@@ -110,6 +122,11 @@
                     Padding="10,6"
                     Command="{Binding DeselectAllCommand}"
                     Content="Auswahl leeren" />
+            <Button Margin="0,0,8,0"
+                    Padding="10,6"
+                    Command="{Binding ApplyTargetFolderToMatchingItemsCommand}"
+                    ToolTip="Übernimmt den Zielordner des markierten Eintrags für weitere Einträge mit demselben ursprünglich erkannten Zielordner."
+                    Content="Zielordner übernehmen" />
             <Button Padding="10,6"
                     Command="{Binding RunSortCommand}"
                     ToolTip="{Binding RunSortTooltip, Mode=OneWay}"
