@@ -61,7 +61,7 @@ jobs:
 
       - name: Upload docs artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v4.0.0
+        uses: actions/upload-pages-artifact@v5.0.0
         with:
           path: .\docs\_site
 
