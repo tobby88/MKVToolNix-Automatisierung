@@ -31,6 +31,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 ## Voraussetzungen
 
+- Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
 - `mkvmerge.exe` aus MKVToolNix ist für das eigentliche Muxing erforderlich.
 - `ffprobe.exe` ist optional. Wenn `ffprobe` fehlt, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
@@ -211,7 +212,7 @@ Zusätzlich hält `.github/dependabot.yml` Versionsupdates für GitHub Actions u
 
 Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt ein Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
 
-Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 9`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
+Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
 
 ## Projektaufbau
 

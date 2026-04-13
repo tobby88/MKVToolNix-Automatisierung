@@ -18,7 +18,7 @@ internal static class FakeMkvMergeTestHelper
                 "FakeMkvMerge",
                 "bin",
                 configuration,
-                "net9.0",
+                "net10.0",
                 "FakeMkvMerge.exe")))
             .Where(File.Exists)
             .Select(path => new FileInfo(path))
