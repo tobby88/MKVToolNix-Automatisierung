@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MkvToolnixAutomatisierung.Services.Emby;
 
 /// <summary>
@@ -18,18 +20,23 @@ internal sealed class EmbyMetadataSyncService
     }
 
     /// <summary>
-    /// Liest die einfache Liste neu erzeugter Batch-Ausgabedateien.
+    /// Liest einen Batch-Report mit neu erzeugten Ausgabedateien.
     /// </summary>
     /// <remarks>
-    /// Das bestehende Reportformat ist absichtlich menschenlesbar. Deshalb werden nur Zeilen
-    /// übernommen, die wie MKV-Pfade aussehen; Kopfzeilen bleiben ignoriert.
+    /// Neue JSON-Reports liefern direkt importierbare Provider-IDs. Die alte menschenlesbare
+    /// TXT-Dateiliste wird weiter akzeptiert, enthält aber nur Pfade und keine Metadaten.
     /// </remarks>
-    public IReadOnlyList<string> LoadNewOutputReport(string reportPath)
+    public IReadOnlyList<EmbyImportEntry> LoadNewOutputReport(string reportPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reportPath);
         if (!File.Exists(reportPath))
         {
             throw new FileNotFoundException("Die ausgewählte Dateiliste wurde nicht gefunden.", reportPath);
+        }
+
+        if (string.Equals(Path.GetExtension(reportPath), ".json", StringComparison.OrdinalIgnoreCase))
+        {
+            return LoadStructuredOutputReport(reportPath);
         }
 
         return File.ReadLines(reportPath)
@@ -38,6 +45,7 @@ internal sealed class EmbyMetadataSyncService
             .Where(line => string.Equals(Path.GetExtension(line), ".mkv", StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Select(path => new EmbyImportEntry(path, EmbyProviderIds.Empty))
             .ToList();
     }
 
@@ -124,7 +132,39 @@ internal sealed class EmbyMetadataSyncService
     {
         return _embyClient.RefreshItemMetadataAsync(settings, itemId, cancellationToken);
     }
+
+    private static IReadOnlyList<EmbyImportEntry> LoadStructuredOutputReport(string reportPath)
+    {
+        var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath));
+        if (report is null)
+        {
+            throw new InvalidDataException("Der ausgewählte Metadaten-Report konnte nicht gelesen werden.");
+        }
+
+        return report.Items
+            .Where(item => !string.IsNullOrWhiteSpace(item.OutputPath))
+            .Where(item => string.Equals(Path.GetExtension(item.OutputPath), ".mkv", StringComparison.OrdinalIgnoreCase))
+            .Select(item => new EmbyImportEntry(item.OutputPath, BuildProviderIds(item)))
+            .GroupBy(item => item.MediaFilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(item => item.MediaFilePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static EmbyProviderIds BuildProviderIds(BatchOutputMetadataEntry item)
+    {
+        var tvdbId = string.IsNullOrWhiteSpace(item.ProviderIds?.Tvdb)
+            ? item.Tvdb?.EpisodeId?.ToString(CultureInfo.InvariantCulture)
+            : item.ProviderIds!.Tvdb;
+        var imdbId = string.IsNullOrWhiteSpace(item.ProviderIds?.Imdb)
+            ? null
+            : item.ProviderIds!.Imdb;
+
+        return new EmbyProviderIds(tvdbId, imdbId);
+    }
 }
+
+internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds ProviderIds);
 
 /// <summary>
 /// Kombiniert lokale NFO-Daten und optionale Emby-Item-Daten für eine einzelne MKV.

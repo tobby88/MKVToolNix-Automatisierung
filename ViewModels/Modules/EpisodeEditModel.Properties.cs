@@ -204,6 +204,12 @@ internal partial class EpisodeEditModel
         }
     }
 
+    public int? TvdbSeriesId => _tvdbSelection?.TvdbSeriesId;
+
+    public string? TvdbSeriesName => _tvdbSelection?.TvdbSeriesName;
+
+    public int? TvdbEpisodeId => _tvdbSelection?.TvdbEpisodeId;
+
     public string PlanSummaryText
     {
         get => _planSummaryText;

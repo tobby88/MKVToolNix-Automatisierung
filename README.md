@@ -81,7 +81,8 @@ Nach jedem Batch-Lauf:
 
 - bleibt das Batch-Protokoll in der GUI sichtbar
 - wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
-- wird dort auch eine Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend geprüft oder bei Bedarf in Emby katalogisiert werden können
+- wird dort auch eine TXT-Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend schnell geprüft werden können
+- wird zusätzlich ein strukturierter JSON-Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` geschrieben, den das Tool für den Emby-Abgleich importieren kann
 
 ## Typischer Workflow: Einsortieren
 
@@ -94,7 +95,7 @@ Nach jedem Batch-Lauf:
 ## Typischer Workflow: Emby-Abgleich
 
 1. Emby-Serveradresse und API-Key eintragen und `Verbindung testen`.
-2. Die nach einem Batch-Lauf erzeugte Liste `Neu erzeugte Ausgabedateien - ...txt` laden.
+2. Den nach einem Batch-Lauf erzeugten Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` laden. Die ältere TXT-Dateiliste funktioniert weiter, enthält aber keine automatisch übernommene TVDB-ID.
 3. `NFO/Emby prüfen`, um vorhandene Provider-IDs aus NFO und Emby-Item zu übernehmen.
 4. Fehlende TVDB-/IMDB-IDs bei Bedarf manuell ergänzen.
 5. `Abgleich starten`, um einen Emby-Library-Scan anzustoßen, NFO-Provider-IDs zu schreiben und geänderte Items gezielt zu refreshen.

@@ -574,6 +574,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
         if (!string.IsNullOrWhiteSpace(MetadataStatusText) || RequiresMetadataReview)
         {
+            ClearTvdbSelection();
             ApproveMetadataReview("Metadaten manuell angepasst.");
         }
     }

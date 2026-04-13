@@ -108,6 +108,7 @@ internal sealed partial class BatchMuxViewModel
                     SourceDirectory,
                     OutputDirectory,
                     executionOutcome.NewOutputFiles,
+                    executionOutcome.NewOutputMetadata,
                     executionOutcome.SuccessCount,
                     executionOutcome.WarningCount,
                     executionOutcome.ErrorCount,
@@ -244,6 +245,12 @@ internal sealed partial class BatchMuxViewModel
             {
                 lines.Add("Dateiliste:");
                 lines.Add(logSaveResult.NewOutputListPath!);
+            }
+
+            if (!string.IsNullOrWhiteSpace(logSaveResult.NewOutputMetadataReportPath))
+            {
+                lines.Add("Metadaten-Report:");
+                lines.Add(logSaveResult.NewOutputMetadataReportPath!);
             }
         }
 

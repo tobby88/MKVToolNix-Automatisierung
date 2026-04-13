@@ -1,4 +1,5 @@
 using System.IO;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
 using Xunit;
 
@@ -25,10 +26,62 @@ public sealed class EmbyMetadataSyncServiceTests
 
             var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
 
-            var paths = service.LoadNewOutputReport(reportPath);
+            var entries = service.LoadNewOutputReport(reportPath);
 
-            var path = Assert.Single(paths);
-            Assert.EndsWith("Pilot.mkv", path, StringComparison.OrdinalIgnoreCase);
+            var entry = Assert.Single(entries);
+            Assert.EndsWith("Pilot.mkv", entry.MediaFilePath, StringComparison.OrdinalIgnoreCase);
+            Assert.False(entry.ProviderIds.HasAny);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadNewOutputReport_ReadsStructuredMetadataReportProviderIds()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Serie - S01E02 - Pilot.mkv");
+            var reportPath = Path.Combine(directory, "Neu erzeugte Ausgabedateien.metadata.json");
+            File.WriteAllText(
+                reportPath,
+                BatchOutputMetadataReportJson.Serialize(new BatchOutputMetadataReport
+                {
+                    CreatedAt = DateTimeOffset.Now,
+                    SourceDirectory = directory,
+                    OutputDirectory = directory,
+                    Items =
+                    [
+                        new BatchOutputMetadataEntry
+                        {
+                            OutputPath = mediaPath,
+                            ProviderIds = new BatchOutputProviderIds
+                            {
+                                Tvdb = "100",
+                                Imdb = "tt1234567"
+                            },
+                            Tvdb = new BatchOutputTvdbMetadata
+                            {
+                                SeriesId = 42,
+                                SeriesName = "Serie",
+                                EpisodeId = 100
+                            }
+                        }
+                    ]
+                }));
+
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+            var entries = service.LoadNewOutputReport(reportPath);
+
+            var entry = Assert.Single(entries);
+            Assert.Equal(mediaPath, entry.MediaFilePath);
+            Assert.Equal("100", entry.ProviderIds.TvdbId);
+            Assert.Equal("tt1234567", entry.ProviderIds.ImdbId);
         }
         finally
         {

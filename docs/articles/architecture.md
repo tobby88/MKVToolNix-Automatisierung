@@ -55,7 +55,9 @@ Wichtig dabei:
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
 7. `BatchRunLogService` schreibt bei Batch-Läufen Log- und Reportdateien in `.\Logs`.
    - Der persistierte Log sammelt gezielt den aktuellen Batch-Lauf, damit Planung, Arbeitskopien und Mux-Ausführung zusammen diagnostizierbar bleiben.
-8. Das optionale Emby-Modul kann die Liste neu erzeugter Batch-Ausgabedateien laden, Emby nach den neuen Items fragen und Provider-IDs in die nebenliegenden NFO-Dateien schreiben.
+   - Die bisherige TXT-Liste neuer Ausgabedateien bleibt als einfache menschenlesbare Prüfliste erhalten.
+   - Der zusätzliche JSON-Metadatenreport enthält ein versioniertes Schema und importierbare Provider-IDs wie die bereits ausgewählte TVDB-Episoden-ID.
+8. Das optionale Emby-Modul kann den strukturierten Metadatenreport oder weiterhin die ältere TXT-Liste laden, Emby nach den neuen Items fragen und Provider-IDs in die nebenliegenden NFO-Dateien schreiben.
    - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
 
 ## Warum DocFX

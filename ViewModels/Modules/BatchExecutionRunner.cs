@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -104,6 +105,7 @@ internal sealed class BatchExecutionRunner
         var upToDateCount = 0;
         var movedDoneFiles = new List<string>();
         var newOutputFiles = new List<string>();
+        var newOutputMetadata = new List<BatchOutputMetadataEntry>();
 
         for (var index = 0; index < executablePlans.Count; index++)
         {
@@ -148,7 +150,7 @@ internal sealed class BatchExecutionRunner
                     item.RefreshArchivePresence(BatchEpisodeStatusKind.Success);
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
-                        newOutputFiles.Add(item.OutputPath);
+                        AddNewOutput(newOutputFiles, newOutputMetadata, item);
                     }
 
                     movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
@@ -168,7 +170,7 @@ internal sealed class BatchExecutionRunner
                     appendLog($"  WARNUNG: {warningStatusText}");
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
-                        newOutputFiles.Add(item.OutputPath);
+                        AddNewOutput(newOutputFiles, newOutputMetadata, item);
                     }
 
                     movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
@@ -211,7 +213,8 @@ internal sealed class BatchExecutionRunner
             errorCount,
             upToDateCount,
             movedDoneFiles,
-            newOutputFiles);
+            newOutputFiles,
+            newOutputMetadata);
     }
 
     private async Task<IReadOnlyList<string>> MoveEpisodeFilesToDoneAsync(
@@ -280,6 +283,48 @@ internal sealed class BatchExecutionRunner
                 ? "Warnung (Header aktualisiert, Exit-Code 1)"
                 : "Warnung (Datei erstellt, Exit-Code 1)";
     }
+
+    private static void AddNewOutput(
+        List<string> newOutputFiles,
+        List<BatchOutputMetadataEntry> newOutputMetadata,
+        BatchEpisodeItemViewModel item)
+    {
+        if (newOutputFiles.Contains(item.OutputPath, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        newOutputFiles.Add(item.OutputPath);
+        newOutputMetadata.Add(CreateNewOutputMetadata(item));
+    }
+
+    private static BatchOutputMetadataEntry CreateNewOutputMetadata(BatchEpisodeItemViewModel item)
+    {
+        var tvdbEpisodeId = item.TvdbEpisodeId?.ToString(CultureInfo.InvariantCulture);
+        return new BatchOutputMetadataEntry
+        {
+            OutputPath = item.OutputPath,
+            NfoPath = Path.ChangeExtension(item.OutputPath, ".nfo"),
+            SeriesName = item.SeriesName,
+            SeasonNumber = item.SeasonNumber,
+            EpisodeNumber = item.EpisodeNumber,
+            EpisodeTitle = item.Title,
+            ProviderIds = string.IsNullOrWhiteSpace(tvdbEpisodeId)
+                ? null
+                : new BatchOutputProviderIds
+                {
+                    Tvdb = tvdbEpisodeId
+                },
+            Tvdb = item.TvdbEpisodeId is null && item.TvdbSeriesId is null && string.IsNullOrWhiteSpace(item.TvdbSeriesName)
+                ? null
+                : new BatchOutputTvdbMetadata
+                {
+                    SeriesId = item.TvdbSeriesId,
+                    SeriesName = item.TvdbSeriesName,
+                    EpisodeId = item.TvdbEpisodeId
+                }
+        };
+    }
 }
 
 /// <summary>
@@ -299,4 +344,5 @@ internal sealed record BatchExecutionOutcome(
     int ErrorCount,
     int UpToDateCount,
     IReadOnlyList<string> MovedDoneFiles,
-    IReadOnlyList<string> NewOutputFiles);
+    IReadOnlyList<string> NewOutputFiles,
+    IReadOnlyList<BatchOutputMetadataEntry> NewOutputMetadata);

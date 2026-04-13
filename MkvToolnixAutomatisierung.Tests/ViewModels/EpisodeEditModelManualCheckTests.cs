@@ -92,6 +92,7 @@ public sealed class EpisodeEditModelManualCheckTests : IDisposable
                 outputPath: string.Empty,
                 title: "Pilot",
                 metadataStatusText: string.Empty,
+                tvdbSelection: null,
                 requiresMetadataReview: false,
                 isMetadataReviewApproved: true,
                 planSummaryText: string.Empty,

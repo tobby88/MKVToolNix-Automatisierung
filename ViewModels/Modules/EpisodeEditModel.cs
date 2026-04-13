@@ -40,6 +40,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private string _outputPath = string.Empty;
     private string _title = string.Empty;
     private string _metadataStatusText = string.Empty;
+    private TvdbEpisodeSelection? _tvdbSelection;
     private string _planSummaryText = string.Empty;
     private EpisodeUsageSummary? _usageSummary;
     private bool _requiresMetadataReview;
@@ -77,6 +78,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         string outputPath,
         string title,
         string metadataStatusText,
+        TvdbEpisodeSelection? tvdbSelection,
         bool requiresMetadataReview,
         bool isMetadataReviewApproved,
         string planSummaryText,
@@ -106,6 +108,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         _archiveState = initialArchiveState ?? ResolveArchiveState(outputPath);
         _title = title;
         _metadataStatusText = metadataStatusText;
+        _tvdbSelection = tvdbSelection;
         _planSummaryText = planSummaryText;
         _usageSummary = usageSummary;
         _requiresMetadataReview = requiresMetadataReview;

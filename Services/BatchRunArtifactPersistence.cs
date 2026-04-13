@@ -12,6 +12,7 @@ internal static class BatchRunArtifactPersistence
     /// <param name="sourceDirectory">Verarbeiteter Quellordner.</param>
     /// <param name="outputDirectory">Aktueller Ausgabeordner des Batch-Laufs.</param>
     /// <param name="newOutputFiles">Neu erzeugte Ausgabedateien des aktuellen Laufs.</param>
+    /// <param name="newOutputMetadata">Importierbare Metadaten zu den neu erzeugten Ausgabedateien.</param>
     /// <param name="successCount">Anzahl erfolgreicher Episoden.</param>
     /// <param name="warningCount">Anzahl Episoden mit Warnungen.</param>
     /// <param name="errorCount">Anzahl fehlgeschlagener Episoden.</param>
@@ -23,6 +24,7 @@ internal static class BatchRunArtifactPersistence
         string sourceDirectory,
         string outputDirectory,
         IReadOnlyList<string> newOutputFiles,
+        IReadOnlyList<BatchOutputMetadataEntry> newOutputMetadata,
         int successCount,
         int warningCount,
         int errorCount,
@@ -54,13 +56,22 @@ internal static class BatchRunArtifactPersistence
             }
         }
 
-        return batchLogs.SaveBatchRunArtifacts(
+        var result = batchLogs.SaveBatchRunArtifacts(
             sourceDirectory,
             outputDirectory,
             batchRunLogBuffer.GetTextSnapshot(),
             files,
             successCount,
             warningCount,
-            errorCount);
+            errorCount,
+            newOutputMetadata);
+
+        if (!string.IsNullOrWhiteSpace(result.NewOutputMetadataReportPath))
+        {
+            appendBatchRunLog("METADATEN-REPORT:");
+            appendBatchRunLog("  " + result.NewOutputMetadataReportPath);
+        }
+
+        return result;
     }
 }

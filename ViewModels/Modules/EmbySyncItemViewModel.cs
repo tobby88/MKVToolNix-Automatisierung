@@ -17,9 +17,16 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged
     private string _note = string.Empty;
 
     public EmbySyncItemViewModel(string mediaFilePath)
+        : this(mediaFilePath, EmbyProviderIds.Empty)
+    {
+    }
+
+    public EmbySyncItemViewModel(string mediaFilePath, EmbyProviderIds providerIds)
     {
         MediaFilePath = mediaFilePath;
         NfoPath = Path.ChangeExtension(mediaFilePath, ".nfo");
+        _tvdbId = providerIds.TvdbId ?? string.Empty;
+        _imdbId = providerIds.ImdbId ?? string.Empty;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

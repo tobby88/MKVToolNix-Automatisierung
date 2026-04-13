@@ -142,6 +142,8 @@ public sealed class BatchMetadataReviewTests
 
         Assert.False(item.RequiresMetadataReview);
         Assert.True(item.IsMetadataReviewApproved);
+        Assert.Equal(42, item.TvdbSeriesId);
+        Assert.Equal(100, item.TvdbEpisodeId);
     }
 
     [Fact]
@@ -211,12 +213,14 @@ public sealed class BatchMetadataReviewTests
     public void ManualMetadataEdit_ApprovesPendingMetadataReview()
     {
         var item = CreatePendingReviewItem();
+        item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"));
 
         item.Title = "Manuell korrigierter Titel";
 
         Assert.False(item.RequiresMetadataReview);
         Assert.True(item.IsMetadataReviewApproved);
         Assert.Equal("Metadaten manuell angepasst.", item.MetadataStatusText);
+        Assert.Null(item.TvdbEpisodeId);
     }
 
     [Fact]
@@ -229,6 +233,7 @@ public sealed class BatchMetadataReviewTests
         Assert.True(item.RequiresMetadataReview);
         Assert.False(item.IsMetadataReviewApproved);
         Assert.Equal("TVDB-Prüfung erforderlich.", item.MetadataStatusText);
+        Assert.Equal(100, item.TvdbEpisodeId);
     }
 
     [Fact]

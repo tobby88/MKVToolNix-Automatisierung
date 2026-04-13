@@ -137,6 +137,7 @@ internal partial class EpisodeEditModel
 
     public virtual void ApplyTvdbSelection(TvdbEpisodeSelection selection)
     {
+        SetTvdbSelection(selection);
         SeriesName = selection.TvdbSeriesName;
         SeasonNumber = selection.SeasonNumber;
         EpisodeNumber = selection.EpisodeNumber;
@@ -145,6 +146,7 @@ internal partial class EpisodeEditModel
 
     public virtual void ApplyLocalMetadataGuess()
     {
+        SetTvdbSelection(null);
         SeriesName = LocalSeriesName;
         SeasonNumber = LocalSeasonNumber;
         EpisodeNumber = LocalEpisodeNumber;
@@ -168,9 +170,15 @@ internal partial class EpisodeEditModel
 
     protected void SetMetadataResolutionState(EpisodeMetadataResolutionResult resolution)
     {
+        SetTvdbSelection(resolution.Selection);
         MetadataStatusText = resolution.StatusText;
         RequiresMetadataReview = resolution.RequiresReview;
         IsMetadataReviewApproved = DetermineAutomaticMetadataApproval(resolution);
+    }
+
+    protected void ClearTvdbSelection()
+    {
+        SetTvdbSelection(null);
     }
 
     protected void SetNotes(IEnumerable<string> notes)
@@ -284,6 +292,19 @@ internal partial class EpisodeEditModel
         _requestedSourcePaths = paths.ToList();
         OnPropertyChanged(nameof(RequestedSourcePaths));
         OnPropertyChanged(nameof(RequestedSourcesDisplayText));
+    }
+
+    private void SetTvdbSelection(TvdbEpisodeSelection? selection)
+    {
+        if (Equals(_tvdbSelection, selection))
+        {
+            return;
+        }
+
+        _tvdbSelection = selection;
+        OnPropertyChanged(nameof(TvdbSeriesId));
+        OnPropertyChanged(nameof(TvdbSeriesName));
+        OnPropertyChanged(nameof(TvdbEpisodeId));
     }
 
     protected void RefreshArchiveState()

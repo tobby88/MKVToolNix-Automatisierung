@@ -7,6 +7,12 @@ internal static class FakeMkvMergeTestHelper
 {
     public static string ResolveExecutablePath()
     {
+        var outputDirectoryCandidate = Path.Combine(AppContext.BaseDirectory, "FakeMkvMerge.exe");
+        if (File.Exists(outputDirectoryCandidate))
+        {
+            return outputDirectoryCandidate;
+        }
+
         var candidatePaths = new[] { "Release", "Debug" }
             .Select(configuration => Path.GetFullPath(Path.Combine(
                 AppContext.BaseDirectory,

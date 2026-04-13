@@ -111,6 +111,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal(0, outcome.ErrorCount);
         Assert.Single(outcome.NewOutputFiles);
         Assert.Equal(outputPath, outcome.NewOutputFiles[0]);
+        var metadata = Assert.Single(outcome.NewOutputMetadata);
+        Assert.Equal(outputPath, metadata.OutputPath);
+        Assert.Equal("100", metadata.ProviderIds?.Tvdb);
+        Assert.Equal(42, metadata.Tvdb?.SeriesId);
+        Assert.Equal(100, metadata.Tvdb?.EpisodeId);
         Assert.Single(outcome.MovedDoneFiles);
         Assert.Equal(movedDoneFile, outcome.MovedDoneFiles[0]);
         Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
@@ -159,6 +164,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal(1, outcome.UpToDateCount);
         Assert.Single(outcome.MovedDoneFiles);
         Assert.Empty(outcome.NewOutputFiles);
+        Assert.Empty(outcome.NewOutputMetadata);
         Assert.Equal(BatchEpisodeStatusKind.UpToDate, item.StatusKind);
         Assert.Contains(logs, line => line.Contains("KEIN MUX", StringComparison.Ordinal));
         Assert.Contains(logs, line => line.StartsWith("DONE:", StringComparison.Ordinal));

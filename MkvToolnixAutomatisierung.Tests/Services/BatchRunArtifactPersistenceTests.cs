@@ -36,6 +36,7 @@ public sealed class BatchRunArtifactPersistenceTests
             sourceDirectory,
             outputDirectory,
             [createdOutputFile],
+            newOutputMetadata: [],
             successCount: 1,
             warningCount: 0,
             errorCount: 0,

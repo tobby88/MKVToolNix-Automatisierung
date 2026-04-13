@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -19,6 +20,7 @@ public sealed class BatchRunLogService
     /// <param name="successCount">Anzahl erfolgreicher Episoden.</param>
     /// <param name="warningCount">Anzahl abgeschlossener Episoden mit Warnungen.</param>
     /// <param name="errorCount">Anzahl fehlgeschlagener Episoden.</param>
+    /// <param name="newOutputMetadata">Optionale strukturierte Metadaten zu den neu erzeugten Ausgabedateien.</param>
     /// <returns>Pfade zu den geschriebenen Artefakten inklusive normalisierter Liste neuer Dateien.</returns>
     public BatchRunLogSaveResult SaveBatchRunArtifacts(
         string sourceDirectory,
@@ -27,19 +29,28 @@ public sealed class BatchRunLogService
         IReadOnlyList<string> newOutputFiles,
         int successCount,
         int warningCount,
-        int errorCount)
+        int errorCount,
+        IReadOnlyList<BatchOutputMetadataEntry>? newOutputMetadata = null)
     {
         PortableAppStorage.EnsureLogsDirectoryForSave();
 
-        var now = DateTime.Now;
-        var fileStamp = now.ToString("yyyy-MM-dd HH-mm-ss");
+        var now = DateTimeOffset.Now;
+        var fileStamp = now.LocalDateTime.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
         var normalizedNewFiles = newOutputFiles
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        var normalizedMetadata = BuildNormalizedMetadataEntries(normalizedNewFiles, newOutputMetadata);
 
         var batchLogPath = Path.Combine(PortableAppStorage.LogsDirectory, $"Batch - {fileStamp}.log.txt");
+        var newFilesListPath = normalizedNewFiles.Count > 0
+            ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.txt")
+            : null;
+        var newFilesMetadataReportPath = normalizedNewFiles.Count > 0
+            ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.metadata.json")
+            : null;
+
         File.WriteAllText(
             batchLogPath,
             BuildBatchLogText(
@@ -48,30 +59,48 @@ public sealed class BatchRunLogService
                 outputDirectory,
                 logText,
                 normalizedNewFiles,
+                normalizedMetadata,
+                newFilesMetadataReportPath,
                 successCount,
                 warningCount,
                 errorCount),
             Utf8Encoding);
 
-        string? newFilesListPath = null;
-        if (normalizedNewFiles.Count > 0)
+        if (newFilesListPath is not null)
         {
-            newFilesListPath = Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.txt");
             File.WriteAllLines(
                 newFilesListPath,
                 BuildNewOutputFileReportLines(now, sourceDirectory, outputDirectory, normalizedNewFiles),
                 Utf8Encoding);
         }
 
-        return new BatchRunLogSaveResult(batchLogPath, newFilesListPath, normalizedNewFiles);
+        if (newFilesMetadataReportPath is not null)
+        {
+            var metadataReport = new BatchOutputMetadataReport
+            {
+                CreatedAt = now,
+                SourceDirectory = sourceDirectory,
+                OutputDirectory = outputDirectory,
+                Items = normalizedMetadata.ToList()
+            };
+
+            File.WriteAllText(
+                newFilesMetadataReportPath,
+                BatchOutputMetadataReportJson.Serialize(metadataReport),
+                Utf8Encoding);
+        }
+
+        return new BatchRunLogSaveResult(batchLogPath, newFilesListPath, newFilesMetadataReportPath, normalizedNewFiles);
     }
 
     private static string BuildBatchLogText(
-        DateTime createdAt,
+        DateTimeOffset createdAt,
         string sourceDirectory,
         string outputDirectory,
         string logText,
         IReadOnlyList<string> newOutputFiles,
+        IReadOnlyList<BatchOutputMetadataEntry> newOutputMetadata,
+        string? newOutputMetadataReportPath,
         int successCount,
         int warningCount,
         int errorCount)
@@ -99,6 +128,32 @@ public sealed class BatchRunLogService
         }
 
         builder.AppendLine();
+        builder.AppendLine("Strukturierter Metadaten-Report:");
+        builder.AppendLine(newOutputMetadataReportPath ?? "(keiner)");
+
+        if (newOutputMetadata.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Metadaten neuer Ausgabedateien:");
+            foreach (var entry in newOutputMetadata)
+            {
+                builder.AppendLine(Path.GetFileName(entry.OutputPath));
+                builder.AppendLine($"  Pfad: {entry.OutputPath}");
+                builder.AppendLine($"  TVDB-Episode: {entry.ProviderIds?.Tvdb ?? "(keine)"}");
+                builder.AppendLine($"  IMDB: {entry.ProviderIds?.Imdb ?? "(keine)"}");
+
+                if (entry.Tvdb is not null)
+                {
+                    builder.AppendLine($"  TVDB-Serie: {entry.Tvdb.SeriesId?.ToString(CultureInfo.InvariantCulture) ?? "(keine)"}");
+                    if (!string.IsNullOrWhiteSpace(entry.Tvdb.SeriesName))
+                    {
+                        builder.AppendLine($"  TVDB-Serienname: {entry.Tvdb.SeriesName}");
+                    }
+                }
+            }
+        }
+
+        builder.AppendLine();
         builder.AppendLine("Batch-Protokoll:");
         builder.AppendLine(string.IsNullOrWhiteSpace(normalizedLogText) ? "(leer)" : normalizedLogText.TrimEnd());
         return builder.ToString();
@@ -120,7 +175,7 @@ public sealed class BatchRunLogService
     }
 
     private static IReadOnlyList<string> BuildNewOutputFileReportLines(
-        DateTime createdAt,
+        DateTimeOffset createdAt,
         string sourceDirectory,
         string outputDirectory,
         IReadOnlyList<string> newOutputFiles)
@@ -135,6 +190,70 @@ public sealed class BatchRunLogService
             .. newOutputFiles
         ];
     }
+
+    private static IReadOnlyList<BatchOutputMetadataEntry> BuildNormalizedMetadataEntries(
+        IReadOnlyList<string> normalizedNewFiles,
+        IReadOnlyList<BatchOutputMetadataEntry>? metadataEntries)
+    {
+        if (normalizedNewFiles.Count == 0)
+        {
+            return [];
+        }
+
+        var metadataByOutputPath = (metadataEntries ?? [])
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.OutputPath))
+            .GroupBy(entry => entry.OutputPath, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return normalizedNewFiles
+            .Select(path =>
+            {
+                metadataByOutputPath.TryGetValue(path, out var metadataEntry);
+                return NormalizeMetadataEntry(path, metadataEntry);
+            })
+            .ToList();
+    }
+
+    private static BatchOutputMetadataEntry NormalizeMetadataEntry(string outputPath, BatchOutputMetadataEntry? entry)
+    {
+        var tvdbEpisodeId = entry?.Tvdb?.EpisodeId;
+        var providerTvdbId = NormalizeOptional(entry?.ProviderIds?.Tvdb)
+            ?? tvdbEpisodeId?.ToString(CultureInfo.InvariantCulture);
+        var providerImdbId = NormalizeOptional(entry?.ProviderIds?.Imdb);
+        var providerIds = string.IsNullOrWhiteSpace(providerTvdbId) && string.IsNullOrWhiteSpace(providerImdbId)
+            ? null
+            : new BatchOutputProviderIds
+            {
+                Tvdb = providerTvdbId,
+                Imdb = providerImdbId
+            };
+
+        var tvdbMetadata = entry?.Tvdb is null
+            ? null
+            : new BatchOutputTvdbMetadata
+            {
+                SeriesId = entry.Tvdb.SeriesId,
+                SeriesName = NormalizeOptional(entry.Tvdb.SeriesName),
+                EpisodeId = entry.Tvdb.EpisodeId
+            };
+
+        return new BatchOutputMetadataEntry
+        {
+            OutputPath = outputPath,
+            NfoPath = NormalizeOptional(entry?.NfoPath) ?? Path.ChangeExtension(outputPath, ".nfo"),
+            SeriesName = NormalizeOptional(entry?.SeriesName),
+            SeasonNumber = NormalizeOptional(entry?.SeasonNumber),
+            EpisodeNumber = NormalizeOptional(entry?.EpisodeNumber),
+            EpisodeTitle = NormalizeOptional(entry?.EpisodeTitle),
+            ProviderIds = providerIds,
+            Tvdb = tvdbMetadata
+        };
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
 }
 
 /// <summary>
@@ -142,10 +261,12 @@ public sealed class BatchRunLogService
 /// </summary>
 /// <param name="BatchLogPath">Pfad zum vollständigen Batch-Protokoll.</param>
 /// <param name="NewOutputListPath">Optionale Liste nur der neu erzeugten Ausgabedateien.</param>
+/// <param name="NewOutputMetadataReportPath">Optionaler JSON-Report mit importierbaren Metadaten der neuen Ausgabedateien.</param>
 /// <param name="NewOutputFiles">Normalisierte Menge der im Lauf neu erzeugten Dateien.</param>
 public sealed record BatchRunLogSaveResult(
     string BatchLogPath,
     string? NewOutputListPath,
+    string? NewOutputMetadataReportPath,
     IReadOnlyList<string> NewOutputFiles)
 {
     /// <summary>

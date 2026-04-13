@@ -45,6 +45,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         string outputPath,
         string title,
         string metadataStatusText,
+        TvdbEpisodeSelection? tvdbSelection,
         bool requiresMetadataReview,
         bool isMetadataReviewApproved,
         BatchEpisodeStatusKind statusKind,
@@ -75,6 +76,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             outputPath,
             title,
             metadataStatusText,
+            tvdbSelection,
             requiresMetadataReview,
             isMetadataReviewApproved,
             planSummaryText,
@@ -192,6 +194,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             outputPath,
             detected.SuggestedTitle,
             metadataResolution.StatusText,
+            metadataResolution.Selection,
             metadataResolution.RequiresReview,
             DetermineAutomaticMetadataApproval(metadataResolution),
             statusKind,
@@ -233,6 +236,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             string.Empty,
             Path.GetFileNameWithoutExtension(requestedMainVideoPath),
             "Keine TVDB-Daten vorhanden.",
+            tvdbSelection: null,
             false,
             true,
             BatchEpisodeStatusKind.Error,
@@ -484,6 +488,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         if (!string.IsNullOrWhiteSpace(MetadataStatusText) || RequiresMetadataReview)
         {
+            ClearTvdbSelection();
             ApproveMetadataReview("Metadaten manuell angepasst.");
         }
     }

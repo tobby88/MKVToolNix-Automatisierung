@@ -191,8 +191,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     private async Task SelectReportAsync()
     {
         var selectedPath = _dialogService.SelectFile(
-            "Liste neu erzeugter Ausgabedateien auswählen",
-            "Textdateien (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
+            "Batch-Report neu erzeugter Ausgabedateien auswählen",
+            "Batch-Reports (*.metadata.json;*.txt)|*.metadata.json;*.txt|Metadatenreports (*.json)|*.json|Textdateien (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
             GetInitialReportDirectory());
         if (string.IsNullOrWhiteSpace(selectedPath))
         {
@@ -210,12 +210,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
-        var filePaths = _services.Sync.LoadNewOutputReport(ReportPath);
-        ReplaceItems(filePaths);
-        ProgressValue = filePaths.Count == 0 ? 0 : 20;
-        StatusText = filePaths.Count == 0
+        var importEntries = _services.Sync.LoadNewOutputReport(ReportPath);
+        ReplaceItems(importEntries);
+        ProgressValue = importEntries.Count == 0 ? 0 : 20;
+        StatusText = importEntries.Count == 0
             ? "Keine MKV-Pfade in der Dateiliste gefunden"
-            : $"Dateiliste geladen: {filePaths.Count} MKV-Datei(en)";
+            : $"Dateiliste geladen: {importEntries.Count} MKV-Datei(en)";
         AppendLog($"Dateiliste geladen: {ReportPath}");
         return AnalyzeItemsAsync(queryEmby: false);
     }
@@ -415,7 +415,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
     }
 
-    private void ReplaceItems(IReadOnlyList<string> filePaths)
+    private void ReplaceItems(IReadOnlyList<EmbyImportEntry> importEntries)
     {
         foreach (var existingItem in Items)
         {
@@ -423,9 +423,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
 
         Items.Clear();
-        foreach (var filePath in filePaths)
+        foreach (var importEntry in importEntries)
         {
-            var item = new EmbySyncItemViewModel(filePath);
+            var item = new EmbySyncItemViewModel(importEntry.MediaFilePath, importEntry.ProviderIds);
             item.PropertyChanged += ItemOnPropertyChanged;
             Items.Add(item);
         }
