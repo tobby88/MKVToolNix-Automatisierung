@@ -160,7 +160,7 @@ internal sealed class DownloadSortService
         if (replacementDecision.ReplaceableConflicts.Count > 0)
         {
             return new DownloadSortTargetEvaluation(
-                DownloadSortItemState.Ready,
+                DownloadSortItemState.ReadyWithReplacement,
                 MergeNotes(
                     BuildReplacementNote(replacementDecision.ReplaceableConflicts),
                     renamePlan is null ? string.Empty : BuildFolderRenameNote(renamePlan)));
@@ -689,8 +689,8 @@ internal sealed class DownloadSortService
     private static string BuildReplacementNote(IReadOnlyList<DownloadSortTargetFileConflict> conflicts)
     {
         return conflicts.Count == 1
-            ? $"Gleichnamige Zieldatei wird ersetzt: {Path.GetFileName(conflicts[0].TargetPath)}."
-            : $"Gleichnamige Zieldateien werden ersetzt: {FormatConflictFileList(conflicts)}.";
+            ? "Gleichnamige Zieldatei wird ersetzt."
+            : "Gleichnamige Zieldateien werden ersetzt.";
     }
 
     private static string BuildFolderRenameNote(DownloadSortFolderRenamePlan renamePlan)
@@ -789,9 +789,41 @@ internal sealed class DownloadSortService
 /// </summary>
 internal enum DownloadSortItemState
 {
+    /// <summary>
+    /// Der Eintrag kann ohne gleichnamige Zieldateien direkt einsortiert werden.
+    /// </summary>
     Ready,
+
+    /// <summary>
+    /// Der Eintrag kann direkt einsortiert werden, ersetzt dabei aber gleichnamige Zieldateien.
+    /// </summary>
+    ReadyWithReplacement,
+
+    /// <summary>
+    /// Dem Eintrag fehlt eine sichere Zielordnerentscheidung.
+    /// </summary>
     NeedsReview,
+
+    /// <summary>
+    /// Der Eintrag hat einen blockierenden Konflikt und wird nicht automatisch ausgeführt.
+    /// </summary>
     Conflict
+}
+
+/// <summary>
+/// Kleine Zustandshelfer fuer das Download-Sortiermodul.
+/// </summary>
+internal static class DownloadSortItemStates
+{
+    /// <summary>
+    /// Gibt an, ob ein Eintrag ohne weitere Pflichtpruefung ausgefuehrt werden darf.
+    /// </summary>
+    /// <param name="state">Aktueller Zustand des Sortiereintrags.</param>
+    /// <returns><see langword="true"/>, wenn der Eintrag einsortiert werden darf.</returns>
+    internal static bool IsSortable(DownloadSortItemState state)
+    {
+        return state is DownloadSortItemState.Ready or DownloadSortItemState.ReadyWithReplacement;
+    }
 }
 
 /// <summary>

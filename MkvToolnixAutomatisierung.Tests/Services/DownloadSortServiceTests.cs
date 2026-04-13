@@ -155,7 +155,7 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
-    public void Scan_MarksCandidateAsReady_WhenTargetAlreadyContainsComparableSameFile()
+    public void Scan_MarksCandidateAsReadyWithReplacement_WhenTargetAlreadyContainsComparableSameFile()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
         Directory.CreateDirectory(targetDirectory);
@@ -170,8 +170,34 @@ public sealed class DownloadSortServiceTests : IDisposable
         var result = _service.Scan(_rootDirectory);
         var item = Assert.Single(result.Items);
 
-        Assert.Equal(DownloadSortItemState.Ready, item.State);
-        Assert.Contains("wird ersetzt", item.Note, StringComparison.Ordinal);
+        Assert.Equal(DownloadSortItemState.ReadyWithReplacement, item.State);
+        Assert.Contains("Gleichnamige Zieldatei wird ersetzt.", item.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("Ostfriesenkrimis-Ostfriesensturm", item.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scan_UsesCompactReplacementNote_WhenMultipleTargetFilesWillBeOverwritten()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
+        var videoFileName = "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4";
+        var textFileName = "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.txt";
+        Directory.CreateDirectory(targetDirectory);
+        CreateFileWithByteLength(Path.Combine(targetDirectory, videoFileName), length: 100);
+        CreateEmptyFile(Path.Combine(targetDirectory, textFileName));
+
+        CreateFileWithByteLength(Path.Combine(_rootDirectory, videoFileName), length: 100);
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, textFileName),
+            topic: "Ostfriesenkrimis",
+            title: "Ostfriesensturm (S02/E05)");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(DownloadSortItemState.ReadyWithReplacement, item.State);
+        Assert.Contains("Gleichnamige Zieldateien werden ersetzt.", item.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain(videoFileName, item.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain(textFileName, item.Note, StringComparison.Ordinal);
     }
 
     [Fact]

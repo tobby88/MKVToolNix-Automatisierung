@@ -116,8 +116,8 @@
                     IsEnabled="{Binding IsInteractive, Mode=OneWay}">
             <Button Margin="0,0,8,0"
                     Padding="10,6"
-                    Command="{Binding SelectAllReadyCommand}"
-                    Content="Alle Bereiten wählen" />
+                    Command="{Binding SelectAllSortableCommand}"
+                    Content="Alle Einsortierbaren wählen" />
             <Button Margin="0,0,8,0"
                     Padding="10,6"
                     Command="{Binding DeselectAllCommand}"

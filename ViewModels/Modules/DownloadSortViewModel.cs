@@ -35,7 +35,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, unexpectedCommandErrorHandler);
-        SelectAllReadyCommand = new RelayCommand(SelectAllReady, () => !_isBusy && Items.Any(item => item.State == DownloadSortItemState.Ready && !item.IsSelected));
+        SelectAllSortableCommand = new RelayCommand(SelectAllSortable, () => !_isBusy && Items.Any(item => DownloadSortItemStates.IsSortable(item.State) && !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
         ApplyTargetFolderToMatchingItemsCommand = new RelayCommand(ApplySelectedTargetFolderToMatchingItems, CanApplySelectedTargetFolderToMatchingItems);
         RunSortCommand = new AsyncRelayCommand(RunSortAsync, CanRunSort, unexpectedCommandErrorHandler);
@@ -47,7 +47,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand ScanCommand { get; }
 
-    public RelayCommand SelectAllReadyCommand { get; }
+    public RelayCommand SelectAllSortableCommand { get; }
 
     public RelayCommand DeselectAllCommand { get; }
 
@@ -143,6 +143,8 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public int ReadyCount => Items.Count(item => item.State == DownloadSortItemState.Ready);
 
+    public int ReplacementCount => Items.Count(item => item.State == DownloadSortItemState.ReadyWithReplacement);
+
     public int ReviewCount => Items.Count(item => item.State == DownloadSortItemState.NeedsReview);
 
     public int ConflictCount => Items.Count(item => item.State == DownloadSortItemState.Conflict);
@@ -151,7 +153,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public string SummaryText => ItemCount == 0
         ? "Keine losen Download-Dateien erkannt."
-        : $"{ItemCount} Paket(e), {ReadyCount} bereit, {ReviewCount} pruefen, {ConflictCount} Konflikt(e), {RenameCount} sichere Ordner-Umbenennung(en).";
+        : $"{ItemCount} Paket(e), {ReadyCount} bereit{BuildReplacementSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e), {RenameCount} sichere Ordner-Umbenennung(en).";
 
     public string ScanTooltip => "Analysiert lose Dateien in der Wurzel des MediathekView-Downloadordners und schlaegt Serienordner vor.";
 
@@ -239,10 +241,10 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     private async Task RunSortAsync()
     {
-        var selectedReadyItems = Items
-            .Where(item => item.IsSelected && item.State == DownloadSortItemState.Ready)
+        var selectedSortableItems = Items
+            .Where(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State))
             .ToList();
-        if (selectedReadyItems.Count == 0)
+        if (selectedSortableItems.Count == 0)
         {
             _dialogService.ShowWarning("Einsortieren", "Es sind keine einsortierbaren Einträge ausgewählt.");
             return;
@@ -254,7 +256,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             StatusText = "Sortiere Dateien ein...";
             ProgressValue = 30;
 
-            var requests = selectedReadyItems
+            var requests = selectedSortableItems
                 .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.TargetFolderName))
                 .ToList();
 
@@ -271,9 +273,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SelectAllReady()
+    private void SelectAllSortable()
     {
-        foreach (var item in Items.Where(item => item.State == DownloadSortItemState.Ready))
+        foreach (var item in Items.Where(item => DownloadSortItemStates.IsSortable(item.State)))
         {
             item.IsSelected = true;
         }
@@ -371,7 +373,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     private bool CanRunSort()
     {
-        return !_isBusy && Items.Any(item => item.IsSelected && item.State == DownloadSortItemState.Ready);
+        return !_isBusy && Items.Any(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State));
     }
 
     private void SetBusy(bool isBusy)
@@ -391,6 +393,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(ReadyCount));
+        OnPropertyChanged(nameof(ReplacementCount));
         OnPropertyChanged(nameof(ReviewCount));
         OnPropertyChanged(nameof(ConflictCount));
         OnPropertyChanged(nameof(RenameCount));
@@ -398,7 +401,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
         SelectSourceDirectoryCommand.RaiseCanExecuteChanged();
         ScanCommand.RaiseCanExecuteChanged();
-        SelectAllReadyCommand.RaiseCanExecuteChanged();
+        SelectAllSortableCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
         ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
         RunSortCommand.RaiseCanExecuteChanged();
@@ -487,7 +490,14 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ProgressValue = 100;
         StatusText = ItemCount == 0
             ? "Keine losen Download-Dateien gefunden"
-            : $"Scan abgeschlossen: {ReadyCount} bereit, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
+            : $"Scan abgeschlossen: {ReadyCount} bereit{BuildReplacementSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
+    }
+
+    private string BuildReplacementSummarySegment()
+    {
+        return ReplacementCount == 0
+            ? string.Empty
+            : $", {ReplacementCount} ersetzen";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

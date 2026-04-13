@@ -22,7 +22,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
         _note = candidate.Note;
-        _isSelected = candidate.State == DownloadSortItemState.Ready;
+        _isSelected = DownloadSortItemStates.IsSortable(candidate.State);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -90,6 +90,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public string StatusText => State switch
     {
         DownloadSortItemState.Ready => "Bereit",
+        DownloadSortItemState.ReadyWithReplacement => "Ersetzen",
         DownloadSortItemState.Conflict => "Konflikt",
         _ => "Pruefen"
     };
