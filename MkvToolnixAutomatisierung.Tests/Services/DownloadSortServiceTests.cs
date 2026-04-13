@@ -155,6 +155,31 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_ReportsIncrementalProgressWhileBuildingCandidates()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "ZZZ-Folge-1.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "ZZZ-Folge-1.txt"),
+            topic: "Die Heiland - Wir sind Anwalt",
+            title: "ZZZ-Folge");
+        CreateEmptyFile(Path.Combine(_rootDirectory, "AAA-Folge-1.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "AAA-Folge-1.txt"),
+            topic: "SOKO Leipzig",
+            title: "AAA-Folge");
+        var progressUpdates = new List<DownloadSortScanProgress>();
+
+        _ = _service.Scan(_rootDirectory, progressUpdates.Add);
+
+        Assert.Contains(progressUpdates, update => update.StatusText.Contains("Lese lose Download-Dateien", StringComparison.Ordinal));
+        Assert.Contains(progressUpdates, update => update.StatusText.Contains("Analysiere Paket 1/2", StringComparison.Ordinal));
+        Assert.Contains(progressUpdates, update => update.StatusText.Contains("Analysiere Paket 2/2", StringComparison.Ordinal));
+        Assert.Equal(100, progressUpdates[^1].ProgressPercent);
+        Assert.True(progressUpdates.Select(update => update.ProgressPercent).SequenceEqual(
+            progressUpdates.Select(update => update.ProgressPercent).OrderBy(value => value)));
+    }
+
+    [Fact]
     public void Scan_MarksCandidateAsReadyWithReplacement_WhenTargetAlreadyContainsComparableSameFile()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");

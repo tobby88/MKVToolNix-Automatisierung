@@ -90,21 +90,41 @@ internal sealed class DownloadSortService
     /// Analysiert die lose Wurzelebene eines Downloadordners und liefert Sortiervorschlaege.
     /// </summary>
     /// <param name="rootDirectory">Oberordner, in dessen Wurzel lose Mediathek-Dateien liegen.</param>
+    /// <param name="onProgress">Optionaler Callback fuer laufende Scan-Fortschrittsmeldungen.</param>
     /// <returns>Scanergebnis inklusive Move-Kandidaten und sicherer Ordner-Umbenennungen.</returns>
-    public DownloadSortScanResult Scan(string rootDirectory)
+    public DownloadSortScanResult Scan(
+        string rootDirectory,
+        Action<DownloadSortScanProgress>? onProgress = null)
     {
         EnsureDirectoryExists(rootDirectory);
 
-        var folderRenames = BuildFolderRenamePlans(rootDirectory);
+        ReportScanProgress(onProgress, "Pruefe vorhandene Serienordner...", 5);
+        var folderRenames = BuildFolderRenamePlans(rootDirectory, onProgress);
+
+        ReportScanProgress(onProgress, "Lese lose Download-Dateien...", 30);
         var rootGroups = EnumerateLogicalGroups(rootDirectory);
-        var candidates = rootGroups
-            .SelectMany(group => BuildCandidates(rootDirectory, group, folderRenames))
+
+        var candidates = new List<DownloadSortCandidate>();
+        for (var index = 0; index < rootGroups.Count; index++)
+        {
+            var group = rootGroups[index];
+            ReportScanProgress(
+                onProgress,
+                $"Analysiere Paket {index + 1}/{rootGroups.Count}: {group.DisplayName}",
+                InterpolateProgress(35, 90, index, rootGroups.Count));
+
+            candidates.AddRange(BuildCandidates(rootDirectory, group, folderRenames));
+        }
+
+        ReportScanProgress(onProgress, "Sortiere Vorschlaege...", 95);
+        var sortedCandidates = candidates
             .OrderBy(candidate => string.IsNullOrWhiteSpace(candidate.SuggestedFolderName))
             .ThenBy(candidate => candidate.SuggestedFolderName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new DownloadSortScanResult(candidates, folderRenames);
+        ReportScanProgress(onProgress, "Scan abgeschlossen.", 100);
+        return new DownloadSortScanResult(sortedCandidates, folderRenames);
     }
 
     /// <summary>
@@ -357,9 +377,12 @@ internal sealed class DownloadSortService
             : firstReason + " Datei wird in den Defekt-Ordner verschoben; Begleituntertitel bleiben separat einsortierbar.";
     }
 
-    private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(string rootDirectory)
+    private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(
+        string rootDirectory,
+        Action<DownloadSortScanProgress>? onProgress)
     {
-        var existingDirectoryNames = Directory.GetDirectories(rootDirectory)
+        var directoryPaths = Directory.GetDirectories(rootDirectory);
+        var existingDirectoryNames = directoryPaths
             .Select(Path.GetFileName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Cast<string>()
@@ -367,13 +390,19 @@ internal sealed class DownloadSortService
 
         var renameCandidates = new List<DownloadSortFolderRenamePlan>();
 
-        foreach (var directoryPath in Directory.GetDirectories(rootDirectory))
+        for (var index = 0; index < directoryPaths.Length; index++)
         {
+            var directoryPath = directoryPaths[index];
             var currentFolderName = Path.GetFileName(directoryPath);
             if (string.IsNullOrWhiteSpace(currentFolderName))
             {
                 continue;
             }
+
+            ReportScanProgress(
+                onProgress,
+                $"Pruefe Serienordner {index + 1}/{directoryPaths.Length}: {currentFolderName}",
+                InterpolateProgress(8, 28, index, Math.Max(1, directoryPaths.Length)));
 
             if (string.Equals(currentFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase))
             {
@@ -410,6 +439,27 @@ internal sealed class DownloadSortService
             .Select(group => group.Single())
             .OrderBy(plan => plan.CurrentFolderName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static int InterpolateProgress(int startPercent, int endPercent, int index, int totalCount)
+    {
+        if (totalCount <= 0)
+        {
+            return endPercent;
+        }
+
+        var ratio = Math.Clamp(index / (double)totalCount, 0, 1);
+        return (int)Math.Round(startPercent + ((endPercent - startPercent) * ratio));
+    }
+
+    private static void ReportScanProgress(
+        Action<DownloadSortScanProgress>? onProgress,
+        string statusText,
+        int progressPercent)
+    {
+        onProgress?.Invoke(new DownloadSortScanProgress(
+            statusText,
+            Math.Clamp(progressPercent, 0, 100)));
     }
 
     private static DownloadFolderProposal DetectFolderProposal(IReadOnlyList<string> filePaths)
@@ -899,6 +949,15 @@ internal static class DownloadSortItemStates
 internal sealed record DownloadSortScanResult(
     IReadOnlyList<DownloadSortCandidate> Items,
     IReadOnlyList<DownloadSortFolderRenamePlan> FolderRenames);
+
+/// <summary>
+/// Fortschrittsmeldung des Download-Sortier-Scans.
+/// </summary>
+/// <param name="StatusText">Kurztext fuer den aktuell laufenden Scan-Schritt.</param>
+/// <param name="ProgressPercent">Grob interpolierter Gesamtfortschritt von 0 bis 100.</param>
+internal sealed record DownloadSortScanProgress(
+    string StatusText,
+    int ProgressPercent);
 
 /// <summary>
 /// Vorschlag fuer einen losen Download mitsamt Zielordner und aktuellem Status.

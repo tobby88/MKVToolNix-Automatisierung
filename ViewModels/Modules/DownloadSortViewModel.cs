@@ -490,13 +490,20 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         StatusText = "Analysiere lose Mediathek-Dateien...";
         ProgressValue = 15;
 
-        var scanResult = await Task.Run(() => _services.DownloadSort.Scan(SourceDirectory));
+        IProgress<DownloadSortScanProgress> scanProgress = new Progress<DownloadSortScanProgress>(HandleDownloadSortScanProgress);
+        var scanResult = await Task.Run(() => _services.DownloadSort.Scan(SourceDirectory, scanProgress.Report));
 
         ApplyScanResult(scanResult);
         ProgressValue = 100;
         StatusText = ItemCount == 0
             ? "Keine losen Download-Dateien gefunden"
             : $"Scan abgeschlossen: {ReadyCount} bereit{BuildReplacementSummarySegment()}{BuildDefectiveSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
+    }
+
+    private void HandleDownloadSortScanProgress(DownloadSortScanProgress progress)
+    {
+        StatusText = progress.StatusText;
+        ProgressValue = progress.ProgressPercent;
     }
 
     private string BuildReplacementSummarySegment()
