@@ -16,7 +16,7 @@ internal static class CompanionTextMetadataReader
     public static CompanionTextMetadata Read(string? filePath)
     {
         var details = ReadDetailed(filePath);
-        return new CompanionTextMetadata(details.Sender, details.Topic, details.Title, details.Duration);
+        return new CompanionTextMetadata(details.Sender, details.Topic, details.Title, details.Duration, details.ExpectedSizeBytes);
     }
 
     /// <summary>
@@ -90,10 +90,50 @@ internal static class CompanionTextMetadataReader
         var title = ReadLabeledValue(content, "Titel");
         var durationText = ReadLabeledValue(content, "Dauer");
         var duration = TimeSpan.TryParse(durationText, out var parsedDuration) ? (TimeSpan?)parsedDuration : null;
+        var expectedSizeBytes = TryParseFileSize(ReadLabeledValue(content, "Größe") ?? ReadLabeledValue(content, "Groesse"));
         var websiteUrl = ReadSectionUrl(content, "Website");
         var mediaUrl = ReadSectionUrl(content, "URL");
 
-        return new CompanionTextDetails(sender, topic, title, duration, websiteUrl, mediaUrl);
+        return new CompanionTextDetails(sender, topic, title, duration, expectedSizeBytes, websiteUrl, mediaUrl);
+    }
+
+    private static long? TryParseFileSize(string? rawValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(
+            rawValue,
+            @"(?<value>\d+(?:[.,]\d+)?)\s*(?<unit>Bytes?|[KMGT]i?B)",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var normalizedValue = match.Groups["value"].Value.Replace(',', '.');
+        if (!double.TryParse(
+                normalizedValue,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var value)
+            || value < 0)
+        {
+            return null;
+        }
+
+        var multiplier = match.Groups["unit"].Value.ToUpperInvariant() switch
+        {
+            "KB" or "KIB" => 1024d,
+            "MB" or "MIB" => 1024d * 1024d,
+            "GB" or "GIB" => 1024d * 1024d * 1024d,
+            "TB" or "TIB" => 1024d * 1024d * 1024d * 1024d,
+            _ => 1d
+        };
+
+        return (long)Math.Round(value * multiplier);
     }
 
     private static string? ReadSectionUrl(string content, string sectionTitle)
@@ -109,9 +149,9 @@ internal static class CompanionTextMetadataReader
 /// <summary>
 /// Kleines, projektweit wiederverwendbares Abbild der TXT-Begleitmetadaten einer Quelle.
 /// </summary>
-internal sealed record CompanionTextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration)
+internal sealed record CompanionTextMetadata(string? Sender, string? Topic, string? Title, TimeSpan? Duration, long? ExpectedSizeBytes)
 {
-    public static CompanionTextMetadata Empty { get; } = new(null, null, null, null);
+    public static CompanionTextMetadata Empty { get; } = new(null, null, null, null, null);
 }
 
 /// <summary>
@@ -122,8 +162,9 @@ internal sealed record CompanionTextDetails(
     string? Topic,
     string? Title,
     TimeSpan? Duration,
+    long? ExpectedSizeBytes,
     string? WebsiteUrl,
     string? MediaUrl)
 {
-    public static CompanionTextDetails Empty { get; } = new(null, null, null, null, null, null);
+    public static CompanionTextDetails Empty { get; } = new(null, null, null, null, null, null, null);
 }

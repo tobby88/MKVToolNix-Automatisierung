@@ -23,7 +23,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var primaryVideoCandidate = context.PrimaryVideoCandidate
             ?? throw new InvalidOperationException("Es konnte keine primäre Videoquelle für diese Episode ermittelt werden.");
         var selectedAudioDescription = SelectAudioDescriptionCandidate(context.AudioDescriptionCandidates, primaryVideoCandidate);
-        var notes = BuildDetectionNotes(mainVideoPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription);
+        var notes = BuildDetectionNotes(mainVideoPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
         var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
 
         ReportProgress(onProgress, "Erstelle Vorschlag...", 94);
@@ -59,7 +59,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             context.AudioDescriptionCandidates,
             context.PrimaryVideoCandidate,
             preferredFilePath: audioDescriptionPath);
-        var notes = BuildDetectionNotes(audioDescriptionPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription);
+        var notes = BuildDetectionNotes(audioDescriptionPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
         var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
 
         if (context.PrimaryVideoCandidate is null)
@@ -135,12 +135,26 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var selectedSeed = preparedContext.GetSelectedSeed(selectedPath);
         var selectedIdentity = selectedSeed.Identity;
         var episodeSeeds = preparedContext.GetEpisodeSeeds(selectedSeed);
+        var defectiveSeedHealth = DetectDefectiveVideoSeeds(episodeSeeds.AllEpisodeVideoSeeds);
+        var defectiveSeedPaths = defectiveSeedHealth
+            .Select(entry => entry.Seed.FilePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var usableEpisodeSeeds = episodeSeeds.AllEpisodeVideoSeeds
+            .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
+            .ToList();
+        var usableNormalSeeds = episodeSeeds.NormalVideoSeeds
+            .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
+            .ToList();
+        var usableAudioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
+            .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
+            .ToList();
+        var sourceHealthNotes = BuildSourceHealthNotes(defectiveSeedHealth);
         cancellationToken.ThrowIfCancellationRequested();
 
-        ReportProgress(onProgress, $"Prüfe {episodeSeeds.NormalVideoSeeds.Count} passende Videoquelle(n)...", 12);
+        ReportProgress(onProgress, $"Prüfe {usableNormalSeeds.Count} passende Videoquelle(n)...", 12);
         var allNormalCandidates = BuildNormalVideoCandidates(
             preparedContext,
-            episodeSeeds.NormalVideoSeeds,
+            usableNormalSeeds,
             mkvMergePath,
             companionFilesByBaseName,
             onProgress,
@@ -151,7 +165,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Where(candidate => excludedSourcePaths is null || !excludedSourcePaths.Contains(candidate.FilePath))
             .ToList();
 
-        var audioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
+        var audioDescriptionSeeds = usableAudioDescriptionSeeds
             .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
 
@@ -169,7 +183,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         {
             if (!allowMissingPrimaryVideo)
             {
-                throw new InvalidOperationException(noVideoCandidatesMessage);
+                var details = sourceHealthNotes.Count == 0
+                    ? string.Empty
+                    : " " + string.Join(" ", sourceHealthNotes);
+                throw new InvalidOperationException(noVideoCandidatesMessage + details);
             }
 
             return new EpisodeDetectionContext(
@@ -179,16 +196,22 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 null,
                 [],
                 [],
-                CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName),
-                audioDescriptionCandidates);
+                CollectRelatedEpisodeFilePaths(usableEpisodeSeeds, companionFilesByBaseName),
+                audioDescriptionCandidates,
+                sourceHealthNotes);
         }
 
         var episodeIdentity = SelectPreferredEpisodeIdentity(normalCandidates, selectedIdentity);
         var durationReferenceCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, durationReferenceCandidate);
         var primaryVideoCandidate = selectedVideoCandidates[0];
-        var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate);
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths(episodeSeeds.AllEpisodeVideoSeeds, companionFilesByBaseName);
+        var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
+            .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths(usableEpisodeSeeds, companionFilesByBaseName);
 
         return new EpisodeDetectionContext(
             directory,
@@ -198,7 +221,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             selectedVideoCandidates,
             subtitlePaths,
             relatedFilePaths,
-            audioDescriptionCandidates);
+            audioDescriptionCandidates,
+            sourceHealthNotes);
     }
 
     private AutoDetectedEpisodeFiles BuildDetectedFiles(
@@ -296,6 +320,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static IReadOnlyList<string> CollectSubtitlePathsFromSeeds(
+        IReadOnlyList<CandidateSeed> seeds,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
+    {
+        return seeds
+            .SelectMany(seed => FindExactSubtitleFiles(seed.FilePath, companionFilesByBaseName))
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 

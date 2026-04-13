@@ -243,6 +243,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*-\s*Kurzfilm\b.*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*$", string.Empty, RegexOptions.IgnoreCase);
+        // "Büttenwarder op Platt" ist bei NDR-Dateien keine eigene Episode, sondern
+        // ein redaktioneller Sprach-/Rubrikvorsatz im Titel. Ohne diese gezielte
+        // Bereinigung laufen normale, AD- und Platt-Quellen derselben Folge als
+        // getrennte Episoden auseinander und werden nach einem Batch-Skip nicht
+        // gemeinsam in den Done-/Papierkorb-Cleanup aufgenommen.
+        normalized = Regex.Replace(
+            normalized,
+            @"^\s*Büttenwarder\s+op\s+Platt\s*[-:_]\s*",
+            string.Empty,
+            RegexOptions.IgnoreCase);
         return normalized.Trim();
     }
 
@@ -366,7 +376,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<NormalVideoCandidate> SelectedVideoCandidates,
         IReadOnlyList<string> SubtitlePaths,
         IReadOnlyList<string> RelatedFilePaths,
-        IReadOnlyList<AudioDescriptionCandidate> AudioDescriptionCandidates);
+        IReadOnlyList<AudioDescriptionCandidate> AudioDescriptionCandidates,
+        IReadOnlyList<string> SourceHealthNotes);
 
     internal sealed record CandidateSeed(
         string FilePath,

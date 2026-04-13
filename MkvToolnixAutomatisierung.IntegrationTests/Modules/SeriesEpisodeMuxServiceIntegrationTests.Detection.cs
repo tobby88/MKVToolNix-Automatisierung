@@ -429,4 +429,91 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             detected.SuggestedOutputFilePath,
             StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsBuettenwarderOpPlattWithNormalAndAdSources()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "Neues aus Büttenwarder");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-buettenwarder-op-platt");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var normalVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Liebesnacht-2129643944.mp4");
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Liebesnacht (Audiodeskription)-0574946159.mp4");
+        var opPlattVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Büttenwarder op Platt_ Liebesnacht-1307924250.mp4");
+        var normalSubtitlePath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Liebesnacht-2129643944.srt", "subtitle");
+        var audioDescriptionSubtitlePath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Liebesnacht (Audiodeskription)-0574946159.srt", "ad subtitle");
+
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Liebesnacht-2129643944.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Liebesnacht\r\nDauer: 00:25:34");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Liebesnacht (Audiodeskription)-0574946159.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Liebesnacht (Audiodeskription)\r\nDauer: 00:25:34");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder op Platt_ Liebesnacht-1307924250.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Büttenwarder op Platt: Liebesnacht\r\nDauer: 00:25:34");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            normalVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            opPlattVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "nds"),
+            CreateAudioTrack(1, "AAC", language: "nds"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(opPlattVideoPath);
+
+        Assert.Equal("Liebesnacht", detected.SuggestedTitle);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, normalVideoPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, opPlattVideoPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, normalSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, audioDescriptionSubtitlePath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_DoesNotUseClearlyIncompleteMp4_ButKeepsItsSubtitles()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-incomplete-mp4");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-incomplete-mp4");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var normalVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+        var incompleteVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.mp4");
+        var incompleteSubtitlePath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.srt", "subtitle");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Bildungsschock-0186867506.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Bildungsschock\r\nDauer: 00:24:18");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Büttenwarder op Platt: Bildungsschock\r\nDauer: 00:24:25\r\nGröße: 700,9 MiB");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            normalVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            incompleteVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "nds"),
+            CreateAudioTrack(1, "AAC", language: "nds"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(normalVideoPath);
+
+        Assert.Equal(normalVideoPath, detected.MainVideoPath);
+        Assert.DoesNotContain(incompleteVideoPath, detected.AdditionalVideoPaths);
+        Assert.Contains(incompleteSubtitlePath, detected.SubtitlePaths);
+        Assert.DoesNotContain(detected.RelatedFilePaths, path => string.Equals(path, incompleteVideoPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.Notes, note => note.Contains("Defekte/unvollständige Quelle", StringComparison.OrdinalIgnoreCase));
+    }
 }

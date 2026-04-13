@@ -221,6 +221,79 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_SplitsDefectiveVideoFromUsableCompanionFiles_WhenTxtSizeShowsIncompleteDownload()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+        var subtitlePath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Neues aus Büttenwarder",
+            title: "Bildungsschock",
+            sizeText: "100,0 MiB");
+        CreateEmptyFile(subtitlePath);
+
+        var result = _service.Scan(_rootDirectory);
+
+        Assert.Collection(
+            result.Items,
+            defective =>
+            {
+                Assert.Equal(DownloadSortItemState.Defective, defective.State);
+                Assert.Equal("defekt", defective.SuggestedFolderName);
+                Assert.Equal(videoPath, Assert.Single(defective.FilePaths));
+                Assert.Contains("deutlich kleiner", defective.Note, StringComparison.Ordinal);
+            },
+            companionFiles =>
+            {
+                Assert.Equal(DownloadSortItemState.Ready, companionFiles.State);
+                Assert.Equal("Neues aus Büttenwarder", companionFiles.SuggestedFolderName);
+                Assert.DoesNotContain(videoPath, companionFiles.FilePaths);
+                Assert.Contains(textPath, companionFiles.FilePaths);
+                Assert.Contains(subtitlePath, companionFiles.FilePaths);
+            });
+    }
+
+    [Fact]
+    public void Scan_MarksTinyLongDurationVideoAsDefective_WhenTxtHasNoExpectedSize()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Der Alte-Der Alte_ Wunschkind-0264348449.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Der Alte-Der Alte_ Wunschkind-0264348449.txt");
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Der Alte",
+            title: "Der Alte: Wunschkind",
+            duration: "00:58:46");
+
+        var result = _service.Scan(_rootDirectory);
+
+        var defective = Assert.Single(result.Items, item => item.State == DownloadSortItemState.Defective);
+        Assert.Equal("defekt", defective.SuggestedFolderName);
+        Assert.Equal(videoPath, Assert.Single(defective.FilePaths));
+        Assert.Contains("auffällig klein", defective.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scan_DoesNotPlanRenameForDefectiveFolder()
+    {
+        var defectiveDirectory = Path.Combine(_rootDirectory, "defekt");
+        Directory.CreateDirectory(defectiveDirectory);
+        CreateEmptyFile(Path.Combine(defectiveDirectory, "Der Alte-Der Alte_ Wunschkind-0264348449.mp4"));
+        CreateCompanionText(
+            Path.Combine(defectiveDirectory, "Der Alte-Der Alte_ Wunschkind-0264348449.txt"),
+            topic: "Der Alte",
+            title: "Der Alte: Wunschkind",
+            duration: "00:58:46");
+
+        var result = _service.Scan(_rootDirectory);
+
+        Assert.Empty(result.FolderRenames);
+        Assert.Empty(result.Items);
+    }
+
+    [Fact]
     public void Apply_RenamesLegacyFolder_AndMovesLooseFilesIntoCanonicalDirectory()
     {
         var legacyDirectory = Path.Combine(_rootDirectory, "Der Kommissar und");
@@ -306,6 +379,37 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("KONFLIKT:", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Apply_MovesDefectiveVideoToDefectiveFolder_AndCompanionsToSeriesFolder()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+        var subtitlePath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Neues aus Büttenwarder",
+            title: "Bildungsschock",
+            sizeText: "100,0 MiB");
+        CreateEmptyFile(subtitlePath);
+
+        var scanResult = _service.Scan(_rootDirectory);
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            scanResult.Items
+                .Where(item => DownloadSortItemStates.IsSortable(item.State))
+                .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.SuggestedFolderName))
+                .ToList(),
+            scanResult.FolderRenames);
+
+        Assert.Equal(2, applyResult.MovedGroupCount);
+        Assert.Equal(3, applyResult.MovedFileCount);
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(videoPath))));
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "Neues aus Büttenwarder", Path.GetFileName(textPath))));
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "Neues aus Büttenwarder", Path.GetFileName(subtitlePath))));
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("DEFEKT:", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_rootDirectory))
@@ -326,17 +430,27 @@ public sealed class DownloadSortServiceTests : IDisposable
         File.WriteAllBytes(path, Enumerable.Repeat(value, length).ToArray());
     }
 
-    private static void CreateCompanionText(string path, string topic, string title)
+    private static void CreateCompanionText(
+        string path,
+        string topic,
+        string title,
+        string duration = "00:05:00",
+        string? sizeText = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(
-            path,
-            string.Join(
-                Environment.NewLine,
-                $"Thema:       {topic}",
-                string.Empty,
-                $"Titel:       {title}",
-                string.Empty,
-                "Dauer:       01:28:34"));
+        var lines = new List<string>
+        {
+            $"Thema:       {topic}",
+            string.Empty,
+            $"Titel:       {title}",
+            string.Empty,
+            $"Dauer:       {duration}"
+        };
+        if (!string.IsNullOrWhiteSpace(sizeText))
+        {
+            lines.Add($"Größe:       {sizeText}");
+        }
+
+        File.WriteAllText(path, string.Join(Environment.NewLine, lines));
     }
 }

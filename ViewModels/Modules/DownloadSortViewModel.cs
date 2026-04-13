@@ -149,11 +149,13 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public int ConflictCount => Items.Count(item => item.State == DownloadSortItemState.Conflict);
 
+    public int DefectiveCount => Items.Count(item => item.State == DownloadSortItemState.Defective);
+
     public int RenameCount => _currentFolderRenames.Count;
 
     public string SummaryText => ItemCount == 0
         ? "Keine losen Download-Dateien erkannt."
-        : $"{ItemCount} Paket(e), {ReadyCount} bereit{BuildReplacementSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e), {RenameCount} sichere Ordner-Umbenennung(en).";
+        : $"{ItemCount} Paket(e), {ReadyCount} bereit{BuildReplacementSummarySegment()}{BuildDefectiveSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e), {RenameCount} sichere Ordner-Umbenennung(en).";
 
     public string ScanTooltip => "Analysiert lose Dateien in der Wurzel des MediathekView-Downloadordners und schlaegt Serienordner vor.";
 
@@ -326,12 +328,15 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         if (e.PropertyName is nameof(DownloadSortItemViewModel.TargetFolderName))
         {
             EnsureTargetFolderOption(item.TargetFolderName);
-            var evaluation = _services.DownloadSort.EvaluateTarget(
-                SourceDirectory,
-                item.FilePaths,
-                item.TargetFolderName,
-                _currentFolderRenames);
-            item.ApplyEvaluation(evaluation);
+            if (item.State != DownloadSortItemState.Defective)
+            {
+                var evaluation = _services.DownloadSort.EvaluateTarget(
+                    SourceDirectory,
+                    item.FilePaths,
+                    item.TargetFolderName,
+                    _currentFolderRenames);
+                item.ApplyEvaluation(evaluation);
+            }
         }
 
         if (e.PropertyName is nameof(DownloadSortItemViewModel.TargetFolderName)
@@ -396,6 +401,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ReplacementCount));
         OnPropertyChanged(nameof(ReviewCount));
         OnPropertyChanged(nameof(ConflictCount));
+        OnPropertyChanged(nameof(DefectiveCount));
         OnPropertyChanged(nameof(RenameCount));
         OnPropertyChanged(nameof(SummaryText));
 
@@ -490,7 +496,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ProgressValue = 100;
         StatusText = ItemCount == 0
             ? "Keine losen Download-Dateien gefunden"
-            : $"Scan abgeschlossen: {ReadyCount} bereit{BuildReplacementSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
+            : $"Scan abgeschlossen: {ReadyCount} bereit{BuildReplacementSummarySegment()}{BuildDefectiveSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
     }
 
     private string BuildReplacementSummarySegment()
@@ -498,6 +504,13 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         return ReplacementCount == 0
             ? string.Empty
             : $", {ReplacementCount} ersetzen";
+    }
+
+    private string BuildDefectiveSummarySegment()
+    {
+        return DefectiveCount == 0
+            ? string.Empty
+            : $", {DefectiveCount} defekt";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

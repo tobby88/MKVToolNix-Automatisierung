@@ -125,6 +125,35 @@ public sealed partial class SeriesEpisodeMuxPlanner
             AttachmentPath: seed.AttachmentPath);
     }
 
+    private static List<(CandidateSeed Seed, MediaFileHealthResult Health)> DetectDefectiveVideoSeeds(IReadOnlyList<CandidateSeed> seeds)
+    {
+        var defectiveSeeds = new List<(CandidateSeed Seed, MediaFileHealthResult Health)>();
+        foreach (var seed in seeds)
+        {
+            var health = MediaFileHealth.CheckMp4FileAgainstDeclaredSize(seed.FilePath, seed.TextMetadata);
+            if (!health.IsUsable)
+            {
+                defectiveSeeds.Add((seed, health));
+            }
+        }
+
+        return defectiveSeeds;
+    }
+
+    private static List<string> BuildSourceHealthNotes(IReadOnlyList<(CandidateSeed Seed, MediaFileHealthResult Health)> defectiveSeedHealth)
+    {
+        return defectiveSeedHealth
+            .Select(entry =>
+            {
+                var reason = string.IsNullOrWhiteSpace(entry.Health.Reason)
+                    ? "MP4 wirkt defekt oder unvollständig."
+                    : entry.Health.Reason;
+                return $"Defekte/unvollständige Quelle wird nicht verwendet: {Path.GetFileName(entry.Seed.FilePath)} ({reason})";
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private EpisodeIdentity SelectPreferredEpisodeIdentity(IReadOnlyList<NormalVideoCandidate> candidates, EpisodeIdentity fallbackIdentity)
     {
         var bestCandidate = candidates
@@ -218,9 +247,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<NormalVideoCandidate> normalCandidates,
         IReadOnlyList<NormalVideoCandidate> selectedVideoCandidates,
         NormalVideoCandidate? primaryVideoCandidate,
-        AudioDescriptionCandidate? selectedAudioDescription)
+        AudioDescriptionCandidate? selectedAudioDescription,
+        IReadOnlyList<string> sourceHealthNotes)
     {
-        var notes = new List<string>();
+        var notes = sourceHealthNotes
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
         if (primaryVideoCandidate is not null
             && !string.Equals(selectedMainVideoPath, primaryVideoCandidate.FilePath, StringComparison.OrdinalIgnoreCase))

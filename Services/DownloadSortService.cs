@@ -15,6 +15,7 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class DownloadSortService
 {
     private const double SignificantlyLargerExistingVideoRatio = 1.2;
+    private const string DefectiveFolderName = "defekt";
 
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -97,7 +98,7 @@ internal sealed class DownloadSortService
         var folderRenames = BuildFolderRenamePlans(rootDirectory);
         var rootGroups = EnumerateLogicalGroups(rootDirectory);
         var candidates = rootGroups
-            .Select(group => BuildCandidate(rootDirectory, group, folderRenames))
+            .SelectMany(group => BuildCandidates(rootDirectory, group, folderRenames))
             .OrderBy(candidate => string.IsNullOrWhiteSpace(candidate.SuggestedFolderName))
             .ThenBy(candidate => candidate.SuggestedFolderName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -271,7 +272,10 @@ internal sealed class DownloadSortService
                 logLines.Add($"ERSETZT: {request.DisplayName} -> {FormatConflictFileList(replacementDecision.ReplaceableConflicts)}");
             }
 
-            logLines.Add($"SORTIERT: {request.DisplayName} -> {targetFolderName} ({request.FilePaths.Count} Datei(en))");
+            var operationLabel = string.Equals(targetFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase)
+                ? "DEFEKT"
+                : "SORTIERT";
+            logLines.Add($"{operationLabel}: {request.DisplayName} -> {targetFolderName} ({request.FilePaths.Count} Datei(en))");
         }
 
         return new DownloadSortApplyResult(
@@ -282,22 +286,75 @@ internal sealed class DownloadSortService
             logLines);
     }
 
-    private DownloadSortCandidate BuildCandidate(
+    private IReadOnlyList<DownloadSortCandidate> BuildCandidates(
         string rootDirectory,
         DownloadFileGroup group,
         IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
     {
-        var proposal = DetectFolderProposal(group.FilePaths);
-        var evaluation = EvaluateTarget(rootDirectory, group.FilePaths, proposal.SuggestedFolderName, folderRenames);
+        var defectiveVideoPaths = group.FilePaths
+            .Where(path => VideoExtensions.Contains(Path.GetExtension(path)))
+            .Select(path => new
+            {
+                FilePath = path,
+                Health = MediaFileHealth.CheckMp4File(path, CompanionTextMetadataReader.ReadDetailed(Path.ChangeExtension(path, ".txt")))
+            })
+            .Where(candidate => !candidate.Health.IsUsable)
+            .ToList();
+
+        if (defectiveVideoPaths.Count == 0)
+        {
+            return [BuildCandidate(rootDirectory, group.DisplayName, group.FilePaths, folderRenames)];
+        }
+
+        var candidates = new List<DownloadSortCandidate>();
+        var defectiveNote = BuildDefectiveVideoNote(defectiveVideoPaths.Select(candidate => candidate.Health.Reason).ToList());
+        candidates.Add(new DownloadSortCandidate(
+            group.DisplayName,
+            defectiveVideoPaths.Select(candidate => candidate.FilePath).ToList(),
+            DetectedSeriesName: null,
+            SuggestedFolderName: DefectiveFolderName,
+            DownloadSortItemState.Defective,
+            defectiveNote));
+
+        // Nicht-Video-Begleitdateien bleiben als eigener normaler Sortierkandidat erhalten.
+        // Gerade ORF-/Mediathek-Fehldownloads liefern häufig brauchbare Untertitel, obwohl
+        // die MP4 nur ein abgebrochener Kurz- oder Platzhalterdownload ist.
+        var remainingFilePaths = group.FilePaths
+            .Except(defectiveVideoPaths.Select(candidate => candidate.FilePath), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (remainingFilePaths.Count > 0)
+        {
+            candidates.Add(BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames));
+        }
+
+        return candidates;
+    }
+
+    private DownloadSortCandidate BuildCandidate(
+        string rootDirectory,
+        string displayName,
+        IReadOnlyList<string> filePaths,
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
+    {
+        var proposal = DetectFolderProposal(filePaths);
+        var evaluation = EvaluateTarget(rootDirectory, filePaths, proposal.SuggestedFolderName, folderRenames);
         var note = MergeNotes(proposal.Note, evaluation.Note);
 
         return new DownloadSortCandidate(
-            group.DisplayName,
-            group.FilePaths,
+            displayName,
+            filePaths,
             proposal.DetectedSeriesName,
             proposal.SuggestedFolderName,
             evaluation.State,
             note);
+    }
+
+    private static string BuildDefectiveVideoNote(IReadOnlyList<string?> reasons)
+    {
+        var firstReason = reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
+        return string.IsNullOrWhiteSpace(firstReason)
+            ? "MP4 wirkt defekt oder unvollständig und wird in den Defekt-Ordner verschoben. Begleituntertitel bleiben separat einsortierbar."
+            : firstReason + " Datei wird in den Defekt-Ordner verschoben; Begleituntertitel bleiben separat einsortierbar.";
     }
 
     private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(string rootDirectory)
@@ -314,6 +371,11 @@ internal sealed class DownloadSortService
         {
             var currentFolderName = Path.GetFileName(directoryPath);
             if (string.IsNullOrWhiteSpace(currentFolderName))
+            {
+                continue;
+            }
+
+            if (string.Equals(currentFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -807,7 +869,12 @@ internal enum DownloadSortItemState
     /// <summary>
     /// Der Eintrag hat einen blockierenden Konflikt und wird nicht automatisch ausgeführt.
     /// </summary>
-    Conflict
+    Conflict,
+
+    /// <summary>
+    /// Der Eintrag enthält offensichtlich defekte oder unvollständige MP4-Dateien, die separat wegsortiert werden.
+    /// </summary>
+    Defective
 }
 
 /// <summary>
@@ -822,7 +889,7 @@ internal static class DownloadSortItemStates
     /// <returns><see langword="true"/>, wenn der Eintrag einsortiert werden darf.</returns>
     internal static bool IsSortable(DownloadSortItemState state)
     {
-        return state is DownloadSortItemState.Ready or DownloadSortItemState.ReadyWithReplacement;
+        return state is DownloadSortItemState.Ready or DownloadSortItemState.ReadyWithReplacement or DownloadSortItemState.Defective;
     }
 }
 

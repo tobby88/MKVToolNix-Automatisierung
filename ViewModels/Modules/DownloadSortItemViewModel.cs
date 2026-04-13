@@ -92,6 +92,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
         DownloadSortItemState.Ready => "Bereit",
         DownloadSortItemState.ReadyWithReplacement => "Ersetzen",
         DownloadSortItemState.Conflict => "Konflikt",
+        DownloadSortItemState.Defective => "Defekt",
         _ => "Pruefen"
     };
 

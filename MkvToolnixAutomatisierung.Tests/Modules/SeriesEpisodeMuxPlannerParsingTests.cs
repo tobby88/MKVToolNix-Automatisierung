@@ -58,6 +58,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeEpisodeTitle_RemovesBuettenwarderOpPlattEditorialPrefix()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Büttenwarder op Platt: Liebesnacht");
+
+        Assert.Equal("Liebesnacht", normalizedTitle);
+    }
+
+    [Fact]
     public void NormalizeSeparators_RepairsMojibakeAndUnicodeDashes()
     {
         var mojibake = "Stra\u00C3\u0178e \u2013 Teil 1";
