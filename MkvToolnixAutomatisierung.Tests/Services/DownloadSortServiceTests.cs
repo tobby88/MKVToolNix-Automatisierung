@@ -125,6 +125,36 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_SortsCandidatesByTargetFolder_BeforeDisplayName()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "ZZZ-Folge-1.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "ZZZ-Folge-1.txt"),
+            topic: "Die Heiland - Wir sind Anwalt",
+            title: "ZZZ-Folge");
+        CreateEmptyFile(Path.Combine(_rootDirectory, "AAA-Folge-1.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "AAA-Folge-1.txt"),
+            topic: "SOKO Leipzig",
+            title: "AAA-Folge");
+
+        var result = _service.Scan(_rootDirectory);
+
+        Assert.Collection(
+            result.Items,
+            first =>
+            {
+                Assert.Equal("Die Heiland", first.SuggestedFolderName);
+                Assert.Equal("ZZZ-Folge", first.DisplayName);
+            },
+            second =>
+            {
+                Assert.Equal("SOKO Leipzig", second.SuggestedFolderName);
+                Assert.Equal("AAA-Folge", second.DisplayName);
+            });
+    }
+
+    [Fact]
     public void Scan_MarksCandidateAsReady_WhenTargetAlreadyContainsComparableSameFile()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");

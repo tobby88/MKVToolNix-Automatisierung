@@ -218,14 +218,14 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             .ToList();
         if (selectedReadyItems.Count == 0)
         {
-            _dialogService.ShowWarning("Downloads", "Es sind keine einsortierbaren Einträge ausgewählt.");
+            _dialogService.ShowWarning("Einsortieren", "Es sind keine einsortierbaren Einträge ausgewählt.");
             return;
         }
 
         try
         {
             SetBusy(true);
-            StatusText = "Sortiere Downloads...";
+            StatusText = "Sortiere Dateien ein...";
             ProgressValue = 30;
 
             var requests = selectedReadyItems
@@ -350,7 +350,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             LogText = string.Empty;
         }
 
-        StatusText = "Analysiere lose Downloads...";
+        StatusText = "Analysiere lose Mediathek-Dateien...";
         ProgressValue = 15;
 
         var scanResult = await Task.Run(() => _services.DownloadSort.Scan(SourceDirectory));

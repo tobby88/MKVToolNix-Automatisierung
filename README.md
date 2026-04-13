@@ -23,10 +23,11 @@ Dabei geht es nicht nur um ein simples "Datei A plus Untertitel B muxen", sonder
 
 Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Sie will nicht jede denkbare MKV-Konstellation generisch erschlagen, sondern Serienepisoden aus deutsch geprägten Mediathek-Quellen zuverlässig und mit möglichst wenig manuellem Nacharbeiten verarbeiten.
 
-## Die zwei Arbeitsmodi
+## Module
 
-- `Einzelepisode`: für einen einzelnen Fall mit Vorschau, manueller Korrektur und anschließendem Mux
-- `Batch`: für einen kompletten Ordner mit Scan, Pflichtchecks, Ausführung, Cleanup und Protokoll
+- `Einzel-Mux`: für einen einzelnen Fall mit Vorschau, manueller Korrektur und anschließendem Mux
+- `Batch-Mux`: für einen kompletten Ordner mit Scan, Pflichtchecks, Ausführung, Cleanup und Protokoll
+- `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
 
 ## Voraussetzungen
 
@@ -51,9 +52,9 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 3. Optional `ffprobe` auswählen, wenn Laufzeiten möglichst zuverlässig über `ffprobe` ermittelt werden sollen.
 4. Bei Bedarf links unten die Standard-Serienbibliothek anpassen.
 5. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
-6. Danach mit `Einzelepisode` oder `Batch` arbeiten.
+6. Danach mit `Einzel-Mux`, `Batch-Mux` oder `Einsortieren` arbeiten.
 
-## Typischer Workflow: Einzelepisode
+## Typischer Workflow: Einzel-Mux
 
 1. `Hauptvideo wählen`.
 2. Automatische Erkennung für Quelle, Begleitdateien und Metadaten prüfen.
@@ -62,7 +63,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 5. `Vorschau erzeugen`, um den geplanten `mkvmerge`-Aufruf zu kontrollieren.
 6. `Muxen`, um die MKV tatsächlich zu erstellen.
 
-## Typischer Workflow: Batch
+## Typischer Workflow: Batch-Mux
 
 1. Quellordner wählen.
 2. Scan abwarten und gefundene Episoden prüfen.
@@ -76,6 +77,14 @@ Nach jedem Batch-Lauf:
 - bleibt das Batch-Protokoll in der GUI sichtbar
 - wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
 - wird dort auch eine Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend geprüft oder bei Bedarf in Emby katalogisiert werden können
+
+## Typischer Workflow: Einsortieren
+
+1. MediathekView-Downloadordner wählen oder den vorgeschlagenen Standardordner nutzen.
+2. `Neu scannen`, um lose Dateien in der Wurzel zu gruppieren.
+3. Zielordner und Hinweise prüfen.
+4. Bei Bedarf Zielordner manuell korrigieren oder einzelne Einträge abwählen.
+5. `Auswahl einsortieren`, um die Dateien in die Serienunterordner zu verschieben.
 
 ## Unterstützte Dateien
 

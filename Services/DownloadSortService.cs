@@ -98,7 +98,9 @@ internal sealed class DownloadSortService
         var rootGroups = EnumerateLogicalGroups(rootDirectory);
         var candidates = rootGroups
             .Select(group => BuildCandidate(rootDirectory, group, folderRenames))
-            .OrderBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(candidate => string.IsNullOrWhiteSpace(candidate.SuggestedFolderName))
+            .ThenBy(candidate => candidate.SuggestedFolderName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(candidate => candidate.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         return new DownloadSortScanResult(candidates, folderRenames);

@@ -56,15 +56,15 @@ internal static class UiCompositionModule
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
-                    "Einzelepisode",
-                    "Erkennen, prüfen, muxen",
+                    "Einzel-Mux",
+                    "Eine Episode erkennen, prüfen und muxen",
                     provider.GetRequiredService<SingleEpisodeMuxViewModel>()),
                 new ModuleNavigationItem(
-                    "Batch",
+                    "Batch-Mux",
                     "Ordner scannen und gesammelt muxen",
                     provider.GetRequiredService<BatchMuxViewModel>()),
                 new ModuleNavigationItem(
-                    "Downloads",
+                    "Einsortieren",
                     "MediathekView-Dateien in Serienordner einsortieren",
                     provider.GetRequiredService<DownloadSortViewModel>())
             ],

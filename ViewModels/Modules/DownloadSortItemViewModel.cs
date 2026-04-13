@@ -18,7 +18,6 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     {
         DisplayName = candidate.DisplayName;
         FilePaths = candidate.FilePaths;
-        DetectedSeriesName = candidate.DetectedSeriesName ?? string.Empty;
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
         _note = candidate.Note;
@@ -30,12 +29,6 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public string DisplayName { get; }
 
     public IReadOnlyList<string> FilePaths { get; }
-
-    public string DetectedSeriesName { get; }
-
-    public int FileCount => FilePaths.Count;
-
-    public string FilesDisplayText => string.Join(Environment.NewLine, FilePaths.Select(Path.GetFileName));
 
     public bool IsSelected
     {
