@@ -69,7 +69,7 @@
                                         Width="2.3*"
                                         MinWidth="220"
                                         IsReadOnly="True" />
-                    <DataGridTextColumn Header="Serie erkannt"
+                    <DataGridTextColumn Header="Ordner erkannt"
                                         Binding="{Binding DetectedSeriesName}"
                                         Width="1.2*"
                                         MinWidth="160"
