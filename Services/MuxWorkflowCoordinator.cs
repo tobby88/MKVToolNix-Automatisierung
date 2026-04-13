@@ -28,7 +28,8 @@ internal interface IMuxWorkflowCoordinator
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
         Action<MuxExecutionUpdate>? onUpdate = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        MuxWorkflowTemporaryCleanup temporaryCleanup = MuxWorkflowTemporaryCleanup.DeleteWorkingCopy);
 }
 
 /// <summary>
@@ -99,18 +100,24 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
     }
 
     /// <summary>
-    /// Führt den zum Plan passenden Lauf aus, invalidiert danach Probe-Caches und entfernt temporäre Arbeitskopien.
+    /// Führt den zum Plan passenden Lauf aus, invalidiert danach Probe-Caches und räumt die temporäre Arbeitskopie je nach Aufrufermodus auf.
     /// </summary>
     /// <param name="plan">Auszuführender Mux-Plan.</param>
     /// <param name="onOutput">Optionaler Callback für rohe Prozessausgabe.</param>
     /// <param name="onUpdate">Optionaler Callback für strukturierten Mux-Fortschritt.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <param name="temporaryCleanup">
+    /// Legt fest, ob die Arbeitskopie sofort gelöscht wird oder für einen nachgelagerten Cleanup-Schritt erhalten bleibt.
+    /// Der Single-Modus nutzt weiterhin das direkte Löschen; der Batch-Modus verschiebt Arbeitskopien zusammen mit den
+    /// ursprünglichen Quellen in den Done-Ordner, damit der abschließende Papierkorb-Schritt alle Laufartefakte bündelt.
+    /// </param>
     /// <returns>Exitcode, Warnungsstatus und letzter bekannter Fortschritt.</returns>
     public async Task<MuxExecutionResult> ExecuteMuxAsync(
         SeriesEpisodeMuxPlan plan,
         Action<string>? onOutput = null,
         Action<MuxExecutionUpdate>? onUpdate = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        MuxWorkflowTemporaryCleanup temporaryCleanup = MuxWorkflowTemporaryCleanup.DeleteWorkingCopy)
     {
         try
         {
@@ -122,7 +129,10 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
         finally
         {
             _muxService.InvalidatePlanOutputs(plan);
-            _cleanupService.DeleteTemporaryFile(plan.WorkingCopy?.DestinationFilePath);
+            if (temporaryCleanup == MuxWorkflowTemporaryCleanup.DeleteWorkingCopy)
+            {
+                _cleanupService.DeleteTemporaryFile(plan.WorkingCopy?.DestinationFilePath);
+            }
         }
     }
 
@@ -144,3 +154,19 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
 /// Fortschrittsmeldung für die Vorbereitung einer lokalen Arbeitskopie.
 /// </summary>
 internal sealed record WorkingCopyPreparationUpdate(int ProgressPercent, bool ReusesExistingCopy);
+
+/// <summary>
+/// Beschreibt, wer nach einem Werkzeuglauf für temporäre Arbeitskopien verantwortlich ist.
+/// </summary>
+internal enum MuxWorkflowTemporaryCleanup
+{
+    /// <summary>
+    /// Die Arbeitskopie wird direkt im Workflow-Finalizer gelöscht. Das ist der Standard für Einzellauf und Tests.
+    /// </summary>
+    DeleteWorkingCopy,
+
+    /// <summary>
+    /// Die Arbeitskopie bleibt erhalten und muss vom Aufrufer bewusst verschoben oder gelöscht werden.
+    /// </summary>
+    KeepWorkingCopy
+}

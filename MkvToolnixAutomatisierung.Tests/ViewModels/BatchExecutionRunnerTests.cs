@@ -166,6 +166,47 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePlansAsync_MovesWorkingCopyToDone_WhenBatchMuxSucceeded()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "work-copy", "Episode.mkv");
+        var workingCopySource = CreateFile("existing-archive.mkv", "archive");
+        var workingCopyDestination = CreateFile("Episode - Arbeitskopie.mkv", "working-copy");
+        var movedWorkingCopy = Path.Combine(_tempDirectory, "done", "Episode - Arbeitskopie.mkv");
+        var muxWorkflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (plan, _) =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(plan.OutputFilePath)!);
+                File.WriteAllText(plan.OutputFilePath, "muxed");
+                return Task.FromResult(new MuxExecutionResult(0, HasWarning: false, LastProgressPercent: 100));
+            }
+        };
+        var cleanup = new StubCleanupService
+        {
+            MoveResult = new FileMoveResult([movedWorkingCopy], [])
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, cleanup);
+        var item = CreateBatchEpisodeItem(outputPath);
+        var plan = CreatePlan(outputPath, CreateCopyPlan(
+            workingCopySource,
+            workingCopyDestination,
+            new FileInfo(workingCopySource).Length));
+
+        var outcome = await runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(item, plan, [])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            _ => { });
+
+        Assert.Equal(1, outcome.SuccessCount);
+        Assert.Equal(movedWorkingCopy, Assert.Single(outcome.MovedDoneFiles));
+        Assert.Equal(workingCopyDestination, Assert.Single(cleanup.LastMoveSourceFiles));
+        Assert.Equal(MuxWorkflowTemporaryCleanup.KeepWorkingCopy, Assert.Single(muxWorkflow.TemporaryCleanupModes));
+    }
+
+    [Fact]
     public async Task ExecutePlansAsync_TreatsExitCodeOneWithOutputFileAsWarning()
     {
         var outputPath = Path.Combine(_tempDirectory, "warning", "Episode.mkv");
@@ -500,6 +541,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     private sealed class StubMuxWorkflowCoordinator : IMuxWorkflowCoordinator
     {
         public Func<SeriesEpisodeMuxPlan, CancellationToken, Task<MuxExecutionResult>>? ExecuteMuxOverride { get; init; }
+        public List<MuxWorkflowTemporaryCleanup> TemporaryCleanupModes { get; } = [];
 
         public bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
         {
@@ -519,8 +561,10 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             SeriesEpisodeMuxPlan plan,
             Action<string>? onOutput = null,
             Action<MuxExecutionUpdate>? onUpdate = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            MuxWorkflowTemporaryCleanup temporaryCleanup = MuxWorkflowTemporaryCleanup.DeleteWorkingCopy)
         {
+            TemporaryCleanupModes.Add(temporaryCleanup);
             if (ExecuteMuxOverride is null)
             {
                 return Task.FromResult(new MuxExecutionResult(0, HasWarning: false, LastProgressPercent: 100));

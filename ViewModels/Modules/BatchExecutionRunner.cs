@@ -138,7 +138,8 @@ internal sealed class BatchExecutionRunner
                     plan,
                     line => appendLog($"  {line}"),
                     update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning),
-                    cancellationToken);
+                    cancellationToken,
+                    MuxWorkflowTemporaryCleanup.KeepWorkingCopy);
 
                 if (result.ExitCode == 0 && !result.HasWarning)
                 {
@@ -222,7 +223,7 @@ internal sealed class BatchExecutionRunner
         CancellationToken cancellationToken = default)
     {
         var item = workItem.Item;
-        var cleanupFiles = workItem.CleanupFiles;
+        var cleanupFiles = BuildDoneCleanupFileList(workItem);
         if (cleanupFiles.Count == 0)
         {
             return [];
@@ -248,6 +249,27 @@ internal sealed class BatchExecutionRunner
         _cleanupService.DeleteEmptyParentDirectories(cleanupFiles, Path.GetDirectoryName(doneDirectory));
 
         return moveResult.MovedFiles;
+    }
+
+    private static IReadOnlyList<string> BuildDoneCleanupFileList(BatchExecutionWorkItem workItem)
+    {
+        var cleanupFiles = workItem.CleanupFiles.ToList();
+
+        // Arbeitskopien liegen technisch im Quellordner, wurden bisher aber bewusst aus
+        // der normalen Quellenliste herausgefiltert, damit sie im Single-Modus nicht
+        // versehentlich als echte Quelle gelten. Im Batch sollen sie nach erfolgreichem
+        // Lauf trotzdem denselben Done-/Papierkorb-Pfad wie die übrigen Quellen nehmen.
+        var workingCopyPath = workItem.Plan.WorkingCopy?.DestinationFilePath;
+        if (!string.IsNullOrWhiteSpace(workingCopyPath)
+            && File.Exists(workingCopyPath)
+            && !cleanupFiles.Contains(workingCopyPath, StringComparer.OrdinalIgnoreCase))
+        {
+            cleanupFiles.Add(workingCopyPath);
+        }
+
+        return cleanupFiles
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static string BuildWarningStatusText(SeriesEpisodeMuxPlan plan, MuxExecutionResult result)
