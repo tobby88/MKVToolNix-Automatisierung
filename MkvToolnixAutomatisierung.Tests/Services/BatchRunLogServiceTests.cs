@@ -75,7 +75,7 @@ public sealed class BatchRunLogServiceTests
         Assert.True(File.Exists(result.BatchLogPath));
         Assert.Null(result.NewOutputListPath);
         Assert.Empty(result.NewOutputFiles);
-        Assert.Equal(result.BatchLogPath, result.PreferredOpenPath);
+        Assert.Null(result.PreferredOpenPath);
 
         var batchLogText = File.ReadAllText(result.BatchLogPath);
         Assert.Contains("Neu erzeugte Ausgabedateien:", batchLogText);

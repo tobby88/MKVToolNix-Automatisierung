@@ -149,11 +149,9 @@ public sealed record BatchRunLogSaveResult(
     IReadOnlyList<string> NewOutputFiles)
 {
     /// <summary>
-    /// Liefert den Pfad, der dem Benutzer nach Batch-Abschluss bevorzugt geöffnet werden soll.
-    /// Wenn eine separate Liste neuer Ausgabedateien existiert, ist sie für die direkte Kontrolle
-    /// hilfreicher als das vollständige Laufprotokoll und hat deshalb Vorrang.
+    /// Liefert den Pfad, der dem Benutzer nach Batch-Abschluss automatisch geöffnet werden soll.
+    /// Dafür kommt bewusst nur die separate Liste neuer Ausgabedateien infrage; das vollständige
+    /// Batch-Protokoll bleibt zwar gespeichert, wird aber nicht als Fallback geöffnet.
     /// </summary>
-    public string PreferredOpenPath => string.IsNullOrWhiteSpace(NewOutputListPath)
-        ? BatchLogPath
-        : NewOutputListPath!;
+    public string? PreferredOpenPath => NewOutputListPath;
 }
