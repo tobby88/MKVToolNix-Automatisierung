@@ -125,13 +125,33 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
-    public void Scan_MarksCandidateAsConflict_WhenTargetAlreadyContainsSameFile()
+    public void Scan_MarksCandidateAsReady_WhenTargetAlreadyContainsComparableSameFile()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
         Directory.CreateDirectory(targetDirectory);
-        CreateEmptyFile(Path.Combine(targetDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"));
+        CreateFileWithByteLength(Path.Combine(targetDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"), length: 100);
 
-        CreateEmptyFile(Path.Combine(_rootDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"));
+        CreateFileWithByteLength(Path.Combine(_rootDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"), length: 100);
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.txt"),
+            topic: "Ostfriesenkrimis",
+            title: "Ostfriesensturm (S02/E05)");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+        Assert.Contains("wird ersetzt", item.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scan_MarksCandidateAsConflict_WhenExistingTargetVideoIsSignificantlyLarger()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
+        Directory.CreateDirectory(targetDirectory);
+        CreateFileWithByteLength(Path.Combine(targetDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"), length: 121);
+
+        CreateFileWithByteLength(Path.Combine(_rootDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4"), length: 100);
         CreateCompanionText(
             Path.Combine(_rootDirectory, "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.txt"),
             topic: "Ostfriesenkrimis",
@@ -141,7 +161,7 @@ public sealed class DownloadSortServiceTests : IDisposable
         var item = Assert.Single(result.Items);
 
         Assert.Equal(DownloadSortItemState.Conflict, item.State);
-        Assert.Contains("liegt bereits", item.Note, StringComparison.Ordinal);
+        Assert.Contains("deutlich größer", item.Note, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -177,6 +197,59 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.False(File.Exists(looseTextPath));
     }
 
+    [Fact]
+    public void Apply_OverwritesExistingTargetFile_WhenLooseVersionIsComparableOrLarger()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
+        var fileName = "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4";
+        var targetPath = Path.Combine(targetDirectory, fileName);
+        var loosePath = Path.Combine(_rootDirectory, fileName);
+        Directory.CreateDirectory(targetDirectory);
+        CreateFileWithByteLength(targetPath, length: 80, value: 1);
+        CreateFileWithByteLength(loosePath, length: 100, value: 2);
+
+        var scanResult = _service.Scan(_rootDirectory);
+        var item = Assert.Single(scanResult.Items);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.SuggestedFolderName)],
+            scanResult.FolderRenames);
+
+        Assert.Equal(1, applyResult.MovedGroupCount);
+        Assert.Equal(1, applyResult.MovedFileCount);
+        Assert.Equal(0, applyResult.SkippedGroupCount);
+        Assert.False(File.Exists(loosePath));
+        Assert.True(File.Exists(targetPath));
+        Assert.Equal(100, new FileInfo(targetPath).Length);
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("ERSETZT:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Apply_SkipsReplacement_WhenExistingTargetVideoIsSignificantlyLarger()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
+        var fileName = "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4";
+        var targetPath = Path.Combine(targetDirectory, fileName);
+        var loosePath = Path.Combine(_rootDirectory, fileName);
+        Directory.CreateDirectory(targetDirectory);
+        CreateFileWithByteLength(targetPath, length: 121, value: 1);
+        CreateFileWithByteLength(loosePath, length: 100, value: 2);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Ostfriesensturm", [loosePath], "Ostfriesenkrimis")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(loosePath));
+        Assert.True(File.Exists(targetPath));
+        Assert.Equal(121, new FileInfo(targetPath).Length);
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("KONFLIKT:", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_rootDirectory))
@@ -189,6 +262,12 @@ public sealed class DownloadSortServiceTests : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "content");
+    }
+
+    private static void CreateFileWithByteLength(string path, int length, byte value = 0)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, Enumerable.Repeat(value, length).ToArray());
     }
 
     private static void CreateCompanionText(string path, string topic, string title)

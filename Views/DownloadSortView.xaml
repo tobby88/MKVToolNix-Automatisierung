@@ -54,10 +54,13 @@
         <GroupBox Grid.Row="2" Header="Lose Download-Pakete">
             <DataGrid ItemsSource="{Binding Items}"
                       AutoGenerateColumns="False"
+                      CanUserResizeColumns="True"
                       CanUserAddRows="False"
                       CanUserDeleteRows="False"
+                      HorizontalScrollBarVisibility="Auto"
                       IsReadOnly="False"
                       IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                      ColumnWidth="*"
                       Margin="8"
                       MinHeight="180">
                 <DataGrid.Columns>
@@ -93,11 +96,19 @@
                                         Width="Auto"
                                         MinWidth="72"
                                         IsReadOnly="True" />
-                    <DataGridTextColumn Header="Hinweis"
-                                        Binding="{Binding Note}"
-                                        Width="2.5*"
-                                        MinWidth="280"
-                                        IsReadOnly="True" />
+                    <DataGridTemplateColumn Header="Hinweis"
+                                            Width="2.5*"
+                                            MinWidth="280"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="4,2"
+                                           Text="{Binding Note}"
+                                           TextWrapping="Wrap"
+                                           ToolTip="{Binding Note}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>

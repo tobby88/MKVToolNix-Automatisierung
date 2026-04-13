@@ -14,6 +14,8 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </remarks>
 internal sealed class DownloadSortService
 {
+    private const double SignificantlyLargerExistingVideoRatio = 1.2;
+
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".mp4",
@@ -22,6 +24,11 @@ internal sealed class DownloadSortService
         ".ass",
         ".vtt",
         ".ttml"
+    };
+
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4"
     };
 
     private static readonly HashSet<string> GenericSeriesLabels = new(StringComparer.OrdinalIgnoreCase)
@@ -140,19 +147,28 @@ internal sealed class DownloadSortService
             effectiveExistingDirectory = Path.Combine(rootDirectory, renamePlan.CurrentFolderName);
         }
 
-        var conflictingFile = FindConflictingTargetFile(filePaths, effectiveExistingDirectory);
-        if (conflictingFile is not null)
+        var replacementDecision = EvaluateExistingTargetFiles(filePaths, effectiveExistingDirectory);
+        if (replacementDecision.BlockingConflict is { } blockingConflict)
         {
             return new DownloadSortTargetEvaluation(
                 DownloadSortItemState.Conflict,
-                $"Im Zielordner liegt bereits {Path.GetFileName(conflictingFile)}.");
+                BuildBlockingConflictNote(blockingConflict));
+        }
+
+        if (replacementDecision.ReplaceableConflicts.Count > 0)
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.Ready,
+                MergeNotes(
+                    BuildReplacementNote(replacementDecision.ReplaceableConflicts),
+                    renamePlan is null ? string.Empty : BuildFolderRenameNote(renamePlan)));
         }
 
         if (renamePlan is not null)
         {
             return new DownloadSortTargetEvaluation(
                 DownloadSortItemState.Ready,
-                $"Vorhandener Serienordner wird vorab von '{renamePlan.CurrentFolderName}' nach '{renamePlan.TargetFolderName}' vereinheitlicht.");
+                BuildFolderRenameNote(renamePlan));
         }
 
         return new DownloadSortTargetEvaluation(
@@ -227,11 +243,11 @@ internal sealed class DownloadSortService
             var targetDirectory = Path.Combine(rootDirectory, targetFolderName);
             Directory.CreateDirectory(targetDirectory);
 
-            var conflictingFile = FindConflictingTargetFile(request.FilePaths, targetDirectory);
-            if (conflictingFile is not null)
+            var replacementDecision = EvaluateExistingTargetFiles(request.FilePaths, targetDirectory);
+            if (replacementDecision.BlockingConflict is { } blockingConflict)
             {
                 skippedGroupCount++;
-                logLines.Add($"KONFLIKT: {request.DisplayName} -> {Path.GetFileName(conflictingFile)} liegt bereits in '{targetFolderName}'.");
+                logLines.Add($"KONFLIKT: {request.DisplayName} -> {BuildBlockingConflictNote(blockingConflict)}");
                 continue;
             }
 
@@ -243,11 +259,16 @@ internal sealed class DownloadSortService
                     continue;
                 }
 
-                File.Move(filePath, destinationPath);
+                File.Move(filePath, destinationPath, overwrite: true);
                 movedFileCount++;
             }
 
             movedGroupCount++;
+            if (replacementDecision.ReplaceableConflicts.Count > 0)
+            {
+                logLines.Add($"ERSETZT: {request.DisplayName} -> {FormatConflictFileList(replacementDecision.ReplaceableConflicts)}");
+            }
+
             logLines.Add($"SORTIERT: {request.DisplayName} -> {targetFolderName} ({request.FilePaths.Count} Datei(en))");
         }
 
@@ -608,24 +629,103 @@ internal sealed class DownloadSortService
         return EpisodeFileNameHelper.SanitizePathSegment(targetFolderName.Trim());
     }
 
-    private static string? FindConflictingTargetFile(IReadOnlyList<string> filePaths, string targetDirectory)
+    private static DownloadSortReplacementDecision EvaluateExistingTargetFiles(
+        IReadOnlyList<string> filePaths,
+        string targetDirectory)
     {
         if (!Directory.Exists(targetDirectory))
         {
-            return null;
+            return DownloadSortReplacementDecision.Empty;
         }
 
+        var replaceableConflicts = new List<DownloadSortTargetFileConflict>();
         foreach (var filePath in filePaths)
         {
             var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
             if (File.Exists(destinationPath)
                 && !Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
             {
-                return destinationPath;
+                var conflict = new DownloadSortTargetFileConflict(
+                    filePath,
+                    destinationPath,
+                    new FileInfo(filePath).Length,
+                    new FileInfo(destinationPath).Length);
+
+                if (ShouldKeepExistingTargetFile(conflict))
+                {
+                    return new DownloadSortReplacementDecision(replaceableConflicts, conflict);
+                }
+
+                replaceableConflicts.Add(conflict);
             }
         }
 
-        return null;
+        return new DownloadSortReplacementDecision(replaceableConflicts, null);
+    }
+
+    /// <summary>
+    /// Schützt vorhandene Zielvideos nur dann vor dem Standard-Overwrite, wenn ein billiges,
+    /// lokales Signal klar gegen die neue Datei spricht. Eine echte Auflösungsprüfung wäre hier
+    /// unnötig teuer; bei MediathekView-Downloads ist eine deutlich größere Videodatei der
+    /// pragmatische Proxy für möglicherweise höhere Qualität oder bessere Auflösung.
+    /// </summary>
+    private static bool ShouldKeepExistingTargetFile(DownloadSortTargetFileConflict conflict)
+    {
+        if (!VideoExtensions.Contains(Path.GetExtension(conflict.SourcePath)))
+        {
+            return false;
+        }
+
+        if (conflict.SourceLengthBytes <= 0)
+        {
+            return conflict.TargetLengthBytes > 0;
+        }
+
+        return conflict.TargetLengthBytes >= conflict.SourceLengthBytes * SignificantlyLargerExistingVideoRatio;
+    }
+
+    private static string BuildReplacementNote(IReadOnlyList<DownloadSortTargetFileConflict> conflicts)
+    {
+        return conflicts.Count == 1
+            ? $"Gleichnamige Zieldatei wird ersetzt: {Path.GetFileName(conflicts[0].TargetPath)}."
+            : $"Gleichnamige Zieldateien werden ersetzt: {FormatConflictFileList(conflicts)}.";
+    }
+
+    private static string BuildFolderRenameNote(DownloadSortFolderRenamePlan renamePlan)
+    {
+        return $"Vorhandener Serienordner wird vorab von '{renamePlan.CurrentFolderName}' nach '{renamePlan.TargetFolderName}' vereinheitlicht.";
+    }
+
+    private static string BuildBlockingConflictNote(DownloadSortTargetFileConflict conflict)
+    {
+        return $"Vorhandene Zieldatei '{Path.GetFileName(conflict.TargetPath)}' ist deutlich größer ({FormatFileSize(conflict.TargetLengthBytes)} statt {FormatFileSize(conflict.SourceLengthBytes)}). Bitte prüfen.";
+    }
+
+    private static string FormatConflictFileList(IReadOnlyList<DownloadSortTargetFileConflict> conflicts)
+    {
+        var shownNames = conflicts
+            .Take(3)
+            .Select(conflict => Path.GetFileName(conflict.TargetPath))
+            .ToList();
+        var suffix = conflicts.Count > shownNames.Count
+            ? $" und {conflicts.Count - shownNames.Count} weitere"
+            : string.Empty;
+        return string.Join(", ", shownNames) + suffix;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        string[] units = ["Bytes", "KB", "MB", "GB", "TB"];
+        double value = Math.Max(0, bytes);
+        var unitIndex = 0;
+
+        while (value >= 1024 && unitIndex < units.Length - 1)
+        {
+            value /= 1024;
+            unitIndex++;
+        }
+
+        return $"{value:0.##} {units[unitIndex]}";
     }
 
     private static string MergeNotes(string left, string right)
@@ -667,6 +767,19 @@ internal sealed class DownloadSortService
     private sealed record DownloadFileGroup(
         string DisplayName,
         IReadOnlyList<string> FilePaths);
+
+    private sealed record DownloadSortReplacementDecision(
+        IReadOnlyList<DownloadSortTargetFileConflict> ReplaceableConflicts,
+        DownloadSortTargetFileConflict? BlockingConflict)
+    {
+        public static DownloadSortReplacementDecision Empty { get; } = new([], null);
+    }
+
+    private sealed record DownloadSortTargetFileConflict(
+        string SourcePath,
+        string TargetPath,
+        long SourceLengthBytes,
+        long TargetLengthBytes);
 }
 
 /// <summary>
