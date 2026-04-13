@@ -29,11 +29,24 @@ internal sealed class DownloadSortService
         "backstage",
         "der samstagskrimi",
         "filme",
+        "hallo deutschland",
         "riverboat"
     };
 
     private static readonly IReadOnlyList<DownloadSeriesAliasGroup> AliasGroups =
     [
+        new(
+            "Die Heiland",
+            [
+                "Die Heiland",
+                "Die Heiland - Wir sind Anwalt"
+            ]),
+        new(
+            "Ein Fall für Zwei",
+            [
+                "Ein Fall für Zwei",
+                "Ein Fall für zwei"
+            ]),
         new(
             "Der Kommissar und das Meer",
             [
@@ -50,7 +63,19 @@ internal sealed class DownloadSortService
             "Pettersson und Findus",
             [
                 "Pettersson und Findus"
+            ]),
+        new(
+            "SOKO Leipzig",
+            [
+                "SOKO Leipzig"
             ])
+    ];
+
+    private static readonly IReadOnlyList<DownloadSpecialTitleFolderRule> SpecialTitleFolderRules =
+    [
+        new(
+            "Die Mucklas",
+            "Pettersson und Findus")
     ];
 
     /// <summary>
@@ -312,9 +337,7 @@ internal sealed class DownloadSortService
         var exactCandidates = new (string? Value, string Note)[]
         {
             (textDetails.Topic, "Serienordner aus TXT-Thema abgeleitet."),
-            (fileParts.SeriesPrefix, "Serienordner aus Dateiname abgeleitet."),
-            (TryExtractSeriesPrefix(textDetails.Title), "Serienordner aus TXT-Titel abgeleitet."),
-            (TryExtractSeriesPrefix(fileParts.Remainder), "Serienordner aus Titelprefix abgeleitet.")
+            (fileParts.SeriesPrefix, "Serienordner aus Dateiname abgeleitet.")
         };
 
         foreach (var candidate in exactCandidates)
@@ -334,7 +357,7 @@ internal sealed class DownloadSortService
 
         foreach (var fragment in new[] { textDetails.Title, fileParts.Remainder, Path.GetFileNameWithoutExtension(representativePath) })
         {
-            if (!TryResolveSeriesFromContainedAlias(fragment, out var resolvedSeriesName))
+            if (!TryResolveSeriesFromTitleFragment(fragment, out var resolvedSeriesName))
             {
                 continue;
             }
@@ -378,7 +401,7 @@ internal sealed class DownloadSortService
         return true;
     }
 
-    private static bool TryResolveSeriesFromContainedAlias(string? fragment, out string resolvedSeriesName)
+    private static bool TryResolveSeriesFromTitleFragment(string? fragment, out string resolvedSeriesName)
     {
         resolvedSeriesName = string.Empty;
         if (string.IsNullOrWhiteSpace(fragment))
@@ -392,6 +415,11 @@ internal sealed class DownloadSortService
             return false;
         }
 
+        if (TryResolveSpecialTitleFolderRule(normalizedFragment, out resolvedSeriesName))
+        {
+            return true;
+        }
+
         var match = AliasGroups
             .SelectMany(group => group.Aliases.Select(alias => new
             {
@@ -399,8 +427,7 @@ internal sealed class DownloadSortService
                 Alias = alias,
                 NormalizedAlias = EpisodeMetadataMatchingHeuristics.NormalizeText(alias)
             }))
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.NormalizedAlias)
-                && normalizedFragment.Contains(entry.NormalizedAlias, StringComparison.OrdinalIgnoreCase))
+            .Where(entry => IsContainedSeriesAliasMatch(fragment, normalizedFragment, entry.Alias, entry.NormalizedAlias))
             .OrderByDescending(entry => entry.NormalizedAlias.Length)
             .FirstOrDefault();
 
@@ -411,6 +438,57 @@ internal sealed class DownloadSortService
 
         resolvedSeriesName = match.CanonicalFolderName;
         return true;
+    }
+
+    private static bool TryResolveSpecialTitleFolderRule(string normalizedFragment, out string targetFolderName)
+    {
+        foreach (var rule in SpecialTitleFolderRules)
+        {
+            var normalizedMarker = EpisodeMetadataMatchingHeuristics.NormalizeText(rule.TitleMarker);
+            if (string.IsNullOrWhiteSpace(normalizedMarker))
+            {
+                continue;
+            }
+
+            if (normalizedFragment.StartsWith(normalizedMarker + " ", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(normalizedFragment, normalizedMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                targetFolderName = rule.TargetFolderName;
+                return true;
+            }
+        }
+
+        targetFolderName = string.Empty;
+        return false;
+    }
+
+    private static bool IsContainedSeriesAliasMatch(
+        string fragment,
+        string normalizedFragment,
+        string alias,
+        string normalizedAlias)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedAlias))
+        {
+            return false;
+        }
+
+        // Generische Mediathek-Rubriken wie "Filme" duerfen nur dann aus dem Titel
+        // auf eine konkrete Serie fallen, wenn die Serie am Anfang steht oder im
+        // redaktionellen Text klar markiert ist. Bekannte Sondertitel werden separat
+        // behandelt; blosse beilaeufige Erwaehnungen sollen dagegen keine automatische
+        // Zielordnerentscheidung ausloesen.
+        if (normalizedFragment.StartsWith(normalizedAlias + " ", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedFragment, normalizedAlias, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var escapedAlias = Regex.Escape(alias);
+        return Regex.IsMatch(
+            fragment,
+            $@"[""'\u201E\u201C_]\s*{escapedAlias}\s*[""'\u201C\u201D_]",
+            RegexOptions.IgnoreCase);
     }
 
     private static bool TryResolveExactAlias(string candidate, out string canonicalSeriesName)
@@ -452,26 +530,6 @@ internal sealed class DownloadSortService
     private static bool IsGenericSeriesLabel(string value)
     {
         return GenericSeriesLabels.Contains(EpisodeMetadataMatchingHeuristics.NormalizeText(value));
-    }
-
-    private static string? TryExtractSeriesPrefix(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators(value);
-        var match = Regex.Match(
-            normalized,
-            @"^(?<series>.+?)(?:\s+-\s+|_\s*|:\s+)(?<title>.+)$",
-            RegexOptions.IgnoreCase);
-        if (!match.Success)
-        {
-            return null;
-        }
-
-        return NormalizeSeriesCandidate(match.Groups["series"].Value);
     }
 
     private static ParsedDownloadName ParseDownloadFileName(string filePath)
@@ -592,6 +650,10 @@ internal sealed class DownloadSortService
     private sealed record DownloadSeriesAliasGroup(
         string CanonicalFolderName,
         IReadOnlyList<string> Aliases);
+
+    private sealed record DownloadSpecialTitleFolderRule(
+        string TitleMarker,
+        string TargetFolderName);
 
     private sealed record ParsedDownloadName(
         string SeriesPrefix,

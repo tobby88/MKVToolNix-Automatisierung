@@ -57,6 +57,74 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_MapsKnownMucklasSpecialCase_ToPetterssonAndFindusFolder()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "Filme-Die Mucklas - Ein neues Abenteuer-1864316966.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "Filme-Die Mucklas - Ein neues Abenteuer-1864316966.txt"),
+            topic: "Filme",
+            title: "Die Mucklas - Ein neues Abenteuer");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("Pettersson und Findus", item.DetectedSeriesName);
+        Assert.Equal("Pettersson und Findus", item.SuggestedFolderName);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+    }
+
+    [Fact]
+    public void Scan_MapsEditorialTitleWithQuotedSeriesAlias()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "hallo deutschland-Antoine Monot in Jubilaeumsstaffel-1234.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "hallo deutschland-Antoine Monot in Jubilaeumsstaffel-1234.txt"),
+            topic: "hallo deutschland",
+            title: "Antoine Monot in Jubilaeumsstaffel - \"Ein Fall für zwei\" feiert 10 Jahre Jubilaeum");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("Ein Fall für Zwei", item.DetectedSeriesName);
+        Assert.Equal("Ein Fall für Zwei", item.SuggestedFolderName);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+    }
+
+    [Fact]
+    public void Scan_MapsMagazineTitleWithQuotedSokoLeipzigAlias()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "Riverboat-Marco Girnth ueber den Abschied von SOKO Leipzig-1234.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "Riverboat-Marco Girnth ueber den Abschied von SOKO Leipzig-1234.txt"),
+            topic: "Riverboat",
+            title: "Marco Girnth ueber den Abschied von \"SOKO Leipzig\"");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("SOKO Leipzig", item.DetectedSeriesName);
+        Assert.Equal("SOKO Leipzig", item.SuggestedFolderName);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+    }
+
+    [Fact]
+    public void Scan_MapsDieHeilandLongBroadcastName_ToExistingShortFolderName()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "Die Heiland - Wir sind Anwalt-Biggis Blond (S04_E27)-0475816257.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "Die Heiland - Wir sind Anwalt-Biggis Blond (S04_E27)-0475816257.txt"),
+            topic: "Die Heiland - Wir sind Anwalt",
+            title: "Biggis Blond (S04/E27)");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("Die Heiland", item.DetectedSeriesName);
+        Assert.Equal("Die Heiland", item.SuggestedFolderName);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+    }
+
+    [Fact]
     public void Scan_MarksCandidateAsConflict_WhenTargetAlreadyContainsSameFile()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
