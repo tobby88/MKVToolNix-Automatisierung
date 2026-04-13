@@ -78,6 +78,12 @@ jobs:
           git tag $tagName
           git push origin $tagName
 
+      - name: Build release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\build-release-notes.ps1 -Version '${{ inputs.version }}' -OutputPath '.\artifacts\release\release-notes.md'
+
       - name: Create GitHub release
         shell: pwsh
         env:
@@ -92,7 +98,8 @@ jobs:
             $assetPath,
             '--title',
             $tagName,
-            '--generate-notes'
+            '--notes-file',
+            '.\artifacts\release\release-notes.md'
           )
 
           if ('${{ inputs.prerelease }}' -eq 'true') {
