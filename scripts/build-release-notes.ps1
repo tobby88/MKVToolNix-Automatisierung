@@ -50,7 +50,28 @@ function Resolve-GeneratedNotes {
     return [string]$generated.body
 }
 
+function Resolve-CuratedNotesPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ReleaseVersion
+    )
+
+    $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot "docs\releases\$ReleaseVersion.md"))
+}
+
 $tagName = "v$Version"
+$curatedNotesPath = Resolve-CuratedNotesPath -ReleaseVersion $Version
+if (Test-Path -LiteralPath $curatedNotesPath) {
+    $outputDirectory = Split-Path -Parent $OutputPath
+    if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
+        New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
+    }
+
+    Copy-Item -LiteralPath $curatedNotesPath -Destination $OutputPath -Force
+    return
+}
+
 $generatedNotes = if ([string]::IsNullOrWhiteSpace($Repository)) {
     ''
 } else {
