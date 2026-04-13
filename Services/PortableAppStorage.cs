@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
@@ -8,12 +10,16 @@ internal static class PortableAppStorage
     private const string DataDirectoryName = "Data";
     private const string LogsDirectoryName = "Logs";
     private const string SettingsFileName = "settings.json";
+    private const string ReadmeFileName = "README.md";
+    private const string EmbeddedReadmeResourceName = "README.md";
 
     public static string AppDirectory => Path.GetFullPath(AppContext.BaseDirectory);
 
     public static string DataDirectory => Path.Combine(AppDirectory, DataDirectoryName);
 
     public static string LogsDirectory => Path.Combine(AppDirectory, LogsDirectoryName);
+
+    public static string ReadmeFilePath => Path.Combine(AppDirectory, ReadmeFileName);
 
     public static string SettingsFilePath => Path.Combine(DataDirectory, SettingsFileName);
 
@@ -29,6 +35,7 @@ internal static class PortableAppStorage
         }
 
         EnsureOptionalDirectoryExists(LogsDirectory);
+        EnsureBundledReadmeFileExists(warnings);
         VerifyDataDirectoryWritable(warnings);
 
         return warnings.Count == 0
@@ -97,6 +104,37 @@ internal static class PortableAppStorage
                 + Environment.NewLine
                 + Environment.NewLine
                 + $"Fehler beim Schreibtest: {ex.Message}");
+        }
+    }
+
+    private static void EnsureBundledReadmeFileExists(List<string> warnings)
+    {
+        try
+        {
+            if (File.Exists(ReadmeFilePath))
+            {
+                return;
+            }
+
+            using var readmeStream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream(EmbeddedReadmeResourceName);
+            if (readmeStream is null)
+            {
+                return;
+            }
+
+            using var outputStream = File.Create(ReadmeFilePath);
+            readmeStream.CopyTo(outputStream);
+        }
+        catch (Exception ex)
+        {
+            warnings.Add(
+                "Die eingebettete README konnte nicht neben der Anwendung angelegt werden."
+                + Environment.NewLine
+                + ReadmeFilePath
+                + Environment.NewLine
+                + Environment.NewLine
+                + $"Fehler beim Schreiben der Hilfedatei: {ex.Message}");
         }
     }
 }

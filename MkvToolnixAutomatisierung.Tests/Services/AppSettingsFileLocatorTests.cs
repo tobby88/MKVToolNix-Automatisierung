@@ -76,4 +76,22 @@ public sealed class AppSettingsFileLocatorTests
         Assert.True(File.Exists(PortableAppStorage.SettingsFilePath));
         Assert.Empty(Directory.EnumerateFiles(PortableAppStorage.DataDirectory, "settings.json.tmp-*"));
     }
+
+    [Fact]
+    public void LoadCombinedSettingsWithDiagnostics_WritesBundledReadme_WhenMissing()
+    {
+        if (File.Exists(PortableAppStorage.ReadmeFilePath))
+        {
+            File.Delete(PortableAppStorage.ReadmeFilePath);
+        }
+
+        var result = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
+
+        Assert.Equal(AppSettingsLoadStatus.LoadedDefaultsNoFile, result.Status);
+        Assert.True(File.Exists(PortableAppStorage.ReadmeFilePath));
+        Assert.Contains(
+            "MKVToolNix-Automatisierung",
+            File.ReadAllText(PortableAppStorage.ReadmeFilePath),
+            StringComparison.Ordinal);
+    }
 }

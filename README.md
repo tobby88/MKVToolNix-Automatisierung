@@ -42,6 +42,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
 - Verwendete Unterordner für portable Laufzeitdaten sind `.\Data` und `.\Logs`.
+- Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
 
@@ -183,50 +184,6 @@ im Projektordner:
 
 `<dein-projektordner>\mkvtoolnix-Automatisierung`
 
-## Manuelle Releases
-
-Für gelegentliche Releases gibt es einen bewusst manuell ausgelösten GitHub-Workflow unter `.github/workflows/release.yml`.
-
-Der Workflow:
-
-- wird nicht bei jedem Push ausgelöst
-- baut die App in `Release`
-- führt Unit- und Integrationstests seriell aus
-- veröffentlicht anschließend eine framework-dependent Single-File-Exe für `win-x64`
-- erstellt dazu ein Git-Tag `v<Version>` und eine GitHub-Release-Seite
-
-Die Release-Datei bleibt eine einzige `.exe`, enthält aber nicht mehr die komplette .NET-Laufzeit.  
-Dadurch wird das Release kleiner, benötigt auf dem Zielsystem aber eine installierte `.NET Desktop Runtime 9` für `win-x64`.  
-Die externen Werkzeuge `mkvmerge.exe` und optional `ffprobe.exe` bleiben bewusst separate Tools und werden nicht in die Release-Datei eingebettet.
-
-### Versionsnummern
-
-Die Release-Version wird beim manuellen Start des Workflows eingegeben und folgt bewusst einfachem SemVer:
-
-- `Major`: nur erhöhen, wenn du bewusst einen harten Bruch einführst
-- `Minor`: für neue Funktionen und größere fachliche Erweiterungen
-- `Patch`: für Bugfixes, kleine Verbesserungen und Doku-/Pflege-Releases
-
-Typische Beispiele:
-
-- `1.0.0` für einen ersten echten Release-Stand
-- `1.1.0` für neue fachliche Fähigkeiten ohne harten Bruch
-- `1.1.1` für reine Korrekturen auf demselben Stand
-
-Die Action erwartet die Eingabe ohne `v`, also zum Beispiel `1.4.0`.  
-Das Git-Tag und der Release-Name werden dann automatisch als `v1.4.0` erzeugt.
-
-### Lokaler Release-Build
-
-Wenn du denselben Release-Typ lokal bauen willst:
-
-```powershell
-.\scripts\publish-release.ps1 -Version 1.4.0
-```
-
-Das Skript erzeugt eine framework-dependent Single-File-Exe unter `.\artifacts\release\`.
-Das lokale Release ist ebenfalls framework-dependent und benötigt deshalb auf dem Zielsystem die passende `.NET Desktop Runtime 9`.
-
 ## Entwicklerdokumentation
 
 Das Projekt ist zusätzlich mit XML-Dokumentationskommentaren und einer DocFX-Konfiguration versehen.
@@ -249,6 +206,12 @@ Die erzeugte Seite landet unter `.\docs\_site`.
 Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
 
 Zusätzlich hält `.github/dependabot.yml` Versionsupdates für GitHub Actions und NuGet-Pakete automatisch im Blick.
+
+### Releases
+
+Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt ein Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
+
+Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 9`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
 
 ## Projektaufbau
 
