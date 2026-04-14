@@ -144,13 +144,13 @@ public sealed record ContainerMetadata(
 /// Beschreibt eine direkte Header-Anpassung an einer bereits vorhandenen MKV-Datei.
 /// </summary>
 /// <param name="Selector">
-/// Von <c>mkvpropedit</c> verstandener Edit-Selektor fuer genau den zu bearbeitenden Track.
+/// Von <c>mkvpropedit</c> verstandener Edit-Selektor für genau den zu bearbeitenden Track.
 /// Die Nummerierung folgt bewusst der Reihenfolge aus <c>mkvmerge --identify</c>, damit die
 /// Planung dieselbe Tracksicht nutzt wie der restliche Archivabgleich.
 /// </param>
-/// <param name="DisplayLabel">Lesbare Kurzbeschreibung der betroffenen Spur fuer GUI und Vorschau.</param>
+/// <param name="DisplayLabel">Lesbare Kurzbeschreibung der betroffenen Spur für GUI und Vorschau.</param>
 /// <param name="CurrentTrackName">Aktuell im Container gesetzter Trackname.</param>
-/// <param name="ExpectedTrackName">Projektweit erwarteter Zielname fuer diesen Track.</param>
+/// <param name="ExpectedTrackName">Projektweit erwarteter Zielname für diesen Track.</param>
 public sealed record TrackHeaderEditOperation(
     string Selector,
     string DisplayLabel,

@@ -17,9 +17,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? NormalizeSeriesName(textMetadata.Topic!)
             : NormalizeSeriesName(fileNameParts.SeriesName);
 
-        // Leere oder fehlende TXT-Metadaten duerfen keinen unbekannten Platzhalter ueber den
+        // Leere oder fehlende TXT-Metadaten dürfen keinen unbekannten Platzhalter über den
         // sauber erkannten Dateinamen legen. Der TXT-Titel hat nur dann Vorrang, wenn er
-        // tatsaechlich explizit vorhanden war.
+        // tatsächlich explizit vorhanden war.
         var title = hasExplicitTxtTitle && !string.IsNullOrWhiteSpace(txtTitleParts.Title)
             ? txtTitleParts.Title
             : fileNameParts.Title;

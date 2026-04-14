@@ -18,7 +18,7 @@ internal sealed class BatchOperationController : IDisposable
     public bool CanCancelCurrentOperation => _currentOperationSource is { IsCancellationRequested: false };
 
     /// <summary>
-    /// Beschriftung fuer den sichtbaren Abbrechen-Knopf passend zum laufenden Vorgang.
+    /// Beschriftung für den sichtbaren Abbrechen-Knopf passend zum laufenden Vorgang.
     /// </summary>
     public string CancelButtonText => CurrentOperationKind switch
     {
@@ -28,7 +28,7 @@ internal sealed class BatchOperationController : IDisposable
     };
 
     /// <summary>
-    /// Startet einen neuen cancelbaren Batch-Vorgang und liefert dessen Token zurueck.
+    /// Startet einen neuen cancelbaren Batch-Vorgang und liefert dessen Token zurück.
     /// </summary>
     /// <param name="operationKind">Art des gestarteten Vorgangs.</param>
     /// <returns>Abbruchtoken des neuen Vorgangs.</returns>
@@ -36,7 +36,7 @@ internal sealed class BatchOperationController : IDisposable
     {
         if (_currentOperationSource is not null)
         {
-            throw new InvalidOperationException("Ein Batch-Vorgang laeuft bereits.");
+            throw new InvalidOperationException("Ein Batch-Vorgang läuft bereits.");
         }
 
         _currentOperationSource = new CancellationTokenSource();
@@ -45,7 +45,7 @@ internal sealed class BatchOperationController : IDisposable
     }
 
     /// <summary>
-    /// Fordert fuer den aktuell laufenden Vorgang einen Benutzerabbruch an.
+    /// Fordert für den aktuell laufenden Vorgang einen Benutzerabbruch an.
     /// </summary>
     /// <returns><see langword="true"/>, wenn der Abbruch neu ausgelöst wurde.</returns>
     public bool CancelCurrentOperation()

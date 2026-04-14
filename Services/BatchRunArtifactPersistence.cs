@@ -8,7 +8,7 @@ internal static class BatchRunArtifactPersistence
     /// <summary>
     /// Schreibt die im aktuellen Lauf neu erzeugten Dateien in den Laufpuffer und speichert danach Logdatei und Dateiliste.
     /// </summary>
-    /// <param name="batchLogs">Service fuer die eigentliche Dateipersistenz.</param>
+    /// <param name="batchLogs">Service für die eigentliche Dateipersistenz.</param>
     /// <param name="sourceDirectory">Verarbeiteter Quellordner.</param>
     /// <param name="outputDirectory">Aktueller Ausgabeordner des Batch-Laufs.</param>
     /// <param name="newOutputFiles">Neu erzeugte Ausgabedateien des aktuellen Laufs.</param>
@@ -16,9 +16,9 @@ internal static class BatchRunArtifactPersistence
     /// <param name="successCount">Anzahl erfolgreicher Episoden.</param>
     /// <param name="warningCount">Anzahl Episoden mit Warnungen.</param>
     /// <param name="errorCount">Anzahl fehlgeschlagener Episoden.</param>
-    /// <param name="batchRunLogBuffer">Puffer nur fuer den aktuellen Batch-Lauf.</param>
+    /// <param name="batchRunLogBuffer">Puffer nur für den aktuellen Batch-Lauf.</param>
     /// <param name="appendBatchRunLog">Callback zum Spiegeln neuer Laufzeilen in die sichtbare UI.</param>
-    /// <returns>Persistierte Batch-Artefakte fuer den abgeschlossenen Lauf.</returns>
+    /// <returns>Persistierte Batch-Artefakte für den abgeschlossenen Lauf.</returns>
     public static BatchRunLogSaveResult Persist(
         BatchRunLogService batchLogs,
         string sourceDirectory,

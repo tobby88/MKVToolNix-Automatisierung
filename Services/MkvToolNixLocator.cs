@@ -1,7 +1,7 @@
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Findet die fuer das Projekt benoetigten MKVToolNix-Executables aus den gespeicherten Toolpfaden.
+/// Findet die für das Projekt benötigten MKVToolNix-Executables aus den gespeicherten Toolpfaden.
 /// </summary>
 public sealed class MkvToolNixLocator : IMkvToolNixLocator
 {

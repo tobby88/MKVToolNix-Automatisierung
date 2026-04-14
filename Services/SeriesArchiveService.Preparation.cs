@@ -326,9 +326,9 @@ public sealed partial class SeriesArchiveService
         var externalSubtitlePlans = requestedExternalSubtitlePlans
             .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();
-        // Aus Benutzersicht darf eine ausgewaehlte ASS/SRT-Datei nicht "verschwinden".
+        // Aus Benutzersicht darf eine ausgewählte ASS/SRT-Datei nicht "verschwinden".
         // Ist derselbe Typ+Sprache in der Ziel-MKV schon vorhanden, bleibt der externe Track
-        // fachlich korrekt unterdrueckt, wird aber als Hinweis am Plan dokumentiert.
+        // fachlich korrekt unterdrückt, wird aber als Hinweis am Plan dokumentiert.
         var suppressedExternalSubtitlePlans = requestedExternalSubtitlePlans
             .Where(subtitle => embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();

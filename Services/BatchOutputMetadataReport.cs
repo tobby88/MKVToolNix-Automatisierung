@@ -118,13 +118,13 @@ public sealed class BatchOutputTvdbMetadata
     public string? SeriesName { get; init; }
 
     /// <summary>
-    /// TVDB-Episoden-ID. Diese ID ist fuer Episoden-NFOs die wichtigste TVDB-ID.
+    /// TVDB-Episoden-ID. Diese ID ist für Episoden-NFOs die wichtigste TVDB-ID.
     /// </summary>
     public int? EpisodeId { get; init; }
 }
 
 /// <summary>
-/// Einheitlicher JSON-Zugriff fuer den strukturierten Batch-Metadatenreport.
+/// Einheitlicher JSON-Zugriff für den strukturierten Batch-Metadatenreport.
 /// </summary>
 internal static class BatchOutputMetadataReportJson
 {

@@ -13,7 +13,7 @@ public interface IFfprobeLocator
 }
 
 /// <summary>
-/// Liefert benutzbare Pfade zu den fuer dieses Projekt erforderlichen MKVToolNix-Werkzeugen.
+/// Liefert benutzbare Pfade zu den für dieses Projekt erforderlichen MKVToolNix-Werkzeugen.
 /// </summary>
 public interface IMkvToolNixLocator
 {

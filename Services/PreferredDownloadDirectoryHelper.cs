@@ -1,14 +1,14 @@
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Liefert den im Projekt bevorzugten Startordner fuer frische MediathekView-Downloads.
+/// Liefert den im Projekt bevorzugten Startordner für frische MediathekView-Downloads.
 /// </summary>
 internal static class PreferredDownloadDirectoryHelper
 {
     private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
 
     /// <summary>
-    /// Liefert den bevorzugten Downloadordner unterhalb des Benutzerprofils oder faellt auf Dokumente zurueck.
+    /// Liefert den bevorzugten Downloadordner unterhalb des Benutzerprofils oder fällt auf Dokumente zurück.
     /// </summary>
     public static string GetPreferredMediathekDownloadsDirectory()
     {
