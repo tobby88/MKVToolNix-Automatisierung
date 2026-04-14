@@ -480,6 +480,54 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task CreatePlanAsync_AdOnlyContinuation_AddsVariantNote_WhenArchiveContainsMatchingMultipartEpisodeVariant()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-episode-variant");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-episode-variant");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (2) ... es geht weiter (mit Audiodeskription).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (2) ... es geht weiter (mit Audiodeskription).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (2) ... es geht weiter (mit Audiodeskription)\r\nDauer: 00:26:13");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var seasonDirectory = Path.Combine(archiveDirectory, "Beispielserie", "Season 2014");
+        var outputPath = Path.Combine(seasonDirectory, "Beispielserie - S2014E06 - Rififi ... es geht weiter (2).mkv");
+        var doubleEpisodePath = Path.Combine(seasonDirectory, "Beispielserie - S2014E05-E06 - Rififi.mkv");
+        CreateFile(seasonDirectory, Path.GetFileName(outputPath), "archive-single");
+        CreateFile(seasonDirectory, Path.GetFileName(doubleEpisodePath), "archive-double");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            doubleEpisodePath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Rififi (2) ... es geht weiter (mit Audiodeskription)",
+            HasPrimaryVideoSource: false));
+
+        Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("Rififi … es geht weiter (2)", "Beispielserie - S2014E06 - Rififi … es geht weiter (2).mkv")]
     [InlineData("Olympische Rekorde (1): Rekord", "Beispielserie - S2014E05 - Olympische Rekorde (1) - Rekord.mkv")]
@@ -494,6 +542,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         var sourceFileTitle = title.Replace(':', '_');
         var mainVideoPath = CreateFile(sourceDirectory, $"Beispielserie - {sourceFileTitle} (S2014_E05).mp4");
+        var assSubtitlePath = CreateFile(sourceDirectory, $"Beispielserie - {sourceFileTitle} (S2014_E05).ass", "ass-subtitle");
         CreateFile(
             sourceDirectory,
             $"Beispielserie - {sourceFileTitle} (S2014_E05).txt",
@@ -515,7 +564,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         FakeMkvMergeTestHelper.WriteProbeFile(
             outputPath,
             CreateVideoTrack(0, "AVC/H.264", "1280x720"),
-            CreateAudioTrack(1, "E-AC-3"));
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(2, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
         FakeMkvMergeTestHelper.WriteProbeFile(
             multipartPath,
             CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
@@ -526,13 +576,15 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
             mainVideoPath,
             AudioDescriptionPath: null,
-            SubtitlePaths: [],
+            SubtitlePaths: [assSubtitlePath],
             AttachmentPaths: [],
             outputPath,
             Title: title));
 
         Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, assSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.Kind.DisplayName == "SRT");
     }
 
     [Fact]

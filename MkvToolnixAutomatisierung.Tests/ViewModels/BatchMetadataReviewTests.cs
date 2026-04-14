@@ -275,6 +275,88 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void ReviewPendingSourcesCommand_ApprovesPendingPlanReviewHints()
+    {
+        var dialogService = new FakeDialogService();
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+        item.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+        item.RefreshArchivePresence();
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.ReviewPendingSourcesCommand.Execute(null);
+
+        Assert.Equal(1, dialogService.ConfirmPlanReviewCallCount);
+        Assert.False(item.HasPendingPlanReview);
+        Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+    }
+
+    [Fact]
+    public void EditSelectedOutputCommand_UsesNearestExistingOutputParentDirectory()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-output-dialog-tests", Guid.NewGuid().ToString("N"));
+        var seriesDirectory = Path.Combine(tempDirectory, "Beispielserie");
+        Directory.CreateDirectory(seriesDirectory);
+        try
+        {
+            var dialogService = new FakeDialogService();
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+            var outputPath = Path.Combine(
+                seriesDirectory,
+                "Season 2014",
+                "Beispielserie - S2014E05-E06 - Rififi.mkv");
+            var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                requestedMainVideoPath: @"C:\Temp\episode.mp4",
+                CreateLocalGuess(),
+                CreateDetectedEpisode(),
+                new EpisodeMetadataResolutionResult(
+                    CreateLocalGuess(),
+                    Selection: null,
+                    StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                    ConfidenceScore: 0,
+                    RequiresReview: false,
+                    QueryWasAttempted: false,
+                    QuerySucceeded: false),
+                outputPath: outputPath,
+                statusKind: BatchEpisodeStatusKind.Ready,
+                isSelected: true,
+                isArchiveTargetPath: true);
+
+            viewModel.EpisodeItems.Add(item);
+            viewModel.SelectedEpisodeItem = item;
+
+            viewModel.EditSelectedOutputCommand.Execute(null);
+
+            Assert.Equal(seriesDirectory, dialogService.LastOutputInitialDirectory);
+            Assert.Equal(Path.GetFileName(outputPath), dialogService.LastOutputFileName);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task FreezeSelectedItemPlanSummaryForExecution_CancelsPendingSelectionRefresh()
     {
         var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
@@ -339,11 +421,13 @@ public sealed class BatchMetadataReviewTests
         Assert.Null(viewModel.SelectedEpisodeItem);
     }
 
-    private static BatchMuxViewModel CreateBatchViewModel(IEpisodeReviewWorkflow reviewWorkflow)
+    private static BatchMuxViewModel CreateBatchViewModel(
+        IEpisodeReviewWorkflow reviewWorkflow,
+        FakeDialogService? dialogService = null)
     {
         return new BatchMuxViewModel(
             ViewModelTestContext.CreateBatchServices(),
-            new FakeDialogService(),
+            dialogService ?? new FakeDialogService(),
             reviewWorkflow);
     }
 
@@ -437,11 +521,26 @@ public sealed class BatchMetadataReviewTests
 
     private sealed class FakeDialogService : IUserDialogService
     {
+        public int ConfirmPlanReviewCallCount { get; private set; }
+
+        public bool ConfirmPlanReviewResult { get; init; } = true;
+
+        public string? LastOutputInitialDirectory { get; private set; }
+
+        public string? LastOutputFileName { get; private set; }
+
+        public string? SelectedOutputPath { get; init; }
+
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
         public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
         public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
         public string[]? SelectAttachments(string initialDirectory) => throw new NotSupportedException();
-        public string? SelectOutput(string initialDirectory, string fileName) => throw new NotSupportedException();
+        public string? SelectOutput(string initialDirectory, string fileName)
+        {
+            LastOutputInitialDirectory = initialDirectory;
+            LastOutputFileName = fileName;
+            return SelectedOutputPath;
+        }
         public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
         public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
         public string? SelectFile(string title, string filter, string initialDirectory) => throw new NotSupportedException();
@@ -454,11 +553,22 @@ public sealed class BatchMetadataReviewTests
         public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();
         public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => throw new NotSupportedException();
         public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
+        public bool ConfirmPlanReview(string episodeTitle, string reviewText)
+        {
+            ConfirmPlanReviewCallCount++;
+            return ConfirmPlanReviewResult;
+        }
         public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
         public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => throw new NotSupportedException();
-        public void ShowInfo(string title, string message) => throw new NotSupportedException();
-        public void ShowWarning(string title, string message) => throw new NotSupportedException();
-        public void ShowError(string message) => throw new NotSupportedException();
+        public void ShowInfo(string title, string message)
+        {
+        }
+
+        public void ShowWarning(string title, string message)
+        {
+        }
+
+        public void ShowError(string message) => throw new InvalidOperationException(message);
     }
 }

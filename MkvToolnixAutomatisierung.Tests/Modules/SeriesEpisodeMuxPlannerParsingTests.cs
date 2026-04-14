@@ -50,6 +50,15 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeEpisodeTitle_RemovesMitAudioDescriptionMarker()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(
+            "Rififi (2) ... es geht weiter (mit Audiodeskription)");
+
+        Assert.Equal("Rififi (2) ... es geht weiter", normalizedTitle);
+    }
+
+    [Fact]
     public void NormalizeEpisodeTitle_RemovesShortFilmEditorialLabel()
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Goldenes Blut - Kurzfilm");

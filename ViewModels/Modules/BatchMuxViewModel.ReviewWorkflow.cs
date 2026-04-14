@@ -61,6 +61,7 @@ internal sealed partial class BatchMuxViewModel
     {
         // Die explizite Detailaktion im Batch soll den TVDB-Dialog immer wieder öffnen können.
         // Nur die automatische Pflichtprüfungs-Schleife filtert weiterhin separat auf offene Fälle.
+        var episodeChanged = false;
         var outcome = await _reviewWorkflow.ReviewMetadataAsync(
             item,
             SetStatus,
@@ -77,12 +78,23 @@ internal sealed partial class BatchMuxViewModel
                 : "TVDB-Zuordnung freigegeben",
             () =>
             {
+                episodeChanged = true;
+                _planCache.Invalidate(item);
                 RefreshAutomaticOutputPath(item);
-                if (ReferenceEquals(SelectedEpisodeItem, item))
-                {
-                    ScheduleSelectedItemPlanSummaryRefresh();
-                }
             });
+
+        // Eine manuelle TVDB- oder lokale Metadatenkorrektur kann Zielpfad, Titel und damit auch
+        // Archivhinweise verändern. Der Pflichtcheck darf danach nicht mit einer alten Vorschau
+        // weiterlaufen, sonst verschwinden Hinweise wie "Mehrfachfolge prüfen" bis zur nächsten
+        // manuellen Detailaktualisierung.
+        if (outcome != EpisodeMetadataReviewOutcome.Cancelled && episodeChanged)
+        {
+            await RefreshComparisonForItemAsync(item, preserveCurrentPresentation: false);
+        }
+        else if (ReferenceEquals(SelectedEpisodeItem, item))
+        {
+            ScheduleSelectedItemPlanSummaryRefresh();
+        }
 
         return outcome != EpisodeMetadataReviewOutcome.Cancelled;
     }
@@ -104,11 +116,9 @@ internal sealed partial class BatchMuxViewModel
             .Where(item => item.RequiresMetadataReview && !item.IsMetadataReviewApproved)
             .ToList();
 
-        var pendingPlanReviewItems = readyItems
-            .Where(item => item.HasPendingPlanReview)
-            .ToList();
-
-        if (pendingSourceItems.Count == 0 && pendingMetadataItems.Count == 0 && pendingPlanReviewItems.Count == 0)
+        if (pendingSourceItems.Count == 0
+            && pendingMetadataItems.Count == 0
+            && !readyItems.Any(item => item.HasPendingPlanReview))
         {
             SetStatus("Keine offenen Pflichtprüfungen", ProgressValue);
             return true;
@@ -138,13 +148,28 @@ internal sealed partial class BatchMuxViewModel
             }
         }
 
+        var pendingPlanReviewItems = readyItems
+            .Where(item => item.HasPendingPlanReview)
+            .ToList();
         if (pendingPlanReviewItems.Count > 0)
         {
-            SelectedEpisodeItem = pendingPlanReviewItems[0];
-            _dialogService.ShowWarning(
-                "Hinweis prüfen",
-                "Mindestens ein ausgewählter Eintrag hat noch einen fachlichen Planhinweis. Bitte im Detailbereich prüfen und mit \"Hinweis geprüft\" freigeben.");
-            return false;
+            foreach (var item in pendingPlanReviewItems)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                SelectedEpisodeItem = item;
+                if (!_dialogService.ConfirmPlanReview(item.Title, item.PrimaryActionablePlanNote))
+                {
+                    SetStatus("Hinweisprüfung abgebrochen", ProgressValue);
+                    return false;
+                }
+
+                item.ApprovePlanReview();
+                item.RefreshArchivePresence();
+            }
+
+            RefreshOverview();
+            RefreshCommands();
+            SetStatus("Fachliche Hinweise freigegeben", ProgressValue);
         }
 
         return true;
@@ -153,12 +178,34 @@ internal sealed partial class BatchMuxViewModel
     private static string ResolveSelectedOutputDirectory(BatchEpisodeItemViewModel item)
     {
         var outputDirectory = Path.GetDirectoryName(item.OutputPath);
-        if (!string.IsNullOrWhiteSpace(outputDirectory) && Directory.Exists(outputDirectory))
+        var existingOutputDirectory = ResolveNearestExistingDirectory(outputDirectory);
+        if (!string.IsNullOrWhiteSpace(existingOutputDirectory))
         {
-            return outputDirectory;
+            return existingOutputDirectory;
         }
 
         return ResolveSelectedItemDirectory(item);
+    }
+
+    private static string? ResolveNearestExistingDirectory(string? directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath))
+        {
+            return null;
+        }
+
+        var directory = new DirectoryInfo(directoryPath);
+        while (directory is not null)
+        {
+            if (directory.Exists)
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return null;
     }
 
     private static string ResolveSelectedItemDirectory(BatchEpisodeItemViewModel item)

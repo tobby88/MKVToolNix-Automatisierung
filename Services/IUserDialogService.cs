@@ -46,8 +46,16 @@ internal interface IUserDialogService
     bool AskOpenDoneDirectory(string doneDirectory);
 
     /// <summary>
-     /// Versucht die angegebenen Dateien mit der Standardanwendung zu öffnen.
-     /// </summary>
+    /// Fragt nach einer expliziten Freigabe für fachliche Planhinweise, die vor dem Muxen geprüft werden müssen.
+    /// </summary>
+    /// <param name="episodeTitle">Lesbarer Episodentitel für die Dialogzuordnung.</param>
+    /// <param name="reviewText">Konkreter Hinweistext aus der Planerstellung.</param>
+    /// <returns><see langword="true"/>, wenn der Hinweis als geprüft gelten soll.</returns>
+    bool ConfirmPlanReview(string episodeTitle, string reviewText);
+
+    /// <summary>
+    /// Versucht die angegebenen Dateien mit der Standardanwendung zu öffnen.
+    /// </summary>
     /// <remarks>
     /// Der Rückgabewert erlaubt dem Review-Workflow, die Prüfung sauber abzubrechen, wenn das
     /// eigentliche Öffnen fehlschlägt und der Benutzer deshalb nichts verifizieren konnte.

@@ -115,7 +115,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Concat(archiveDecision.Notes)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (request.HasPrimaryVideoSource)
+        var hintSourcePath = request.HasPrimaryVideoSource
+            ? request.MainVideoPath
+            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
+                ? audioDescriptionPath
+                : request.AudioDescriptionPath;
+        if (!string.IsNullOrWhiteSpace(hintSourcePath) && videoSelections.Count > 0)
         {
             var archiveEpisodeVariantHint = TryBuildArchiveEpisodeVariantHint(
                 effectiveOutputPath,
@@ -127,7 +132,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
             var durationMismatchHint = await TryBuildArchiveDurationMismatchHintAsync(
                 mkvMergePath,
-                request.MainVideoPath,
+                hintSourcePath,
                 effectiveOutputPath,
                 videoSelections[0].LanguageCode,
                 cancellationToken);
@@ -378,6 +383,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var normalized = NormalizeEpisodeTitle(title);
         normalized = Regex.Replace(normalized, @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*[:\-]\s*.+$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(
+            normalized,
+            @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*(?:\.{3}|…|-|:)?\s*es geht weiter.*$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*(?:\d+\.\s*)?teil\s*\d+\s*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(

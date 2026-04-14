@@ -243,6 +243,27 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmPlanReview(string episodeTitle, string reviewText)
+    {
+        var lines = new List<string>
+        {
+            $"Episode: {episodeTitle}",
+            string.Empty,
+            string.IsNullOrWhiteSpace(reviewText)
+                ? "Für diese Episode liegt ein fachlicher Planhinweis vor."
+                : reviewText.Trim(),
+            string.Empty,
+            "Diesen Hinweis als geprüft freigeben?"
+        };
+
+        return MessageBox.Show(
+            GetOwner(),
+            string.Join(Environment.NewLine, lines),
+            "Hinweis prüfen",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
     /// <summary>
     /// Öffnet Prüfdokumente mit der registrierten Standardanwendung und meldet Shell-Fehler direkt.
     /// </summary>

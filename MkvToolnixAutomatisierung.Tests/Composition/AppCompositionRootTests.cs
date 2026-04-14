@@ -127,6 +127,8 @@ public sealed class AppCompositionRootTests
 
         public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
 
+        public bool ConfirmPlanReview(string episodeTitle, string reviewText) => throw new NotSupportedException();
+
         public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
 
         public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();

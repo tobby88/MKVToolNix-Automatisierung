@@ -163,6 +163,8 @@ public sealed class EpisodeReviewWorkflowTests
 
         public bool AskOpenDoneDirectory(string doneDirectory) => throw new NotSupportedException();
 
+        public bool ConfirmPlanReview(string episodeTitle, string reviewText) => throw new NotSupportedException();
+
         public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
         {
             OpenedFilePaths.AddRange(filePaths);
