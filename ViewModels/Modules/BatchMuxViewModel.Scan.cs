@@ -98,9 +98,9 @@ internal sealed partial class BatchMuxViewModel
                     var processed = Interlocked.Increment(ref completedCount);
                     _ = Application.Current.Dispatcher.BeginInvoke(() =>
                     {
-                        // Einzelne Abschlussmeldungen aus den parallelen Scan-Tasks koennen noch kurz
-                        // spaeter in der UI ankommen. Der globale Fortschritt darf dabei nie hinter
-                        // einen bereits angezeigten Vergleichsstand zurueckfallen.
+                        // Einzelne Abschlussmeldungen aus den parallelen Scan-Tasks können noch kurz
+                        // später in der UI ankommen. Der globale Fortschritt darf dabei nie hinter
+                        // einen bereits angezeigten Vergleichsstand zurückfallen.
                         SetStatus(
                             $"Scanne Ordner... {processed}/{total} abgeschlossen",
                             Math.Max(

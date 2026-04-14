@@ -126,11 +126,11 @@
                                         MinWidth="180"
                                         IsReadOnly="True" />
                     <DataGridTextColumn Header="TVDB"
-                                        Binding="{Binding TvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Binding="{Binding TvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
                                         Width="0.7*"
                                         MinWidth="90" />
                     <DataGridTextColumn Header="IMDB"
-                                        Binding="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        Binding="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}"
                                         Width="0.8*"
                                         MinWidth="110" />
                     <DataGridTextColumn Header="Emby"
@@ -200,7 +200,17 @@
                          Minimum="0"
                          Maximum="100"
                          Value="{Binding ProgressValue, Mode=OneWay}"
-                         ToolTip="{Binding StatusText, Mode=OneWay}" />
+                         ToolTip="{Binding StatusText, Mode=OneWay}">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsInteractive}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
         </Grid>
     </Grid>
 </UserControl>

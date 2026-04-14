@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Services.Emby;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -7,7 +8,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Bindbare Zeile des Emby-Abgleichs für eine neu erzeugte MKV.
 /// </summary>
-internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged
+internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataErrorInfo
 {
     private bool _isSelected = true;
     private string _tvdbId = string.Empty;
@@ -230,6 +231,19 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged
                 ? "NFO aktualisiert und Emby-Metadatenrefresh angestoßen."
                 : "NFO aktualisiert. Emby-Item wurde noch nicht gefunden, daher kein gezielter Refresh.");
     }
+
+    /// <inheritdoc/>
+    public string Error => string.Empty;
+
+    /// <inheritdoc/>
+    public string this[string columnName] => columnName switch
+    {
+        nameof(TvdbId) when !string.IsNullOrWhiteSpace(TvdbId) && !Regex.IsMatch(TvdbId, @"^\d+$")
+            => "TVDB-ID muss eine Ganzzahl sein.",
+        nameof(ImdbId) when !string.IsNullOrWhiteSpace(ImdbId) && !Regex.IsMatch(ImdbId, @"^tt\d+$")
+            => "IMDB-ID muss im Format tt1234567 angegeben werden.",
+        _ => string.Empty
+    };
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {

@@ -16,9 +16,9 @@ internal sealed class BufferedTextStore
     private bool _flushScheduled;
 
     /// <summary>
-    /// Erstellt einen Textpuffer fuer haeufige UI-Updates.
+    /// Erstellt einen Textpuffer für häufige UI-Updates.
     /// </summary>
-    /// <param name="scheduleFlush">Plant das spaetere Flushen auf dem gewuenschten Thread ein.</param>
+    /// <param name="scheduleFlush">Plant das spätere Flushen auf dem gewünschten Thread ein.</param>
     /// <param name="replaceText">Setzt den gesamten Textbestand, z. B. nach Reset oder initialem Laden.</param>
     /// <param name="appendText">
     /// Optionaler inkrementeller UI-Callback. Wenn gesetzt, werden Flushes nur mit den seit dem letzten Flush

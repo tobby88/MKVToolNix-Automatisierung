@@ -157,7 +157,17 @@
                          Margin="12,0,0,0"
                          Minimum="0"
                          Maximum="100"
-                         Value="{Binding ProgressValue, Mode=OneWay}" />
+                         Value="{Binding ProgressValue, Mode=OneWay}">
+                <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsInteractive}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ProgressBar.Style>
+            </ProgressBar>
         </Grid>
     </Grid>
 </UserControl>

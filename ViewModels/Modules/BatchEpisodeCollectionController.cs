@@ -47,7 +47,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 {
     private readonly ObservableCollection<BatchEpisodeItemViewModel> _items = [];
     private readonly ICollectionView _view;
-    private bool _suppressCollectionChanged;
+    private bool _deferCollectionNotifications;
     private bool _viewRefreshPending;
     private BatchEpisodeFilterOption _selectedFilterMode;
     private BatchEpisodeSortOption _selectedSortMode;
@@ -133,7 +133,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public void Reset(IEnumerable<BatchEpisodeItemViewModel> items)
     {
-        _suppressCollectionChanged = true;
+        _deferCollectionNotifications = true;
         try
         {
             foreach (var item in _items)
@@ -151,7 +151,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         }
         finally
         {
-            _suppressCollectionChanged = false;
+            _deferCollectionNotifications = false;
         }
 
         CommandsChanged?.Invoke();
@@ -235,7 +235,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     private void Items_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (_suppressCollectionChanged)
+        if (_deferCollectionNotifications)
         {
             return;
         }

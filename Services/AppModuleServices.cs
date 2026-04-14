@@ -97,17 +97,17 @@ internal sealed record BatchModuleServices(
 }
 
 /// <summary>
-/// Buendelt nur die fuer das Einsortieren loser MediathekView-Downloads benoetigten Services.
+/// Bündelt nur die für das Einsortieren loser MediathekView-Downloads benötigten Services.
 /// </summary>
-/// <param name="DownloadSort">Fachservice fuer Scan, Ordnervereinheitlichung und Verschiebungen.</param>
+/// <param name="DownloadSort">Fachservice für Scan, Ordnervereinheitlichung und Verschiebungen.</param>
 internal sealed record DownloadSortModuleServices(
     DownloadSortService DownloadSort);
 
 /// <summary>
-/// Buendelt nur die Services fuer den nachgelagerten Emby-/NFO-Abgleich.
+/// Bündelt nur die Services für den nachgelagerten Emby-/NFO-Abgleich.
 /// </summary>
-/// <param name="Settings">Persistenter Store fuer Emby-Adresse und API-Key.</param>
-/// <param name="Sync">Fachservice fuer Dateilistenimport, NFO-Provider-IDs und Emby-API-Aktionen.</param>
+/// <param name="Settings">Persistenter Store für Emby-Adresse und API-Key.</param>
+/// <param name="Sync">Fachservice für Dateilistenimport, NFO-Provider-IDs und Emby-API-Aktionen.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
     EmbyMetadataSyncService Sync);

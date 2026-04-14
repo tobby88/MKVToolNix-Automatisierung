@@ -177,6 +177,10 @@ internal sealed class EmbyClient : IEmbyClient
         {
             throw new InvalidOperationException("Emby-Anfrage hat den Timeout überschritten.", ex);
         }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException("Emby-Server nicht erreichbar. Bitte Adresse und Netzwerkverbindung prüfen.", ex);
+        }
 
         if (response.IsSuccessStatusCode)
         {
@@ -239,7 +243,14 @@ internal sealed class EmbyClient : IEmbyClient
     {
         await EnsureSuccessAsync(response, cancellationToken);
         await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+        try
+        {
+            return await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            throw new InvalidOperationException("Emby hat keine gültige JSON-Antwort geliefert.", ex);
+        }
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)

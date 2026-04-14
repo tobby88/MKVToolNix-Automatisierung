@@ -85,12 +85,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var mediaMetadata = _probeService.ReadPrimaryVideoMetadataAsync(
-                mkvMergePath,
-                seed.FilePath,
-                cancellationToken)
-            .GetAwaiter()
-            .GetResult();
+        var mediaMetadata = _probeService.ReadPrimaryVideoMetadata(mkvMergePath, seed.FilePath);
         cancellationToken.ThrowIfCancellationRequested();
         var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration);
         cancellationToken.ThrowIfCancellationRequested();

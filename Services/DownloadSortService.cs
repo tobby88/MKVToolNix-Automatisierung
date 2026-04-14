@@ -5,12 +5,12 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Plant und fuehrt das Einsortieren loser MediathekView-Downloads in Serienunterordner aus.
+/// Plant und führt das Einsortieren loser MediathekView-Downloads in Serienunterordner aus.
 /// </summary>
 /// <remarks>
 /// Der Dienst arbeitet bewusst nur auf der obersten Ebene eines Downloadordners.
 /// Bereits einsortierte Unterordner werden nur untersucht, wenn daraus sichere
-/// Umbenennungen auf einen kanonischen Seriennamen abgeleitet werden koennen.
+/// Umbenennungen auf einen kanonischen Seriennamen abgeleitet werden können.
 /// </remarks>
 internal sealed class DownloadSortService
 {
@@ -87,10 +87,10 @@ internal sealed class DownloadSortService
     ];
 
     /// <summary>
-    /// Analysiert die lose Wurzelebene eines Downloadordners und liefert Sortiervorschlaege.
+    /// Analysiert die lose Wurzelebene eines Downloadordners und liefert Sortiervorschläge.
     /// </summary>
     /// <param name="rootDirectory">Oberordner, in dessen Wurzel lose Mediathek-Dateien liegen.</param>
-    /// <param name="onProgress">Optionaler Callback fuer laufende Scan-Fortschrittsmeldungen.</param>
+    /// <param name="onProgress">Optionaler Callback für laufende Scan-Fortschrittsmeldungen.</param>
     /// <returns>Scanergebnis inklusive Move-Kandidaten und sicherer Ordner-Umbenennungen.</returns>
     public DownloadSortScanResult Scan(
         string rootDirectory,
@@ -128,7 +128,7 @@ internal sealed class DownloadSortService
     }
 
     /// <summary>
-    /// Bewertet einen Zielordner fuer einen bereits gescannten Dateigruppen-Kandidaten erneut.
+    /// Bewertet einen Zielordner für einen bereits gescannten Dateigruppen-Kandidaten erneut.
     /// </summary>
     /// <param name="rootDirectory">Download-Wurzel, in der sich lose Dateien und Serienordner befinden.</param>
     /// <param name="filePaths">Dateien des Kandidaten.</param>
@@ -203,10 +203,10 @@ internal sealed class DownloadSortService
     /// Fuehrt die geplanten Ordnerumbenennungen und Dateiverschiebungen aus.
     /// </summary>
     /// <param name="rootDirectory">Wurzel des Downloadordners.</param>
-    /// <param name="moveRequests">Ausgewaehlte Sortieroperationen.</param>
-    /// <param name="folderRenames">Vorab auszufuehrende sichere Ordnerumbenennungen.</param>
+    /// <param name="moveRequests">Ausgewählte Sortieroperationen.</param>
+    /// <param name="folderRenames">Vorab auszuführende sichere Ordnerumbenennungen.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal zwischen einzelnen Gruppen.</param>
-    /// <returns>Kompakte Ausfuehrungszusammenfassung fuer GUI und Log.</returns>
+    /// <returns>Kompakte Ausführungszusammenfassung für GUI und Log.</returns>
     public DownloadSortApplyResult Apply(
         string rootDirectory,
         IReadOnlyList<DownloadSortMoveRequest> moveRequests,
@@ -608,7 +608,7 @@ internal sealed class DownloadSortService
             return false;
         }
 
-        // Generische Mediathek-Rubriken wie "Filme" duerfen nur dann aus dem Titel
+        // Generische Mediathek-Rubriken wie "Filme" dürfen nur dann aus dem Titel
         // auf eine konkrete Serie fallen, wenn die Serie am Anfang steht oder im
         // redaktionellen Text klar markiert ist. Bekannte Sondertitel werden separat
         // behandelt; blosse beilaeufige Erwaehnungen sollen dagegen keine automatische
@@ -928,12 +928,12 @@ internal enum DownloadSortItemState
 }
 
 /// <summary>
-/// Kleine Zustandshelfer fuer das Download-Sortiermodul.
+/// Kleine Zustandshelfer für das Download-Sortiermodul.
 /// </summary>
 internal static class DownloadSortItemStates
 {
     /// <summary>
-    /// Gibt an, ob ein Eintrag ohne weitere Pflichtpruefung ausgefuehrt werden darf.
+    /// Gibt an, ob ein Eintrag ohne weitere Pflichtprüfung ausgeführt werden darf.
     /// </summary>
     /// <param name="state">Aktueller Zustand des Sortiereintrags.</param>
     /// <returns><see langword="true"/>, wenn der Eintrag einsortiert werden darf.</returns>
@@ -953,14 +953,14 @@ internal sealed record DownloadSortScanResult(
 /// <summary>
 /// Fortschrittsmeldung des Download-Sortier-Scans.
 /// </summary>
-/// <param name="StatusText">Kurztext fuer den aktuell laufenden Scan-Schritt.</param>
+/// <param name="StatusText">Kurztext für den aktuell laufenden Scan-Schritt.</param>
 /// <param name="ProgressPercent">Grob interpolierter Gesamtfortschritt von 0 bis 100.</param>
 internal sealed record DownloadSortScanProgress(
     string StatusText,
     int ProgressPercent);
 
 /// <summary>
-/// Vorschlag fuer einen losen Download mitsamt Zielordner und aktuellem Status.
+/// Vorschlag für einen losen Download mitsamt Zielordner und aktuellem Status.
 /// </summary>
 internal sealed record DownloadSortCandidate(
     string DisplayName,
@@ -979,7 +979,7 @@ internal sealed record DownloadSortFolderRenamePlan(
     string Reason);
 
 /// <summary>
-/// Erneute Statusbewertung fuer einen manuell angepassten Zielordner.
+/// Erneute Statusbewertung für einen manuell angepassten Zielordner.
 /// </summary>
 internal sealed record DownloadSortTargetEvaluation(
     DownloadSortItemState State,
@@ -994,7 +994,7 @@ internal sealed record DownloadSortMoveRequest(
     string TargetFolderName);
 
 /// <summary>
-/// Zusammenfassung eines ausgefuehrten Sortierlaufs.
+/// Zusammenfassung eines ausgeführten Sortierlaufs.
 /// </summary>
 internal sealed record DownloadSortApplyResult(
     int MovedGroupCount,

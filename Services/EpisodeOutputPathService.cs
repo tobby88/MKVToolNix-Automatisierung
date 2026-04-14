@@ -45,9 +45,9 @@ internal sealed class EpisodeOutputPathService
         if (PathComparisonHelper.AreSamePath(outputRootOverride, _archiveService.ArchiveRootDirectory))
         {
             // Fuer die Serienbibliothek selbst soll die fachliche Serien-/Staffelstruktur stabil bleiben,
-            // auch wenn die Reachability-Pruefung der Bibliothek gerade negativ ausfaellt.
-            // Das ist besonders fuer AD-only-Faelle wichtig, weil deren Archivvergleich sonst schon im Scan
-            // auf einen flachen Dateinamen zusammenfaellt und vorhandene Bibliotheksdateien nicht mehr trifft.
+            // auch wenn die Reachability-Prüfung der Bibliothek gerade negativ ausfällt.
+            // Das ist besonders für AD-only-Fälle wichtig, weil deren Archivvergleich sonst schon im Scan
+            // auf einen flachen Dateinamen zusammenfällt und vorhandene Bibliotheksdateien nicht mehr trifft.
             return _archiveService.BuildArchiveOutputPath(seriesName, seasonNumber, episodeNumber, title);
         }
 
@@ -64,7 +64,7 @@ internal sealed class EpisodeOutputPathService
     }
 
     /// <summary>
-    /// Liefert fuer AD-only-Faelle optional den fachlich passenden Bibliothekspfad, wenn unter der konfigurierten
+    /// Liefert für AD-only-Fälle optional den fachlich passenden Bibliothekspfad, wenn unter der konfigurierten
     /// Serienbibliothek bereits eine passende MKV existiert.
     /// Dieser Fallback hilft Batch-Zeilen mit reinem AD-Eingang, deren automatischer Ausgabepfad zwischenzeitlich
     /// auf einen anderen Ort zeigte, obwohl die eigentliche Bibliotheksdatei vorhanden ist.

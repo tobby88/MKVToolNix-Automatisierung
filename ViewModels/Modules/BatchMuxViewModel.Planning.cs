@@ -229,8 +229,8 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        // AD-only-Eintraege sollen einen bereits vorhandenen Bibliothekstreffer wieder als
-        // Hauptquellenbasis nutzen koennen. Das korrigiert veraltete automatische Batch-Ziele,
+        // AD-only-Einträge sollen einen bereits vorhandenen Bibliothekstreffer wieder als
+        // Hauptquellenbasis nutzen können. Das korrigiert veraltete automatische Batch-Ziele,
         // ohne bewusst manuell gesetzte Custom-Ausgaben umzubiegen.
         item.SetAutomaticOutputPathWithContext(
             existingArchiveOutputPath,

@@ -122,8 +122,8 @@ public sealed partial class SeriesArchiveService
     }
 
     /// <summary>
-    /// Baut die konkreten <c>mkvpropedit</c>-Operationen fuer bereits vorhandene Tracks auf.
-    /// Nur solche Spuren werden betrachtet, die die aktuelle Planung tatsaechlich weiterverwendet.
+    /// Baut die konkreten <c>mkvpropedit</c>-Operationen für bereits vorhandene Tracks auf.
+    /// Nur solche Spuren werden betrachtet, die die aktuelle Planung tatsächlich weiterverwendet.
     /// Dadurch bleibt der direkte Header-Edit-Pfad fachlich deckungsgleich mit dem Vergleich, der
     /// zuvor auch den reinen "Tracknamen-Normalisierung"-Sonderfall erkannt hat.
     /// </summary>

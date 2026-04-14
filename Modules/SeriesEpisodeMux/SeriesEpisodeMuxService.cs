@@ -43,7 +43,7 @@ public sealed class SeriesEpisodeMuxService
     /// <param name="selectedVideoPath">Pfad zur vom Benutzer ausgewählten Videodatei.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
-    /// <param name="cancellationToken">Optionales Abbruchsignal fuer den aufrufenden Task.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für den aufrufenden Task.</param>
     /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,
@@ -64,7 +64,7 @@ public sealed class SeriesEpisodeMuxService
     /// <param name="directoryContext">Vorbereiteter Ordnerkontext derselben Quelle für wiederholte Scans.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz von Quellpfaden, die bei der Erkennung ignoriert werden sollen.</param>
-    /// <param name="cancellationToken">Optionales Abbruchsignal fuer den aufrufenden Task.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für den aufrufenden Task.</param>
     /// <returns>Alle automatisch erkannten Episodendateien und Vorschläge.</returns>
     public Task<AutoDetectedEpisodeFiles> DetectFromSelectedVideoAsync(
         string selectedVideoPath,

@@ -234,11 +234,13 @@ internal sealed class TvdbClient : ITvdbClient
             await response.Content.ReadAsStreamAsync(cancellationToken),
             cancellationToken: cancellationToken);
 
-        var token = document.RootElement
-            .GetProperty("data")
-            .GetProperty("token")
-            .GetString();
+        if (!document.RootElement.TryGetProperty("data", out var dataElement)
+            || !dataElement.TryGetProperty("token", out var tokenElement))
+        {
+            throw new InvalidOperationException("TVDB-Antwort enthält kein 'data.token'-Feld.");
+        }
 
+        var token = tokenElement.GetString();
         if (string.IsNullOrWhiteSpace(token))
         {
             throw new InvalidOperationException("TVDB hat kein Bearer-Token geliefert.");

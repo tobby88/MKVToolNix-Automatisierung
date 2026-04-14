@@ -3,7 +3,7 @@ using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
-// Dieser Partial kapselt die wiederverwendbare Ordnerbasis fuer Batch-Scans: Seeds, Companion-Lookups und pro Datei gecachte Kandidaten.
+// Dieser Partial kapselt die wiederverwendbare Ordnerbasis für Batch-Scans: Seeds, Companion-Lookups und pro Datei gecachte Kandidaten.
 public sealed partial class SeriesEpisodeMuxPlanner
 {
     /// <summary>
