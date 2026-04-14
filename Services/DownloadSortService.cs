@@ -246,7 +246,16 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            Directory.Move(sourcePath, destinationPath);
+            try
+            {
+                Directory.Move(sourcePath, destinationPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logLines.Add($"FEHLER: Ordner '{renamePlan.CurrentFolderName}' konnte nicht umbenannt werden: {ex.Message}");
+                continue;
+            }
+
             renamedFolderCount++;
             logLines.Add($"ORDNER: '{renamePlan.CurrentFolderName}' -> '{renamePlan.TargetFolderName}'");
         }
@@ -274,6 +283,7 @@ internal sealed class DownloadSortService
                 continue;
             }
 
+            var groupMovedCount = 0;
             foreach (var filePath in request.FilePaths)
             {
                 var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
@@ -282,8 +292,24 @@ internal sealed class DownloadSortService
                     continue;
                 }
 
-                File.Move(filePath, destinationPath, overwrite: true);
-                movedFileCount++;
+                try
+                {
+                    File.Move(filePath, destinationPath, overwrite: true);
+                    groupMovedCount++;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logLines.Add($"FEHLER: '{Path.GetFileName(filePath)}' konnte nicht nach '{targetFolderName}' verschoben werden: {ex.Message}");
+                }
+            }
+
+            movedFileCount += groupMovedCount;
+
+            if (groupMovedCount == 0)
+            {
+                skippedGroupCount++;
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> keine Datei konnte verschoben werden.");
+                continue;
             }
 
             movedGroupCount++;
