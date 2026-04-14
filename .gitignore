@@ -1,6 +1,7 @@
 bin/
 obj/
 .codex-function-test/
+.claude/
 *.user
 *.suo
 *.tmp

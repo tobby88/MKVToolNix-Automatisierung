@@ -81,7 +81,9 @@ internal sealed class BatchExecutionRunner
                             index + 1,
                             copyPreparation.CopyPlansToExecute.Count,
                             combinedCopiedBytes,
-                            copyPreparation.TotalCopyBytes);
+                            copyPreparation.TotalCopyBytes,
+                            copiedBytes,
+                            copyPlan.FileSizeBytes);
                     });
                 },
                 cancellationToken);
@@ -309,6 +311,7 @@ internal sealed class BatchExecutionRunner
             SeasonNumber = item.SeasonNumber,
             EpisodeNumber = item.EpisodeNumber,
             EpisodeTitle = item.Title,
+            TvdbEpisodeId = tvdbEpisodeId,
             ProviderIds = string.IsNullOrWhiteSpace(tvdbEpisodeId)
                 ? null
                 : new BatchOutputProviderIds

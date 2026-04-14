@@ -50,6 +50,24 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void BatchRunProgressTracker_ReportCopyProgress_IncludesCurrentFilePercent()
+    {
+        var statusUpdates = new List<string>();
+        var tracker = new BatchRunProgressTracker(1, (status, _) => statusUpdates.Add(status));
+
+        tracker.ReportCopyProgress(
+            currentFile: 1,
+            totalFiles: 3,
+            copiedBytes: 50,
+            totalBytes: 300,
+            currentFileCopiedBytes: 50,
+            currentFileTotalBytes: 100);
+
+        Assert.Contains(statusUpdates, status => status.Contains("1/3", StringComparison.Ordinal));
+        Assert.Contains(statusUpdates, status => status.Contains("50% der aktuellen Datei", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task PrepareWorkingCopiesAsync_LogsReuseMessage_WhenNothingNeedsCopying()
     {
         var source = CreateFile("source.mkv");

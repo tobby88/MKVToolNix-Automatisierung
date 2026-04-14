@@ -34,14 +34,26 @@ internal sealed class BatchRunProgressTracker
             MapPhase(PlanningStart, PlanningEnd, ratio));
     }
 
-    public void ReportCopyProgress(int currentFile, int totalFiles, long copiedBytes, long totalBytes)
+    public void ReportCopyProgress(
+        int currentFile,
+        int totalFiles,
+        long copiedBytes,
+        long totalBytes,
+        long currentFileCopiedBytes = 0,
+        long currentFileTotalBytes = 0)
     {
         var ratio = totalBytes > 0
             ? copiedBytes / (double)totalBytes
             : currentFile / (double)Math.Max(totalFiles, 1);
+        var currentFilePercent = currentFileTotalBytes > 0
+            ? (int)Math.Round(Math.Clamp(currentFileCopiedBytes / (double)currentFileTotalBytes, 0d, 1d) * 100)
+            : (int?)null;
+        var currentFileProgressText = currentFilePercent is int percent
+            ? $" ({percent}% der aktuellen Datei)"
+            : string.Empty;
 
         _reportStatus(
-            $"Kopiere Zieldateien... {currentFile}/{Math.Max(totalFiles, 1)}",
+            $"Kopiere Zieldateien... {currentFile}/{Math.Max(totalFiles, 1)}{currentFileProgressText}",
             MapPhase(CopyStart, CopyEnd, ratio));
     }
 

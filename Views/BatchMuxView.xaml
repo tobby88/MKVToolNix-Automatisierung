@@ -574,7 +574,7 @@
 
             <Expander Grid.Row="4"
                       Header="Batch-Protokoll"
-                      Margin="0,6,0,0"
+                      Margin="0,6,0,10"
                       IsExpanded="False"
                       ToolTip="{Binding BatchLogInfoText, Mode=OneWay}">
                 <StackPanel>
@@ -592,7 +592,7 @@
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              MinHeight="140"
-                             MaxHeight="260"
+                             MaxHeight="220"
                              TextChanged="BatchLogTextBox_OnTextChanged"
                              Text="{Binding LogText, Mode=OneWay}" />
                 </StackPanel>
