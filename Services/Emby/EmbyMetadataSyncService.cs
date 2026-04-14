@@ -3,7 +3,7 @@ using System.Globalization;
 namespace MkvToolnixAutomatisierung.Services.Emby;
 
 /// <summary>
-/// Orchestriert den lokalen Emby-Abgleich aus Dateiliste, NFO-Provider-IDs und Emby-API-Itemdaten.
+/// Orchestriert den lokalen Emby-Abgleich aus JSON-Metadatenreport, NFO-Provider-IDs und Emby-API-Itemdaten.
 /// </summary>
 internal sealed class EmbyMetadataSyncService
 {
@@ -22,31 +22,20 @@ internal sealed class EmbyMetadataSyncService
     /// <summary>
     /// Liest einen Batch-Report mit neu erzeugten Ausgabedateien.
     /// </summary>
-    /// <remarks>
-    /// Neue JSON-Reports liefern direkt importierbare Provider-IDs. Die alte menschenlesbare
-    /// TXT-Dateiliste wird weiter akzeptiert, enthält aber nur Pfade und keine Metadaten.
-    /// </remarks>
     public IReadOnlyList<EmbyImportEntry> LoadNewOutputReport(string reportPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reportPath);
         if (!File.Exists(reportPath))
         {
-            throw new FileNotFoundException("Die ausgewählte Dateiliste wurde nicht gefunden.", reportPath);
+            throw new FileNotFoundException("Der ausgewählte Metadatenreport wurde nicht gefunden.", reportPath);
         }
 
-        if (string.Equals(Path.GetExtension(reportPath), ".json", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(Path.GetExtension(reportPath), ".json", StringComparison.OrdinalIgnoreCase))
         {
-            return LoadStructuredOutputReport(reportPath);
+            throw new InvalidDataException("Der Emby-Abgleich erwartet den strukturierten JSON-Metadatenreport (*.metadata.json). Die ältere TXT-Dateiliste wird nicht mehr importiert.");
         }
 
-        return File.ReadLines(reportPath)
-            .Select(line => line.Trim())
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Where(line => string.Equals(Path.GetExtension(line), ".mkv", StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .Select(path => new EmbyImportEntry(path, EmbyProviderIds.Empty))
-            .ToList();
+        return LoadStructuredOutputReport(reportPath);
     }
 
     /// <summary>
@@ -154,7 +143,7 @@ internal sealed class EmbyMetadataSyncService
     private static EmbyProviderIds BuildProviderIds(BatchOutputMetadataEntry item)
     {
         var tvdbId = string.IsNullOrWhiteSpace(item.ProviderIds?.Tvdb)
-            ? item.Tvdb?.EpisodeId?.ToString(CultureInfo.InvariantCulture)
+            ? item.TvdbEpisodeId ?? item.Tvdb?.EpisodeId?.ToString(CultureInfo.InvariantCulture)
             : item.ProviderIds!.Tvdb;
         var imdbId = string.IsNullOrWhiteSpace(item.ProviderIds?.Imdb)
             ? null

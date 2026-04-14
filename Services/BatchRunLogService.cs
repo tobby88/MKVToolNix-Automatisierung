@@ -245,6 +245,7 @@ public sealed class BatchRunLogService
             SeasonNumber = NormalizeOptional(entry?.SeasonNumber),
             EpisodeNumber = NormalizeOptional(entry?.EpisodeNumber),
             EpisodeTitle = NormalizeOptional(entry?.EpisodeTitle),
+            TvdbEpisodeId = providerTvdbId,
             ProviderIds = providerIds,
             Tvdb = tvdbMetadata
         };

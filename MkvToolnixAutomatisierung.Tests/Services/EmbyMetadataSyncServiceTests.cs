@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 public sealed class EmbyMetadataSyncServiceTests
 {
     [Fact]
-    public void LoadNewOutputReport_ReadsOnlyMkvPaths()
+    public void LoadNewOutputReport_RejectsLegacyTextLists()
     {
         var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -26,11 +26,8 @@ public sealed class EmbyMetadataSyncServiceTests
 
             var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
 
-            var entries = service.LoadNewOutputReport(reportPath);
-
-            var entry = Assert.Single(entries);
-            Assert.EndsWith("Pilot.mkv", entry.MediaFilePath, StringComparison.OrdinalIgnoreCase);
-            Assert.False(entry.ProviderIds.HasAny);
+            var ex = Assert.Throws<InvalidDataException>(() => service.LoadNewOutputReport(reportPath));
+            Assert.Contains("JSON", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -59,6 +56,7 @@ public sealed class EmbyMetadataSyncServiceTests
                         new BatchOutputMetadataEntry
                         {
                             OutputPath = mediaPath,
+                            TvdbEpisodeId = "100",
                             ProviderIds = new BatchOutputProviderIds
                             {
                                 Tvdb = "100",

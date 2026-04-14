@@ -43,7 +43,7 @@ public sealed class EmbySyncViewModelTests
     {
         var vm = CreateViewModel();
 
-        Assert.Equal("Noch keine MKV-Dateiliste geladen.", vm.SummaryText);
+        Assert.Equal("Noch kein Metadatenreport geladen.", vm.SummaryText);
     }
 
     [Fact]

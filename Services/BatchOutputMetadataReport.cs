@@ -76,6 +76,13 @@ public sealed class BatchOutputMetadataEntry
     public string? EpisodeTitle { get; init; }
 
     /// <summary>
+    /// Direkt lesbare TVDB-Episoden-ID. Sie dupliziert bewusst <see cref="ProviderIds"/>
+    /// für nachgelagerte einfache JSON-Verbraucher, während <c>providerIds.tvdb</c>
+    /// als kompatibler erweiterbarer Provider-ID-Block erhalten bleibt.
+    /// </summary>
+    public string? TvdbEpisodeId { get; init; }
+
+    /// <summary>
     /// Provider-IDs, die nachgelagerte Metadaten-Workflows direkt übernehmen können.
     /// </summary>
     public BatchOutputProviderIds? ProviderIds { get; init; } = new();

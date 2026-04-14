@@ -183,14 +183,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     public int MissingIdCount => Items.Count(item => !item.HasProviderIds);
 
     public string SummaryText => ItemCount == 0
-        ? "Noch keine MKV-Dateiliste geladen."
+        ? "Noch kein Metadatenreport geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
 
     private async Task SelectReportAsync()
     {
         var selectedPath = _dialogService.SelectFile(
             "Batch-Report neu erzeugter Ausgabedateien auswählen",
-            "Batch-Reports (*.metadata.json;*.txt)|*.metadata.json;*.txt|Metadatenreports (*.json)|*.json|Textdateien (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
+            "Metadatenreports (*.metadata.json;*.json)|*.metadata.json;*.json|Alle Dateien (*.*)|*.*",
             GetInitialReportDirectory());
         if (string.IsNullOrWhiteSpace(selectedPath))
         {
@@ -212,9 +212,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         ReplaceItems(importEntries);
         ProgressValue = importEntries.Count == 0 ? 0 : 20;
         StatusText = importEntries.Count == 0
-            ? "Keine MKV-Pfade in der Dateiliste gefunden"
-            : $"Dateiliste geladen: {importEntries.Count} MKV-Datei(en)";
-        AppendLog($"Dateiliste geladen: {ReportPath}");
+            ? "Keine MKV-Pfade im Metadatenreport gefunden"
+            : $"Metadatenreport geladen: {importEntries.Count} MKV-Datei(en)";
+        AppendLog($"Metadatenreport geladen: {ReportPath}");
         return AnalyzeItemsAsync(queryEmby: false);
     }
 
