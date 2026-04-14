@@ -63,9 +63,12 @@ public sealed partial class SeriesArchiveService
     /// <returns>Vollstaendiger Pfad innerhalb der konfigurierten Serienbibliothek.</returns>
     public string BuildArchiveOutputPath(string seriesName, string seasonNumber, string episodeNumber, string title)
     {
-        var seasonFolderName = int.TryParse(seasonNumber, out var parsedSeason) && parsedSeason > 0
-            ? $"Season {parsedSeason}"
-            : "Season xx";
+        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(seasonNumber);
+        var seasonFolderName = normalizedSeasonNumber == "00"
+            ? "Specials"
+            : int.TryParse(normalizedSeasonNumber, out var parsedSeason) && parsedSeason > 0
+                ? $"Season {parsedSeason}"
+                : "Season xx";
 
         var targetDirectory = Path.Combine(
             ArchiveRootDirectory,

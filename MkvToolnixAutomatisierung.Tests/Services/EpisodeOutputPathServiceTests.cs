@@ -85,6 +85,27 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void BuildOutputPath_UsesSpecialsFolder_ForSeasonZero()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        Directory.CreateDirectory(archiveRoot);
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var outputPath = service.BuildOutputPath(
+            Path.Combine(_tempDirectory, "fallback"),
+            "Beispielserie",
+            "00",
+            "07",
+            "Sonderfolge");
+
+        Assert.Equal(
+            Path.Combine(archiveRoot, "Beispielserie", "Specials", "Beispielserie - S00E07 - Sonderfolge.mkv"),
+            outputPath);
+    }
+
+    [Fact]
     public void TryResolveExistingArchiveOutputPath_ReturnsExistingArchiveFile_WhenOverrideMatchesArchiveRoot()
     {
         var archiveRoot = Path.Combine(_tempDirectory, "archive-root");

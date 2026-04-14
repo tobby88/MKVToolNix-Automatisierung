@@ -318,14 +318,22 @@ public sealed partial class SeriesArchiveService
 
         // Vorhandene Untertitel in der Ziel-MKV bleiben für denselben fachlichen Slot erhalten.
         // Ergänzt werden nur fehlende Slots, z. B. ASS zusätzlich zu vorhandenem SRT.
-        var externalSubtitlePlans = requestSubtitlePaths
+        var requestedExternalSubtitlePlans = requestSubtitlePaths
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
+            .ToList();
+        var externalSubtitlePlans = requestedExternalSubtitlePlans
             .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();
+        // Aus Benutzersicht darf eine ausgewaehlte ASS/SRT-Datei nicht "verschwinden".
+        // Ist derselbe Typ+Sprache in der Ziel-MKV schon vorhanden, bleibt der externe Track
+        // fachlich korrekt unterdrueckt, wird aber als Hinweis am Plan dokumentiert.
+        var suppressedExternalSubtitlePlans = requestedExternalSubtitlePlans
+            .Where(subtitle => embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
+            .ToList();
 
-        return new SubtitleReusePlan(externalSubtitlePlans, embeddedSubtitlePlans);
+        return new SubtitleReusePlan(externalSubtitlePlans, embeddedSubtitlePlans, suppressedExternalSubtitlePlans);
     }
 
     private static ContainerTrackMetadata? FindExistingAudioDescription(IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
@@ -394,7 +402,10 @@ public sealed partial class SeriesArchiveService
                     existingAudioDescription,
                     subtitlePlan,
                     attachmentReusePlan.PreservedAttachmentNames),
-                ["Zieldatei bereits vollständig. Alle relevanten Spurnamen sind bereits konsistent. Kein erneutes Muxen nötig."]);
+                [
+                    "Zieldatei bereits vollständig. Alle relevanten Spurnamen sind bereits konsistent. Kein erneutes Muxen nötig.",
+                    .. BuildSubtitleSuppressionNotes(subtitlePlan)
+                ]);
         }
 
         if (!needsAudioDescription
@@ -427,7 +438,10 @@ public sealed partial class SeriesArchiveService
                 PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
                 UsageComparison: ArchiveUsageComparison.Empty,
                 TrackHeaderEdits: relevantTrackHeaderEdits,
-                Notes: BuildTrackHeaderNormalizationOnlyNotes(bestExistingVideo));
+                Notes: BuildTrackHeaderNormalizationOnlyNotes(bestExistingVideo)
+                    .Concat(BuildSubtitleSuppressionNotes(subtitlePlan))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList());
         }
 
         var usageComparison = new ArchiveUsageComparison(
@@ -474,7 +488,8 @@ public sealed partial class SeriesArchiveService
                 needsAdditionalVideo,
                 needsVideoCleanup,
                 needsManualAttachments,
-                requiresRelevantTrackNameNormalization));
+                requiresRelevantTrackNameNormalization,
+                subtitlePlan.SuppressedExternalPlans.Count > 0));
     }
 
     private static ArchiveIntegrationDecision BuildDecisionReplacingExistingPrimary(
@@ -576,8 +591,16 @@ public sealed partial class SeriesArchiveService
                 "Archiv-MKV bereits vorhanden. Die neue Quelle ersetzt die Hauptspuren.",
                 bestExistingVideo is null
                     ? $"Neue Hauptquelle wird verwendet: {Path.GetFileName(videoPlan.VideoSelections[0].FilePath)}."
-                    : BuildPrimaryVideoReplacementReason(bestExistingVideo, newPrimaryVideo)
+                    : BuildPrimaryVideoReplacementReason(bestExistingVideo, newPrimaryVideo),
+                .. BuildSubtitleSuppressionNotes(subtitlePlan)
             ]);
+    }
+
+    private static IReadOnlyList<string> BuildSubtitleSuppressionNotes(SubtitleReusePlan subtitlePlan)
+    {
+        return subtitlePlan.SuppressedExternalPlans.Count == 0
+            ? []
+            : ["Ausgewählte externe Untertitel wurden nicht zusätzlich übernommen, weil die Zieldatei bereits Untertitel desselben Typs und derselben Sprache enthält."];
     }
 
     private static IReadOnlyList<ContainerTrackMetadata> GetRetainedNormalAudioTracks(
@@ -733,7 +756,8 @@ public sealed partial class SeriesArchiveService
 
     private sealed record SubtitleReusePlan(
         IReadOnlyList<SubtitleFile> ExternalPlans,
-        IReadOnlyList<SubtitleFile> EmbeddedPlans)
+        IReadOnlyList<SubtitleFile> EmbeddedPlans,
+        IReadOnlyList<SubtitleFile> SuppressedExternalPlans)
     {
         public IReadOnlyList<SubtitleFile> FinalPlans { get; } = ExternalPlans.Concat(EmbeddedPlans).ToList();
     }

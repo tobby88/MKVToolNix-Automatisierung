@@ -298,6 +298,30 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Contains("TVDB-Vorschlag prüfen", result.StatusText);
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_KeepsTvdbSpecialsAsSeasonZero()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Sonderfolge", 0, 7, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Beispielserie", "Sonderfolge", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.NotNull(result.Selection);
+        Assert.Equal("00", result.Selection!.SeasonNumber);
+        Assert.Equal("07", result.Selection.EpisodeNumber);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

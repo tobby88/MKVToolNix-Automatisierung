@@ -528,6 +528,106 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task CreatePlanAsync_AdOnlyContinuation_AddsVariantNote_WhenExistingTargetAlreadySkipsMux()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-skip-episode-variant");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-skip-episode-variant");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (2) ... es geht weiter (mit Audiodeskription).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Rififi (2) ... es geht weiter (mit Audiodeskription).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Rififi (2) ... es geht weiter (mit Audiodeskription)\r\nDauer: 00:26:13");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var seasonDirectory = Path.Combine(archiveDirectory, "Beispielserie", "Season 2014");
+        var outputPath = Path.Combine(seasonDirectory, "Beispielserie - S2014E06 - Rififi ... es geht weiter (2).mkv");
+        var doubleEpisodePath = Path.Combine(seasonDirectory, "Beispielserie - S2014E05-E06 - Rififi.mkv");
+        CreateFile(seasonDirectory, Path.GetFileName(outputPath), "archive-single");
+        CreateFile(seasonDirectory, Path.GetFileName(doubleEpisodePath), "archive-double");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "Deutsch - HD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            doubleEpisodePath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Rififi (2) ... es geht weiter (mit Audiodeskription)",
+            HasPrimaryVideoSource: false));
+
+        Assert.True(plan.SkipMux);
+        Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_ExplainsWhenSelectedAssAlreadyExistsInTarget()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-existing-ass-subtitle");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-existing-ass-subtitle");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Olympische Rekorde (S2015_E02-E03).mp4");
+        var assSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Olympische Rekorde (S2015_E02-E03).ass", "ass-subtitle");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Olympische Rekorde (S2015_E02-E03).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Olympische Rekorde (S2015_E02-E03)\r\nDauer: 00:49:01");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Beispielserie",
+            "Season 2015",
+            "Beispielserie - S2015E02-E03 - Olympische Rekorde.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateSubtitleTrack(2, "SubStationAlpha", trackName: "Deutsch (hörgeschädigte) - SSA", isHearingImpaired: true),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [assSubtitlePath],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Olympische Rekorde",
+            PlannedVideoPaths: [mainVideoPath]));
+
+        Assert.True(plan.SkipMux);
+        Assert.Contains(plan.Notes, note => note.Contains("nicht zusätzlich", StringComparison.OrdinalIgnoreCase));
+        var subtitlesText = plan.BuildUsageSummary().Subtitles.CurrentText;
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SSA", subtitlesText, StringComparison.Ordinal);
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", subtitlesText, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("Rififi … es geht weiter (2)", "Beispielserie - S2014E06 - Rififi … es geht weiter (2).mkv")]
     [InlineData("Olympische Rekorde (1): Rekord", "Beispielserie - S2014E05 - Olympische Rekorde (1) - Rekord.mkv")]

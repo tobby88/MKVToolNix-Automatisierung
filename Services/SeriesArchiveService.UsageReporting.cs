@@ -26,7 +26,8 @@ public sealed partial class SeriesArchiveService
         bool needsAdditionalVideo,
         bool needsVideoCleanup,
         bool needsManualAttachments,
-        bool requiresRelevantTrackNameNormalization)
+        bool requiresRelevantTrackNameNormalization,
+        bool hasSuppressedExternalSubtitles)
     {
         var notes = new List<string>
         {
@@ -49,6 +50,11 @@ public sealed partial class SeriesArchiveService
             && requiresRelevantTrackNameNormalization)
         {
             notes.Add("Alle Inhalte sind bereits vorhanden. Es werden nur die Benennungen der relevanten Spuren vereinheitlicht.");
+        }
+
+        if (hasSuppressedExternalSubtitles)
+        {
+            notes.Add("Ausgewählte externe Untertitel wurden nicht zusätzlich übernommen, weil die Zieldatei bereits Untertitel desselben Typs und derselben Sprache enthält.");
         }
 
         return notes;

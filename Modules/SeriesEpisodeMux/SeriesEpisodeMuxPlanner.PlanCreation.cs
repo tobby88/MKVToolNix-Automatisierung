@@ -38,15 +38,46 @@ public sealed partial class SeriesEpisodeMuxPlanner
             plannedVideoPaths,
             cancellationToken);
 
+        // Fachliche Review-Hinweise muessen vor dem Skip-Return aufgebaut werden. Gerade bei
+        // AD-only-Quellen kann die vorhandene Ziel-MKV bereits vollstaendig sein; trotzdem muss
+        // ein konkurrierender Mehrfachfolgen-Treffer sichtbar bleiben, bevor der Batch gruen wird.
+        var notes = planNotes
+            .Concat(archiveDecision.Notes)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var hintSourcePath = request.HasPrimaryVideoSource
+            ? request.MainVideoPath
+            : !string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
+                ? request.AudioDescriptionPath
+                : request.MainVideoPath;
+        var archiveEpisodeVariantHint = TryBuildArchiveEpisodeVariantHint(
+            archiveDecision.OutputFilePath,
+            request.Title);
+        if (!string.IsNullOrWhiteSpace(archiveEpisodeVariantHint))
+        {
+            notes.Add(archiveEpisodeVariantHint);
+        }
+
         if (archiveDecision.SkipMux)
         {
+            var durationMismatchHint = await TryBuildArchiveDurationMismatchHintAsync(
+                mkvMergePath,
+                hintSourcePath,
+                archiveDecision.OutputFilePath,
+                primaryLanguageCode: "de",
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(durationMismatchHint))
+            {
+                notes.Add(durationMismatchHint);
+            }
+
             return SeriesEpisodeMuxPlan.CreateSkip(
                 mkvMergePath,
                 archiveDecision.OutputFilePath,
                 request.Title,
                 archiveDecision.SkipReason ?? "Archiv bereits aktuell.",
                 archiveDecision.SkipUsageSummary,
-                archiveDecision.Notes);
+                notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
         }
 
         if (!request.HasPrimaryVideoSource && string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
@@ -111,25 +142,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 ? request.AttachmentPaths
                 : [];
 
-        var notes = planNotes
-            .Concat(archiveDecision.Notes)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var hintSourcePath = request.HasPrimaryVideoSource
-            ? request.MainVideoPath
-            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
-                ? audioDescriptionPath
-                : request.AudioDescriptionPath;
         if (!string.IsNullOrWhiteSpace(hintSourcePath) && videoSelections.Count > 0)
         {
-            var archiveEpisodeVariantHint = TryBuildArchiveEpisodeVariantHint(
-                effectiveOutputPath,
-                request.Title);
-            if (!string.IsNullOrWhiteSpace(archiveEpisodeVariantHint))
-            {
-                notes.Add(archiveEpisodeVariantHint);
-            }
-
             var durationMismatchHint = await TryBuildArchiveDurationMismatchHintAsync(
                 mkvMergePath,
                 hintSourcePath,
