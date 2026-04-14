@@ -377,11 +377,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         var normalized = NormalizeEpisodeTitle(title);
+        normalized = Regex.Replace(normalized, @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*[:\-]\s*.+$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\)\s*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*(?:\d+\.\s*)?teil\s*\d+\s*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(
             normalized,
-            @"\s*(?:\.{3}|-|:)?\s*es geht weiter(?:\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\))?\s*$",
+            @"\s*(?:\.{3}|…|-|:)?\s*es geht weiter(?:\s*\(\s*\d+\s*(?:/\s*\d+)?\s*\))?\s*$",
             string.Empty,
             RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
@@ -520,12 +521,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
         {
             cancellationToken.ThrowIfCancellationRequested();
             var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
+            var metadataWithLanguageHints = ApplySourceLanguageHints(
+                metadata,
+                videoPath,
+                CompanionTextMetadataReader.ReadForMediaFile(videoPath));
             selections.Add(new VideoTrackSelection(
                 videoPath,
-                metadata.VideoTrackId,
-                metadata.VideoWidth,
-                metadata.VideoCodecLabel,
-                MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.VideoLanguage)));
+                metadataWithLanguageHints.VideoTrackId,
+                metadataWithLanguageHints.VideoWidth,
+                metadataWithLanguageHints.VideoCodecLabel,
+                MediaLanguageHelper.NormalizeMuxLanguageCode(metadataWithLanguageHints.VideoLanguage)));
         }
 
         return selections;
@@ -601,14 +606,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
         CancellationToken cancellationToken)
     {
         var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, inputFilePath, cancellationToken);
+        var textMetadata = CompanionTextMetadataReader.ReadForMediaFile(inputFilePath);
+        var sourceLanguageHint = MediaLanguageHelper.TryInferMuxLanguageCodeFromText(
+            Path.GetFileNameWithoutExtension(inputFilePath),
+            textMetadata.Title,
+            textMetadata.Topic);
 
         return AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks)
             .Select(track => new AudioSourcePlan(
                 inputFilePath,
                 track.TrackId,
-                BuildNormalAudioTrackName(track.Language, track.CodecLabel),
+                BuildNormalAudioTrackName(sourceLanguageHint ?? track.Language, track.CodecLabel),
                 IsDefaultTrack: false,
-                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)))
+                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(sourceLanguageHint ?? track.Language)))
             .ToList();
     }
 

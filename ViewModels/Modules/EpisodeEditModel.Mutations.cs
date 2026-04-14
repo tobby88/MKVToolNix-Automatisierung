@@ -160,6 +160,17 @@ internal partial class EpisodeEditModel
         IsMetadataReviewApproved = true;
     }
 
+    public virtual void ApprovePlanReview()
+    {
+        if (!HasPendingPlanReview)
+        {
+            return;
+        }
+
+        _isPlanReviewApproved = true;
+        NotifyNotePropertiesChanged();
+    }
+
     protected bool OutputPathWasManuallyChanged => _outputPathWasManuallyChanged;
 
     protected void MarkOutputPathAsAutomatic()
@@ -189,10 +200,22 @@ internal partial class EpisodeEditModel
 
     public void SetPlanNotes(IEnumerable<string> notes)
     {
+        var previousPlanReviewKey = BuildPlanReviewKey(_planNotes);
+
         _planNotes = notes
             .Where(note => !string.IsNullOrWhiteSpace(note))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        var currentPlanReviewKey = BuildPlanReviewKey(_planNotes);
+        if (string.IsNullOrWhiteSpace(currentPlanReviewKey)
+            || !string.Equals(previousPlanReviewKey, currentPlanReviewKey, StringComparison.Ordinal))
+        {
+            // Die Freigabe gilt nur für exakt denselben fachlichen Planhinweis. Sobald ein
+            // Refresh neue Mehrfachfolgen-/Archivhinweise liefert, muss wieder sichtbar geprüft werden.
+            _isPlanReviewApproved = false;
+        }
+
         NotifyNotePropertiesChanged();
     }
 
@@ -411,6 +434,8 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(ReviewHintTooltip));
         OnPropertyChanged(nameof(ReviewBadgeBackground));
         OnPropertyChanged(nameof(ReviewBadgeBorderBrush));
+        OnPropertyChanged(nameof(HasPendingPlanReview));
+        OnPropertyChanged(nameof(IsPlanReviewApproved));
         OnPropertyChanged(nameof(HasPendingChecks));
     }
 
@@ -424,6 +449,16 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(PrimaryActionablePlanNote));
         OnPropertyChanged(nameof(ActionablePlanNotesDisplayText));
         NotifyReviewStatePropertiesChanged();
+    }
+
+    private static string BuildPlanReviewKey(IEnumerable<string> notes)
+    {
+        return string.Join(
+            "\n",
+            notes
+                .Where(EpisodeEditTextBuilder.IsActionablePlanReviewNote)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(note => note, StringComparer.OrdinalIgnoreCase));
     }
 
 }

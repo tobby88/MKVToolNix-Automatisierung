@@ -56,6 +56,7 @@ public sealed partial class SeriesArchiveService
             return BuildDecisionUsingExistingPrimary(
                 outputPath,
                 request,
+                plannedVideos,
                 videoPlan,
                 subtitlePlan,
                 replacedSubtitleTracks,
@@ -77,6 +78,7 @@ public sealed partial class SeriesArchiveService
             ? BuildDecisionUsingExistingPrimary(
                 outputPath,
                 request,
+                plannedVideos,
                 videoPlan,
                 subtitlePlan,
                 replacedSubtitleTracks,
@@ -123,9 +125,10 @@ public sealed partial class SeriesArchiveService
         foreach (var videoPath in plannedVideoPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
             plannedVideos.Add(new PreparedVideoSource(
                 videoPath,
-                await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken),
+                ApplySourceLanguageHints(metadata, videoPath),
                 new FileInfo(videoPath).Length));
         }
 
@@ -333,6 +336,7 @@ public sealed partial class SeriesArchiveService
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
         string outputPath,
         SeriesEpisodeMuxRequest request,
+        IReadOnlyList<PreparedVideoSource> plannedVideos,
         FinalVideoSelectionPlan videoPlan,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<ContainerTrackMetadata> replacedSubtitleTracks,
@@ -342,7 +346,11 @@ public sealed partial class SeriesArchiveService
         FileCopyPlan workingCopyPlan,
         AttachmentReusePlan attachmentReusePlan)
     {
-        var retainedNormalAudioTracks = GetRetainedNormalAudioTracks(existingArchive.AudioTracks);
+        var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForSelectedFreshVideos(
+            outputPath,
+            videoPlan.VideoSelections,
+            plannedVideos,
+            existingArchive.AudioTracks);
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
         var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
@@ -493,7 +501,7 @@ public sealed partial class SeriesArchiveService
             .Concat(manualAttachmentPaths)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForPrimaryReplacement(
+        var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForSelectedFreshVideos(
             outputPath,
             videoPlan.VideoSelections,
             plannedVideos,
@@ -582,7 +590,7 @@ public sealed partial class SeriesArchiveService
             .ToList();
     }
 
-    private static IReadOnlyList<ContainerTrackMetadata> SelectRetainedExistingNormalAudioTracksForPrimaryReplacement(
+    private static IReadOnlyList<ContainerTrackMetadata> SelectRetainedExistingNormalAudioTracksForSelectedFreshVideos(
         string outputPath,
         IReadOnlyList<VideoTrackSelection> videoSelections,
         IReadOnlyList<PreparedVideoSource> plannedVideos,
@@ -601,6 +609,28 @@ public sealed partial class SeriesArchiveService
         return retainedNormalAudioTracks
             .Where(track => !freshAudioLanguages.Contains(MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)))
             .ToList();
+    }
+
+    private static MediaTrackMetadata ApplySourceLanguageHints(MediaTrackMetadata metadata, string filePath)
+    {
+        var textMetadata = CompanionTextMetadataReader.ReadForMediaFile(filePath);
+        var sourceLanguageHint = MediaLanguageHelper.TryInferMuxLanguageCodeFromText(
+            Path.GetFileNameWithoutExtension(filePath),
+            textMetadata.Title,
+            textMetadata.Topic);
+        if (string.IsNullOrWhiteSpace(sourceLanguageHint))
+        {
+            return metadata;
+        }
+
+        // Der Archivabgleich muss dieselbe enge Mediathek-Sprachkorrektur sehen wie die
+        // Dateierkennung. Sonst würden "op Platt"-Quellen trotz korrekter Anzeige in den
+        // falschen Deutsch-/English-Slot einsortiert und vorhandene Platt-Spuren duplizieren.
+        return metadata with
+        {
+            VideoLanguage = sourceLanguageHint,
+            AudioLanguage = sourceLanguageHint
+        };
     }
 
     /// <summary>

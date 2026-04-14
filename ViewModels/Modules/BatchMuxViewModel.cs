@@ -74,6 +74,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         EditSelectedSubtitlesCommand = new RelayCommand(EditSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedAttachmentsCommand = new RelayCommand(EditSelectedAttachments, () => !_isBusy && SelectedEpisodeItem is not null);
         EditSelectedOutputCommand = new RelayCommand(EditSelectedOutput, () => !_isBusy && SelectedEpisodeItem is not null);
+        ApproveSelectedPlanReviewCommand = new RelayCommand(ApproveSelectedPlanReview, () => !_isBusy && SelectedEpisodeItem?.HasPendingPlanReview == true);
         RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected), unexpectedCommandErrorHandler);
         CancelBatchOperationCommand = new RelayCommand(CancelCurrentBatchOperation, () => CanCancelBatchOperation);
     }
@@ -94,6 +95,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public RelayCommand EditSelectedSubtitlesCommand { get; }
     public RelayCommand EditSelectedAttachmentsCommand { get; }
     public RelayCommand EditSelectedOutputCommand { get; }
+    public RelayCommand ApproveSelectedPlanReviewCommand { get; }
     public AsyncRelayCommand RunBatchCommand { get; }
     public RelayCommand CancelBatchOperationCommand { get; }
 
@@ -196,7 +198,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     public string ScanDirectoryTooltip => "Scannt den Quellordner nach Episoden und erstellt Vorschläge für Quellen, Titel und Zielpfade.";
 
-    public string ReviewPendingSourcesTooltip => "Öffnet nacheinander alle noch offenen Quellen- und TVDB-Prüfungen der ausgewählten Episoden.";
+    public string ReviewPendingSourcesTooltip => "Öffnet nacheinander alle noch offenen Quellen-, TVDB- und Hinweisprüfungen der ausgewählten Episoden.";
 
     public string OpenSelectedSourcesTooltip => "Prüft die Quelldateien des markierten Eintrags und erlaubt bei Bedarf eine alternative Quelle.";
 
@@ -295,6 +297,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         EditSelectedSubtitlesCommand.RaiseCanExecuteChanged();
         EditSelectedAttachmentsCommand.RaiseCanExecuteChanged();
         EditSelectedOutputCommand.RaiseCanExecuteChanged();
+        ApproveSelectedPlanReviewCommand.RaiseCanExecuteChanged();
         RunBatchCommand.RaiseCanExecuteChanged();
         CancelBatchOperationCommand.RaiseCanExecuteChanged();
     }

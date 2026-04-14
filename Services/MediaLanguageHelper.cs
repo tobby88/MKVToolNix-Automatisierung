@@ -38,6 +38,41 @@ internal static class MediaLanguageHelper
     }
 
     /// <summary>
+    /// Erkennt fachliche Sprachhinweise aus Mediathek-Dateinamen, TXT-Titeln oder vorhandenen Tracknamen.
+    /// </summary>
+    /// <remarks>
+    /// Diese Heuristik ist bewusst eng gehalten: Für die realen Mediathek-Fälle ist vor allem
+    /// <c>op Platt</c> wichtig, weil betroffene MP4-Container gelegentlich nur generische oder
+    /// falsche Sprachflags liefern. Ohne diesen Override würde Plattdeutsch als Deutsch oder
+    /// Englisch in falsche Archivslots einsortiert.
+    /// </remarks>
+    /// <param name="values">Zu prüfende Rohtexte, z. B. Dateiname, TXT-Titel oder Trackname.</param>
+    /// <returns>Ein projektweit normalisierter Sprachcode oder <see langword="null"/>, wenn kein sicherer Hinweis gefunden wurde.</returns>
+    public static string? TryInferMuxLanguageCodeFromText(params string?[] values)
+    {
+        var combined = string.Join(
+            " ",
+            values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => MojibakeRepair.NormalizeLikelyMojibake(value!).Trim()));
+        if (string.IsNullOrWhiteSpace(combined))
+        {
+            return null;
+        }
+
+        var normalized = combined.ToLowerInvariant();
+        if (normalized.Contains("op platt", StringComparison.Ordinal)
+            || normalized.Contains("plattdüütsch", StringComparison.Ordinal)
+            || normalized.Contains("plattdeutsch", StringComparison.Ordinal)
+            || normalized.Contains("plattduetsch", StringComparison.Ordinal))
+        {
+            return "nds";
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Liefert den zur normalisierten Sprache passenden lesbaren Tracknamen für die GUI und mkvmerge-Metadaten.
     /// </summary>
     /// <param name="languageCode">Rohwert oder bereits normalisierter Sprachcode.</param>

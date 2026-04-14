@@ -85,7 +85,8 @@ internal static class EpisodeFileNameHelper
     public static string SanitizeFileName(string fileName)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
-        var sanitized = string.Concat(fileName.Select(character => invalidCharacters.Contains(character) ? '_' : character));
+        var fileNameWithReadableColons = Regex.Replace(fileName, @"\s*:\s*", " - ");
+        var sanitized = string.Concat(fileNameWithReadableColons.Select(character => invalidCharacters.Contains(character) ? '_' : character));
         var trimmedValue = sanitized.TrimEnd(' ', '.');
         if (string.IsNullOrWhiteSpace(trimmedValue))
         {
@@ -105,7 +106,8 @@ internal static class EpisodeFileNameHelper
     public static string SanitizePathSegment(string value)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
-        var sanitized = string.Concat(value.Select(character =>
+        var valueWithReadableColons = Regex.Replace(value, @"\s*:\s*", " - ");
+        var sanitized = string.Concat(valueWithReadableColons.Select(character =>
             invalidCharacters.Contains(character)
             || character == Path.DirectorySeparatorChar
             || character == Path.AltDirectorySeparatorChar

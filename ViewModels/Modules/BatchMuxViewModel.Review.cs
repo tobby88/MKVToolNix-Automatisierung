@@ -111,7 +111,7 @@ internal sealed partial class BatchMuxViewModel
         }
 
         var path = _dialogService.SelectOutput(
-            ResolveSelectedItemDirectory(item),
+            ResolveSelectedOutputDirectory(item),
             string.IsNullOrWhiteSpace(item.OutputFileName) ? "Ausgabe.mkv" : item.OutputFileName);
 
         if (!string.IsNullOrWhiteSpace(path))
@@ -120,6 +120,22 @@ internal sealed partial class BatchMuxViewModel
             SetStatus("Ausgabedatei aktualisiert", ProgressValue);
             ScheduleSelectedItemPlanSummaryRefresh();
         }
+    }
+
+    private void ApproveSelectedPlanReview()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        item.ApprovePlanReview();
+        item.RefreshArchivePresence();
+        SetStatus("Fachlicher Hinweis freigegeben", ProgressValue);
+        RefreshOverview();
+        RefreshCommands();
+        ScheduleSelectedItemPlanSummaryRefresh();
     }
 
     private async Task OpenSelectedSourcesAsync()

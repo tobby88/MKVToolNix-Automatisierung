@@ -313,7 +313,11 @@ internal partial class EpisodeEditModel
     public bool IsManualCheckApproved => !RequiresManualCheck
         || string.IsNullOrWhiteSpace(CurrentReviewTargetPath);
 
-    public bool HasPendingChecks => HasPendingManualCheck || HasPendingMetadataReview;
+    public bool HasPendingPlanReview => HasActionablePlanNotes && !IsPlanReviewApproved;
+
+    public bool IsPlanReviewApproved => _isPlanReviewApproved;
+
+    public bool HasPendingChecks => HasPendingManualCheck || HasPendingMetadataReview || HasPendingPlanReview;
 
     public EpisodeReviewState ReviewState => EpisodeEditTextBuilder.GetReviewState(
         RequiresManualCheck,
@@ -326,7 +330,7 @@ internal partial class EpisodeEditModel
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    public bool HasActionablePlanNotes => ActionablePlanNotes.Count > 0;
+    public bool HasActionablePlanNotes => ActionablePlanNotes.Count > 0 && !IsPlanReviewApproved;
 
     public string PrimaryActionablePlanNote => EpisodeEditTextBuilder.GetPrimaryActionablePlanReviewNote(_planNotes) ?? string.Empty;
 
@@ -340,13 +344,13 @@ internal partial class EpisodeEditModel
         {
             return EpisodeEditTextBuilder.BuildReviewHint(
                 ReviewState,
-                EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes));
+                HasPendingPlanReview ? EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes) : null);
         }
     }
 
     public string ReviewHintTooltip => EpisodeEditTextBuilder.BuildReviewHintTooltip(
         ReviewState,
-        EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes),
+        HasPendingPlanReview ? EpisodeEditTextBuilder.BuildPlanReviewLabel(_planNotes) : null,
         PrimaryActionablePlanNote);
 
     public string ReviewBadgeBackground => HasActionablePlanNotes

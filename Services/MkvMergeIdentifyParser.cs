@@ -359,6 +359,12 @@ internal static class MkvMergeIdentifyParser
 
     private static string NormalizeLanguage(JsonElement properties)
     {
+        var trackNameLanguage = MediaLanguageHelper.TryInferMuxLanguageCodeFromText(ReadTrackName(properties));
+        if (!string.IsNullOrWhiteSpace(trackNameLanguage))
+        {
+            return trackNameLanguage;
+        }
+
         if (properties.ValueKind != JsonValueKind.Undefined && properties.TryGetProperty("language_ietf", out var ietfElement))
         {
             var value = ietfElement.GetString();

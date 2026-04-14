@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -32,6 +33,13 @@ public partial class BatchMuxView : UserControl
 
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (e.OriginalSource is DependencyObject originalSource
+            && FindVisualParent<CheckBox>(originalSource) is not null)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (DataContext is not BatchMuxViewModel viewModel || viewModel.SelectedEpisodeItem is null)
         {
             return;
@@ -55,6 +63,18 @@ public partial class BatchMuxView : UserControl
 
         DetailsExpander.IsExpanded = true;
         DetailsExpander.BringIntoView();
+    }
+
+    private void BatchLogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is not TextBox textBox)
+        {
+            return;
+        }
+
+        // Das Batch-Protokoll ist ein fortlaufender Sitzungslog. Neue Zeilen sollen beim
+        // laufenden Batch direkt sichtbar bleiben, ohne dass die TextBox unbegrenzt wächst.
+        textBox.ScrollToEnd();
     }
 
     private void DetailsExpander_OnExpanded(object sender, RoutedEventArgs e)
@@ -108,6 +128,22 @@ public partial class BatchMuxView : UserControl
     private void UpdateExpandedDetailsHeight()
     {
         DetailsExpander.Height = Math.Max(0d, DetailsHost.ActualHeight);
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? current)
+        where T : DependencyObject
+    {
+        while (current is not null)
+        {
+            if (current is T typed)
+            {
+                return typed;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
     }
 
     private void EpisodeIndexTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)

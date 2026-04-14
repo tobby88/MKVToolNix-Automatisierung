@@ -186,8 +186,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         ? "Noch keine MKV-Dateiliste geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
 
-    public string SettingsHintText => $"Emby-API-Keys werden lokal in {_services.Settings.SettingsFilePath} gespeichert.";
-
     private async Task SelectReportAsync()
     {
         var selectedPath = _dialogService.SelectFile(

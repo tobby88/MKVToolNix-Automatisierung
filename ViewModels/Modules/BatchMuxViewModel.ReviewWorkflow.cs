@@ -31,7 +31,7 @@ internal sealed partial class BatchMuxViewModel
         var approved = await EnsurePendingChecksApprovedAsync(readyItems);
         if (approved)
         {
-            _dialogService.ShowInfo("Hinweis", "Alle offenen Quellen- und TVDB-Prüfungen wurden abgeschlossen.");
+            _dialogService.ShowInfo("Hinweis", "Alle offenen Quellen-, TVDB- und Hinweisprüfungen wurden abgeschlossen.");
         }
     }
 
@@ -104,7 +104,11 @@ internal sealed partial class BatchMuxViewModel
             .Where(item => item.RequiresMetadataReview && !item.IsMetadataReviewApproved)
             .ToList();
 
-        if (pendingSourceItems.Count == 0 && pendingMetadataItems.Count == 0)
+        var pendingPlanReviewItems = readyItems
+            .Where(item => item.HasPendingPlanReview)
+            .ToList();
+
+        if (pendingSourceItems.Count == 0 && pendingMetadataItems.Count == 0 && pendingPlanReviewItems.Count == 0)
         {
             SetStatus("Keine offenen Pflichtprüfungen", ProgressValue);
             return true;
@@ -134,7 +138,27 @@ internal sealed partial class BatchMuxViewModel
             }
         }
 
+        if (pendingPlanReviewItems.Count > 0)
+        {
+            SelectedEpisodeItem = pendingPlanReviewItems[0];
+            _dialogService.ShowWarning(
+                "Hinweis prüfen",
+                "Mindestens ein ausgewählter Eintrag hat noch einen fachlichen Planhinweis. Bitte im Detailbereich prüfen und mit \"Hinweis geprüft\" freigeben.");
+            return false;
+        }
+
         return true;
+    }
+
+    private static string ResolveSelectedOutputDirectory(BatchEpisodeItemViewModel item)
+    {
+        var outputDirectory = Path.GetDirectoryName(item.OutputPath);
+        if (!string.IsNullOrWhiteSpace(outputDirectory) && Directory.Exists(outputDirectory))
+        {
+            return outputDirectory;
+        }
+
+        return ResolveSelectedItemDirectory(item);
     }
 
     private static string ResolveSelectedItemDirectory(BatchEpisodeItemViewModel item)

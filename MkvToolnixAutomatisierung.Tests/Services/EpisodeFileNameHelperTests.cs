@@ -39,7 +39,15 @@ public sealed class EpisodeFileNameHelperTests
     {
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie:Test", "01", "02", "Pilot?");
 
-        Assert.Equal("Serie_Test - S01E02 - Pilot_.mkv", fileName);
+        Assert.Equal("Serie - Test - S01E02 - Pilot_.mkv", fileName);
+    }
+
+    [Fact]
+    public void BuildEpisodeFileName_ReplacesTitleColonWithReadableSeparator()
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Neues aus Büttenwarder", "2014", "05", "Olympische Rekorde (1): Rekord");
+
+        Assert.Equal("Neues aus Büttenwarder - S2014E05 - Olympische Rekorde (1) - Rekord.mkv", fileName);
     }
 
     [Fact]

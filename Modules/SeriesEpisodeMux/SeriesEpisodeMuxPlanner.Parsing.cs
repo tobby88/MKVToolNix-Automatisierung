@@ -368,6 +368,30 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return (int)Math.Round(duration.Value.TotalSeconds);
     }
 
+    private static MediaTrackMetadata ApplySourceLanguageHints(
+        MediaTrackMetadata metadata,
+        string filePath,
+        CompanionTextMetadata textMetadata)
+    {
+        var sourceLanguageHint = MediaLanguageHelper.TryInferMuxLanguageCodeFromText(
+            Path.GetFileNameWithoutExtension(filePath),
+            textMetadata.Title,
+            textMetadata.Topic);
+        if (string.IsNullOrWhiteSpace(sourceLanguageHint))
+        {
+            return metadata;
+        }
+
+        // Mediathek-Quellen mit "op Platt" tragen ihre Sprache häufig nur in Datei-/TXT-Texten.
+        // Der Override wird auf Video und normale Audiospur angewendet, damit Archivvergleich
+        // und spätere Tracknamen denselben fachlichen Sprachslot verwenden.
+        return metadata with
+        {
+            VideoLanguage = sourceLanguageHint,
+            AudioLanguage = sourceLanguageHint
+        };
+    }
+
     private sealed record EpisodeDetectionContext(
         string Directory,
         EpisodeIdentity EpisodeIdentity,

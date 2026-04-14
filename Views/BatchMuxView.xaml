@@ -149,7 +149,16 @@
                           MinHeight="130"
                           Margin="8">
                     <DataGrid.Columns>
-                        <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="SizeToHeader" />
+                        <DataGridTemplateColumn Header="Auswahl" Width="SizeToHeader">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Focusable="False"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="1.1*" MinWidth="140" IsReadOnly="True" />
                         <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="Auto" MinWidth="48" IsReadOnly="True" />
 
@@ -290,6 +299,11 @@
                                         <TextBlock Margin="0,4,0,0"
                                                    TextWrapping="Wrap"
                                                    Text="{Binding SelectedEpisodeItem.PrimaryActionablePlanNote, Mode=OneWay}" />
+                                        <Button Margin="0,8,0,0"
+                                                HorizontalAlignment="Left"
+                                                Padding="10,4"
+                                                Command="{Binding ApproveSelectedPlanReviewCommand}"
+                                                Content="Hinweis gepr&#252;ft" />
                                     </StackPanel>
                                 </Border>
 
@@ -568,7 +582,8 @@
                                Opacity="0.75"
                                TextWrapping="Wrap"
                                Text="{Binding BatchLogInfoText, Mode=OneWay}" />
-                    <TextBox Margin="8"
+                    <TextBox x:Name="BatchLogTextBox"
+                             Margin="8"
                              FontFamily="Consolas"
                              AcceptsReturn="True"
                              AcceptsTab="True"
@@ -577,6 +592,8 @@
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
                              MinHeight="140"
+                             MaxHeight="260"
+                             TextChanged="BatchLogTextBox_OnTextChanged"
                              Text="{Binding LogText, Mode=OneWay}" />
                 </StackPanel>
             </Expander>

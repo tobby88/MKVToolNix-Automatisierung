@@ -264,6 +264,14 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal("Mehrfachfolge prüfen", item.ReviewHint);
         Assert.Contains("Mehrfachfolge", item.ReviewHintTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(BatchEpisodeStatusKind.ReviewPending, item.StatusKind);
+
+        item.ApprovePlanReview();
+        item.RefreshArchivePresence();
+
+        Assert.False(item.HasPendingPlanReview);
+        Assert.False(item.HasActionablePlanNotes);
+        Assert.Equal("Keine nötig", item.ReviewHint);
+        Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
     }
 
     [Fact]

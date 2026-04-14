@@ -309,6 +309,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.RequiresManualCheck)
             or nameof(BatchEpisodeItemViewModel.IsMetadataReviewApproved)
             or nameof(BatchEpisodeItemViewModel.RequiresMetadataReview)
+            or nameof(BatchEpisodeItemViewModel.HasPendingChecks)
             or nameof(BatchEpisodeItemViewModel.ArchiveState)
             or nameof(BatchEpisodeItemViewModel.OutputPath);
     }

@@ -96,15 +96,17 @@ public sealed partial class SeriesEpisodeMuxPlanner
         cancellationToken.ThrowIfCancellationRequested();
         var subtitlePaths = FindExactSubtitleFiles(seed.FilePath, companionFilesByBaseName);
 
+        var mediaMetadataWithLanguageHints = ApplySourceLanguageHints(mediaMetadata, seed.FilePath, seed.TextMetadata);
+
         return new NormalVideoCandidate(
             FilePath: seed.FilePath,
             Identity: seed.Identity,
             Sender: NormalizeSender(seed.TextMetadata.Sender),
             DurationSeconds: durationSeconds,
-            VideoWidth: mediaMetadata.VideoWidth,
-            VideoCodecLabel: mediaMetadata.VideoCodecLabel,
-            VideoLanguage: MediaLanguageHelper.NormalizeMuxLanguageCode(mediaMetadata.VideoLanguage),
-            AudioCodecLabel: mediaMetadata.AudioCodecLabel,
+            VideoWidth: mediaMetadataWithLanguageHints.VideoWidth,
+            VideoCodecLabel: mediaMetadataWithLanguageHints.VideoCodecLabel,
+            VideoLanguage: MediaLanguageHelper.NormalizeMuxLanguageCode(mediaMetadataWithLanguageHints.VideoLanguage),
+            AudioCodecLabel: mediaMetadataWithLanguageHints.AudioCodecLabel,
             FileSizeBytes: new FileInfo(seed.FilePath).Length,
             SubtitlePaths: subtitlePaths,
             AttachmentPath: seed.AttachmentPath);

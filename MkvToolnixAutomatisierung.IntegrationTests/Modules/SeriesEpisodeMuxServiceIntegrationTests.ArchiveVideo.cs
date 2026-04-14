@@ -479,4 +479,112 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Theory]
+    [InlineData("Rififi … es geht weiter (2)", "Beispielserie - S2014E06 - Rififi … es geht weiter (2).mkv")]
+    [InlineData("Olympische Rekorde (1): Rekord", "Beispielserie - S2014E05 - Olympische Rekorde (1) - Rekord.mkv")]
+    public async Task CreatePlanAsync_AddsVariantNote_ForMultipartContinuationAndColonSubtitles(
+        string title,
+        string outputFileName)
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-episode-variant-extended");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-episode-variant-extended");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var sourceFileTitle = title.Replace(':', '_');
+        var mainVideoPath = CreateFile(sourceDirectory, $"Beispielserie - {sourceFileTitle} (S2014_E05).mp4");
+        CreateFile(
+            sourceDirectory,
+            $"Beispielserie - {sourceFileTitle} (S2014_E05).txt",
+            $"Sender: NDR\r\nThema: Beispielserie\r\nTitel: {title} (S2014_E05)\r\nDauer: 00:26:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var seasonDirectory = Path.Combine(archiveDirectory, "Beispielserie", "Season 2014");
+        var outputPath = Path.Combine(seasonDirectory, outputFileName);
+        var multipartPath = Path.Combine(
+            seasonDirectory,
+            title.StartsWith("Olympische", StringComparison.Ordinal)
+                ? "Beispielserie - S2014E05-E06 - Olympische Rekorde.mkv"
+                : "Beispielserie - S2014E05-E06 - Rififi.mkv");
+        CreateFile(seasonDirectory, Path.GetFileName(outputPath), "archive-single");
+        CreateFile(seasonDirectory, Path.GetFileName(multipartPath), "archive-double");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            multipartPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: title));
+
+        Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_OpPlattSourceWithWrongLanguageFlag_ReplacesOnlyMatchingPlattArchiveSlot()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-op-platt-language-hint-archive");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-op-platt-language-hint-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var opPlattVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Büttenwarder op Platt: Bildungsschock\r\nDauer: 00:24:25");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            opPlattVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "en"),
+            CreateAudioTrack(1, "AAC", language: "en"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season 2014",
+            "Neues aus Büttenwarder - S2014E01 - Bildungsschock.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", language: "de", trackName: "Deutsch - E-AC-3"),
+            CreateVideoTrack(2, "AVC/H.264", "1280x720", language: "nds", trackName: "Plattdüütsch - HD - H.264"),
+            CreateAudioTrack(3, "AAC", language: "nds", trackName: "Plattdüütsch - AAC"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            opPlattVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Bildungsschock",
+            PlannedVideoPaths: [opPlattVideoPath]));
+
+        Assert.Equal([outputPath, opPlattVideoPath], plan.VideoSources.Select(source => source.FilePath).ToList());
+        Assert.Equal(["de", "nds"], plan.VideoSources.Select(source => source.LanguageCode).ToList());
+        Assert.Equal([outputPath, opPlattVideoPath], plan.AudioSources.Select(source => source.FilePath).ToList());
+        Assert.Equal(["de", "nds"], plan.AudioSources.Select(source => source.LanguageCode).ToList());
+        Assert.DoesNotContain(plan.VideoSources, source => source.TrackName.Contains("English", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.AudioSources, source => source.TrackName.Contains("English", StringComparison.OrdinalIgnoreCase));
+        var summary = plan.BuildUsageSummary();
+        Assert.NotNull(summary.AdditionalVideos.RemovedText);
+        Assert.Contains("Plattdüütsch", summary.AdditionalVideos.RemovedText, StringComparison.OrdinalIgnoreCase);
+    }
 }
