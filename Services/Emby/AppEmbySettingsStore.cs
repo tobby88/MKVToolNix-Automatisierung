@@ -42,7 +42,7 @@ public sealed class AppEmbySettingsStore
     public void Save(AppEmbySettings settings)
     {
         var normalizedSettings = settings?.Clone() ?? new AppEmbySettings();
-        _settingsStore.Update(combinedSettings => combinedSettings.Emby = normalizedSettings.Clone());
+        _settingsStore.Update(combinedSettings => combinedSettings.Emby = normalizedSettings);
     }
 
     /// <summary>
