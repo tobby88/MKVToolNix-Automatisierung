@@ -435,6 +435,54 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_DoesNotAddDurationMismatchNote_ForShortSpecials()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-short-special-duration");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-short-special-duration");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Der Vorspann der Kultserie (S00_E01).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Der Vorspann der Kultserie (S00_E01).txt",
+            "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Der Vorspann der Kultserie (S00_E01)\r\nDauer: 00:01:26");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "960x544"),
+            CreateAudioTrack(1, "AAC"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Beispielserie",
+            "Specials",
+            "Beispielserie - S00E01 - Der Vorspann der Kultserie.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [
+                CreateAttachment(
+                    "Beispielserie-Der Vorspann der Kultserie.txt",
+                    textContent: "Sender: NDR\r\nThema: Beispielserie\r\nTitel: Der Vorspann der Kultserie\r\nDauer: 00:00:43")
+            ],
+            CreateVideoTrack(0, "AVC/H.264", "960x544", trackName: "Deutsch - SD - H.264"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Der Vorspann der Kultserie"));
+
+        Assert.DoesNotContain(plan.Notes, note => note.Contains("Doppelfolge", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AddsVariantNote_WhenArchiveContainsMatchingMultipartEpisodeVariant()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-episode-variant");
@@ -738,5 +786,50 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var summary = plan.BuildUsageSummary();
         Assert.NotNull(summary.AdditionalVideos.RemovedText);
         Assert.Contains("Plattdüütsch", summary.AdditionalVideos.RemovedText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_GermanSourceWithWrongVideoLanguageFlag_DoesNotCreateEnglishVideoSlot()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-german-video-language-flag");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-german-video-language-flag");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var sourcePath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Büttenwarder mobil_ Killerkralle-0364751988.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder mobil_ Killerkralle-0364751988.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Büttenwarder mobil: Killerkralle\r\nDauer: 00:03:28");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            sourcePath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "eng"),
+            CreateAudioTrack(1, "AAC", language: "ger"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Specials",
+            "Neues aus Büttenwarder - S00E22 - Büttenwarder mobil - Killerkralles Mondn Beik.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de", trackName: "Deutsch - HD - H.264"),
+            CreateAudioTrack(1, "AAC", language: "de", trackName: "Deutsch - AAC"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            sourcePath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Büttenwarder mobil - Killerkralles Mondn Beik",
+            PlannedVideoPaths: [sourcePath]));
+
+        Assert.True(plan.SkipMux);
+        Assert.DoesNotContain(plan.Notes, note => note.Contains("English", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("English", plan.BuildUsageSummary().AdditionalVideos.CurrentText, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -479,6 +479,101 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsBuettenwarderLanguageVariants_WithSlightDurationDifferences()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-buettenwarder-duration-tolerance");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-buettenwarder-duration-tolerance");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var normalVideoPath = CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4",
+            "de");
+        var opPlattVideoPath = CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.mp4",
+            new string('p', 64));
+
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Bildungsschock-0186867506.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Bildungsschock\r\nDauer: 00:24:18");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Büttenwarder op Platt_ Bildungsschock-0183875890.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Büttenwarder op Platt: Bildungsschock\r\nDauer: 00:24:25");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            normalVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            opPlattVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "und"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(opPlattVideoPath);
+
+        Assert.Equal(normalVideoPath, detected.MainVideoPath);
+        Assert.Contains(opPlattVideoPath, detected.AdditionalVideoPaths, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, normalVideoPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, opPlattVideoPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsGenericFilmeTopicAndHoerfassungWithSeriesSources()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-pettersson-findus-generic-topic");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-pettersson-findus-generic-topic");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var zdfNormalPath = CreateFile(sourceDirectory, "Filme-Pettersson und Findus - Findus zieht um-0585373376.mp4");
+        var kikaNormalPath = CreateFile(sourceDirectory, "Pettersson und Findus-Pettersson und Findus - Findus zieht um-0986869160.mp4");
+        var hoerfassungPath = CreateFile(sourceDirectory, "Pettersson und Findus-Pettersson und Findus - Findus zieht um (Hörfassung)-1824923996.mp4");
+
+        CreateFile(
+            sourceDirectory,
+            "Filme-Pettersson und Findus - Findus zieht um-0585373376.txt",
+            "Sender: ZDF-tivi\r\nThema: Filme\r\nTitel: Pettersson und Findus - Findus zieht um\r\nDauer: 01:13:30");
+        CreateFile(
+            sourceDirectory,
+            "Pettersson und Findus-Pettersson und Findus - Findus zieht um-0986869160.txt",
+            "Sender: KiKA\r\nThema: Pettersson und Findus\r\nTitel: Pettersson und Findus - Findus zieht um\r\nDauer: 01:13:30");
+        CreateFile(
+            sourceDirectory,
+            "Pettersson und Findus-Pettersson und Findus - Findus zieht um (Hörfassung)-1824923996.txt",
+            "Sender: KiKA\r\nThema: Pettersson und Findus\r\nTitel: Pettersson und Findus - Findus zieht um (Hörfassung)\r\nDauer: 01:13:30");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            zdfNormalPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            kikaNormalPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            hoerfassungPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(zdfNormalPath);
+
+        Assert.Equal("Pettersson und Findus", detected.SeriesName);
+        Assert.Equal("Findus zieht um", detected.SuggestedTitle);
+        Assert.Equal(hoerfassungPath, detected.AudioDescriptionPath);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, zdfNormalPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, kikaNormalPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, hoerfassungPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotUseClearlyIncompleteMp4_ButKeepsItsSubtitles()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-incomplete-mp4");

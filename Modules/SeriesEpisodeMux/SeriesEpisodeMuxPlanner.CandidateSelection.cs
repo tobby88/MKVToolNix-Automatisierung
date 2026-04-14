@@ -233,10 +233,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         var filtered = candidates
-            .Where(candidate => candidate.DurationSeconds is null || Math.Abs(candidate.DurationSeconds.Value - preferredDurationSeconds.Value) <= 1)
+            .Where(candidate => candidate.DurationSeconds is null || AreCandidateDurationsCompatible(candidate.DurationSeconds.Value, preferredDurationSeconds.Value))
             .ToList();
 
         return filtered.Count == 0 ? candidates.ToList() : filtered;
+    }
+
+    private static bool AreCandidateDurationsCompatible(int candidateDurationSeconds, int preferredDurationSeconds)
+    {
+        // Mediathek-Varianten derselben Episode unterscheiden sich real gelegentlich um
+        // wenige Sekunden, z. B. zwischen normaler NDR-Fassung und "op Platt". Ein
+        // starres 1-Sekunden-Fenster trennt dann fachlich zusammengehörige Sprachslots
+        // und verhindert spätere Qualitätsersetzungen im Archivabgleich.
+        var toleranceSeconds = Math.Max(10, (int)Math.Round(preferredDurationSeconds * 0.01d));
+        return Math.Abs(candidateDurationSeconds - preferredDurationSeconds) <= toleranceSeconds;
     }
 
     private static List<string> BuildDetectionNotes(

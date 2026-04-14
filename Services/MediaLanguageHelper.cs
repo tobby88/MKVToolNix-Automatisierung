@@ -38,6 +38,76 @@ internal static class MediaLanguageHelper
     }
 
     /// <summary>
+    /// Bestimmt die fachliche Sprache einer frischen Videospur für den Mux- und Archivvergleich.
+    /// </summary>
+    /// <remarks>
+    /// Gerade NDR-/Mediathek-MP4s markieren die Videospur gelegentlich pauschal als Englisch,
+    /// obwohl die einzige Tonspur Deutsch ist. Für diesen engen Falschflag-Fall und für
+    /// wirklich unbestimmte Videosprachen ist die Audiosprache belastbarer als das Video-Flag.
+    /// Explizite Dateinamen-/TXT-Hinweise wie <c>op Platt</c> bleiben trotzdem stärker, weil
+    /// sie echte Sprachvarianten beschreiben, die Container-Metadaten häufig nicht korrekt tragen.
+    /// </remarks>
+    /// <param name="videoLanguageCode">Rohsprache der Videospur aus Container-Metadaten.</param>
+    /// <param name="primaryAudioLanguageCode">Rohsprache der primären normalen Audiospur.</param>
+    /// <param name="explicitSourceLanguageHint">Explizit aus Dateiname oder TXT erkannte Quellsprache.</param>
+    /// <returns>Projektweit normalisierter Sprachcode für den Video-Slot.</returns>
+    public static string ResolveMuxVideoLanguageCode(
+        string? videoLanguageCode,
+        string? primaryAudioLanguageCode,
+        string? explicitSourceLanguageHint)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitSourceLanguageHint))
+        {
+            return NormalizeMuxLanguageCode(explicitSourceLanguageHint);
+        }
+
+        var normalizedVideoLanguage = NormalizeMuxLanguageCode(videoLanguageCode);
+        if (string.IsNullOrWhiteSpace(primaryAudioLanguageCode))
+        {
+            return normalizedVideoLanguage;
+        }
+
+        var normalizedAudioLanguage = NormalizeMuxLanguageCode(primaryAudioLanguageCode);
+        if (IsUnspecifiedLanguageCode(videoLanguageCode))
+        {
+            return normalizedAudioLanguage;
+        }
+
+        // Die beobachtete Mediathek-Regressionsklasse ist "Video: eng, Audio: ger".
+        // Andere echte Mischfälle, z. B. bewusst englische Tonspuren bei bereits
+        // gesetztem deutschem Video-Flag, dürfen dadurch nicht versehentlich in
+        // einen anderen Sprachslot verschoben werden.
+        if (IsEnglishLanguageCode(videoLanguageCode) && normalizedAudioLanguage == "de")
+        {
+            return normalizedAudioLanguage;
+        }
+
+        return normalizedVideoLanguage;
+    }
+
+    private static bool IsUnspecifiedLanguageCode(string? languageCode)
+    {
+        if (string.IsNullOrWhiteSpace(languageCode))
+        {
+            return true;
+        }
+
+        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
+        return normalized is "und" or "unknown" or "unk" or "zxx";
+    }
+
+    private static bool IsEnglishLanguageCode(string? languageCode)
+    {
+        if (string.IsNullOrWhiteSpace(languageCode))
+        {
+            return false;
+        }
+
+        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
+        return normalized is "en" or "eng" || normalized.StartsWith("en-", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Erkennt fachliche Sprachhinweise aus Mediathek-Dateinamen, TXT-Titeln oder vorhandenen Tracknamen.
     /// </summary>
     /// <remarks>

@@ -651,18 +651,21 @@ public sealed partial class SeriesArchiveService
             Path.GetFileNameWithoutExtension(filePath),
             textMetadata.Title,
             textMetadata.Topic);
-        if (string.IsNullOrWhiteSpace(sourceLanguageHint))
-        {
-            return metadata;
-        }
+        var videoLanguage = MediaLanguageHelper.ResolveMuxVideoLanguageCode(
+            metadata.VideoLanguage,
+            metadata.AudioLanguage,
+            sourceLanguageHint);
+        var audioLanguage = string.IsNullOrWhiteSpace(sourceLanguageHint)
+            ? metadata.AudioLanguage
+            : sourceLanguageHint;
 
-        // Der Archivabgleich muss dieselbe enge Mediathek-Sprachkorrektur sehen wie die
-        // Dateierkennung. Sonst würden "op Platt"-Quellen trotz korrekter Anzeige in den
-        // falschen Deutsch-/English-Slot einsortiert und vorhandene Platt-Spuren duplizieren.
+        // Der Archivabgleich muss dieselbe Mediathek-Sprachkorrektur sehen wie die
+        // Dateierkennung. Sonst landen Quellen trotz korrekter Anzeige in falschen
+        // Sprachslots und ersetzen oder duplizieren Archivspuren.
         return metadata with
         {
-            VideoLanguage = sourceLanguageHint,
-            AudioLanguage = sourceLanguageHint
+            VideoLanguage = videoLanguage,
+            AudioLanguage = audioLanguage
         };
     }
 

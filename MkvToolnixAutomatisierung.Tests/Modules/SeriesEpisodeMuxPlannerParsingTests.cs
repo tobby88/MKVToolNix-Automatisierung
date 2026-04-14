@@ -59,6 +59,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeEpisodeTitle_RemovesHoerfassungMarker()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Findus zieht um (Hörfassung)");
+
+        Assert.Equal("Findus zieht um", normalizedTitle);
+    }
+
+    [Fact]
     public void NormalizeEpisodeTitle_RemovesShortFilmEditorialLabel()
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Goldenes Blut - Kurzfilm");

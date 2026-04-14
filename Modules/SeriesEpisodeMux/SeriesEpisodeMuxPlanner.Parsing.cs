@@ -13,7 +13,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var txtTitleParts = ParseTitleDetails(textMetadata.Title);
         var hasExplicitTxtTitle = !string.IsNullOrWhiteSpace(textMetadata.Title);
 
-        var seriesName = !string.IsNullOrWhiteSpace(textMetadata.Topic)
+        var hasSpecificTextTopic = !string.IsNullOrWhiteSpace(textMetadata.Topic)
+            && !IsGenericMetadataTopic(textMetadata.Topic);
+        var seriesName = hasSpecificTextTopic
             ? NormalizeSeriesName(textMetadata.Topic!)
             : NormalizeSeriesName(fileNameParts.SeriesName);
 
@@ -150,6 +152,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return normalized.Trim();
     }
 
+    private static bool IsGenericMetadataTopic(string? topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            return false;
+        }
+
+        return BuildSeriesIdentityKey(topic) is "filme" or "film";
+    }
+
     private static TitleDetails ParseTitleDetails(string? rawTitle)
     {
         var titlePart = NormalizeEpisodeTitle(rawTitle);
@@ -208,8 +220,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         name = Regex.Replace(name, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*$", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskrip\w*\b", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAD\b", string.Empty, RegexOptions.IgnoreCase);
         return Regex.Replace(name, @"\s+", " ").Trim();
     }
@@ -230,7 +244,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}(?:\s*-\s*\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);
         return normalized;
@@ -239,6 +255,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private static string RemoveEditorialLabels(string value)
     {
         var normalized = Regex.Replace(value, @"\s*-\s*Neue Folgen?\b.*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"^\s*Filme\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*-\s*Der Samstagskrimi\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Der Samstagskrimi\s*$", string.Empty, RegexOptions.IgnoreCase);
@@ -379,18 +396,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
             Path.GetFileNameWithoutExtension(filePath),
             textMetadata.Title,
             textMetadata.Topic);
-        if (string.IsNullOrWhiteSpace(sourceLanguageHint))
-        {
-            return metadata;
-        }
+        var videoLanguage = MediaLanguageHelper.ResolveMuxVideoLanguageCode(
+            metadata.VideoLanguage,
+            metadata.AudioLanguage,
+            sourceLanguageHint);
+        var audioLanguage = string.IsNullOrWhiteSpace(sourceLanguageHint)
+            ? metadata.AudioLanguage
+            : sourceLanguageHint;
 
-        // Mediathek-Quellen mit "op Platt" tragen ihre Sprache häufig nur in Datei-/TXT-Texten.
-        // Der Override wird auf Video und normale Audiospur angewendet, damit Archivvergleich
-        // und spätere Tracknamen denselben fachlichen Sprachslot verwenden.
+        // Mediathek-Quellen mit "op Platt" tragen ihre Sprache häufig nur in Datei-/TXT-Texten;
+        // sonst ist bei einsprachigen MP4s die Audiosprache belastbarer als das Video-Flag.
         return metadata with
         {
-            VideoLanguage = sourceLanguageHint,
-            AudioLanguage = sourceLanguageHint
+            VideoLanguage = videoLanguage,
+            AudioLanguage = audioLanguage
         };
     }
 

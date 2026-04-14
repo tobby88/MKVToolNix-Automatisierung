@@ -42,6 +42,8 @@ internal static class EpisodeFileNameHelper
     {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
         return fileName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase)
+            || fileName.Contains("hörfassung", StringComparison.OrdinalIgnoreCase)
+            || fileName.Contains("hoerfassung", StringComparison.OrdinalIgnoreCase)
             || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
     }
 

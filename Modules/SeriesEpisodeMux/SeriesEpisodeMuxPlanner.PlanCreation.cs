@@ -7,6 +7,7 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 public sealed partial class SeriesEpisodeMuxPlanner
 {
     private static readonly TimeSpan DurationHintProbeTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MinimumDurationForMultipartHint = TimeSpan.FromMinutes(10);
 
     /// <summary>
     /// Erzeugt aus einer konkreten Episodeingabe einen vollständig aufgelösten Mux-Plan inklusive Archivintegration.
@@ -253,6 +254,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
+        if (IsShortDurationMultipartHintTooWeak(sourceDuration, archiveDuration))
+        {
+            return null;
+        }
+
         var hasConflictingDurationEvidence = false;
         if (sourceDuration is not null
             && sourceTextDuration is TimeSpan resolvedSourceTextDuration)
@@ -473,6 +479,22 @@ public sealed partial class SeriesEpisodeMuxPlanner
         {
             return null;
         }
+    }
+
+    private static bool IsShortDurationMultipartHintTooWeak(TimeSpan? sourceDuration, TimeSpan? archiveDuration)
+    {
+        if (sourceDuration is null || archiveDuration is null)
+        {
+            return false;
+        }
+
+        // Die Laufzeitvielfach-Heuristik ist für echte Serienepisoden gedacht. Bei sehr
+        // kurzen Specials reichen TXT-Angaben allein nicht als Doppelfolgen-Signal, weil
+        // kleine redaktionelle Clips häufiger ungenaue oder wiederverwendete Begleitwerte
+        // tragen. So bleibt der seltene Nutzen für 25/50-Minuten-Folgen erhalten, ohne
+        // kurze "Vorspann"/"Büttenwarderisch"-Clips ständig zur manuellen Prüfung zu zwingen.
+        return sourceDuration.Value < MinimumDurationForMultipartHint
+            || archiveDuration.Value < MinimumDurationForMultipartHint;
     }
 
     private async Task<bool> HasConflictingDurationEvidenceAsync(
