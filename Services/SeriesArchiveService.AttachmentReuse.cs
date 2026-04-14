@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
-    private static readonly TimeSpan AttachmentExtractionTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan TextAttachmentExtractionTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Bestimmt, welche vorhandenen Attachments einer Archiv-MKV im finalen Mux-Plan erhalten bleiben dürfen.
@@ -463,7 +463,7 @@ public sealed partial class SeriesArchiveService
         string outputPath,
         CancellationToken cancellationToken)
     {
-        using var timeout = new CancellationTokenSource(AttachmentExtractionTimeout);
+        using var timeout = new CancellationTokenSource(TextAttachmentExtractionTimeout);
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         using var process = new Process
         {
