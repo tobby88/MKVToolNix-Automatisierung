@@ -172,6 +172,32 @@ public sealed partial class SeriesArchiveService
             track => track,
             StringComparer.OrdinalIgnoreCase);
 
+        var (selectedVideos, retainedExistingTrackIds) = SelectVideoTracksFromSlots(outputPath, freshBySlot, existingBySlot);
+
+        var selectedVideoOrder = selectedVideos
+            .Where(selection => string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select((selection, index) => new { selection.TrackId, Index = index })
+            .ToDictionary(entry => entry.TrackId, entry => entry.Index);
+        var retainedExistingTracks = allExistingVideoTracks
+            .Where(track => retainedExistingTrackIds.Contains(track.TrackId))
+            .OrderBy(track => selectedVideoOrder[track.TrackId])
+            .ToList();
+        var removedExistingTracks = allExistingVideoTracks
+            .Where(track => !retainedExistingTrackIds.Contains(track.TrackId))
+            .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
+            .ThenBy(track => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(track.CodecLabel))
+            .ThenByDescending(track => track.VideoWidth)
+            .ThenBy(track => track.TrackId)
+            .ToList();
+
+        return new FinalVideoSelectionPlan(selectedVideos, retainedExistingTracks, removedExistingTracks);
+    }
+
+    private static (IReadOnlyList<VideoTrackSelection> SelectedVideos, IReadOnlyCollection<int> RetainedExistingTrackIds) SelectVideoTracksFromSlots(
+        string outputPath,
+        IReadOnlyDictionary<string, PreparedVideoSource> freshBySlot,
+        IReadOnlyDictionary<string, ContainerTrackMetadata> existingBySlot)
+    {
         var selectedVideos = new List<VideoTrackSelection>();
         var retainedExistingTrackIds = new HashSet<int>();
 
@@ -211,23 +237,7 @@ public sealed partial class SeriesArchiveService
             }
         }
 
-        var selectedVideoOrder = selectedVideos
-            .Where(selection => string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
-            .Select((selection, index) => new { selection.TrackId, Index = index })
-            .ToDictionary(entry => entry.TrackId, entry => entry.Index);
-        var retainedExistingTracks = allExistingVideoTracks
-            .Where(track => retainedExistingTrackIds.Contains(track.TrackId))
-            .OrderBy(track => selectedVideoOrder[track.TrackId])
-            .ToList();
-        var removedExistingTracks = allExistingVideoTracks
-            .Where(track => !retainedExistingTrackIds.Contains(track.TrackId))
-            .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
-            .ThenBy(track => MediaCodecPreferenceHelper.GetVideoCodecPreferenceRank(track.CodecLabel))
-            .ThenByDescending(track => track.VideoWidth)
-            .ThenBy(track => track.TrackId)
-            .ToList();
-
-        return new FinalVideoSelectionPlan(selectedVideos, retainedExistingTracks, removedExistingTracks);
+        return (selectedVideos, retainedExistingTrackIds);
     }
 
     private static VideoTrackSelection CreateVideoTrackSelection(PreparedVideoSource video)
