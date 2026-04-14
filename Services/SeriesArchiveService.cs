@@ -72,7 +72,7 @@ public sealed partial class SeriesArchiveService
 
         var targetDirectory = Path.Combine(
             ArchiveRootDirectory,
-            SanitizePathPart(seriesName),
+            EpisodeFileNameHelper.SanitizePathSegment(seriesName),
             seasonFolderName);
 
         return Path.Combine(targetDirectory, EpisodeFileNameHelper.BuildEpisodeFileName(seriesName, seasonNumber, episodeNumber, title));
@@ -151,10 +151,6 @@ public sealed partial class SeriesArchiveService
         }
     }
 
-    private static string SanitizePathPart(string value)
-    {
-        return EpisodeFileNameHelper.SanitizePathSegment(value);
-    }
 }
 
 /// <summary>

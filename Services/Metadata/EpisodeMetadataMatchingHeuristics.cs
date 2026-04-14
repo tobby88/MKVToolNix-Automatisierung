@@ -125,7 +125,6 @@ internal static class EpisodeMetadataMatchingHeuristics
         }
 
         var bestTitleSimilarity = scoredEpisodes.Max(entry => entry.TitleSimilarity);
-        var bestTitleSimilarityCount = scoredEpisodes.Count(entry => entry.TitleSimilarity == bestTitleSimilarity);
         var exactTitleMatchCount = scoredEpisodes.Count(entry => entry.TitleSimilarity >= 30);
         var strongTitleMatchCount = scoredEpisodes.Count(entry => entry.TitleSimilarity >= 22);
         var prioritizedEpisodes = scoredEpisodes.AsEnumerable();
@@ -170,7 +169,6 @@ internal static class EpisodeMetadataMatchingHeuristics
             bestEpisode.EpisodeScore,
             combinedScore,
             bestEpisode.TitleSimilarity,
-            bestTitleSimilarityCount,
             exactTitleMatchCount,
             strongTitleMatchCount,
             SeasonMatched: int.TryParse(guess.SeasonNumber, out var seasonNumber) && bestEpisode.Episode.SeasonNumber == seasonNumber,
@@ -363,7 +361,6 @@ internal sealed record ScoredEpisodeMatch(
     int EpisodeScore,
     int CombinedScore,
     int TitleSimilarity,
-    int BestTitleSimilarityCount,
     int ExactTitleMatchCount,
     int StrongTitleMatchCount,
     bool SeasonMatched,
@@ -378,7 +375,6 @@ internal sealed record ScoredAutomaticMatch(
     ScoredEpisodeMatch SelectionMatch)
 {
     public int TitleSimilarity => SelectionMatch.TitleSimilarity;
-    public int BestTitleSimilarityCount => SelectionMatch.BestTitleSimilarityCount;
     public int ExactTitleMatchCount => SelectionMatch.ExactTitleMatchCount;
     public int StrongTitleMatchCount => SelectionMatch.StrongTitleMatchCount;
     public bool SeasonMatched => SelectionMatch.SeasonMatched;
