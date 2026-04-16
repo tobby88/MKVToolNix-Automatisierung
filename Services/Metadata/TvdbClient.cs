@@ -90,7 +90,7 @@ internal sealed class TvdbClient : ITvdbClient
         using var response = await SendAuthorizedGetAsync(
             apiKey,
             pin,
-            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20",
+            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20&language=deu",
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -107,7 +107,9 @@ internal sealed class TvdbClient : ITvdbClient
         foreach (var item in dataElement.EnumerateArray())
         {
             var id = ReadInt(item, "tvdb_id") ?? ReadInt(item, "id");
-            var name = ReadString(item, "name");
+            // Bei sprachspezifischer Suche liefert TVDB den übersetzten Namen in nameTranslated.
+            // Fällt nameTranslated weg (keine Übersetzung vorhanden), wird der Originalname verwendet.
+            var name = ReadString(item, "nameTranslated") ?? ReadString(item, "name");
             if (id is null || string.IsNullOrWhiteSpace(name))
             {
                 continue;
@@ -117,7 +119,7 @@ internal sealed class TvdbClient : ITvdbClient
                 id.Value,
                 name.Trim(),
                 ReadString(item, "year"),
-                ReadString(item, "overview"),
+                ReadString(item, "overviewTranslated") ?? ReadString(item, "overview"),
                 ReadString(item, "primary_language")));
         }
 
