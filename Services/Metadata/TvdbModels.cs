@@ -16,7 +16,8 @@ public sealed record TvdbSeriesSearchResult(
     int Id,
     string Name,
     string? Year,
-    string? Overview);
+    string? Overview,
+    string? PrimaryLanguage = null);
 
 /// <summary>
 /// Minimale TVDB-Episodenrepräsentation für die automatische Zuordnung.
@@ -37,7 +38,8 @@ public sealed record TvdbEpisodeSelection(
     int TvdbEpisodeId,
     string EpisodeTitle,
     string SeasonNumber,
-    string EpisodeNumber);
+    string EpisodeNumber,
+    string? OriginalLanguage = null);
 
 /// <summary>
 /// Ergebnis der automatischen Metadatenauflösung inklusive Vertrauens- und Review-Signalen.

@@ -152,7 +152,7 @@ internal sealed class EpisodeMetadataLookupService
                 cacheKey,
                 _episodeCache,
                 _episodeLoadsInFlight,
-                () => _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, CancellationToken.None)));
+                () => _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, "deu", CancellationToken.None)));
 
         return await requestTask.WaitAsync(cancellationToken);
     }
@@ -296,7 +296,8 @@ internal sealed class EpisodeMetadataLookupService
             {
                 LocalSeriesName = localSeriesName,
                 TvdbSeriesId = series.Id,
-                TvdbSeriesName = series.Name
+                TvdbSeriesName = series.Name,
+                OriginalLanguage = series.PrimaryLanguage
             });
         }
         else
@@ -304,6 +305,7 @@ internal sealed class EpisodeMetadataLookupService
             existing.LocalSeriesName = localSeriesName;
             existing.TvdbSeriesId = series.Id;
             existing.TvdbSeriesName = series.Name;
+            existing.OriginalLanguage = series.PrimaryLanguage;
         }
 
         settings.SeriesMappings = settings.SeriesMappings

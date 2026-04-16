@@ -435,6 +435,8 @@ internal partial class EpisodeEditModel
 
     IReadOnlyList<string> IEpisodePlanInput.DetectionNotes => _notes;
 
+    string? IEpisodePlanInput.OriginalLanguage => _tvdbSelection?.OriginalLanguage;
+
     private IReadOnlyList<string> BuildPlannedVideoPaths()
     {
         if (!HasPrimaryVideoSource || string.IsNullOrWhiteSpace(MainVideoPath))

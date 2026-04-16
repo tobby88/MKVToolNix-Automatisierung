@@ -128,6 +128,12 @@ public sealed class SeriesMetadataMapping
     public string TvdbSeriesName { get; set; } = string.Empty;
 
     /// <summary>
+    /// Ursprungssprache der TVDB-Serie, z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
+    /// Null oder leer, wenn die Sprache nicht bekannt ist (Altmappings bleiben rückwärtskompatibel).
+    /// </summary>
+    public string? OriginalLanguage { get; set; }
+
+    /// <summary>
     /// Erzeugt eine Kopie eines einzelnen Mappings.
     /// </summary>
     /// <returns>Geklontes Serien-Mapping.</returns>
@@ -137,7 +143,8 @@ public sealed class SeriesMetadataMapping
         {
             LocalSeriesName = LocalSeriesName,
             TvdbSeriesId = TvdbSeriesId,
-            TvdbSeriesName = TvdbSeriesName
+            TvdbSeriesName = TvdbSeriesName,
+            OriginalLanguage = OriginalLanguage
         };
     }
 }

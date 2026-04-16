@@ -300,7 +300,8 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
             SelectedEpisodeItem.Episode.Id,
             SelectedEpisodeItem.Episode.Name,
             TvdbLookupWindowTextFormatter.FormatTvdbNumber(SelectedEpisodeItem.Episode.SeasonNumber),
-            TvdbLookupWindowTextFormatter.FormatTvdbNumber(SelectedEpisodeItem.Episode.EpisodeNumber));
+            TvdbLookupWindowTextFormatter.FormatTvdbNumber(SelectedEpisodeItem.Episode.EpisodeNumber),
+            SelectedSeriesItem.Series.PrimaryLanguage);
         return true;
     }
 

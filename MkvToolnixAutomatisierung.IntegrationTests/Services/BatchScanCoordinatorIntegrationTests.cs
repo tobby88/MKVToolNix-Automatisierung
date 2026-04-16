@@ -379,6 +379,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             string apiKey,
             string? pin,
             int seriesId,
+            string? language = null,
             CancellationToken cancellationToken = default)
         {
             if (GetSeriesEpisodesAsyncOverride is not null)

@@ -389,6 +389,7 @@ public sealed class EpisodeMetadataLookupServiceTests
             string apiKey,
             string? pin,
             int seriesId,
+            string? language = null,
             CancellationToken cancellationToken = default)
         {
             LoadEpisodesCallCount++;

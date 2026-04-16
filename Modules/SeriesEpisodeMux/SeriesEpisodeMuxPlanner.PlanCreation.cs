@@ -196,7 +196,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.WorkingCopy,
             mkvPropEditPath,
             archiveDecision.TrackHeaderEdits,
-            notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+            notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            request.OriginalLanguage);
     }
 
     /// <summary>

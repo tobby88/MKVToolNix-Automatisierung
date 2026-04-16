@@ -40,6 +40,10 @@ public sealed class SeriesEpisodeMuxPlan
     /// im Header vereinheitlicht.
     /// </param>
     /// <param name="notes">Zusätzliche Hinweise für GUI und Vorschau.</param>
+    /// <param name="originalLanguage">
+    /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
+    /// Null oder leer, wenn unbekannt; in diesem Fall wird <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
+    /// </param>
     public SeriesEpisodeMuxPlan(
         string mkvMergePath,
         string outputFilePath,
@@ -63,7 +67,8 @@ public sealed class SeriesEpisodeMuxPlan
         FileCopyPlan? workingCopy,
         string? mkvPropEditPath = null,
         IReadOnlyList<TrackHeaderEditOperation>? trackHeaderEdits = null,
-        IReadOnlyList<string>? notes = null)
+        IReadOnlyList<string>? notes = null,
+        string? originalLanguage = null)
     {
         if (videoSources.Count == 0)
         {
@@ -106,6 +111,7 @@ public sealed class SeriesEpisodeMuxPlan
         MkvPropEditPath = mkvPropEditPath;
         TrackHeaderEdits = trackHeaderEdits ?? [];
         Notes = notes ?? [];
+        OriginalLanguage = string.IsNullOrWhiteSpace(originalLanguage) ? null : originalLanguage.Trim();
     }
 
     private SeriesEpisodeMuxPlan(
@@ -142,6 +148,7 @@ public sealed class SeriesEpisodeMuxPlan
         MkvPropEditPath = null;
         TrackHeaderEdits = [];
         Notes = notes;
+        OriginalLanguage = null;
     }
 
     /// <summary>
@@ -305,6 +312,12 @@ public sealed class SeriesEpisodeMuxPlan
     /// Zusätzliche Hinweise für GUI und Vorschau.
     /// </summary>
     public IReadOnlyList<string> Notes { get; }
+
+    /// <summary>
+    /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
+    /// Null, wenn unbekannt; in diesem Fall setzt der Argument-Builder <c>--original-flag</c> auf <c>yes</c>.
+    /// </summary>
+    public string? OriginalLanguage { get; }
 
     /// <summary>
     /// Erzeugt einen Plan, der einen echten Mux-Lauf fachlich überspringt.

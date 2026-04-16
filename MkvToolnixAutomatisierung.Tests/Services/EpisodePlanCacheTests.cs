@@ -302,5 +302,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
         public IReadOnlyList<string> PlannedVideoPaths { get; set; } = [@"C:\Temp\episode.mp4", @"C:\Temp\episode-alt.mp4"];
 
         public IReadOnlyList<string> DetectionNotes { get; set; } = ["Hinweis"];
+
+        public string? OriginalLanguage { get; init; } = null;
     }
 }

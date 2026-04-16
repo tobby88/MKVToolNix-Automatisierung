@@ -189,6 +189,7 @@ public sealed class TvdbLookupWindowViewModelTests
             string apiKey,
             string? pin,
             int seriesId,
+            string? language = null,
             CancellationToken cancellationToken = default)
         {
             GetSeriesEpisodesCallCount++;

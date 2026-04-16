@@ -61,6 +61,12 @@ internal interface IEpisodePlanInput
     /// Bereits bekannte Detection-Hinweise, die unverändert in den Mux-Plan übernommen werden können.
     /// </summary>
     IReadOnlyList<string> DetectionNotes { get; }
+
+    /// <summary>
+    /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
+    /// Null oder leer, wenn unbekannt; in diesem Fall wird der <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
+    /// </summary>
+    string? OriginalLanguage { get; }
 }
 
 /// <summary>
@@ -96,7 +102,8 @@ internal sealed class EpisodePlanCoordinator
             input.ManualAttachmentPaths,
             input.HasPrimaryVideoSource,
             input.PlannedVideoPaths,
-            input.DetectionNotes),
+            input.DetectionNotes,
+            input.OriginalLanguage),
             cancellationToken);
     }
 }

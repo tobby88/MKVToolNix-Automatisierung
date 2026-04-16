@@ -19,6 +19,10 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 /// Wenn gesetzt, baut die Planerstellung daraus weiter und vermeidet eine erneute Ordnererkennung.
 /// </param>
 /// <param name="DetectionNotes">Optional bereits bekannte Detection-Hinweise, die in den Plan übernommen werden sollen.</param>
+/// <param name="OriginalLanguage">
+/// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
+/// Null oder leer, wenn unbekannt; in diesem Fall wird der <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
+/// </param>
 public sealed record SeriesEpisodeMuxRequest(
     string MainVideoPath,
     string? AudioDescriptionPath,
@@ -30,7 +34,8 @@ public sealed record SeriesEpisodeMuxRequest(
     IReadOnlyList<string>? ManualAttachmentPaths = null,
     bool HasPrimaryVideoSource = true,
     IReadOnlyList<string>? PlannedVideoPaths = null,
-    IReadOnlyList<string>? DetectionNotes = null);
+    IReadOnlyList<string>? DetectionNotes = null,
+    string? OriginalLanguage = null);
 
 /// <summary>
 /// Ergebnis der automatischen Dateierkennung rund um eine Episode.

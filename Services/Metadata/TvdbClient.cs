@@ -23,10 +23,19 @@ internal interface ITvdbClient : IDisposable
     /// <summary>
     /// Lädt alle Episoden einer TVDB-Serie über die v4-API.
     /// </summary>
+    /// <param name="apiKey">TVDB-API-Key.</param>
+    /// <param name="pin">Optionaler TVDB-PIN.</param>
+    /// <param name="seriesId">TVDB-Serien-ID.</param>
+    /// <param name="language">
+    /// Optionaler ISO-639-2-Sprachcode (z. B. <c>deu</c>) für sprachspezifische Episodentitel.
+    /// Liefert der Sprach-Endpunkt keine Ergebnisse, wird automatisch auf den sprachneutralen Endpunkt zurückgefallen.
+    /// </param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
         string apiKey,
         string? pin,
         int seriesId,
+        string? language = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -108,7 +117,8 @@ internal sealed class TvdbClient : ITvdbClient
                 id.Value,
                 name.Trim(),
                 ReadString(item, "year"),
-                ReadString(item, "overview")));
+                ReadString(item, "overview"),
+                ReadString(item, "primary_language")));
         }
 
         return results;
@@ -120,14 +130,44 @@ internal sealed class TvdbClient : ITvdbClient
     /// <param name="apiKey">TVDB-API-Key.</param>
     /// <param name="pin">Optionaler TVDB-PIN.</param>
     /// <param name="seriesId">TVDB-Serien-ID.</param>
+    /// <param name="language">
+    /// Optionaler ISO-639-2-Sprachcode (z. B. <c>deu</c>) für sprachspezifische Episodentitel.
+    /// Liefert der Sprach-Endpunkt keine Ergebnisse, wird automatisch auf den sprachneutralen Endpunkt zurückgefallen.
+    /// </param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>Alle geladenen Episoden der Serie.</returns>
     public async Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
         string apiKey,
         string? pin,
         int seriesId,
+        string? language = null,
         CancellationToken cancellationToken = default)
     {
+        var useLanguage = !string.IsNullOrWhiteSpace(language);
+        var results = await FetchSeriesEpisodesInternalAsync(
+            apiKey, pin, seriesId, useLanguage ? language!.Trim() : null, cancellationToken);
+
+        // Fallback: Sprach-Endpunkt lieferte keine Titel → sprachneutralen Endpunkt versuchen.
+        if (results.Count == 0 && useLanguage)
+        {
+            results = await FetchSeriesEpisodesInternalAsync(
+                apiKey, pin, seriesId, language: null, cancellationToken);
+        }
+
+        return results;
+    }
+
+    private async Task<List<TvdbEpisodeRecord>> FetchSeriesEpisodesInternalAsync(
+        string apiKey,
+        string? pin,
+        int seriesId,
+        string? language,
+        CancellationToken cancellationToken)
+    {
+        var episodePath = string.IsNullOrWhiteSpace(language)
+            ? $"series/{seriesId}/episodes/default"
+            : $"series/{seriesId}/episodes/default/{language}";
+
         var results = new List<TvdbEpisodeRecord>();
         var page = 0;
 
@@ -136,7 +176,7 @@ internal sealed class TvdbClient : ITvdbClient
             using var response = await SendAuthorizedGetAsync(
                 apiKey,
                 pin,
-                $"series/{seriesId}/episodes/default?page={page}",
+                $"{episodePath}?page={page}",
                 cancellationToken);
             response.EnsureSuccessStatusCode();
 
