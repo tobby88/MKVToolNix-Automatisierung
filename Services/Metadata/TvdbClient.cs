@@ -90,7 +90,7 @@ internal sealed class TvdbClient : ITvdbClient
         using var response = await SendAuthorizedGetAsync(
             apiKey,
             pin,
-            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20&language=deu",
+            $"search?query={Uri.EscapeDataString(query)}&type=series&limit=20",
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -107,9 +107,11 @@ internal sealed class TvdbClient : ITvdbClient
         foreach (var item in dataElement.EnumerateArray())
         {
             var id = ReadInt(item, "tvdb_id") ?? ReadInt(item, "id");
-            // Bei sprachspezifischer Suche liefert TVDB den übersetzten Namen in nameTranslated.
-            // Fällt nameTranslated weg (keine Übersetzung vorhanden), wird der Originalname verwendet.
-            var name = ReadString(item, "nameTranslated") ?? ReadString(item, "name");
+            // TVDB liefert Übersetzungen im translations-Objekt als Sprachcode→Name-Map.
+            // Bevorzuge deutschen Namen (translations.deu), dann name_translated, dann Originalname.
+            var name = ReadTranslationString(item, "translations", "deu")
+                    ?? ReadString(item, "name_translated")
+                    ?? ReadString(item, "name");
             if (id is null || string.IsNullOrWhiteSpace(name))
             {
                 continue;
@@ -119,7 +121,7 @@ internal sealed class TvdbClient : ITvdbClient
                 id.Value,
                 name.Trim(),
                 ReadString(item, "year"),
-                ReadString(item, "overviewTranslated") ?? ReadString(item, "overview"),
+                ReadTranslationString(item, "overviews", "deu") ?? ReadString(item, "overview"),
                 ReadString(item, "primary_language")));
         }
 
@@ -376,6 +378,17 @@ internal sealed class TvdbClient : ITvdbClient
         return element.TryGetProperty(propertyName, out var property)
             && property.ValueKind == JsonValueKind.String
             ? property.GetString()
+            : null;
+    }
+
+    /// <summary>
+    /// Liest einen Sprachcode-Schlüssel aus einem eingebetteten Übersetzungs-Objekt (z. B. translations.deu).
+    /// </summary>
+    private static string? ReadTranslationString(JsonElement element, string translationsProperty, string languageKey)
+    {
+        return element.TryGetProperty(translationsProperty, out var translations)
+            && translations.ValueKind == JsonValueKind.Object
+            ? ReadString(translations, languageKey)
             : null;
     }
 
