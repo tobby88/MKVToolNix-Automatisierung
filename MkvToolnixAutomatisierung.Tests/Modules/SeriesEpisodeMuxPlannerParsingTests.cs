@@ -78,6 +78,7 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     [InlineData("Der Nachtalb - aus der Reihe _Die Toten vom Bodensee_", "Der Nachtalb")]
     [InlineData("Der Nachtalb - aus der Reihe \"Die Toten vom Bodensee\" (S2025/E04)", "Der Nachtalb")]
     [InlineData("Der Nachtalb - Aus der Reihe: Die Toten vom Bodensee", "Der Nachtalb")]
+    [InlineData("Der Seelenkreis - aus der Krimireihe _Die Toten vom Bodensee_", "Der Seelenkreis")]
     public void NormalizeEpisodeTitle_RemovesSeriesEditorialSuffix(string rawTitle, string expectedTitle)
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(rawTitle);
