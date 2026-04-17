@@ -102,7 +102,7 @@ internal sealed partial class BatchMuxViewModel
                         // später in der UI ankommen. Der globale Fortschritt darf dabei nie hinter
                         // einen bereits angezeigten Vergleichsstand zurückfallen.
                         SetStatus(
-                            $"Scanne Ordner... {processed}/{total} abgeschlossen",
+                            $"Scanne Ordner... Datei {processed}/{total} abgeschlossen",
                             Math.Max(
                                 ProgressValue,
                                 ScaleProgress(CalculatePercent(processed, total), 0, AutomaticCompareProgressStart)));

@@ -187,7 +187,7 @@ internal sealed partial class BatchMuxViewModel
 
             var scaledProgress = ScaleProgress((int)Math.Round(baseProgress), 0, AutomaticCompareProgressStart);
             SetStatus(
-                $"Scanne Ordner... {currentItem}/{totalItems} - {Path.GetFileName(currentFilePath)} - {update.StatusText}",
+                $"Scanne Ordner... Datei {currentItem}/{totalItems} - {Path.GetFileName(currentFilePath)} - {update.StatusText}",
                 Math.Max(ProgressValue, scaledProgress));
         }
 
