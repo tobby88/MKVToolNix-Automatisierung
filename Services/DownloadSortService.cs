@@ -352,8 +352,28 @@ internal sealed class DownloadSortService
             return [BuildCandidate(rootDirectory, group.DisplayName, group.FilePaths, folderRenames)];
         }
 
-        var candidates = new List<DownloadSortCandidate>();
         var defectiveNote = BuildDefectiveVideoNote(defectiveVideoPaths.Select(candidate => candidate.Health.Reason).ToList());
+        var defectiveVideoPathSet = defectiveVideoPaths
+            .Select(candidate => candidate.FilePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasUsableVideo = group.FilePaths
+            .Where(path => VideoExtensions.Contains(Path.GetExtension(path)))
+            .Any(path => !defectiveVideoPathSet.Contains(path));
+        if (!hasUsableVideo)
+        {
+            return
+            [
+                new DownloadSortCandidate(
+                    group.DisplayName,
+                    group.FilePaths,
+                    DetectedSeriesName: null,
+                    SuggestedFolderName: DefectiveFolderName,
+                    DownloadSortItemState.Defective,
+                    defectiveNote)
+            ];
+        }
+
+        var candidates = new List<DownloadSortCandidate>();
         candidates.Add(new DownloadSortCandidate(
             group.DisplayName,
             defectiveVideoPaths.Select(candidate => candidate.FilePath).ToList(),
@@ -362,9 +382,10 @@ internal sealed class DownloadSortService
             DownloadSortItemState.Defective,
             defectiveNote));
 
-        // Nicht-Video-Begleitdateien bleiben als eigener normaler Sortierkandidat erhalten.
-        // Gerade ORF-/Mediathek-Fehldownloads liefern häufig brauchbare Untertitel, obwohl
-        // die MP4 nur ein abgebrochener Kurz- oder Platzhalterdownload ist.
+        // Wenn es im selben logischen Paket noch nutzbare Videos gibt, bleiben deren
+        // Begleitdateien beim normalen Sortierkandidaten. Reine Defektpakete werden
+        // dagegen geschlossen nach "defekt" verschoben, damit spätere Mux-/Cleanup-
+        // Schritte keine verwaisten Untertitel im Serienordner übersehen.
         var remainingFilePaths = group.FilePaths
             .Except(defectiveVideoPaths.Select(candidate => candidate.FilePath), StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -399,8 +420,8 @@ internal sealed class DownloadSortService
     {
         var firstReason = reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
         return string.IsNullOrWhiteSpace(firstReason)
-            ? "MP4 wirkt defekt oder unvollständig und wird in den Defekt-Ordner verschoben. Begleituntertitel bleiben separat einsortierbar."
-            : firstReason + " Datei wird in den Defekt-Ordner verschoben; Begleituntertitel bleiben separat einsortierbar.";
+            ? "MP4 wirkt defekt oder unvollständig; das betroffene Paket wird geschlossen in den Defekt-Ordner verschoben."
+            : firstReason + " Betroffenes Paket wird geschlossen in den Defekt-Ordner verschoben.";
     }
 
     private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(

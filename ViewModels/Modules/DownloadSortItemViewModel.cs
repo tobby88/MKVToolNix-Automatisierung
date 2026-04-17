@@ -84,6 +84,8 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
             _state = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(StatusBadgeBackground));
+            OnPropertyChanged(nameof(StatusBadgeBorderBrush));
         }
     }
 
@@ -94,6 +96,24 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
         DownloadSortItemState.Conflict => "Konflikt",
         DownloadSortItemState.Defective => "Defekt",
         _ => "Pruefen"
+    };
+
+    public string StatusBadgeBackground => State switch
+    {
+        DownloadSortItemState.Ready => "#E7F5EA",
+        DownloadSortItemState.ReadyWithReplacement => "#E5F0FF",
+        DownloadSortItemState.Conflict => "#FDE7E7",
+        DownloadSortItemState.Defective => "#FFF1D6",
+        _ => "#FFF7E0"
+    };
+
+    public string StatusBadgeBorderBrush => State switch
+    {
+        DownloadSortItemState.Ready => "#66A875",
+        DownloadSortItemState.ReadyWithReplacement => "#5A8DEE",
+        DownloadSortItemState.Conflict => "#CC4B4B",
+        DownloadSortItemState.Defective => "#D8902F",
+        _ => "#D0A34B"
     };
 
     public string Note

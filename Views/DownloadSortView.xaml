@@ -88,11 +88,25 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Status"
-                                        Binding="{Binding StatusText}"
-                                        Width="Auto"
-                                        MinWidth="56"
-                                        IsReadOnly="True" />
+                    <DataGridTemplateColumn Header="Status"
+                                            Width="Auto"
+                                            MinWidth="56"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Margin="2"
+                                        Padding="6,2"
+                                        CornerRadius="9"
+                                        BorderThickness="1"
+                                        Background="{Binding StatusBadgeBackground}"
+                                        BorderBrush="{Binding StatusBadgeBorderBrush}">
+                                    <TextBlock HorizontalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding StatusText}" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="Hinweis"
                                             Width="2.5*"
                                             MinWidth="280"

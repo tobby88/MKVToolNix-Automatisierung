@@ -264,6 +264,13 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
             var applyResult = await Task.Run(() => _services.DownloadSort.Apply(SourceDirectory, requests, _currentFolderRenames));
             AppendLog(applyResult.LogLines);
+            if (applyResult.LogLines.Any(line => line.StartsWith("FEHLER:", StringComparison.OrdinalIgnoreCase)))
+            {
+                _dialogService.ShowWarning(
+                    "Einsortieren",
+                    "Einige Dateien oder Ordner konnten nicht verschoben werden. Der Lauf wurde fortgesetzt; Details stehen im Protokoll.");
+            }
+
             ProgressValue = 85;
             StatusText = $"Sortieren abgeschlossen: {applyResult.MovedGroupCount} Paket(e), {applyResult.MovedFileCount} Datei(en), {applyResult.RenamedFolderCount} Ordner.";
 

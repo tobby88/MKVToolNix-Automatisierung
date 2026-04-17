@@ -19,5 +19,6 @@ public sealed class DownloadSortItemViewModelTests
 
         Assert.True(item.IsSelected);
         Assert.Equal("Ersetzen", item.StatusText);
+        Assert.Equal("#E5F0FF", item.StatusBadgeBackground);
     }
 }
