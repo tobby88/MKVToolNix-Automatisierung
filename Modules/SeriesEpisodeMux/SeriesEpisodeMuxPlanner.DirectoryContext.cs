@@ -109,20 +109,108 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var normalSeeds = candidateSeeds
             .Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
             .ToList();
-        var audioDescriptionOnlySeeds = candidateSeeds
+        var normalEpisodeGroups = BuildEpisodeSeedGroups(normalSeeds);
+        var normalEntrySeeds = normalEpisodeGroups
+            .Select(group => group
+                .OrderBy(seed => Path.GetFileName(seed.FilePath), StringComparer.OrdinalIgnoreCase)
+                .First())
+            .ToList();
+        var audioDescriptionOnlyCandidates = candidateSeeds
             .Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath))
-            .Where(seed => !normalSeeds.Any(normalSeed => normalSeed.Identity.Matches(seed.Identity)))
-            .GroupBy(seed => seed.Identity)
+            .Where(seed => !normalEpisodeGroups.Any(group => group.Any(normalSeed => SeedsBelongToSameEpisode(normalSeed, seed))))
+            .ToList();
+        var audioDescriptionOnlySeeds = BuildEpisodeSeedGroups(audioDescriptionOnlyCandidates)
             .Select(group => group
                 .OrderBy(seed => Path.GetFileName(seed.FilePath), StringComparer.OrdinalIgnoreCase)
                 .First())
             .ToList();
 
-        return normalSeeds
+        return normalEntrySeeds
             .Concat(audioDescriptionOnlySeeds)
             .Select(seed => seed.FilePath)
             .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static IReadOnlyList<IReadOnlyList<CandidateSeed>> BuildEpisodeSeedGroups(IReadOnlyList<CandidateSeed> seeds)
+    {
+        var groups = new List<List<CandidateSeed>>();
+
+        foreach (var seed in seeds.OrderBy(seed => Path.GetFileName(seed.FilePath), StringComparer.OrdinalIgnoreCase))
+        {
+            var matchingGroup = groups.FirstOrDefault(group => group.Any(existingSeed => SeedsBelongToSameEpisode(existingSeed, seed)));
+            if (matchingGroup is null)
+            {
+                groups.Add([seed]);
+                continue;
+            }
+
+            matchingGroup.Add(seed);
+        }
+
+        return groups;
+    }
+
+    private static bool SeedsBelongToSameEpisode(CandidateSeed left, CandidateSeed right)
+    {
+        if (left.Identity.Matches(right.Identity))
+        {
+            return true;
+        }
+
+        if (!HaveSameSeriesAndTitle(left.Identity, right.Identity)
+            || !HasAmbiguousMediathekEpisodeCodePair(left.Identity, right.Identity))
+        {
+            return false;
+        }
+
+        // "Die Toten vom Bodensee" liefert dieselbe Folge teils mit TVDB-nahem Code
+        // und teils mit jahrgangsbasiertem Mediathek-Code. Damit solche Varianten nicht
+        // mit echten Wiederholungen gleichen Titels kollidieren, reicht der Titel allein
+        // nicht: die deklarierte TXT-Laufzeit muss ebenfalls praktisch identisch sein.
+        return HaveCompatibleDeclaredDurations(left.TextMetadata.Duration, right.TextMetadata.Duration);
+    }
+
+    private static bool HaveSameSeriesAndTitle(EpisodeIdentity left, EpisodeIdentity right)
+    {
+        return string.Equals(BuildSeriesIdentityKey(left.SeriesName), BuildSeriesIdentityKey(right.SeriesName), StringComparison.Ordinal)
+            && string.Equals(BuildTitleIdentityKey(left.Title), BuildTitleIdentityKey(right.Title), StringComparison.Ordinal);
+    }
+
+    private static bool HasAmbiguousMediathekEpisodeCodePair(EpisodeIdentity left, EpisodeIdentity right)
+    {
+        if (!HasKnownEpisodeCode(left) || !HasKnownEpisodeCode(right))
+        {
+            return false;
+        }
+
+        if (string.Equals(left.SeasonNumber, right.SeasonNumber, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(left.EpisodeNumber, right.EpisodeNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return IsYearLikeSeason(left.SeasonNumber) != IsYearLikeSeason(right.SeasonNumber);
+    }
+
+    private static bool HasKnownEpisodeCode(EpisodeIdentity identity)
+    {
+        return identity.SeasonNumber != "xx" && identity.EpisodeNumber != "xx";
+    }
+
+    private static bool IsYearLikeSeason(string seasonNumber)
+    {
+        return int.TryParse(seasonNumber, out var season) && season is >= 1900 and <= 2100;
+    }
+
+    private static bool HaveCompatibleDeclaredDurations(TimeSpan? left, TimeSpan? right)
+    {
+        if (left is null || right is null)
+        {
+            return false;
+        }
+
+        return Math.Abs((left.Value - right.Value).TotalSeconds) <= 120;
     }
 
     /// <summary>
@@ -182,7 +270,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         internal EpisodeSeedCollection GetEpisodeSeeds(CandidateSeed selectedSeed)
         {
             var matchingSeeds = _candidateSeeds
-                .Where(seed => selectedSeed.Identity.Matches(seed.Identity))
+                .Where(seed => SeedsBelongToSameEpisode(selectedSeed, seed))
                 .ToList();
 
             if (matchingSeeds.Count > 0)

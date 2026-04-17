@@ -574,6 +574,59 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsEditorialSeriesSuffixVariants_WhenMediathekCodesDiffer()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-editorial-series-suffix");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-editorial-series-suffix");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var canonicalPath = CreateFile(sourceDirectory, "Die Toten vom Bodensee-Der Seelenkreis (S02_E03)-1491353440.mp4");
+        var editorialPath = CreateFile(sourceDirectory, "Die Toten vom Bodensee-Der Seelenkreis - aus der Reihe _Die Toten vom Bodensee_ (S2025_E04)-0779747296.mp4");
+        var canonicalAdPath = CreateFile(sourceDirectory, "Die Toten vom Bodensee-Der Seelenkreis (S02_E03) (Audiodeskription)-0008179300.mp4");
+        var editorialAdPath = CreateFile(sourceDirectory, "Die Toten vom Bodensee-Der Seelenkreis - aus der Reihe _Die Toten vom Bodensee_ (S2025_E04) (Audiodeskription)-0703426844.mp4");
+
+        CreateFile(
+            sourceDirectory,
+            "Die Toten vom Bodensee-Der Seelenkreis (S02_E03)-1491353440.txt",
+            "Sender: ZDF\r\nThema: Die Toten vom Bodensee\r\nTitel: Der Seelenkreis (S02/E03)\r\nDauer: 01:29:17");
+        CreateFile(
+            sourceDirectory,
+            "Die Toten vom Bodensee-Der Seelenkreis - aus der Reihe _Die Toten vom Bodensee_ (S2025_E04)-0779747296.txt",
+            "Sender: 3Sat\r\nThema: Die Toten vom Bodensee\r\nTitel: Der Seelenkreis - aus der Reihe \"Die Toten vom Bodensee\" (S2025/E04)\r\nDauer: 01:29:21");
+        CreateFile(
+            sourceDirectory,
+            "Die Toten vom Bodensee-Der Seelenkreis (S02_E03) (Audiodeskription)-0008179300.txt",
+            "Sender: ZDF\r\nThema: Die Toten vom Bodensee\r\nTitel: Der Seelenkreis (S02/E03) (Audiodeskription)\r\nDauer: 01:29:17");
+        CreateFile(
+            sourceDirectory,
+            "Die Toten vom Bodensee-Der Seelenkreis - aus der Reihe _Die Toten vom Bodensee_ (S2025_E04) (Audiodeskription)-0703426844.txt",
+            "Sender: 3Sat\r\nThema: Die Toten vom Bodensee\r\nTitel: Der Seelenkreis - aus der Reihe \"Die Toten vom Bodensee\" (S2025/E04) (Audiodeskription)\r\nDauer: 01:29:21");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            canonicalPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            editorialPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        Assert.Single(directoryContext.MainVideoFiles);
+
+        var detected = await service.DetectFromSelectedVideoAsync(canonicalPath, directoryContext);
+
+        Assert.Equal("Der Seelenkreis", detected.SuggestedTitle);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, canonicalPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, editorialPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, canonicalAdPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, editorialAdPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotUseClearlyIncompleteMp4_ButKeepsItsSubtitles()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-incomplete-mp4");

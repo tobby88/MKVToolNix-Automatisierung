@@ -242,6 +242,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(Staffel\s*\d{1,4}\s*,\s*Folge\s*\d{1,4}(?:\s*-\s*\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
+        // Manche Mediatheken hängen erst den Reihenzusatz und danach den Episodencode an.
+        // Deshalb läuft die Label-Bereinigung nach dem Entfernen der Codes bewusst erneut.
+        normalized = RemoveEditorialLabels(normalized);
         normalized = Regex.Replace(normalized, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);

@@ -76,6 +76,7 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
 
     [Theory]
     [InlineData("Der Nachtalb - aus der Reihe _Die Toten vom Bodensee_", "Der Nachtalb")]
+    [InlineData("Der Nachtalb - aus der Reihe \"Die Toten vom Bodensee\" (S2025/E04)", "Der Nachtalb")]
     [InlineData("Der Nachtalb - Aus der Reihe: Die Toten vom Bodensee", "Der Nachtalb")]
     public void NormalizeEpisodeTitle_RemovesSeriesEditorialSuffix(string rawTitle, string expectedTitle)
     {
