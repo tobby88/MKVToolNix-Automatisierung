@@ -63,8 +63,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
         ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory), unexpectedCommandErrorHandler);
-        SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => !item.IsSelected));
-        DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected));
+        SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && _episodeCollection.HasUnselectedVisibleItems);
+        DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && _episodeCollection.HasSelectedVisibleItems);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
         OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0, unexpectedCommandErrorHandler);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);

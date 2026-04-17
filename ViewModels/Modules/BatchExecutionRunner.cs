@@ -99,13 +99,15 @@ internal sealed class BatchExecutionRunner
         string doneDirectory,
         BatchRunProgressTracker progressTracker,
         Action<string> appendLog,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<BatchEpisodeItemViewModel>? onCurrentItemChanged = null)
     {
         var successCount = 0;
         var warningCount = 0;
         var errorCount = 0;
         var upToDateCount = 0;
         var movedDoneFiles = new List<string>();
+        var failedDoneMoveFiles = new List<string>();
         var newOutputFiles = new List<string>();
         var newOutputMetadata = new List<BatchOutputMetadataEntry>();
 
@@ -118,6 +120,7 @@ internal sealed class BatchExecutionRunner
             item.RefreshArchivePresence();
             var outputExistedBeforeRun = item.ArchiveState == EpisodeArchiveState.Existing;
             item.SetStatus(BatchEpisodeStatusKind.Running);
+            onCurrentItemChanged?.Invoke(item);
             appendLog($"STARTE: {item.MainVideoFileName}");
 
             try
@@ -128,13 +131,21 @@ internal sealed class BatchExecutionRunner
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);
                     appendLog($"  KEIN MUX: {plan.SkipReason ?? "Zieldatei bereits aktuell."}");
 
-                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                    var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
                         workItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
                         appendLog,
-                        cancellationToken));
+                        cancellationToken);
+                    movedDoneFiles.AddRange(doneMoveResult.MovedFiles);
+                    failedDoneMoveFiles.AddRange(doneMoveResult.FailedFiles);
+                    if (doneMoveResult.FailedFiles.Count > 0)
+                    {
+                        warningCount++;
+                        item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
+                    }
+
                     continue;
                 }
 
@@ -155,13 +166,20 @@ internal sealed class BatchExecutionRunner
                         AddNewOutput(newOutputFiles, newOutputMetadata, item);
                     }
 
-                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                    var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
                         workItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
                         appendLog,
-                        cancellationToken));
+                        cancellationToken);
+                    movedDoneFiles.AddRange(doneMoveResult.MovedFiles);
+                    failedDoneMoveFiles.AddRange(doneMoveResult.FailedFiles);
+                    if (doneMoveResult.FailedFiles.Count > 0)
+                    {
+                        warningCount++;
+                        item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
+                    }
                 }
                 else if ((result.ExitCode == 0 && result.HasWarning)
                     || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
@@ -175,13 +193,19 @@ internal sealed class BatchExecutionRunner
                         AddNewOutput(newOutputFiles, newOutputMetadata, item);
                     }
 
-                    movedDoneFiles.AddRange(await MoveEpisodeFilesToDoneAsync(
+                    var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
                         workItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
                         appendLog,
-                        cancellationToken));
+                        cancellationToken);
+                    movedDoneFiles.AddRange(doneMoveResult.MovedFiles);
+                    failedDoneMoveFiles.AddRange(doneMoveResult.FailedFiles);
+                    if (doneMoveResult.FailedFiles.Count > 0)
+                    {
+                        item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
+                    }
                 }
                 else
                 {
@@ -215,11 +239,12 @@ internal sealed class BatchExecutionRunner
             errorCount,
             upToDateCount,
             movedDoneFiles,
+            failedDoneMoveFiles,
             newOutputFiles,
             newOutputMetadata);
     }
 
-    private async Task<IReadOnlyList<string>> MoveEpisodeFilesToDoneAsync(
+    private async Task<BatchDoneMoveResult> MoveEpisodeFilesToDoneAsync(
         BatchExecutionWorkItem workItem,
         string doneDirectory,
         int currentItemIndex,
@@ -231,7 +256,7 @@ internal sealed class BatchExecutionRunner
         var cleanupFiles = BuildDoneCleanupFileList(workItem);
         if (cleanupFiles.Count == 0)
         {
-            return [];
+            return new BatchDoneMoveResult([], []);
         }
 
         var moveResult = await _cleanupService.MoveFilesToDirectoryAsync(
@@ -253,7 +278,7 @@ internal sealed class BatchExecutionRunner
 
         _cleanupService.DeleteEmptyParentDirectories(cleanupFiles, Path.GetDirectoryName(doneDirectory));
 
-        return moveResult.MovedFiles;
+        return new BatchDoneMoveResult(moveResult.MovedFiles, moveResult.FailedFiles);
     }
 
     private static IReadOnlyList<string> BuildDoneCleanupFileList(BatchExecutionWorkItem workItem)
@@ -347,5 +372,14 @@ internal sealed record BatchExecutionOutcome(
     int ErrorCount,
     int UpToDateCount,
     IReadOnlyList<string> MovedDoneFiles,
+    IReadOnlyList<string> FailedDoneMoveFiles,
     IReadOnlyList<string> NewOutputFiles,
     IReadOnlyList<BatchOutputMetadataEntry> NewOutputMetadata);
+
+/// <summary>
+/// Ergebnis des Done-Verschiebens, damit erfolgreiche Mux-Läufe bei gesperrten Quelldateien
+/// nicht abbrechen, aber trotzdem als Cleanup-Warnung im Batch sichtbar bleiben.
+/// </summary>
+internal sealed record BatchDoneMoveResult(
+    IReadOnlyList<string> MovedFiles,
+    IReadOnlyList<string> FailedFiles);

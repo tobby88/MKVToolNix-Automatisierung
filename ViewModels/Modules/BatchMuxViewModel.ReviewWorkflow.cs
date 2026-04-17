@@ -228,12 +228,22 @@ internal sealed partial class BatchMuxViewModel
 
     private void SelectAllEpisodes()
     {
-        _episodeCollection.SelectAll();
+        var changedCount = _episodeCollection.SelectAllVisible();
+        SetStatus(
+            SelectedFilterMode.Key == BatchEpisodeFilterMode.All
+                ? $"Alle Episoden ausgewählt ({changedCount} geändert)"
+                : $"Gefilterte Episoden ausgewählt ({changedCount} geändert)",
+            ProgressValue);
     }
 
     private void DeselectAllEpisodes()
     {
-        _episodeCollection.DeselectAll();
+        var changedCount = _episodeCollection.DeselectAllVisible();
+        SetStatus(
+            SelectedFilterMode.Key == BatchEpisodeFilterMode.All
+                ? $"Auswahl geleert ({changedCount} geändert)"
+                : $"Gefilterte Auswahl geleert ({changedCount} geändert)",
+            ProgressValue);
     }
 
 }

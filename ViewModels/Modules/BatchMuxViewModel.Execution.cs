@@ -93,7 +93,15 @@ internal sealed partial class BatchMuxViewModel
                 doneDirectory,
                 progressTracker,
                 AppendBatchRunLogCore,
-                cancellationToken);
+                cancellationToken,
+                item => SelectedEpisodeItem = item);
+
+            if (executionOutcome.FailedDoneMoveFiles.Count > 0)
+            {
+                _dialogService.ShowWarning(
+                    "Batch-Cleanup",
+                    "Einige Quelldateien konnten nicht in den Done-Ordner verschoben werden. Der Batch wurde fortgesetzt; Details stehen im Batch-Protokoll.");
+            }
 
             await OfferBatchDoneCleanupAsync(
                 doneDirectory,

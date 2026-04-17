@@ -107,6 +107,10 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public int PendingCheckCount => _items.Count(item => item.IsSelected && item.HasPendingChecks);
 
+    public bool HasUnselectedVisibleItems => VisibleItems.Any(item => !item.IsSelected);
+
+    public bool HasSelectedVisibleItems => VisibleItems.Any(item => item.IsSelected);
+
     public bool SetFilterMode(BatchEpisodeFilterOption? value)
     {
         if (value is null || EqualityComparer<BatchEpisodeFilterOption>.Default.Equals(_selectedFilterMode, value))
@@ -116,6 +120,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
         _selectedFilterMode = value;
         RequestViewRefresh();
+        CommandsChanged?.Invoke();
         return true;
     }
 
@@ -164,21 +169,33 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         SelectedItem = null;
     }
 
-    public void SelectAll()
+    public int SelectAllVisible()
     {
-        foreach (var item in _items)
+        var changedCount = 0;
+        foreach (var item in VisibleItems.Where(item => !item.IsSelected))
         {
             item.IsSelected = true;
+            changedCount++;
         }
+
+        return changedCount;
     }
 
-    public void DeselectAll()
+    public int DeselectAllVisible()
     {
-        foreach (var item in _items)
+        var changedCount = 0;
+        foreach (var item in VisibleItems.Where(item => item.IsSelected))
         {
             item.IsSelected = false;
+            changedCount++;
         }
+
+        return changedCount;
     }
+
+    private IEnumerable<BatchEpisodeItemViewModel> VisibleItems => _view
+        .Cast<object>()
+        .OfType<BatchEpisodeItemViewModel>();
 
     public void Dispose()
     {
@@ -342,6 +359,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             if (!HasOpenEditTransaction(_view))
             {
                 _view.Refresh();
+                CommandsChanged?.Invoke();
             }
 
             return;
@@ -374,5 +392,6 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
         _viewRefreshPending = false;
         _view.Refresh();
+        CommandsChanged?.Invoke();
     }
 }

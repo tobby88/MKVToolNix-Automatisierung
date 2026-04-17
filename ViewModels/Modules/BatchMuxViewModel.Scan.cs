@@ -67,7 +67,7 @@ internal sealed partial class BatchMuxViewModel
             ResetLog();
             SetStatus("Bereite Batch-Scan vor...", 0);
 
-            var itemsByEpisodeKey = new Dictionary<string, BatchEpisodeItemViewModel>(StringComparer.OrdinalIgnoreCase);
+            var itemsByEpisodeKey = new Dictionary<string, List<BatchEpisodeItemViewModel>>(StringComparer.OrdinalIgnoreCase);
             var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory), cancellationToken);
             var mainVideoFiles = directoryContext.MainVideoFiles;
 
@@ -131,16 +131,36 @@ internal sealed partial class BatchMuxViewModel
                 var outputPath = result.OutputPath!;
                 var episodeKey = Path.GetFileName(outputPath);
 
-                if (itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItem))
+                IReadOnlyList<BatchEpisodeItemViewModel> existingItemsForOutput = itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItems)
+                    ? existingItems
+                    : [];
+                var relatedExistingItem = existingItemsForOutput.FirstOrDefault(item => IsSameDetectedSourceGroup(item, detected));
+                if (relatedExistingItem is not null)
                 {
-                    existingItem.AddRequestedSource(result.SourcePath);
-                    AppendLog($"DUBLETTE: {Path.GetFileName(result.SourcePath)} -> wird bereits über {Path.GetFileName(existingItem.MainVideoPath)} verarbeitet.");
+                    relatedExistingItem.AddRequestedSource(result.SourcePath);
+                    AppendLog($"DUBLETTE: {Path.GetFileName(result.SourcePath)} -> wird bereits über {Path.GetFileName(relatedExistingItem.MainVideoPath)} verarbeitet.");
                     continue;
                 }
 
                 var outputAlreadyExists = File.Exists(outputPath);
                 var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
-                var statusKind = DetermineInitialStatus(detected, outputAlreadyExists, isArchiveTargetPath);
+                var hasOutputCollision = existingItemsForOutput.Count > 0;
+                var statusKind = hasOutputCollision
+                    ? BatchEpisodeStatusKind.Warning
+                    : DetermineInitialStatus(detected, outputAlreadyExists, isArchiveTargetPath);
+                if (hasOutputCollision)
+                {
+                    var collisionNote = $"Mehrere getrennt erkannte Quellen zeigen auf dieselbe Ausgabedatei '{Path.GetFileName(outputPath)}'. Bitte Episodencode und Ausgabeziel prüfen.";
+                    detected = detected with
+                    {
+                        Notes = detected.Notes
+                            .Concat([collisionNote])
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList()
+                    };
+                    AppendLog($"KONFLIKT: {Path.GetFileName(result.SourcePath)} -> gleiches Ausgabeziel wie anderer Batch-Eintrag: {Path.GetFileName(outputPath)}");
+                }
+
                 var item = BatchEpisodeItemViewModel.CreateFromDetection(
                     requestedMainVideoPath: result.SourcePath,
                     localGuess: localGuess,
@@ -152,7 +172,13 @@ internal sealed partial class BatchMuxViewModel
                     isArchiveTargetPath: isArchiveTargetPath);
 
                 scannedItems.Add(item);
-                itemsByEpisodeKey[episodeKey] = item;
+                if (!itemsByEpisodeKey.TryGetValue(episodeKey, out existingItems))
+                {
+                    existingItems = [];
+                    itemsByEpisodeKey[episodeKey] = existingItems;
+                }
+
+                existingItems.Add(item);
 
                 AppendLog(BuildScanSuccessLogLine(result.SourcePath, detected, outputAlreadyExists, isArchiveTargetPath));
             }
@@ -229,6 +255,19 @@ internal sealed partial class BatchMuxViewModel
         return outputAlreadyExists
             ? $"OK: {Path.GetFileName(sourcePath)} -> In der Serienbibliothek bereits vorhanden, wird später genauer verglichen."
             : $"OK: {Path.GetFileName(sourcePath)}";
+    }
+
+    private static bool IsSameDetectedSourceGroup(
+        BatchEpisodeItemViewModel existingItem,
+        AutoDetectedEpisodeFiles detected)
+    {
+        // Mehrere Einstiegsvideos derselben erkannten Episode werden weiterhin nur einmal
+        // als Batch-Zeile geführt. Ein gleicher Zielpfad allein reicht dafür aber nicht:
+        // bei Einzelfolge/Doppelfolge-Konstellationen wie "Rififi" muss die zweite Quelle
+        // sichtbar bleiben, damit der Episodencode manuell auf SxxEyy-Ezz korrigierbar ist.
+        return existingItem.SourceFilePaths.Any(existingPath =>
+            detected.RelatedFilePaths.Any(detectedPath =>
+                PathComparisonHelper.AreSamePath(existingPath, detectedPath)));
     }
 
 }

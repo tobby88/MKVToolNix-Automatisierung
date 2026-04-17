@@ -65,6 +65,39 @@ public partial class BatchMuxView : UserControl
         DetailsExpander.BringIntoView();
     }
 
+    private void EpisodeItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space
+            || DataContext is not BatchMuxViewModel viewModel
+            || !viewModel.IsInteractive
+            || viewModel.SelectedEpisodeItem is null)
+        {
+            return;
+        }
+
+        viewModel.SelectedEpisodeItem.IsSelected = !viewModel.SelectedEpisodeItem.IsSelected;
+        e.Handled = true;
+    }
+
+    private void EpisodeItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not DataGrid dataGrid || dataGrid.SelectedItem is null)
+        {
+            return;
+        }
+
+        // Während eines Batch-Laufs setzt das ViewModel die laufende Episode als
+        // Auswahl. ScrollIntoView macht den Statuswechsel sichtbar, obwohl die Tabelle
+        // zur Vermeidung paralleler Bearbeitung nicht interaktiv ist.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (dataGrid.SelectedItem is not null)
+            {
+                dataGrid.ScrollIntoView(dataGrid.SelectedItem);
+            }
+        }));
+    }
+
     private void BatchLogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
         if (sender is not TextBox textBox)

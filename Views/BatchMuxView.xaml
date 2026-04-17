@@ -146,6 +146,8 @@
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
+                          PreviewKeyDown="EpisodeItemsGrid_OnPreviewKeyDown"
+                          SelectionChanged="EpisodeItemsGrid_OnSelectionChanged"
                           MinHeight="130"
                           Margin="8">
                     <DataGrid.Columns>
