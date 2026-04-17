@@ -262,6 +262,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*-\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s*-\s*Kurzfilm\b.*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*Kurzfilm\s*$", string.Empty, RegexOptions.IgnoreCase);
+        // Einige Mediathek-Einträge hängen die Serien-/Reihenzuordnung an den Episodentitel,
+        // z. B. "Der Nachtalb - aus der Reihe _Die Toten vom Bodensee_". Für Dateiname
+        // und TVDB-Matching zählt hier nur der eigentliche Episodentitel vor dem Zusatz.
+        normalized = Regex.Replace(
+            normalized,
+            @"\s*[-:]\s*aus\s+der\s+reihe\b(?:\s*[:\-]?\s*[_""'„“]?[^_""'„“]+[_""'„“]?)?\s*$",
+            string.Empty,
+            RegexOptions.IgnoreCase);
         // "Büttenwarder op Platt" ist bei NDR-Dateien keine eigene Episode, sondern
         // ein redaktioneller Sprach-/Rubrikvorsatz im Titel. Ohne diese gezielte
         // Bereinigung laufen normale, AD- und Platt-Quellen derselben Folge als

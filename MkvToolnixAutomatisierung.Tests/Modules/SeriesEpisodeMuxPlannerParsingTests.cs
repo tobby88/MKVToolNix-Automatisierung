@@ -74,6 +74,16 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         Assert.Equal("Goldenes Blut", normalizedTitle);
     }
 
+    [Theory]
+    [InlineData("Der Nachtalb - aus der Reihe _Die Toten vom Bodensee_", "Der Nachtalb")]
+    [InlineData("Der Nachtalb - Aus der Reihe: Die Toten vom Bodensee", "Der Nachtalb")]
+    public void NormalizeEpisodeTitle_RemovesSeriesEditorialSuffix(string rawTitle, string expectedTitle)
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(rawTitle);
+
+        Assert.Equal(expectedTitle, normalizedTitle);
+    }
+
     [Fact]
     public void NormalizeEpisodeTitle_RemovesBuettenwarderOpPlattEditorialPrefix()
     {
