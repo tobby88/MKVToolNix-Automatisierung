@@ -383,6 +383,11 @@ public sealed record ResolutionLabel(string Value)
             return new ResolutionLabel("HD");
         }
 
+        if (width >= 900)
+        {
+            return new ResolutionLabel("qHD");
+        }
+
         return new ResolutionLabel("SD");
     }
 }

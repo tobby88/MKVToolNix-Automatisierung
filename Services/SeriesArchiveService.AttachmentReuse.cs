@@ -377,7 +377,12 @@ public sealed partial class SeriesArchiveService
             return "HD";
         }
 
-        if (ContainsAny(mediaUrl, "540", "sd.mp4", "_sd.", "-sd.", "/sd."))
+        if (ContainsAny(mediaUrl, "540", "qhd"))
+        {
+            return "qHD";
+        }
+
+        if (ContainsAny(mediaUrl, "sd.mp4", "_sd.", "-sd.", "/sd."))
         {
             return "SD";
         }

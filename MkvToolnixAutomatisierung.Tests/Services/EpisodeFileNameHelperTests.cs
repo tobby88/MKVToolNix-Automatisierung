@@ -41,7 +41,15 @@ public sealed class EpisodeFileNameHelperTests
     {
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie:Test", "01", "02", "Pilot?");
 
-        Assert.Equal("Serie - Test - S01E02 - Pilot_.mkv", fileName);
+        Assert.Equal("Serie - Test - S01E02 - Pilot.mkv", fileName);
+    }
+
+    [Fact]
+    public void BuildEpisodeFileName_NormalizesTypographicDashes()
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "01", "02", "A – B");
+
+        Assert.Equal("Serie - S01E02 - A - B.mkv", fileName);
     }
 
     [Fact]

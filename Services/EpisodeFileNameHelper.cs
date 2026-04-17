@@ -87,8 +87,11 @@ internal static class EpisodeFileNameHelper
     public static string SanitizeFileName(string fileName)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
-        var fileNameWithReadableColons = Regex.Replace(fileName, @"\s*:\s*", " - ");
-        var sanitized = string.Concat(fileNameWithReadableColons.Select(character => invalidCharacters.Contains(character) ? '_' : character));
+        var normalizedFileName = NormalizePortableTitleCharacters(fileName);
+        var fileNameWithReadableColons = Regex.Replace(normalizedFileName, @"\s*:\s*", " - ");
+        var sanitized = string.Concat(fileNameWithReadableColons
+            .Where(character => character != '?')
+            .Select(character => invalidCharacters.Contains(character) ? '_' : character));
         var trimmedValue = sanitized.TrimEnd(' ', '.');
         if (string.IsNullOrWhiteSpace(trimmedValue))
         {
@@ -108,11 +111,14 @@ internal static class EpisodeFileNameHelper
     public static string SanitizePathSegment(string value)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
-        var valueWithReadableColons = Regex.Replace(value, @"\s*:\s*", " - ");
-        var sanitized = string.Concat(valueWithReadableColons.Select(character =>
-            invalidCharacters.Contains(character)
-            || character == Path.DirectorySeparatorChar
-            || character == Path.AltDirectorySeparatorChar
+        var normalizedValue = NormalizePortableTitleCharacters(value);
+        var valueWithReadableColons = Regex.Replace(normalizedValue, @"\s*:\s*", " - ");
+        var sanitized = string.Concat(valueWithReadableColons
+            .Where(character => character != '?')
+            .Select(character =>
+                invalidCharacters.Contains(character)
+                || character == Path.DirectorySeparatorChar
+                || character == Path.AltDirectorySeparatorChar
                 ? '_'
                 : character));
         var trimmedValue = sanitized.TrimEnd(' ', '.');
@@ -122,6 +128,17 @@ internal static class EpisodeFileNameHelper
         }
 
         return AppendReservedNameSuffixIfNeeded(trimmedValue);
+    }
+
+    private static string NormalizePortableTitleCharacters(string value)
+    {
+        // TV-/Mediathek-Titel enthalten regelmäßig typografische Gedankenstriche. Für
+        // Dateinamen und Ordner sollen diese stabil als normaler Bindestrich landen,
+        // damit spätere Vergleiche nicht an visuell ähnlichen Unicode-Zeichen hängen.
+        return value
+            .Replace('\u2013', '-')
+            .Replace('\u2014', '-')
+            .Replace('\u2212', '-');
     }
 
     private static string AppendReservedNameSuffixIfNeeded(string value)
