@@ -125,17 +125,16 @@ internal static class DataGridSelectionInput
 
     private static void RestoreFocus(DataGrid dataGrid, DataGridFocusTarget focusTarget)
     {
-        // WPF schiebt nach dem Toggle noch interne CurrentCell-/Edit-Navigation auf den Dispatcher.
-        // Die eigentliche Zelle kann dabei durch Template-/Layout-Updates kurz neu aufgebaut werden.
-        // Wir restaurieren deshalb erst nachgelagert den fachlichen Grid-Zustand und fokussieren
-        // danach erneut die konkrete Zelle. Nur so bleibt die aktive Auswahlzeile für weitere
-        // Pfeil-/Space-Eingaben stabil "focused" statt nachgelagert grau zu werden.
-        _ = dataGrid.Dispatcher.BeginInvoke(
-            DispatcherPriority.ContextIdle,
-            new Action(() => RestoreFocusCore(dataGrid, focusTarget, remainingRetries: 2)));
+        // Die vorherige Variante wartete immer bis ContextIdle, bevor die Zelle wieder fokussiert
+        // wurde. Das stabilisierte zwar manche WPF-Nachläufer, verursachte aber selbst das sichtbare
+        // "Ausgrauen": Die Zeile verlor den Fokus erst kurz und bekam ihn dann asynchron zurück.
+        // Deshalb restaurieren wir jetzt sofort die aktive Zelle und verwenden den Dispatcher nur
+        // noch als Sicherheitsnetz, falls WPF nachgelagert doch noch einmal hineinfunkt.
+        RestoreFocusState(dataGrid, focusTarget);
+        ScheduleFocusVerification(dataGrid, focusTarget, remainingRetries: 2, DispatcherPriority.Background);
     }
 
-    private static void RestoreFocusCore(DataGrid dataGrid, DataGridFocusTarget focusTarget, int remainingRetries)
+    private static void RestoreFocusState(DataGrid dataGrid, DataGridFocusTarget focusTarget)
     {
         if (focusTarget.Item is null)
         {
@@ -152,26 +151,45 @@ internal static class DataGridSelectionInput
         }
 
         FocusGrid(dataGrid, focusTarget);
+    }
 
+    private static void ScheduleFocusVerification(
+        DataGrid dataGrid,
+        DataGridFocusTarget focusTarget,
+        int remainingRetries,
+        DispatcherPriority priority)
+    {
         if (remainingRetries <= 0)
         {
             return;
         }
 
-        // Manche nachgelagerte WPF-Routen greifen erst noch einmal nach dem ContextIdle-Lauf ein.
-        // Bleibt der Fokus dann nicht mehr auf der gewaehlten Zeile, ziehen wir ihn genau noch
-        // einmal nach. IsKeyboardFocusWithin am DataGrid reicht dafuer nicht: WPF laesst die
-        // Auswahl auch dann "selected-unfocused" (grau) wirken, wenn der Fokus auf dem Grid
-        // selbst, aber nicht in einer konkreten Zeile sitzt.
         _ = dataGrid.Dispatcher.BeginInvoke(
-            DispatcherPriority.ApplicationIdle,
-            new Action(() =>
-            {
-                if (!IsFocusOnSelectedRow(dataGrid, focusTarget))
-                {
-                    RestoreFocusCore(dataGrid, focusTarget, remainingRetries - 1);
-                }
-            }));
+            priority,
+            new Action(() => VerifyFocus(dataGrid, focusTarget, remainingRetries)));
+    }
+
+    private static void VerifyFocus(DataGrid dataGrid, DataGridFocusTarget focusTarget, int remainingRetries)
+    {
+        if (IsFocusOnSelectedRow(dataGrid, focusTarget))
+        {
+            return;
+        }
+
+        RestoreFocusState(dataGrid, focusTarget);
+        if (remainingRetries <= 0)
+        {
+            return;
+        }
+
+        // Manche WPF-Pfade laufen noch einmal spaeter, etwa nach Layout-/Template-Neuaufbau.
+        // Reicht die sofortige Rueckfokussierung nicht, pruefen wir mit sinkender Prioritaet
+        // nach und ziehen den Fokus hoechstens noch ein weiteres Mal gezielt zur aktiven Zelle.
+        ScheduleFocusVerification(
+            dataGrid,
+            focusTarget,
+            remainingRetries - 1,
+            DispatcherPriority.ApplicationIdle);
     }
 
     private static bool IsFocusOnSelectedRow(DataGrid dataGrid, DataGridFocusTarget focusTarget)
