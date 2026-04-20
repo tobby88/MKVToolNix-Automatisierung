@@ -409,6 +409,37 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void ToggleSelectedEpisodeSelectionCommand_DoesNotInvalidateItself()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode(),
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: false);
+
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+        var canExecuteRefreshCount = 0;
+        viewModel.ToggleSelectedEpisodeSelectionCommand.CanExecuteChanged += (_, _) => canExecuteRefreshCount++;
+
+        viewModel.ToggleSelectedEpisodeSelectionCommand.Execute(null);
+
+        Assert.True(item.IsSelected);
+        Assert.Equal(0, canExecuteRefreshCount);
+    }
+
+    [Fact]
     public void EditSelectedOutputCommand_UsesNearestExistingOutputParentDirectory()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-output-dialog-tests", Guid.NewGuid().ToString("N"));

@@ -81,6 +81,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     }
 
     public event Action? CommandsChanged;
+    public event Action? SelectionStateChanged;
     public event Action? OverviewChanged;
     public event Action<BatchEpisodeItemViewModel>? AutomaticOutputInputsChanged;
     public event Action? SelectedItemPlanInputsChanged;
@@ -288,7 +289,18 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        CommandsChanged?.Invoke();
+        if (e.PropertyName == nameof(BatchEpisodeItemViewModel.IsSelected))
+        {
+            // Auswahländerungen sind extrem häufig und können direkt durch die DataGrid-Tastaturbedienung
+            // ausgelöst werden. Sie aktualisieren nur die davon abhängigen Batch-Kommandos; ein vollständiger
+            // Command-Refresh würde auch das gerade ausgeführte Space-Kommando neu bewerten und WPF kann
+            // dadurch den Zellfokus nachgelagert verlieren.
+            SelectionStateChanged?.Invoke();
+        }
+        else
+        {
+            CommandsChanged?.Invoke();
+        }
 
         if (e.PropertyName is nameof(BatchEpisodeItemViewModel.SeriesName)
             or nameof(BatchEpisodeItemViewModel.SeasonNumber)

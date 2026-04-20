@@ -56,6 +56,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         _episodeCollection.CommandsChanged += RefreshCommands;
+        _episodeCollection.SelectionStateChanged += RefreshSelectionCommands;
         _episodeCollection.OverviewChanged += RefreshOverview;
         _episodeCollection.AutomaticOutputInputsChanged += RefreshAutomaticOutputPath;
         _episodeCollection.SelectedItemPlanInputsChanged += ScheduleSelectedItemPlanSummaryRefresh;
@@ -303,6 +304,17 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ApproveSelectedPlanReviewCommand.RaiseCanExecuteChanged();
         RunBatchCommand.RaiseCanExecuteChanged();
         CancelBatchOperationCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshSelectionCommands()
+    {
+        // Die Zeilenauswahl beeinflusst nur Batch-Aktionen, die über die Menge der aktivierten Folgen
+        // entscheiden. Der DataGrid-Space-Command hängt dagegen an markierter Zeile und Busy-Zustand;
+        // er darf sich nicht während seiner eigenen Ausführung per CanExecuteChanged neu routen.
+        SelectAllEpisodesCommand.RaiseCanExecuteChanged();
+        DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
+        ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
+        RunBatchCommand.RaiseCanExecuteChanged();
     }
 
     private void ClearEpisodeItems()
