@@ -169,6 +169,30 @@ public sealed class BatchRunLogServiceTests
         Assert.DoesNotContain("hÃ¶rgeschÃ¤digte", batchLogText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SaveBatchRunArtifacts_UsesProvidedRunLabel_ForLogFileAndHeader()
+    {
+        var service = new BatchRunLogService();
+        var outputDirectory = CreateDirectory("output");
+        var sourceDirectory = CreateDirectory("source");
+        var createdOutputFile = Path.Combine(outputDirectory, "Episode.mkv");
+        File.WriteAllText(createdOutputFile, "video");
+
+        var result = service.SaveBatchRunArtifacts(
+            sourceDirectory,
+            outputDirectory,
+            "MUX: Erfolg",
+            [createdOutputFile],
+            successCount: 1,
+            warningCount: 0,
+            errorCount: 0,
+            runLabel: "Einzel");
+
+        Assert.Contains("Einzel - ", Path.GetFileName(result.BatchLogPath), StringComparison.Ordinal);
+        var batchLogText = File.ReadAllText(result.BatchLogPath);
+        Assert.Contains("MKVToolNix-Automatisierung - Einzel-Log", batchLogText, StringComparison.Ordinal);
+    }
+
     private static string CreateDirectory(string name)
     {
         var path = Path.Combine(Path.GetTempPath(), "mkv-auto-tests", Guid.NewGuid().ToString("N"), name);

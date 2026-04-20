@@ -62,4 +62,12 @@ public partial class SingleEpisodeMuxView : UserControl
             e.CancelCommand();
         }
     }
+
+    private void PreviewTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            textBox.ScrollToEnd();
+        }
+    }
 }

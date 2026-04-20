@@ -38,7 +38,7 @@ internal static class ViewModelTestContext
         BatchRunLogService? batchLogs = null)
     {
         var graph = CreateServiceGraph(episodeMetadata, fileCopy, cleanup, muxWorkflow, batchLogs);
-        return new SingleEpisodeModuleServices(graph.Shared, graph.Cleanup, graph.MuxWorkflow);
+        return new SingleEpisodeModuleServices(graph.Shared, graph.Cleanup, graph.MuxWorkflow, graph.BatchLogs);
     }
 
     /// <summary>

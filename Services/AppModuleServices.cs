@@ -25,10 +25,12 @@ internal sealed record SharedEpisodeModuleServices(
 /// <param name="Shared">Gemeinsame Kernservices des Episoden-Workflows.</param>
 /// <param name="Cleanup">Cleanup-Dienst für Papierkorb-Operationen nach Einzelmuxing.</param>
 /// <param name="MuxWorkflow">Koordinator für Arbeitskopie und echten Mux-Lauf im Einzelmodus.</param>
+/// <param name="BatchLogs">Persistenzdienst für Log- und Metadatenartefakte neu erzeugter Ausgabedateien.</param>
 internal sealed record SingleEpisodeModuleServices(
     SharedEpisodeModuleServices Shared,
     IEpisodeCleanupService Cleanup,
-    IMuxWorkflowCoordinator MuxWorkflow)
+    IMuxWorkflowCoordinator MuxWorkflow,
+    BatchRunLogService BatchLogs)
 {
     /// <summary>
     /// Kurzgriff auf die Mux-Fassade des gemeinsam genutzten Service-Bundles.

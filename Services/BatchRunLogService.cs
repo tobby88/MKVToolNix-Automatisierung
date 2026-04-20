@@ -21,6 +21,7 @@ public sealed class BatchRunLogService
     /// <param name="warningCount">Anzahl abgeschlossener Episoden mit Warnungen.</param>
     /// <param name="errorCount">Anzahl fehlgeschlagener Episoden.</param>
     /// <param name="newOutputMetadata">Optionale strukturierte Metadaten zu den neu erzeugten Ausgabedateien.</param>
+    /// <param name="runLabel">Kurzes Label für Dateiname und Logkopf, z. B. <c>Batch</c> oder <c>Einzel</c>.</param>
     /// <returns>Pfade zu den geschriebenen Artefakten inklusive normalisierter Liste neuer Dateien.</returns>
     public BatchRunLogSaveResult SaveBatchRunArtifacts(
         string sourceDirectory,
@@ -30,12 +31,14 @@ public sealed class BatchRunLogService
         int successCount,
         int warningCount,
         int errorCount,
-        IReadOnlyList<BatchOutputMetadataEntry>? newOutputMetadata = null)
+        IReadOnlyList<BatchOutputMetadataEntry>? newOutputMetadata = null,
+        string runLabel = "Batch")
     {
         PortableAppStorage.EnsureLogsDirectoryForSave();
 
         var now = DateTimeOffset.Now;
         var fileStamp = now.LocalDateTime.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+        var normalizedRunLabel = string.IsNullOrWhiteSpace(runLabel) ? "Batch" : runLabel.Trim();
         var normalizedNewFiles = newOutputFiles
             .Where(File.Exists)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -43,7 +46,7 @@ public sealed class BatchRunLogService
             .ToList();
         var normalizedMetadata = BuildNormalizedMetadataEntries(normalizedNewFiles, newOutputMetadata);
 
-        var batchLogPath = Path.Combine(PortableAppStorage.LogsDirectory, $"Batch - {fileStamp}.log.txt");
+        var batchLogPath = Path.Combine(PortableAppStorage.LogsDirectory, $"{normalizedRunLabel} - {fileStamp}.log.txt");
         var newFilesListPath = normalizedNewFiles.Count > 0
             ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.txt")
             : null;
@@ -61,6 +64,7 @@ public sealed class BatchRunLogService
                 normalizedNewFiles,
                 normalizedMetadata,
                 newFilesMetadataReportPath,
+                normalizedRunLabel,
                 successCount,
                 warningCount,
                 errorCount),
@@ -101,13 +105,14 @@ public sealed class BatchRunLogService
         IReadOnlyList<string> newOutputFiles,
         IReadOnlyList<BatchOutputMetadataEntry> newOutputMetadata,
         string? newOutputMetadataReportPath,
+        string runLabel,
         int successCount,
         int warningCount,
         int errorCount)
     {
         var normalizedLogText = NormalizeLogText(logText);
         var builder = new StringBuilder();
-        builder.AppendLine("MKVToolNix-Automatisierung - Batch-Log");
+        builder.AppendLine($"MKVToolNix-Automatisierung - {runLabel}-Log");
         builder.AppendLine($"Erstellt am: {createdAt:dd.MM.yyyy HH:mm:ss}");
         builder.AppendLine($"Quellordner: {sourceDirectory}");
         builder.AppendLine($"Ausgabeordner: {outputDirectory}");

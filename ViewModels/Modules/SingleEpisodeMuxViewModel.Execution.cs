@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Threading;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -51,6 +52,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             var cancellationToken = operationSource.Token;
             SetBusy(true);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
+            var outputExistedBeforeRun = File.Exists(_currentPlan.OutputFilePath);
             PlanRefreshProblemText = string.Empty;
             RefreshOutputTargetStatusFromPlan(_currentPlan);
             SetPlanNotes(_currentPlan.Notes);
@@ -82,6 +84,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
             {
                 _dialogService.ShowWarning("Hinweis", "Die TVDB-Zuordnung ist noch nicht freigegeben. Bitte zuerst 'TVDB prüfen' ausführen oder die Metadaten manuell korrigieren.");
                 SetStatus("Freigabe der TVDB-Metadaten fehlt", 0);
+                return;
+            }
+
+            if (HasPendingPlanReview)
+            {
+                _dialogService.ShowWarning(
+                    "Hinweis",
+                    "Vor dem Muxen ist noch ein offener Archiv-/Mehrfachfolgenhinweis zu prüfen. Bitte bestätige den Hinweis zuerst explizit.");
+                SetStatus("Hinweisprüfung fehlt", 0);
                 return;
             }
 
@@ -119,6 +130,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                     _currentPlan.HasTrackHeaderEdits
                         ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{_currentPlan.OutputFilePath}"
                         : $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
+                PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: false);
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else if ((result.ExitCode == 0 && result.HasWarning)
@@ -134,6 +146,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                     _currentPlan.HasTrackHeaderEdits
                         ? $"Die Header-Metadaten wurden aktualisiert, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}"
                         : $"Die MKV wurde erstellt, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
+                PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: true);
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
             else
@@ -160,6 +173,57 @@ internal sealed partial class SingleEpisodeMuxViewModel
             SetBusy(false);
             CompleteCurrentOperation(operationSource);
         }
+    }
+
+    private void PersistSingleEpisodeArtifactsIfNeeded(
+        SeriesEpisodeMuxPlan plan,
+        bool outputExistedBeforeRun,
+        bool hasWarning)
+    {
+        if (outputExistedBeforeRun || !File.Exists(plan.OutputFilePath))
+        {
+            return;
+        }
+
+        _ = _services.BatchLogs.SaveBatchRunArtifacts(
+            Path.GetDirectoryName(DetectionSeedPath ?? MainVideoPath ?? plan.OutputFilePath) ?? string.Empty,
+            Path.GetDirectoryName(plan.OutputFilePath) ?? string.Empty,
+            PreviewText,
+            [plan.OutputFilePath],
+            successCount: hasWarning ? 0 : 1,
+            warningCount: hasWarning ? 1 : 0,
+            errorCount: 0,
+            newOutputMetadata: [CreateSingleEpisodeOutputMetadata(plan.OutputFilePath)],
+            runLabel: "Einzel");
+    }
+
+    private BatchOutputMetadataEntry CreateSingleEpisodeOutputMetadata(string outputPath)
+    {
+        var tvdbEpisodeId = TvdbEpisodeId?.ToString(CultureInfo.InvariantCulture);
+        return new BatchOutputMetadataEntry
+        {
+            OutputPath = outputPath,
+            NfoPath = Path.ChangeExtension(outputPath, ".nfo"),
+            SeriesName = SeriesName,
+            SeasonNumber = SeasonNumber,
+            EpisodeNumber = EpisodeNumber,
+            EpisodeTitle = Title,
+            TvdbEpisodeId = tvdbEpisodeId,
+            ProviderIds = string.IsNullOrWhiteSpace(tvdbEpisodeId)
+                ? null
+                : new BatchOutputProviderIds
+                {
+                    Tvdb = tvdbEpisodeId
+                },
+            Tvdb = TvdbEpisodeId is null && TvdbSeriesId is null && string.IsNullOrWhiteSpace(TvdbSeriesName)
+                ? null
+                : new BatchOutputTvdbMetadata
+                {
+                    SeriesId = TvdbSeriesId,
+                    SeriesName = TvdbSeriesName,
+                    EpisodeId = TvdbEpisodeId
+                }
+        };
     }
 
     private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(CancellationToken cancellationToken = default)

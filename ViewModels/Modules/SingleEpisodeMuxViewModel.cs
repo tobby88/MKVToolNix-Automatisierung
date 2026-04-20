@@ -60,6 +60,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
         OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
         TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => !_isBusy && ManualCheckFilePaths.Count > 0, unexpectedCommandErrorHandler);
+        ApprovePlanReviewCommand = new RelayCommand(ApprovePendingPlanReview, () => !_isBusy && HasPendingPlanReview);
         CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         CancelCurrentOperationCommand = new RelayCommand(CancelCurrentOperation, () => CanCancelCurrentOperation);
@@ -73,6 +74,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public AsyncRelayCommand RescanCommand { get; }
     public AsyncRelayCommand OpenTvdbLookupCommand { get; }
     public AsyncRelayCommand TestSelectedSourcesCommand { get; }
+    public RelayCommand ApprovePlanReviewCommand { get; }
     public AsyncRelayCommand CreatePreviewCommand { get; }
     public AsyncRelayCommand ExecuteMuxCommand { get; }
     public RelayCommand CancelCurrentOperationCommand { get; }
@@ -247,6 +249,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         RescanCommand.RaiseCanExecuteChanged();
         OpenTvdbLookupCommand.RaiseCanExecuteChanged();
         TestSelectedSourcesCommand.RaiseCanExecuteChanged();
+        ApprovePlanReviewCommand.RaiseCanExecuteChanged();
         CreatePreviewCommand.RaiseCanExecuteChanged();
         ExecuteMuxCommand.RaiseCanExecuteChanged();
         CancelCurrentOperationCommand.RaiseCanExecuteChanged();
@@ -323,6 +326,12 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private void ResetPreviewOutputBuffer(string initialText)
     {
         _previewOutputBuffer.Reset(initialText);
+    }
+
+    private void ApprovePendingPlanReview()
+    {
+        ApprovePlanReview();
+        RefreshCommands();
     }
 
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)

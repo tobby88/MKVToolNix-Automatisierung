@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
@@ -139,6 +140,21 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         Assert.Equal(expectedDirectory, dialogService.LastOutputInitialDirectory);
         Assert.Equal("Folge.mkv", dialogService.LastOutputFileName);
+    }
+
+    [Fact]
+    public void ApplyTvdbSelection_ClearsStalePlanReviewHints()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+
+        viewModel.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Mit Pippi Langstrumpf auf der Walz", "01", "04"));
+
+        Assert.False(viewModel.HasPendingPlanReview);
+        Assert.False(viewModel.HasActionablePlanNotes);
+        Assert.DoesNotContain("Archiv prüfen", viewModel.ReviewHint, StringComparison.OrdinalIgnoreCase);
     }
 
     private static SingleEpisodeMuxViewModel CreateViewModel()

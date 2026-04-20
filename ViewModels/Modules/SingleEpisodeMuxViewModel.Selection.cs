@@ -588,6 +588,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
         try
         {
             applyAction();
+            // Metadatenwechsel können den Archivvergleich und Mehrfachfolgenhinweise vollständig ändern.
+            // Alte Hinweise wie "Archiv prüfen" dürfen deshalb nicht sichtbar bleiben, bis der
+            // nachfolgende Plan-Refresh neue, tatsächlich passende Hinweise berechnet.
+            SetPlanNotes([]);
         }
         finally
         {

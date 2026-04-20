@@ -66,6 +66,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="170" />
@@ -160,6 +161,42 @@
                             Grid.ColumnSpan="3"
                             Margin="0,0,0,8"
                             Padding="10"
+                            Background="#FFF4D6"
+                            BorderBrush="#D8B46A"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasPendingPlanReview, Mode=OneWay}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <DockPanel>
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold"
+                                           Text="Wichtiger Hinweis vor dem Muxen" />
+                                <TextBlock Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Text="{Binding PrimaryActionablePlanNote, Mode=OneWay}" />
+                            </StackPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Margin="12,0,0,0"
+                                    Padding="10,6"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding ApprovePlanReviewCommand}"
+                                    Content="Hinweis geprüft" />
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Row="3"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="3"
+                            Margin="0,0,0,8"
+                            Padding="10"
                             Background="#FCE8E8"
                             BorderBrush="#D28A8A"
                             BorderThickness="1"
@@ -178,7 +215,7 @@
                                    Text="{Binding PlanRefreshProblemText, Mode=OneWay}" />
                     </Border>
 
-                    <Border Grid.Row="3"
+                    <Border Grid.Row="4"
                             Grid.Column="0"
                             Grid.ColumnSpan="3"
                             Margin="0,0,0,4"
@@ -402,7 +439,8 @@
                 <ProgressBar Grid.Row="1" Margin="0,0,0,8" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
                 <Expander Grid.Row="2" Header="Details und mkvmerge-Ausgabe" IsExpanded="False">
-                    <TextBox Margin="0,8,0,0"
+                    <TextBox x:Name="PreviewTextBox"
+                             Margin="0,8,0,0"
                              FontFamily="Consolas"
                              AcceptsReturn="True"
                              AcceptsTab="True"
@@ -411,6 +449,7 @@
                              TextWrapping="NoWrap"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"
+                             TextChanged="PreviewTextBox_OnTextChanged"
                              Text="{Binding PreviewText, Mode=OneWay}" />
                 </Expander>
             </Grid>

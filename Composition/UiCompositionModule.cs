@@ -29,7 +29,8 @@ internal static class UiCompositionModule
         services.AddSingleton<SingleEpisodeModuleServices>(provider => new SingleEpisodeModuleServices(
             provider.GetRequiredService<SharedEpisodeModuleServices>(),
             provider.GetRequiredService<IEpisodeCleanupService>(),
-            provider.GetRequiredService<IMuxWorkflowCoordinator>()));
+            provider.GetRequiredService<IMuxWorkflowCoordinator>(),
+            provider.GetRequiredService<BatchRunLogService>()));
         services.AddSingleton<BatchModuleServices>(provider => new BatchModuleServices(
             provider.GetRequiredService<SharedEpisodeModuleServices>(),
             provider.GetRequiredService<BatchScanCoordinator>(),
