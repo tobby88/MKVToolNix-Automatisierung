@@ -432,7 +432,14 @@ internal sealed class DownloadSortService
             .ToList();
         if (remainingFilePaths.Count > 0)
         {
-            candidates.Add(BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames));
+            var remainingCandidate = BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames);
+            candidates.Add(remainingCandidate with
+            {
+                IsInitiallySelected = false,
+                Note = MergeNotes(
+                    remainingCandidate.Note,
+                    "Nur Begleitdateien einer defekten MP4; standardmäßig nicht vorausgewählt.")
+            });
         }
 
         return candidates;
@@ -1088,7 +1095,8 @@ internal sealed record DownloadSortCandidate(
     string? DetectedSeriesName,
     string SuggestedFolderName,
     DownloadSortItemState State,
-    string Note);
+    string Note,
+    bool IsInitiallySelected = true);
 
 /// <summary>
 /// Sichere Vorab-Umbenennung eines bestehenden Serienordners auf einen kanonischen Namen.

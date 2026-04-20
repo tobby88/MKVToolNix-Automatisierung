@@ -285,6 +285,8 @@ public sealed class DownloadSortServiceTests : IDisposable
 
         Assert.Equal(DownloadSortItemState.Ready, remaining.State);
         Assert.Equal("Neues aus Büttenwarder", remaining.SuggestedFolderName);
+        Assert.False(remaining.IsInitiallySelected);
+        Assert.Contains("nicht vorausgewählt", remaining.Note, StringComparison.Ordinal);
         Assert.Contains(textPath, remaining.FilePaths);
         Assert.Contains(subtitlePath, remaining.FilePaths);
         Assert.DoesNotContain(videoPath, remaining.FilePaths);
@@ -313,6 +315,7 @@ public sealed class DownloadSortServiceTests : IDisposable
 
         Assert.Equal(DownloadSortItemState.Ready, remaining.State);
         Assert.Equal("Der Alte", remaining.SuggestedFolderName);
+        Assert.False(remaining.IsInitiallySelected);
         Assert.Contains(textPath, remaining.FilePaths);
         Assert.DoesNotContain(videoPath, remaining.FilePaths);
     }

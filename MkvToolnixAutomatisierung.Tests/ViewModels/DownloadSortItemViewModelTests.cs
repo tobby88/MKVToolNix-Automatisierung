@@ -21,4 +21,20 @@ public sealed class DownloadSortItemViewModelTests
         Assert.Equal("Ersetzen", item.StatusText);
         Assert.Equal("#E5F0FF", item.StatusBadgeBackground);
     }
+
+    [Fact]
+    public void Constructor_RespectsInitialSelectionFlag_ForSidecarOnlyFollowUps()
+    {
+        var item = new DownloadSortItemViewModel(new DownloadSortCandidate(
+            "Stralsund-Außer Kontrolle",
+            [@"C:\Downloads\Stralsund-Außer Kontrolle.txt"],
+            "Stralsund",
+            "Stralsund",
+            DownloadSortItemState.Ready,
+            "Nur Begleitdateien einer defekten MP4; standardmäßig nicht vorausgewählt.",
+            IsInitiallySelected: false));
+
+        Assert.False(item.IsSelected);
+        Assert.Equal("Bereit", item.StatusText);
+    }
 }

@@ -22,7 +22,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
         _note = candidate.Note;
-        _isSelected = DownloadSortItemStates.IsSortable(candidate.State);
+        _isSelected = candidate.IsInitiallySelected;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
