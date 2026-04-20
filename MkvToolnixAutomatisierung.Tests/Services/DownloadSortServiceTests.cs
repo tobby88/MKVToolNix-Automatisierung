@@ -125,6 +125,18 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_UsesContainedAliasPrefix_WhenFilenameMergesMarieBrandWithEpisodeTitle()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "Marie Brand und die verlorenen Kinder-1860682802.mp4"));
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("Marie Brand", item.DetectedSeriesName);
+        Assert.Equal("Marie Brand", item.SuggestedFolderName);
+    }
+
+    [Fact]
     public void Scan_SortsCandidatesByTargetFolder_BeforeDisplayName()
     {
         CreateEmptyFile(Path.Combine(_rootDirectory, "ZZZ-Folge-1.mp4"));

@@ -207,6 +207,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return true;
         }
 
+        if (ShouldMergeSupplementSeedWithEquivalentEpisode(left, right))
+        {
+            return true;
+        }
+
         if (!HaveSameSeriesAndTitle(left.Identity, right.Identity)
             || !HasAmbiguousMediathekEpisodeCodePair(left.Identity, right.Identity))
         {
@@ -218,6 +223,20 @@ public sealed partial class SeriesEpisodeMuxPlanner
         // mit echten Wiederholungen gleichen Titels kollidieren, reicht der Titel allein
         // nicht: die deklarierte TXT-Laufzeit muss ebenfalls praktisch identisch sein.
         return HaveCompatibleDeclaredDurations(left.TextMetadata.Duration, right.TextMetadata.Duration);
+    }
+
+    private static bool ShouldMergeSupplementSeedWithEquivalentEpisode(CandidateSeed left, CandidateSeed right)
+    {
+        if (!HaveSameSeriesAndTitle(left.Identity, right.Identity)
+            || !HasKnownEpisodeCode(left.Identity)
+            || !HasKnownEpisodeCode(right.Identity)
+            || !string.Equals(left.Identity.SeasonNumber, right.Identity.SeasonNumber, StringComparison.OrdinalIgnoreCase)
+            || !HaveCompatibleDeclaredDurations(left.TextMetadata.Duration, right.TextMetadata.Duration))
+        {
+            return false;
+        }
+
+        return IsSupplementOnlySeed(left) || IsSupplementOnlySeed(right);
     }
 
     private static bool HaveSameSeriesAndTitle(EpisodeIdentity left, EpisodeIdentity right)
@@ -245,6 +264,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private static bool HasKnownEpisodeCode(EpisodeIdentity identity)
     {
         return identity.SeasonNumber != "xx" && identity.EpisodeNumber != "xx";
+    }
+
+    private static bool IsSupplementOnlySeed(CandidateSeed seed)
+    {
+        return SupportedSubtitleExtensions.Contains(Path.GetExtension(seed.FilePath))
+            || EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath);
     }
 
     private static bool IsYearLikeSeason(string seasonNumber)

@@ -698,6 +698,41 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsSubtitleOnlySeed_WithEquivalentEpisodeDespiteMediathekCodeDrift()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-only-code-drift");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-only-code-drift");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Jenseits der Spree-Im Land der toten Träume (S05_E01)-1358865137.mp4");
+        var subtitleOnlyPath = CreateFile(sourceDirectory, "Jenseits der Spree-Im Land der toten Träume (Staffel 5, Folge 25)-0880795506.vtt", "subtitle");
+        CreateFile(
+            sourceDirectory,
+            "Jenseits der Spree-Im Land der toten Träume (S05_E01)-1358865137.txt",
+            "Sender: ZDF\r\nThema: Jenseits der Spree\r\nTitel: Im Land der toten Träume (S05/E01)\r\nDauer: 00:48:00");
+        CreateFile(
+            sourceDirectory,
+            "Jenseits der Spree-Im Land der toten Träume (Staffel 5, Folge 25)-0880795506.txt",
+            "Sender: ZDF\r\nThema: Jenseits der Spree\r\nTitel: Im Land der toten Träume (Staffel 5, Folge 25)\r\nDauer: 00:48:05");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        Assert.Equal([mainVideoPath], directoryContext.MainVideoFiles);
+
+        var detected = await service.DetectFromSelectedVideoAsync(mainVideoPath, directoryContext);
+
+        Assert.Contains(subtitleOnlyPath, detected.SubtitlePaths);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, subtitleOnlyPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotUseClearlyIncompleteMp4_ButKeepsItsSubtitles()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-incomplete-mp4");

@@ -62,6 +62,11 @@ internal sealed class DownloadSortService
                 "Der Kommissar und der See"
             ]),
         new(
+            "Marie Brand",
+            [
+                "Marie Brand"
+            ]),
+        new(
             "Ostfriesenkrimis",
             [
                 "Ostfriesenkrimis",
@@ -562,6 +567,13 @@ internal sealed class DownloadSortService
             return true;
         }
 
+        if (TryResolveContainedAliasPrefix(normalizedCandidate, out canonicalSeriesName))
+        {
+            resolvedSeriesName = canonicalSeriesName;
+            aliasApplied = true;
+            return true;
+        }
+
         resolvedSeriesName = normalizedCandidate;
         return true;
     }
@@ -669,6 +681,31 @@ internal sealed class DownloadSortService
             {
                 canonicalSeriesName = group.CanonicalFolderName;
                 return true;
+            }
+        }
+
+        canonicalSeriesName = string.Empty;
+        return false;
+    }
+
+    private static bool TryResolveContainedAliasPrefix(string candidate, out string canonicalSeriesName)
+    {
+        var normalizedCandidate = EpisodeMetadataMatchingHeuristics.NormalizeText(candidate);
+        foreach (var group in AliasGroups)
+        {
+            foreach (var alias in group.Aliases)
+            {
+                var normalizedAlias = EpisodeMetadataMatchingHeuristics.NormalizeText(alias);
+                if (string.IsNullOrWhiteSpace(normalizedAlias))
+                {
+                    continue;
+                }
+
+                if (normalizedCandidate.StartsWith(normalizedAlias + " ", StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalSeriesName = group.CanonicalFolderName;
+                    return true;
+                }
             }
         }
 
