@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Threading;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -56,8 +55,8 @@ public partial class BatchMuxView : UserControl
 
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (e.OriginalSource is DependencyObject originalSource
-            && FindVisualParent<CheckBox>(originalSource) is not null)
+        if (sender is DataGrid
+            && DataGridSelectionInput.IsSelectionColumnSource(e.OriginalSource as DependencyObject))
         {
             e.Handled = true;
             return;
@@ -170,22 +169,6 @@ public partial class BatchMuxView : UserControl
     private void UpdateExpandedDetailsHeight()
     {
         DetailsExpander.Height = Math.Max(0d, DetailsHost.ActualHeight);
-    }
-
-    private static T? FindVisualParent<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        while (current is not null)
-        {
-            if (current is T typed)
-            {
-                return typed;
-            }
-
-            current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
     }
 
     private void EpisodeIndexTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)

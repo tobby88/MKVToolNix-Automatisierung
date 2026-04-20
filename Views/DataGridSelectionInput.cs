@@ -13,6 +13,18 @@ namespace MkvToolnixAutomatisierung.Views;
 internal static class DataGridSelectionInput
 {
     /// <summary>
+    /// Prüft, ob ein Ereignis aus der fachlichen Auswahlspalte stammt.
+    /// </summary>
+    /// <param name="source">Ursprüngliches WPF-Quellelement des Ereignisses.</param>
+    /// <param name="toggleColumnDisplayIndex">DisplayIndex der Auswahlspalte.</param>
+    /// <returns><see langword="true"/>, wenn das Ereignis innerhalb der Auswahlspalte ausgelöst wurde.</returns>
+    public static bool IsSelectionColumnSource(DependencyObject? source, int toggleColumnDisplayIndex = 0)
+    {
+        var cell = FindVisualParent<DataGridCell>(source);
+        return cell?.Column is not null && cell.Column.DisplayIndex == toggleColumnDisplayIndex;
+    }
+
+    /// <summary>
     /// Behandelt <kbd>Space</kbd> als explizites Auswahlkommando, bevor das WPF-DataGrid
     /// daraus einen Edit- oder Fokusnavigationsvorgang machen kann.
     /// </summary>
@@ -70,8 +82,7 @@ internal static class DataGridSelectionInput
             return false;
         }
 
-        var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
-        if (cell?.Column is null || cell.Column.DisplayIndex != toggleColumnDisplayIndex)
+        if (!IsSelectionColumnSource(e.OriginalSource as DependencyObject, toggleColumnDisplayIndex))
         {
             return false;
         }
