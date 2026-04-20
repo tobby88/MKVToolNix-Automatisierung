@@ -89,7 +89,10 @@ public partial class BatchMuxView : UserControl
 
     private void EpisodeItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is not DataGrid dataGrid || dataGrid.SelectedItem is null)
+        if (sender is not DataGrid dataGrid
+            || dataGrid.SelectedItem is null
+            || DataContext is not BatchMuxViewModel viewModel
+            || viewModel.IsInteractive)
         {
             return;
         }
