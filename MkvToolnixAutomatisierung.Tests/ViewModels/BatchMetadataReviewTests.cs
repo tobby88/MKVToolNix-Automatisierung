@@ -524,6 +524,30 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task ReviewSelectedMetadataCommand_MetadataChange_CancelsPendingSelectionRefresh()
+    {
+        var workflow = new MetadataChangingEpisodeReviewWorkflow();
+        var viewModel = CreateBatchViewModel(workflow);
+        var item = CreatePendingReviewItem();
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        var pendingRefresh = viewModel.SelectedItemPlanSummaryRefreshTask;
+
+        viewModel.ReviewSelectedMetadataCommand.Execute(null);
+        await workflow.WaitForMetadataReviewAsync();
+        if (pendingRefresh is not null)
+        {
+            await pendingRefresh;
+        }
+
+        Assert.Null(viewModel.SelectedItemPlanSummaryRefreshTask);
+        Assert.Equal("Mit Pippi Langstrumpf auf der Walz", item.Title);
+        Assert.Equal("01", item.SeasonNumber);
+        Assert.Equal("04", item.EpisodeNumber);
+    }
+
+    [Fact]
     public void ResetCompletedBatchSession_ClearsEpisodeItems_AndSelection()
     {
         var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
@@ -641,6 +665,48 @@ public sealed class BatchMetadataReviewTests
             LastMetadataItem = item;
             _metadataReviewCompletion.TrySetResult();
             return Task.FromResult(EpisodeMetadataReviewOutcome.Cancelled);
+        }
+
+        public async Task WaitForMetadataReviewAsync()
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _metadataReviewCompletion.Task.WaitAsync(timeout.Token);
+        }
+    }
+
+    private sealed class MetadataChangingEpisodeReviewWorkflow : IEpisodeReviewWorkflow
+    {
+        private readonly TaskCompletionSource _metadataReviewCompletion = new();
+
+        public Task<bool> ReviewManualSourceAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string openFailedStatusText,
+            string approvedStatusText,
+            string alternativeStatusText,
+            Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<EpisodeMetadataReviewOutcome> ReviewMetadataAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string localApprovedStatusText,
+            string tvdbApprovedStatusText,
+            Action onEpisodeChanged)
+        {
+            item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Pippi Langstrumpf", 100, "Mit Pippi Langstrumpf auf der Walz", "01", "04"));
+            onEpisodeChanged();
+            item.ApproveMetadataReview("TVDB manuell bestätigt: S01E04 - Mit Pippi Langstrumpf auf der Walz");
+            _metadataReviewCompletion.TrySetResult();
+            return Task.FromResult(EpisodeMetadataReviewOutcome.AppliedTvdbSelection);
         }
 
         public async Task WaitForMetadataReviewAsync()

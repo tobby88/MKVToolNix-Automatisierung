@@ -445,6 +445,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
             "TVDB-Zuordnung freigegeben",
             () =>
             {
+                // Bereits geplante Hintergrund-Refreshes dürfen nach einer manuellen TVDB-Korrektur
+                // nicht mehr mit dem alten Episodencode in die UI zurückschreiben.
+                _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
                 UpdateSuggestedOutputPathIfAutomatic();
                 RefreshOutputTargetStatus();
                 SchedulePlanSummaryRefresh();

@@ -89,6 +89,10 @@ internal sealed partial class BatchMuxViewModel
             () =>
             {
                 episodeChanged = true;
+                // Eine ältere, bereits geplante Detailaktualisierung könnte noch mit dem alten
+                // Episodencode oder Archivziel in die UI zurückschreiben. Vor dem neuen Vergleich
+                // wird sie deshalb explizit verworfen.
+                CancelSelectedItemPlanSummaryRefresh(invalidateInFlightRefreshes: true);
                 _planCache.Invalidate(item);
                 RefreshAutomaticOutputPath(item);
             });
