@@ -138,6 +138,77 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_PreservesAsciiApostropheEpisodeTitle()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var filePath = Path.Combine(tempDirectory, "München Mord-Einer, der's geschafft hat (S01_E05)-0873185230.mp4");
+            CreateEmptyFile(filePath);
+            CreateCompanionText(
+                Path.Combine(tempDirectory, "München Mord-Einer, der's geschafft hat (S01_E05)-0873185230.txt"),
+                topic: "München Mord",
+                title: "Einer, der's geschafft hat (S01/E05)",
+                duration: "01:28:00");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+            var seed = context.GetSelectedSeed(filePath);
+
+            Assert.Equal("München Mord", seed.Identity.SeriesName);
+            Assert.Equal("Einer, der's geschafft hat", seed.Identity.Title);
+            Assert.Equal("01", seed.Identity.SeasonNumber);
+            Assert.Equal("05", seed.Identity.EpisodeNumber);
+            Assert.Contains(filePath, context.MainVideoFiles);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreateDirectoryDetectionContext_KeepsApostropheEpisodeVisibleAmongBatchEntries()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            CreateEpisodePackage(
+                tempDirectory,
+                "München Mord-Wir sind die Neuen-0855232701",
+                "München Mord",
+                "Wir sind die Neuen",
+                duration: "01:28:00");
+            CreateEpisodePackage(
+                tempDirectory,
+                "München Mord-Einer, der's geschafft hat (S01_E05)-0873185230",
+                "München Mord",
+                "Einer, der's geschafft hat (S01/E05)",
+                duration: "01:28:00");
+            CreateEpisodePackage(
+                tempDirectory,
+                "München Mord-A saisonale G'schicht - Der Samstagskrimi (S02_E08)-1736149521",
+                "München Mord",
+                "A saisonale G'schicht - Der Samstagskrimi (S02/E08)",
+                duration: "01:28:00");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+
+            Assert.Equal(3, context.MainVideoFiles.Count);
+            Assert.Contains(
+                context.MainVideoFiles,
+                path => Path.GetFileName(path).Contains("Einer, der's geschafft hat", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_MergesSubtitleOnlySupplement_WithEquivalentEpisodeDespiteDifferentCode()
     {
         var planner = CreatePlanner();
@@ -258,6 +329,17 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "content");
+    }
+
+    private static void CreateEpisodePackage(
+        string directory,
+        string baseName,
+        string topic,
+        string title,
+        string duration)
+    {
+        CreateEmptyFile(Path.Combine(directory, baseName + ".mp4"));
+        CreateCompanionText(Path.Combine(directory, baseName + ".txt"), topic, title, duration);
     }
 
     private static void CreateCompanionText(

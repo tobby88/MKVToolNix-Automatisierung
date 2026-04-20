@@ -72,9 +72,12 @@ internal sealed partial class BatchMuxViewModel
         Func<bool>? shouldSkipPresentationUpdate = null,
         CancellationToken cancellationToken = default)
     {
+        var comparisonInputVersion = item.ComparisonInputVersion;
+
         bool ShouldSkipPresentationUpdate()
         {
-            return shouldSkipPresentationUpdate?.Invoke() == true;
+            return shouldSkipPresentationUpdate?.Invoke() == true
+                || item.ComparisonInputVersion != comparisonInputVersion;
         }
 
         cancellationToken.ThrowIfCancellationRequested();

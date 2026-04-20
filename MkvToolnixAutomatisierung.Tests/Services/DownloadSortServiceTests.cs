@@ -304,9 +304,10 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Equal("defekt", item.SuggestedFolderName);
         Assert.Contains(videoPath, item.FilePaths);
         Assert.Contains(textPath, item.FilePaths);
-        Assert.Equal(2, item.DefectiveFilePaths.Count);
-        Assert.Contains(videoPath, item.DefectiveFilePaths);
-        Assert.Contains(textPath, item.DefectiveFilePaths);
+        var defectiveFilePaths = Assert.IsAssignableFrom<IReadOnlyList<string>>(item.DefectiveFilePaths);
+        Assert.Equal(2, defectiveFilePaths.Count);
+        Assert.Contains(videoPath, defectiveFilePaths);
+        Assert.Contains(textPath, defectiveFilePaths);
         Assert.Contains("Alle zugehörigen Dateien", item.Note, StringComparison.Ordinal);
     }
 

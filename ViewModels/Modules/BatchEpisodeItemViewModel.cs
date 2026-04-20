@@ -1,5 +1,6 @@
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using System.Threading;
 using System.Runtime.CompilerServices;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -26,6 +27,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     private bool _isArchiveTargetPath;
     private string? _statusTextOverride;
     private BatchEpisodeStatusKind _statusKind;
+    private int _comparisonInputVersion;
 
     private BatchEpisodeItemViewModel(
         string requestedMainVideoPath,
@@ -145,6 +147,13 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     /// Vereinfacht Fehlerfilter und Fehler-Badge-Logik in der Batch-Liste.
     /// </summary>
     public bool HasErrorStatus => StatusKind == BatchEpisodeStatusKind.Error;
+
+    /// <summary>
+    /// Monotone Versionsnummer aller planrelevanten Eingaben dieser Batch-Zeile.
+    /// Hintergrundvergleiche verwerfen Ergebnisse, sobald sich diese Nummer während
+    /// eines laufenden Refreshs ändert.
+    /// </summary>
+    internal int ComparisonInputVersion => Volatile.Read(ref _comparisonInputVersion);
 
     /// <summary>
     /// Sortierschlüssel für die Status-basierte Batch-Sortierung.
@@ -306,30 +315,35 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     public override void SetAudioDescription(string? path)
     {
         base.SetAudioDescription(path);
+        MarkComparisonInputsChanged();
         IsSelected = true;
     }
 
     public override void SetSubtitles(IEnumerable<string> paths)
     {
         base.SetSubtitles(paths);
+        MarkComparisonInputsChanged();
         IsSelected = true;
     }
 
     public override void SetAttachments(IEnumerable<string> paths)
     {
         base.SetAttachments(paths);
+        MarkComparisonInputsChanged();
         IsSelected = true;
     }
 
     public override void SetOutputPath(string outputPath)
     {
         base.SetOutputPath(outputPath);
+        MarkComparisonInputsChanged();
         IsSelected = true;
     }
 
     public override void SetAutomaticOutputPath(string outputPath)
     {
         base.SetAutomaticOutputPath(outputPath);
+        MarkComparisonInputsChanged();
     }
 
     /// <summary>
@@ -577,11 +591,22 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             // wie "Archiv prüfen" dürfen deshalb nicht sichtbar bleiben, bis der
             // nächste Vergleich neue, tatsächlich passende Hinweise berechnet.
             SetPlanNotes([]);
+            MarkComparisonInputsChanged();
         }
         finally
         {
             _isApplyingSharedMetadataState = false;
         }
+    }
+
+    /// <summary>
+    /// Hebt die Vergleichsversion an, sobald sich planrelevante Eingaben ändern.
+    /// Bereits laufende Vergleiche erkennen darüber veraltete Ergebnisse und
+    /// schreiben keine alten Archivhinweise mehr zurück.
+    /// </summary>
+    private void MarkComparisonInputsChanged()
+    {
+        Interlocked.Increment(ref _comparisonInputVersion);
     }
 
 }

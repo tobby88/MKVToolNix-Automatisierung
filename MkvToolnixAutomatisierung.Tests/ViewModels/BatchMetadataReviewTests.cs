@@ -252,6 +252,28 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void ApplyTvdbSelection_BumpsComparisonInputVersion()
+    {
+        var item = CreatePendingReviewItem();
+        var before = item.ComparisonInputVersion;
+
+        item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Pippi Langstrumpf", 100, "Mit Pippi Langstrumpf auf der Walz", "01", "04"));
+
+        Assert.True(item.ComparisonInputVersion > before);
+    }
+
+    [Fact]
+    public void SetSubtitles_BumpsComparisonInputVersion()
+    {
+        var item = CreatePendingReviewItem();
+        var before = item.ComparisonInputVersion;
+
+        item.SetSubtitles([@"C:\Temp\episode.ass"]);
+
+        Assert.True(item.ComparisonInputVersion > before);
+    }
+
+    [Fact]
     public void SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
     {
         var item = BatchEpisodeItemViewModel.CreateFromDetection(
