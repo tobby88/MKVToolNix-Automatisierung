@@ -21,6 +21,12 @@ internal interface IEmbyClient : IDisposable
     Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Startet für ein konkretes Emby-Item einen "Scan library files"-ähnlichen Refresh.
+    /// Bei Ordner-Items entspricht das fachlich dem bevorzugten, gezielten Bibliotheksscan.
+    /// </summary>
+    Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Sucht ein Emby-Item über den lokalen Dateipfad der MKV.
     /// </summary>
     Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default);
@@ -76,6 +82,23 @@ internal sealed class EmbyClient : IEmbyClient
     }
 
     /// <inheritdoc />
+    public Task TriggerItemFileScanAsync(
+        AppEmbySettings settings,
+        string itemId,
+        CancellationToken cancellationToken = default)
+    {
+        return PostItemRefreshAsync(
+            settings,
+            itemId,
+            recursive: true,
+            metadataRefreshMode: "Default",
+            imageRefreshMode: "Default",
+            replaceAllMetadata: false,
+            replaceAllImages: false,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<EmbyItem?> FindItemByPathAsync(
         AppEmbySettings settings,
         string mediaFilePath,
@@ -123,15 +146,36 @@ internal sealed class EmbyClient : IEmbyClient
         string itemId,
         CancellationToken cancellationToken = default)
     {
+        await PostItemRefreshAsync(
+            settings,
+            itemId,
+            recursive: false,
+            metadataRefreshMode: "FullRefresh",
+            imageRefreshMode: "Default",
+            replaceAllMetadata: false,
+            replaceAllImages: false,
+            cancellationToken);
+    }
+
+    private async Task PostItemRefreshAsync(
+        AppEmbySettings settings,
+        string itemId,
+        bool recursive,
+        string metadataRefreshMode,
+        string imageRefreshMode,
+        bool replaceAllMetadata,
+        bool replaceAllImages,
+        CancellationToken cancellationToken)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
 
         var queryParameters = new Dictionary<string, string?>
         {
-            ["Recursive"] = "false",
-            ["MetadataRefreshMode"] = "FullRefresh",
-            ["ImageRefreshMode"] = "Default",
-            ["ReplaceAllMetadata"] = "false",
-            ["ReplaceAllImages"] = "false"
+            ["Recursive"] = recursive ? "true" : "false",
+            ["MetadataRefreshMode"] = metadataRefreshMode,
+            ["ImageRefreshMode"] = imageRefreshMode,
+            ["ReplaceAllMetadata"] = replaceAllMetadata ? "true" : "false",
+            ["ReplaceAllImages"] = replaceAllImages ? "true" : "false"
         };
 
         using var content = new StringContent("{}", Encoding.UTF8, "application/json");

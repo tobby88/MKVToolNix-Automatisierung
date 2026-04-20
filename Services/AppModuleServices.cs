@@ -109,9 +109,11 @@ internal sealed record DownloadSortModuleServices(
 /// Bündelt nur die Services für den nachgelagerten Emby-/NFO-Abgleich.
 /// </summary>
 /// <param name="Settings">Persistenter Store für Emby-Adresse und API-Key.</param>
+/// <param name="ArchiveSettings">Persistenter Store für den Standardpfad der Serienbibliothek.</param>
 /// <param name="Sync">Fachservice für JSON-Metadatenreport-Import, NFO-Provider-IDs und Emby-API-Aktionen.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
+    AppArchiveSettingsStore ArchiveSettings,
     EmbyMetadataSyncService Sync);
 
 /// <summary>

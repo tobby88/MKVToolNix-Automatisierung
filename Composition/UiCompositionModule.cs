@@ -43,6 +43,7 @@ internal static class UiCompositionModule
             provider.GetRequiredService<DownloadSortService>()));
         services.AddSingleton<EmbyModuleServices>(provider => new EmbyModuleServices(
             provider.GetRequiredService<AppEmbySettingsStore>(),
+            provider.GetRequiredService<AppArchiveSettingsStore>(),
             provider.GetRequiredService<EmbyMetadataSyncService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),

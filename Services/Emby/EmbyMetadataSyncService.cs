@@ -47,11 +47,35 @@ internal sealed class EmbyMetadataSyncService
     }
 
     /// <summary>
-    /// Startet einen Emby-Library-Scan.
+    /// Startet bevorzugt einen gezielten Scan der konfigurierten Serienbibliothek.
+    /// Falls Emby den Bibliothekswurzelpfad nicht direkt als Item auflösen kann,
+    /// wird konservativ auf den globalen Library-Scan zurückgefallen.
     /// </summary>
-    public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+    public async Task<EmbyLibraryScanTriggerResult> TriggerSeriesLibraryScanAsync(
+        AppEmbySettings settings,
+        string? archiveRootPath,
+        CancellationToken cancellationToken = default)
     {
-        return _embyClient.TriggerLibraryScanAsync(settings, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(archiveRootPath))
+        {
+            var libraryRootItem = await _embyClient.FindItemByPathAsync(settings, archiveRootPath, cancellationToken);
+            if (libraryRootItem is not null)
+            {
+                await _embyClient.TriggerItemFileScanAsync(settings, libraryRootItem.Id, cancellationToken);
+                return new EmbyLibraryScanTriggerResult(
+                    UsedGlobalLibraryScan: false,
+                    $"Serienbibliotheksscan angestoßen: {archiveRootPath}");
+            }
+        }
+
+        await _embyClient.TriggerLibraryScanAsync(settings, cancellationToken);
+        return string.IsNullOrWhiteSpace(archiveRootPath)
+            ? new EmbyLibraryScanTriggerResult(
+                UsedGlobalLibraryScan: true,
+                "Globaler Emby-Library-Scan angestoßen, weil kein Serienbibliothekspfad konfiguriert ist.")
+            : new EmbyLibraryScanTriggerResult(
+                UsedGlobalLibraryScan: true,
+                $"Globaler Emby-Library-Scan angestoßen, weil die Serienbibliothek in Emby nicht direkt gefunden wurde: {archiveRootPath}");
     }
 
     /// <summary>
@@ -154,6 +178,13 @@ internal sealed class EmbyMetadataSyncService
 }
 
 internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds ProviderIds);
+
+/// <summary>
+/// Beschreibt, ob der Emby-Abgleich den bevorzugten Serienbibliotheksscan oder den globalen Fallback nutzen musste.
+/// </summary>
+internal sealed record EmbyLibraryScanTriggerResult(
+    bool UsedGlobalLibraryScan,
+    string Message);
 
 /// <summary>
 /// Kombiniert lokale NFO-Daten und optionale Emby-Item-Daten für eine einzelne MKV.

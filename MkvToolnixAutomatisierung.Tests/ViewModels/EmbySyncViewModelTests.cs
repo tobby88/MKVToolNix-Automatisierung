@@ -14,8 +14,9 @@ public sealed class EmbySyncViewModelTests
     {
         var settingsStore = new AppSettingsStore();
         var embySettings = new AppEmbySettingsStore(settingsStore);
+        var archiveSettings = new AppArchiveSettingsStore(settingsStore);
         var syncService = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
-        var services = new EmbyModuleServices(embySettings, syncService);
+        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService);
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
     }
 
@@ -157,6 +158,9 @@ public sealed class EmbySyncViewModelTests
             => throw new NotSupportedException();
 
         public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
         public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)

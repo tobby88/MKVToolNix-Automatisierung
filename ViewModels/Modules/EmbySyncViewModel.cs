@@ -188,10 +188,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
 
     public string AnalyzeItemsTooltip => HasEmbyApiSettings()
-        ? "Prüft lokale NFO-Dateien und fragt zusätzlich die zugehörigen Emby-Items samt Provider-IDs ab."
+        ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell sichtbaren Emby-Items samt Provider-IDs."
         : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
 
-    public string RunSyncTooltip => "Startet den Emby-Bibliotheksscan, wartet auf neue Serien-Items und schreibt danach die Provider-IDs in die NFO-Dateien zurück.";
+    public string RunSyncTooltip => "Startet bevorzugt einen Scan der Serienbibliothek, wartet auf neue Emby-Items und schreibt danach die Provider-IDs in die NFO-Dateien zurück.";
 
     private async Task SelectReportAsync()
     {
@@ -306,11 +306,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         {
             var settings = BuildSettingsFromInput();
             SaveSettings(settings);
+            var archiveSettings = _services.ArchiveSettings.Load();
 
-            StatusText = "Starte Emby-Bibliotheksscan...";
+            StatusText = "Starte Emby-Scan...";
             ProgressValue = 5;
-            await _services.Sync.TriggerLibraryScanAsync(settings);
-            AppendLog("Emby-Bibliotheksscan angestoßen.");
+            var scanTrigger = await _services.Sync.TriggerSeriesLibraryScanAsync(
+                settings,
+                archiveSettings.DefaultSeriesArchiveRootPath);
+            ProgressValue = 10;
+            StatusText = scanTrigger.Message;
+            AppendLog(scanTrigger.Message);
 
             await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems);
             await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems);
@@ -340,7 +345,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
                 if (!updateResult.NfoChanged)
                 {
-                    item.SetStatus("Bereits aktuell", updateResult.Message);
+                    item.SetStatus("NFO aktuell", updateResult.Message);
                     continue;
                 }
 
@@ -356,7 +361,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             }
 
             ProgressValue = 100;
-            StatusText = $"Emby-Abgleich abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen";
+            StatusText =
+                $"Lokaler Emby-Abgleich abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen. "
+                + (scanTrigger.UsedGlobalLibraryScan
+                    ? "Der globale Server-Scan kann noch im Hintergrund weiterlaufen."
+                    : "Der Serienbibliotheksscan kann serverseitig noch im Hintergrund weiterlaufen.");
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
         });
