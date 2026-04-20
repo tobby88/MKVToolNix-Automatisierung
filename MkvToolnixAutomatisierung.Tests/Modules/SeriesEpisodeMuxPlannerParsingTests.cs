@@ -74,6 +74,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         Assert.Equal("Goldenes Blut", normalizedTitle);
     }
 
+    [Fact]
+    public void NormalizeEpisodeTitle_RemovesLeadingEpisodeLabel()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Folge 22: Die Waffe im Müll (S03/E10)");
+
+        Assert.Equal("Die Waffe im Müll", normalizedTitle);
+    }
+
     [Theory]
     [InlineData("Der Nachtalb - aus der Reihe _Die Toten vom Bodensee_", "Der Nachtalb")]
     [InlineData("Der Nachtalb - aus der Reihe \"Die Toten vom Bodensee\" (S2025/E04)", "Der Nachtalb")]

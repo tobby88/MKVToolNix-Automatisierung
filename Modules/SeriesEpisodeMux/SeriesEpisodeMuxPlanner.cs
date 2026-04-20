@@ -52,9 +52,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
     }
 
     /// <summary>
-    /// Führt die lokale Dateierkennung für eine ausgewählte Hauptquelle synchron aus.
+    /// Führt die lokale Dateierkennung für eine ausgewählte Einstiegsquelle synchron aus.
     /// </summary>
-    /// <param name="mainVideoPath">Pfad zur primären Video- oder AD-Datei der Episode.</param>
+    /// <param name="mainVideoPath">Pfad zur primären Video-, AD- oder reinen Untertitelquelle der Episode.</param>
     /// <param name="onProgress">Optionaler Callback für Status- und Fortschrittsmeldungen.</param>
     /// <param name="excludedSourcePaths">Optionaler Satz an Pfaden, die bei der Erkennung ignoriert werden sollen.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal für Ordner- und Kandidatenanalyse.</param>
@@ -78,7 +78,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(mainVideoPath))
         {
-            throw new FileNotFoundException($"Videodatei nicht gefunden: {mainVideoPath}");
+            throw new FileNotFoundException($"Quelldatei nicht gefunden: {mainVideoPath}");
         }
 
         ReportProgress(onProgress, "Bereite Erkennung vor...", 0);
@@ -87,9 +87,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ? null
             : new HashSet<string>(excludedSourcePaths, StringComparer.OrdinalIgnoreCase);
 
-        var detected = EpisodeFileNameHelper.LooksLikeAudioDescription(mainVideoPath)
-            ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken)
-            : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken);
+        var detected = Path.GetExtension(mainVideoPath) is string extension && SupportedSubtitleExtensions.Contains(extension)
+            ? DetectFromSubtitleOnly(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken)
+            : EpisodeFileNameHelper.LooksLikeAudioDescription(mainVideoPath)
+                ? DetectFromAudioDescription(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken)
+                : DetectFromNormalVideo(mainVideoPath, directoryContext, onProgress, excludedPathSet, cancellationToken);
 
         return detected;
     }

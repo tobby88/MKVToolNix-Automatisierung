@@ -186,7 +186,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         else
         {
-            lines.Add($"AD-Quelle: {Path.GetFileName(detected.AudioDescriptionPath ?? detected.MainVideoPath)}");
+            var supplementalSourceLabel = string.IsNullOrWhiteSpace(detected.AudioDescriptionPath)
+                ? "Zusatzquelle"
+                : "AD-Quelle";
+            lines.Add($"{supplementalSourceLabel}: {Path.GetFileName(detected.AudioDescriptionPath ?? detected.MainVideoPath)}");
             lines.Add("Zu dieser Episode wurde noch keine frische Hauptvideoquelle gefunden.");
         }
 
@@ -304,8 +307,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
         {
             OutputTargetStatusText = ArchiveState == EpisodeArchiveState.Existing
                 && _services.OutputPaths.IsArchivePath(OutputPath)
-                ? "Es liegt nur eine AD-Quelle vor. Bei Vorschau oder Mux kann die vorhandene Bibliotheks-MKV als Hauptquelle weiterverwendet und um die AD ergänzt werden."
-                : "Es liegt nur eine AD-Quelle vor. Ohne vorhandene Bibliotheks-MKV kann aktuell kein vollständiger Mux geplant werden.";
+                ? "Es liegt nur Zusatzmaterial ohne frische Hauptvideoquelle vor. Bei Vorschau oder Mux kann die vorhandene Bibliotheks-MKV als Hauptquelle weiterverwendet und ergänzt werden."
+                : "Es liegt nur Zusatzmaterial ohne frische Hauptvideoquelle vor. Ohne vorhandene Bibliotheks-MKV kann aktuell kein vollständiger Mux geplant werden.";
             return;
         }
 

@@ -70,13 +70,23 @@ public partial class BatchMuxView : UserControl
         if (e.Key != Key.Space
             || DataContext is not BatchMuxViewModel viewModel
             || !viewModel.IsInteractive
-            || viewModel.SelectedEpisodeItem is null)
+            || viewModel.SelectedEpisodeItem is null
+            || sender is not DataGrid dataGrid)
         {
             return;
         }
 
         viewModel.SelectedEpisodeItem.IsSelected = !viewModel.SelectedEpisodeItem.IsSelected;
         e.Handled = true;
+
+        // Der Space-Toggle soll sich wie eine echte Tabellenbedienung anfühlen: Nach dem
+        // Umschalten bleibt der Fokus auf der Tabelle, damit Pfeiltasten und weitere
+        // Space-Eingaben ohne erneutes Anklicken funktionieren.
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            dataGrid.Focus();
+            Keyboard.Focus(dataGrid);
+        }));
     }
 
     private void EpisodeItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)

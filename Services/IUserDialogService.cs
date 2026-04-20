@@ -37,6 +37,13 @@ internal interface IUserDialogService
 
     bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes);
 
+    /// <summary>
+    /// Fragt bei aktivem Batch-Filter, ob eine Auswahlaktion nur gefilterte oder alle Einträge betreffen soll.
+    /// </summary>
+    /// <param name="selectItems"><see langword="true"/> für Auswählen, <see langword="false"/> für Abwählen.</param>
+    /// <returns><see langword="true"/>, wenn die Aktion auf alle Batch-Einträge erweitert werden soll.</returns>
+    bool ConfirmApplyBatchSelectionToAllItems(bool selectItems);
+
     bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan);
 
     bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles);

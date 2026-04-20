@@ -184,6 +184,25 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
+    {
+        var actionText = selectItems ? "auswählen" : "abwählen";
+        var lines = new[]
+        {
+            "Der aktuelle Filter ist aktiv.",
+            string.Empty,
+            $"Nein: nur die aktuell sichtbaren/gefilterten Episoden {actionText}.",
+            $"Ja: die Aktion auf alle Episoden des Scans erweitern."
+        };
+
+        return MessageBox.Show(
+            GetOwner(),
+            string.Join(Environment.NewLine, lines),
+            "Batch-Auswahl",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
     public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan)
     {
         return MessageBox.Show(

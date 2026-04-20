@@ -84,7 +84,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         if (!request.HasPrimaryVideoSource && string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
         {
             throw new InvalidOperationException(
-                "Zur ausgewählten AD-Datei wurde keine passende Hauptquelle gefunden, und am Ziel liegt noch keine wiederverwendbare Archiv-MKV. Die AD kann deshalb derzeit nicht verarbeitet werden.");
+                "Zur ausgewählten Zusatzquelle wurde keine passende Hauptquelle gefunden, und am Ziel liegt noch keine wiederverwendbare Archiv-MKV. Die Quelle kann deshalb derzeit nicht verarbeitet werden.");
         }
 
         var effectiveOutputPath = archiveDecision.OutputFilePath;
@@ -158,7 +158,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
         if (!request.HasPrimaryVideoSource && !string.IsNullOrWhiteSpace(archiveDecision.PrimarySourcePath))
         {
-            notes.Insert(0, "Es liegt nur eine AD-Quelle vor. Die Hauptspuren werden aus der vorhandenen Archiv-MKV übernommen.");
+            notes.Insert(0, "Es liegt nur Zusatzmaterial ohne frische Hauptvideoquelle vor. Die Hauptspuren werden aus der vorhandenen Archiv-MKV übernommen.");
         }
         if (audioDescriptionPath is not null && IsSrfSender(CompanionTextMetadataReader.ReadForMediaFile(audioDescriptionPath).Sender))
         {

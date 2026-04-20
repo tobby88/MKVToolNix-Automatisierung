@@ -54,6 +54,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return legacyAudioDescriptionParts;
         }
 
+        if (TryParseEpisodeNameWithLeadingEpisodeLabel(normalizedName, out var labeledEpisodeParts))
+        {
+            return labeledEpisodeParts;
+        }
+
         var splitIndex = normalizedName.IndexOf(" - ", StringComparison.Ordinal);
 
         if (splitIndex < 0)
@@ -94,6 +99,41 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var seriesName = NormalizeSeriesName(legacyMatch.Groups["series"].Value);
         var titleDetails = ParseTitleDetails(legacyMatch.Groups["title"].Value);
+        if (string.IsNullOrWhiteSpace(seriesName) || string.IsNullOrWhiteSpace(titleDetails.Title))
+        {
+            return false;
+        }
+
+        episodeNameParts = new EpisodeNameParts(
+            seriesName,
+            titleDetails.Title,
+            titleDetails.SeasonNumber,
+            titleDetails.EpisodeNumber);
+        return true;
+    }
+
+    private static bool TryParseEpisodeNameWithLeadingEpisodeLabel(
+        string normalizedName,
+        out EpisodeNameParts episodeNameParts)
+    {
+        episodeNameParts = default!;
+
+        // ARD/RBB-Dateien wie
+        // "Die Heiland - Wir sind Anwalt-Folge 22_ Die Waffe im Müll (S03_E10)"
+        // nutzen den Seriennamen selbst mit Leerzeichen-Bindestrich, trennen die Folge
+        // danach aber nur mit "-Folge ...". Die generische " - "-Trennung würde sonst
+        // "Die Heiland" als Serie und "Wir sind Anwalt-..." als Titel fehlinterpretieren.
+        var match = Regex.Match(
+            normalizedName,
+            @"^(?<series>.+?)-\s*Folge\s+\d+\s*[_:]\s*(?<title>.+)$",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var seriesName = NormalizeSeriesName(match.Groups["series"].Value);
+        var titleDetails = ParseTitleDetails(match.Groups["title"].Value);
         if (string.IsNullOrWhiteSpace(seriesName) || string.IsNullOrWhiteSpace(titleDetails.Title))
         {
             return false;
@@ -237,6 +277,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var normalized = NormalizeSeparators(value);
         normalized = RemoveEditorialLabels(normalized);
+        normalized = Regex.Replace(normalized, @"^\s*Folge\s+\d+\s*[_:]\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"^\s*S\d{1,4}\s*E\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?\s*[-:]\s*", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(S\d{1,4}\s*[_/]\s*E\d{1,4}(?:\s*-\s*(?:E)?\d{1,4})?\)", string.Empty, RegexOptions.IgnoreCase);
@@ -445,7 +486,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
     internal sealed record EpisodeSeedCollection(
         IReadOnlyList<CandidateSeed> AllEpisodeVideoSeeds,
         IReadOnlyList<CandidateSeed> NormalVideoSeeds,
-        IReadOnlyList<CandidateSeed> AudioDescriptionSeeds);
+        IReadOnlyList<CandidateSeed> AudioDescriptionSeeds,
+        IReadOnlyList<CandidateSeed> SubtitleOnlySeeds);
 
     internal sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber)
     {

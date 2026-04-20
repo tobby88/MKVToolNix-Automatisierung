@@ -228,9 +228,13 @@ internal sealed partial class BatchMuxViewModel
 
     private void SelectAllEpisodes()
     {
-        var changedCount = _episodeCollection.SelectAllVisible();
+        var includeHiddenItems = SelectedFilterMode.Key != BatchEpisodeFilterMode.All
+            && _dialogService.ConfirmApplyBatchSelectionToAllItems(selectItems: true);
+        var changedCount = includeHiddenItems
+            ? _episodeCollection.SelectAllItems()
+            : _episodeCollection.SelectAllVisible();
         SetStatus(
-            SelectedFilterMode.Key == BatchEpisodeFilterMode.All
+            SelectedFilterMode.Key == BatchEpisodeFilterMode.All || includeHiddenItems
                 ? $"Alle Episoden ausgewählt ({changedCount} geändert)"
                 : $"Gefilterte Episoden ausgewählt ({changedCount} geändert)",
             ProgressValue);
@@ -238,9 +242,13 @@ internal sealed partial class BatchMuxViewModel
 
     private void DeselectAllEpisodes()
     {
-        var changedCount = _episodeCollection.DeselectAllVisible();
+        var includeHiddenItems = SelectedFilterMode.Key != BatchEpisodeFilterMode.All
+            && _dialogService.ConfirmApplyBatchSelectionToAllItems(selectItems: false);
+        var changedCount = includeHiddenItems
+            ? _episodeCollection.DeselectAllItems()
+            : _episodeCollection.DeselectAllVisible();
         SetStatus(
-            SelectedFilterMode.Key == BatchEpisodeFilterMode.All
+            SelectedFilterMode.Key == BatchEpisodeFilterMode.All || includeHiddenItems
                 ? $"Auswahl geleert ({changedCount} geändert)"
                 : $"Gefilterte Auswahl geleert ({changedCount} geändert)",
             ProgressValue);

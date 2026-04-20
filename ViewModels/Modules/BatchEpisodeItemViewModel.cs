@@ -385,8 +385,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         if (!hasPrimaryVideoSource)
         {
             return outputExists && isArchiveTargetPath
-                ? "Es liegt nur eine AD-Quelle vor. Für die Hauptspuren wird die vorhandene Bibliotheks-MKV geprüft."
-                : "Es liegt nur eine AD-Quelle vor. Ohne vorhandene Bibliotheks-MKV kann derzeit kein vollständiger Mux geplant werden.";
+                ? "Es liegt nur Zusatzmaterial ohne frische Hauptvideoquelle vor. Für die Hauptspuren wird die vorhandene Bibliotheks-MKV geprüft."
+                : "Es liegt nur Zusatzmaterial ohne frische Hauptvideoquelle vor. Ohne vorhandene Bibliotheks-MKV kann derzeit kein vollständiger Mux geplant werden.";
         }
 
         if (outputExists && isArchiveTargetPath)
@@ -408,10 +408,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         {
             return outputExists && isArchiveTargetPath
                 ? EpisodeUsageSummary.CreatePending(
-                    "Nur AD erkannt",
+                    "Nur Zusatzmaterial erkannt",
                     "Vorhandene Bibliotheks-MKV wird als Hauptquelle geprüft")
                 : EpisodeUsageSummary.CreatePending(
-                    "Nur AD erkannt",
+                    "Nur Zusatzmaterial erkannt",
                     "Ohne vorhandene Bibliotheks-MKV aktuell nicht ausführbar");
         }
 
@@ -458,7 +458,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         return HasArchiveComparisonTarget
             ? EpisodeEditTextBuilder.BuildBatchStatusText(BatchEpisodeStatusKind.ComparisonPending)
-            : "Warnung (nur AD ohne vorhandene Bibliotheks-MKV)";
+            : "Warnung (nur Zusatzmaterial ohne vorhandene Bibliotheks-MKV)";
     }
 
     private string? GetCurrentStatusTextOverride()
@@ -499,6 +499,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         try
         {
             applyAction();
+            // Metadatenwechsel ändern Zielpfad und Archivvergleich. Alte Planhinweise
+            // wie "Archiv prüfen" dürfen deshalb nicht sichtbar bleiben, bis der
+            // nächste Vergleich neue, tatsächlich passende Hinweise berechnet.
+            SetPlanNotes([]);
         }
         finally
         {

@@ -5,7 +5,7 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 /// <summary>
 /// Vom UI zusammengestellte Eingabe für einen konkreten Mux-Vorgang.
 /// </summary>
-/// <param name="MainVideoPath">Ausgewählte Hauptvideoquelle oder bei AD-only-Fällen der Platzhalterpfad der Episode.</param>
+/// <param name="MainVideoPath">Ausgewählte Hauptvideoquelle oder bei Zusatzmaterial-only-Fällen der Platzhalterpfad der Episode.</param>
 /// <param name="AudioDescriptionPath">Optional ausgewählte AD-Datei.</param>
 /// <param name="SubtitlePaths">Aktuell ausgewählte externe Untertiteldateien.</param>
 /// <param name="AttachmentPaths">Aktuell ausgewählte TXT-Anhänge inklusive automatisch erkannter Videobegleiter.</param>

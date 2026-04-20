@@ -627,6 +627,77 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_GroupsLeadingEpisodeLabelAudioDescriptionWithoutTxt()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-leading-episode-label-ad");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-leading-episode-label-ad");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var normalPath = CreateFile(sourceDirectory, "Die Heiland - Wir sind Anwalt-Folge 22_ Die Waffe im Müll (S03_E10)-1173328014.mp4");
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Die Heiland - Wir sind Anwalt-Folge 22_ Die Waffe im Müll (S03_E10) (Audiodeskription)-153587882.mp4");
+
+        CreateFile(
+            sourceDirectory,
+            "Die Heiland - Wir sind Anwalt-Folge 22_ Die Waffe im Müll (S03_E10)-1173328014.txt",
+            "Sender: RBB\r\nThema: Die Heiland - Wir sind Anwalt\r\nTitel: Folge 22: Die Waffe im Müll (S03/E10)\r\nDauer: 00:48:48");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            normalPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        Assert.Equal([normalPath], directoryContext.MainVideoFiles);
+
+        var detected = await service.DetectFromSelectedVideoAsync(normalPath, directoryContext);
+
+        Assert.Equal("Die Heiland - Wir sind Anwalt", detected.SeriesName);
+        Assert.Equal("Die Waffe im Müll", detected.SuggestedTitle);
+        Assert.Equal(audioDescriptionPath, detected.AudioDescriptionPath);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_SubtitleOnly_MarksMissingPrimaryAndKeepsSubtitleCompanions()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-only");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-only");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var subtitleAssPath = CreateFile(sourceDirectory, "Marie Brand-Marie Brand und die verlorenen Kinder-1860682802.ass", "ass");
+        var subtitleSrtPath = CreateFile(sourceDirectory, "Marie Brand-Marie Brand und die verlorenen Kinder-1860682802.srt", "srt");
+        var subtitleTtmlPath = CreateFile(sourceDirectory, "Marie Brand-Marie Brand und die verlorenen Kinder-1860682802.ttml", "ttml");
+        var metadataPath = CreateFile(
+            sourceDirectory,
+            "Marie Brand-Marie Brand und die verlorenen Kinder-1860682802.txt",
+            "Sender: ZDF\r\nThema: Marie Brand\r\nTitel: Marie Brand und die verlorenen Kinder\r\nDauer: 01:29:00");
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        Assert.Equal([subtitleAssPath], directoryContext.MainVideoFiles);
+
+        var detected = await service.DetectFromSelectedVideoAsync(subtitleAssPath, directoryContext);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal(subtitleAssPath, detected.MainVideoPath);
+        Assert.Null(detected.AudioDescriptionPath);
+        Assert.Equal("Marie Brand", detected.SeriesName);
+        Assert.Equal("Marie Brand und die verlorenen Kinder", detected.SuggestedTitle);
+        Assert.Equal([subtitleAssPath, subtitleSrtPath], detected.SubtitlePaths);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, metadataPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, subtitleTtmlPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            detected.Notes,
+            note => note.Contains("Untertiteldatei", StringComparison.OrdinalIgnoreCase)
+                && note.Contains("keine passende frische Hauptquelle", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_DoesNotUseClearlyIncompleteMp4_ButKeepsItsSubtitles()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-incomplete-mp4");

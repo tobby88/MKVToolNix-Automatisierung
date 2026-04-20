@@ -75,6 +75,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 audioDescriptionPath,
                 context.RelatedFilePaths,
                 selectedAudioDescription,
+                context.SubtitlePaths,
                 manualCheckFilePaths,
                 notes);
             ReportProgress(onProgress, "Erkennung abgeschlossen", 100);
@@ -97,6 +98,63 @@ public sealed partial class SeriesEpisodeMuxPlanner
         ReportProgress(onProgress, "Erkennung abgeschlossen", 100);
         return detectedFiles;
     }
+
+    private AutoDetectedEpisodeFiles DetectFromSubtitleOnly(
+        string subtitlePath,
+        DirectoryDetectionContext? directoryContext,
+        Action<DetectionProgressUpdate>? onProgress,
+        ISet<string>? excludedSourcePaths,
+        CancellationToken cancellationToken)
+    {
+        var context = BuildEpisodeDetectionContext(
+            subtitlePath,
+            directoryContext,
+            onProgress,
+            excludedSourcePaths,
+            "Zu der ausgewählten Untertiteldatei konnte keine passende Hauptdatei gefunden werden.",
+            allowMissingPrimaryVideo: true,
+            cancellationToken: cancellationToken);
+        var selectedAudioDescription = SelectAudioDescriptionCandidate(
+            context.AudioDescriptionCandidates,
+            context.PrimaryVideoCandidate);
+        var notes = BuildDetectionNotes(subtitlePath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
+        var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
+
+        if (context.PrimaryVideoCandidate is null)
+        {
+            notes.Insert(
+                0,
+                "Zur ausgewählten Untertiteldatei wurde keine passende frische Hauptquelle gefunden. Falls am Ziel bereits eine Archiv-MKV liegt, kann sie später als Hauptquelle weiterverwendet und um die Untertitel ergänzt werden.");
+
+            ReportProgress(onProgress, "Erstelle Vorschlag...", 94);
+            var detectedSubtitleOnly = BuildDetectedFilesWithoutPrimaryVideo(
+                context.Directory,
+                context.EpisodeIdentity,
+                subtitlePath,
+                context.RelatedFilePaths,
+                selectedAudioDescription,
+                context.SubtitlePaths,
+                manualCheckFilePaths,
+                notes);
+            ReportProgress(onProgress, "Erkennung abgeschlossen", 100);
+            return detectedSubtitleOnly;
+        }
+
+        ReportProgress(onProgress, "Erstelle Vorschlag...", 94);
+        var detectedFiles = BuildDetectedFiles(
+            context.Directory,
+            context.EpisodeIdentity,
+            context.PrimaryVideoCandidate,
+            context.SelectedVideoCandidates,
+            context.SubtitlePaths,
+            context.RelatedFilePaths,
+            selectedAudioDescription,
+            manualCheckFilePaths,
+            notes);
+        ReportProgress(onProgress, "Erkennung abgeschlossen", 100);
+        return detectedFiles;
+    }
+
     private EpisodeDetectionContext BuildEpisodeDetectionContext(
         string selectedPath,
         DirectoryDetectionContext? directoryContext,
@@ -195,8 +253,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 [],
                 null,
                 [],
-                [],
-                CollectRelatedEpisodeFilePaths(usableEpisodeSeeds, companionFilesByBaseName),
+                CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName),
+                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds], companionFilesByBaseName),
                 audioDescriptionCandidates,
                 sourceHealthNotes);
         }
@@ -207,11 +265,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var primaryVideoCandidate = selectedVideoCandidates[0];
         var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
             .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
+            .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths(usableEpisodeSeeds, companionFilesByBaseName);
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds], companionFilesByBaseName);
 
         return new EpisodeDetectionContext(
             directory,
@@ -270,16 +329,26 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string detectionSeedPath,
         IReadOnlyList<string> relatedFilePaths,
         AudioDescriptionCandidate? selectedAudioDescription,
+        IReadOnlyList<string> subtitlePaths,
         IReadOnlyList<string> manualCheckFilePaths,
         IReadOnlyList<string> notes)
     {
-        var effectiveAudioDescriptionPath = selectedAudioDescription?.FilePath ?? detectionSeedPath;
+        // Ohne frische Hauptquelle kann die Erkennungsquelle AD oder Untertitel sein. Nur
+        // echte AD-Pfade dürfen in den AD-Slot wandern; reine Untertitelquellen bleiben
+        // ausschließlich in SubtitlePaths, damit der spätere Plan sie nicht als Audiospur
+        // an mkvmerge weitergibt.
+        var effectiveAudioDescriptionPath = selectedAudioDescription?.FilePath;
+        if (string.IsNullOrWhiteSpace(effectiveAudioDescriptionPath)
+            && EpisodeFileNameHelper.LooksLikeAudioDescription(detectionSeedPath))
+        {
+            effectiveAudioDescriptionPath = detectionSeedPath;
+        }
 
         return new AutoDetectedEpisodeFiles(
             MainVideoPath: detectionSeedPath,
             AdditionalVideoPaths: [],
             AudioDescriptionPath: effectiveAudioDescriptionPath,
-            SubtitlePaths: [],
+            SubtitlePaths: subtitlePaths,
             AttachmentPaths: [],
             RelatedFilePaths: relatedFilePaths,
             SuggestedOutputFilePath: _archiveService.BuildSuggestedOutputPath(

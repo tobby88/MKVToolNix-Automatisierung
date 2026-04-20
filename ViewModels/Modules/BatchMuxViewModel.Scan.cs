@@ -248,8 +248,8 @@ internal sealed partial class BatchMuxViewModel
         if (!detected.HasPrimaryVideoSource)
         {
             return outputAlreadyExists && isArchiveTargetPath
-                ? $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur AD erkannt. Die vorhandene Bibliotheksdatei wird später als Hauptquelle geprüft."
-                : $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur AD erkannt. Ohne vorhandene Bibliotheks-MKV aktuell nicht ausführbar.";
+                ? $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur Zusatzmaterial erkannt. Die vorhandene Bibliotheksdatei wird später als Hauptquelle geprüft."
+                : $"HINWEIS: {Path.GetFileName(sourcePath)} -> Nur Zusatzmaterial erkannt. Ohne vorhandene Bibliotheks-MKV aktuell nicht ausführbar.";
         }
 
         return outputAlreadyExists

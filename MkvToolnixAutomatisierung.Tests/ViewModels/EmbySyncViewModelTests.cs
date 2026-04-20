@@ -136,6 +136,7 @@ public sealed class EmbySyncViewModelTests
         public MessageBoxResult AskAttachmentChoice() => MessageBoxResult.Cancel;
         public bool ConfirmMuxStart() => false;
         public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => false;
+        public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems) => false;
         public bool ConfirmArchiveCopy(FileCopyPlan copyPlan) => false;
         public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => false;
         public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => false;

@@ -155,6 +155,8 @@ public sealed class EpisodeReviewWorkflowTests
 
         public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
 
+        public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems) => throw new NotSupportedException();
+
         public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan) => throw new NotSupportedException();
 
         public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();

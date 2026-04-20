@@ -136,7 +136,49 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Equal(0, plan.AudioDescriptionTrackId);
         Assert.Contains(
             plan.Notes,
-            note => note.Contains("nur eine AD-Quelle", StringComparison.OrdinalIgnoreCase));
+            note => note.Contains("Zusatzmaterial", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_SubtitleOnly_WithExistingArchiveTarget_UsesArchiveAsPrimarySource()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-only-existing");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-only-existing");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var subtitlePath = CreateFile(sourceDirectory, "Marie Brand - Pilot (S01_E02).ass", "subtitle");
+        CreateFile(
+            sourceDirectory,
+            "Marie Brand - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Marie Brand\r\nTitel: Pilot (S01/E02)\r\nDauer: 01:29:00");
+        var outputPath = Path.Combine(archiveDirectory, "Marie Brand", "Season 1", "Marie Brand - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: subtitlePath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [subtitlePath],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Pilot",
+            HasPrimaryVideoSource: false));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(outputPath, plan.VideoSources[0].FilePath);
+        Assert.NotNull(plan.WorkingCopy);
+        Assert.Null(plan.AudioDescriptionFilePath);
+        Assert.Contains(plan.SubtitleFiles, subtitle => string.Equals(subtitle.FilePath, subtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            plan.Notes,
+            note => note.Contains("Zusatzmaterial", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -116,8 +116,8 @@ public sealed class BatchMetadataReviewTests
 
         Assert.False(item.HasPrimaryVideoSource);
         Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
-        Assert.Contains("AD-Quelle", item.PlanSummaryText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("nur AD", item.Status, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Zusatzmaterial", item.PlanSummaryText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Zusatzmaterial", item.Status, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -237,6 +237,21 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void ApplyTvdbSelection_ClearsStalePlanReviewHints()
+    {
+        var item = CreatePendingReviewItem();
+        item.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+
+        item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Mit Pippi Langstrumpf auf der Walz", "01", "04"));
+
+        Assert.False(item.HasPendingPlanReview);
+        Assert.False(item.HasActionablePlanNotes);
+        Assert.DoesNotContain("Archiv prüfen", item.ReviewHint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
     {
         var item = BatchEpisodeItemViewModel.CreateFromDetection(
@@ -306,6 +321,60 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal(1, dialogService.ConfirmPlanReviewCallCount);
         Assert.False(item.HasPendingPlanReview);
         Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+    }
+
+    [Fact]
+    public void SelectAllEpisodesCommand_WithActiveFilter_AsksWhetherHiddenItemsShouldBeIncluded()
+    {
+        var dialogService = new FakeDialogService
+        {
+            ConfirmApplyBatchSelectionToAllItemsResult = false
+        };
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var pendingItem = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\pending.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with { MainVideoPath = @"C:\Temp\pending.mp4" },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\pending.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: false);
+        var hiddenReadyItem = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\ready.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with { MainVideoPath = @"C:\Temp\ready.mp4" },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"),
+                StatusText: "TVDB-Zuordnung automatisch bestätigt.",
+                ConfidenceScore: 100,
+                RequiresReview: false,
+                QueryWasAttempted: true,
+                QuerySucceeded: true),
+            outputPath: @"C:\Temp\ready.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: false);
+
+        pendingItem.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+        viewModel.EpisodeItems.Add(pendingItem);
+        viewModel.EpisodeItems.Add(hiddenReadyItem);
+        viewModel.SelectedFilterMode = viewModel.FilterModes.Single(mode => mode.Key == BatchEpisodeFilterMode.PendingChecks);
+
+        viewModel.SelectAllEpisodesCommand.Execute(null);
+
+        Assert.Equal(1, dialogService.ConfirmApplyBatchSelectionToAllItemsCallCount);
+        Assert.True(pendingItem.IsSelected);
+        Assert.False(hiddenReadyItem.IsSelected);
+        Assert.Contains("Gefilterte Episoden", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -525,6 +594,10 @@ public sealed class BatchMetadataReviewTests
 
         public bool ConfirmPlanReviewResult { get; init; } = true;
 
+        public int ConfirmApplyBatchSelectionToAllItemsCallCount { get; private set; }
+
+        public bool ConfirmApplyBatchSelectionToAllItemsResult { get; init; }
+
         public string? LastOutputInitialDirectory { get; private set; }
 
         public string? LastOutputFileName { get; private set; }
@@ -549,6 +622,11 @@ public sealed class BatchMetadataReviewTests
         public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();
         public bool ConfirmMuxStart() => throw new NotSupportedException();
         public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
+        public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
+        {
+            ConfirmApplyBatchSelectionToAllItemsCallCount++;
+            return ConfirmApplyBatchSelectionToAllItemsResult;
+        }
         public bool ConfirmArchiveCopy(FileCopyPlan copyPlan) => throw new NotSupportedException();
         public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => throw new NotSupportedException();
         public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => throw new NotSupportedException();

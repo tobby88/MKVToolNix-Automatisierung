@@ -181,6 +181,18 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return changedCount;
     }
 
+    public int SelectAllItems()
+    {
+        var changedCount = 0;
+        foreach (var item in _items.Where(item => !item.IsSelected))
+        {
+            item.IsSelected = true;
+            changedCount++;
+        }
+
+        return changedCount;
+    }
+
     public int DeselectAllVisible()
     {
         var changedCount = 0;
@@ -193,9 +205,22 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return changedCount;
     }
 
-    private IEnumerable<BatchEpisodeItemViewModel> VisibleItems => _view
-        .Cast<object>()
-        .OfType<BatchEpisodeItemViewModel>();
+    public int DeselectAllItems()
+    {
+        var changedCount = 0;
+        foreach (var item in _items.Where(item => item.IsSelected))
+        {
+            item.IsSelected = false;
+            changedCount++;
+        }
+
+        return changedCount;
+    }
+
+    // Auswahlaktionen muessen gegen die aktuell gesetzte Filterregel laufen, nicht gegen
+    // den eventuell noch nicht neu gerenderten ICollectionView-Zustand. Sonst kann ein
+    // direkt nach dem Filterwechsel geklicktes "Alle wählen" kurz wieder alle Einträge treffen.
+    private IEnumerable<BatchEpisodeItemViewModel> VisibleItems => _items.Where(item => FilterEpisodeItem(item));
 
     public void Dispose()
     {

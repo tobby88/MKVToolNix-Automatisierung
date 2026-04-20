@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.Services;
 internal interface IEpisodePlanInput
 {
     /// <summary>
-    /// Pfad zur aktuell ausgewählten Erkennungsquelle. Bei AD-only-Fällen kann dies bewusst die AD-Datei sein.
+    /// Pfad zur aktuell ausgewählten Erkennungsquelle. Bei Zusatzmaterial-only-Fällen kann dies bewusst die AD- oder Untertiteldatei sein.
     /// </summary>
     string MainVideoPath { get; }
 
