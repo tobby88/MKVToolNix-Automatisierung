@@ -117,6 +117,26 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void RunSyncTooltip_ExplainsSeriesLibraryScanAndBackgroundWork()
+    {
+        var vm = CreateViewModel();
+
+        Assert.Contains("Serienbibliothek", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NFO-Dateien", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("weiterlaufen", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WorkflowInfoText_ExplainsThreeStepFlow()
+    {
+        var vm = CreateViewModel();
+
+        Assert.Contains("Reports laden", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("NFO/Emby prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("Scan + NFO-Sync", vm.WorkflowInfoText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectReportCommand_LoadsMultipleStructuredReports()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));

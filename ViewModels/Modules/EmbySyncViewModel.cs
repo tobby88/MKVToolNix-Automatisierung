@@ -188,10 +188,18 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
 
     public string AnalyzeItemsTooltip => HasEmbyApiSettings()
-        ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell sichtbaren Emby-Items samt Provider-IDs."
+        ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
         : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
 
-    public string RunSyncTooltip => "Startet bevorzugt einen Scan der Serienbibliothek, wartet auf neue Emby-Items und schreibt danach die Provider-IDs in die NFO-Dateien zurück.";
+    public string RunSyncTooltip => "Startet bevorzugt nur den Scan der Serienbibliothek, wartet begrenzt auf neue Emby-Items und schreibt danach TVDB-/IMDB-IDs in die lokalen NFO-Dateien zurück. Der serverseitige Scan kann danach noch weiterlaufen.";
+
+    /// <summary>
+    /// Kurzer Ablaufhinweis für den manuellen Emby-Schritt.
+    /// </summary>
+    public string WorkflowInfoText =>
+        "1. Reports laden importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien. "
+        + "2. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
+        + "3. Scan + NFO-Sync startet bevorzugt nur den Serienbibliotheksscan und schreibt danach die IDs in die NFO-Dateien zurück.";
 
     private async Task SelectReportAsync()
     {
@@ -314,7 +322,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
                 settings,
                 archiveSettings.DefaultSeriesArchiveRootPath);
             ProgressValue = 10;
-            StatusText = scanTrigger.Message;
+            StatusText = $"{scanTrigger.Message} Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
             AppendLog(scanTrigger.Message);
 
             await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems);
@@ -362,7 +370,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
             ProgressValue = 100;
             StatusText =
-                $"Lokaler Emby-Abgleich abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen. "
+                $"Lokaler NFO-Abgleich abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen. "
                 + (scanTrigger.UsedGlobalLibraryScan
                     ? "Der globale Server-Scan kann noch im Hintergrund weiterlaufen."
                     : "Der Serienbibliotheksscan kann serverseitig noch im Hintergrund weiterlaufen.");

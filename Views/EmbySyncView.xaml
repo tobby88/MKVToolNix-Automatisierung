@@ -5,6 +5,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="150" />
             <RowDefinition Height="Auto" />
@@ -100,16 +101,27 @@
                     Padding="10,6"
                     Command="{Binding AnalyzeItemsCommand}"
                     ToolTip="{Binding AnalyzeItemsTooltip, Mode=OneWay}"
-                    Content="NFO/Emby analysieren" />
+                    Content="NFO/Emby prüfen" />
             <Button Grid.Column="5"
                     Margin="0,2,0,2"
                     Padding="10,6"
                     Command="{Binding RunSyncCommand}"
                     ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                    Content="Scan + Sync starten" />
+                    Content="Scan + NFO-Sync" />
         </Grid>
 
-        <GroupBox Grid.Row="2" Header="Neue MKV-Dateien">
+        <Border Grid.Row="2"
+                Margin="0,0,0,10"
+                Padding="10,8"
+                Background="#F4F7FB"
+                BorderBrush="#BCD0E5"
+                BorderThickness="1"
+                CornerRadius="6">
+            <TextBlock TextWrapping="Wrap"
+                       Text="{Binding WorkflowInfoText, Mode=OneWay}" />
+        </Border>
+
+        <GroupBox Grid.Row="3" Header="Neue MKV-Dateien">
             <DataGrid ItemsSource="{Binding Items}"
                       AutoGenerateColumns="False"
                       CanUserResizeColumns="True"
@@ -165,7 +177,7 @@
             </DataGrid>
         </GroupBox>
 
-        <GroupBox Grid.Row="3"
+        <GroupBox Grid.Row="4"
                   Margin="0,10,0,0"
                   Header="Protokoll">
             <TextBox Margin="8"
@@ -177,7 +189,7 @@
                      HorizontalScrollBarVisibility="Disabled" />
         </GroupBox>
 
-        <Grid Grid.Row="4" Margin="0,10,0,0">
+        <Grid Grid.Row="5" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
