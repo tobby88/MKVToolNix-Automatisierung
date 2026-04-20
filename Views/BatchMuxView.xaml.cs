@@ -108,14 +108,14 @@ public partial class BatchMuxView : UserControl
 
     private void BatchLogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (sender is not TextBox textBox)
-        {
-            return;
-        }
-
         // Das Batch-Protokoll ist ein fortlaufender Sitzungslog. Neue Zeilen sollen beim
         // laufenden Batch direkt sichtbar bleiben, ohne dass die TextBox unbegrenzt wächst.
-        textBox.ScrollToEnd();
+        ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(sender as TextBox);
+    }
+
+    private void BatchLogExpander_OnExpanded(object sender, RoutedEventArgs e)
+    {
+        ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(BatchLogTextBox);
     }
 
     private void DetailsExpander_OnExpanded(object sender, RoutedEventArgs e)

@@ -438,7 +438,10 @@
                 <TextBlock Grid.Row="0" Margin="0,0,0,6" Text="{Binding StatusText, Mode=OneWay}" />
                 <ProgressBar Grid.Row="1" Margin="0,0,0,8" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
-                <Expander Grid.Row="2" Header="Details und mkvmerge-Ausgabe" IsExpanded="False">
+                <Expander Grid.Row="2"
+                          Header="Details und mkvmerge-Ausgabe"
+                          IsExpanded="False"
+                          Expanded="PreviewExpander_OnExpanded">
                     <TextBox x:Name="PreviewTextBox"
                              Margin="0,8,0,0"
                              FontFamily="Consolas"

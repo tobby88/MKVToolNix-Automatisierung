@@ -594,6 +594,7 @@
                       Header="Batch-Protokoll"
                       Margin="0,6,0,10"
                       IsExpanded="False"
+                      Expanded="BatchLogExpander_OnExpanded"
                       ToolTip="{Binding BatchLogInfoText, Mode=OneWay}">
                 <StackPanel>
                     <TextBlock Margin="8,8,8,0"

@@ -65,9 +65,11 @@ public partial class SingleEpisodeMuxView : UserControl
 
     private void PreviewTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
-        if (sender is TextBox textBox)
-        {
-            textBox.ScrollToEnd();
-        }
+        ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(sender as TextBox);
+    }
+
+    private void PreviewExpander_OnExpanded(object sender, RoutedEventArgs e)
+    {
+        ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(PreviewTextBox);
     }
 }
