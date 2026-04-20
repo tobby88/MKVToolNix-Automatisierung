@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Modules;
@@ -125,5 +126,122 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Beispieltitel: ");
 
         Assert.Equal("Beispieltitel", normalizedTitle);
+    }
+
+    [Fact]
+    public void CreateDirectoryDetectionContext_MergesSubtitleOnlySupplement_WithEquivalentEpisodeDespiteDifferentCode()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            CreateEmptyFile(Path.Combine(tempDirectory, "Jenseits der Spree-Im Land der toten Träume (S05_E01)-1358865137.mp4"));
+            CreateCompanionText(
+                Path.Combine(tempDirectory, "Jenseits der Spree-Im Land der toten Träume (S05_E01)-1358865137.txt"),
+                topic: "Jenseits der Spree",
+                title: "Im Land der toten Träume (S05/E01)",
+                duration: "00:58:48");
+            CreateEmptyFile(Path.Combine(tempDirectory, "Jenseits der Spree-Im Land der toten Träume (Staffel 5, Folge 25)-0880795506.vtt"));
+            CreateCompanionText(
+                Path.Combine(tempDirectory, "Jenseits der Spree-Im Land der toten Träume (Staffel 5, Folge 25)-0880795506.txt"),
+                topic: "Jenseits der Spree",
+                title: "Im Land der toten Träume (Staffel 5, Folge 25)",
+                duration: "00:58:48");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+
+            var mainVideoFiles = Assert.Single(context.MainVideoFiles);
+            Assert.EndsWith("Jenseits der Spree-Im Land der toten Träume (S05_E01)-1358865137.mp4", mainVideoFiles, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreateDirectoryDetectionContext_UsesSeriesPrefixFromTitle_WhenTopicIsGenericRubric()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var filePath = Path.Combine(tempDirectory, "Backstage-SOKO Leipzig_ Am Filmset mit den Krimi-Helden (S01_E04)-0868375784.mp4");
+            CreateEmptyFile(filePath);
+            CreateCompanionText(
+                Path.Combine(tempDirectory, "Backstage-SOKO Leipzig_ Am Filmset mit den Krimi-Helden (S01_E04)-0868375784.txt"),
+                topic: "Backstage",
+                title: "SOKO Leipzig: Am Filmset mit den Krimi-Helden (S01/E04)",
+                duration: "00:26:55");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+            var seed = context.GetSelectedSeed(filePath);
+
+            Assert.Equal("SOKO Leipzig", seed.Identity.SeriesName);
+            Assert.Equal("Am Filmset mit den Krimi-Helden", seed.Identity.Title);
+            Assert.Equal("01", seed.Identity.SeasonNumber);
+            Assert.Equal("04", seed.Identity.EpisodeNumber);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    private static SeriesEpisodeMuxPlanner CreatePlanner()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
+        var probeService = new MkvMergeProbeService();
+        var archiveService = new SeriesArchiveService(probeService, archiveSettingsStore);
+        return new SeriesEpisodeMuxPlanner(
+            new MkvToolNixLocator(toolPathStore),
+            probeService,
+            archiveService,
+            new NullDurationProbe());
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-planner-parsing-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        return tempDirectory;
+    }
+
+    private static void CreateEmptyFile(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "content");
+    }
+
+    private static void CreateCompanionText(
+        string path,
+        string topic,
+        string title,
+        string duration)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(
+            path,
+            string.Join(
+                Environment.NewLine,
+                [
+                    $"Thema:       {topic}",
+                    string.Empty,
+                    $"Titel:       {title}",
+                    string.Empty,
+                    $"Dauer:       {duration}"
+                ]));
+    }
+
+    private sealed class NullDurationProbe : IMediaDurationProbe
+    {
+        public TimeSpan? TryReadDuration(string filePath)
+        {
+            return null;
+        }
     }
 }
