@@ -81,18 +81,24 @@ public partial class BatchMuxView : UserControl
         selectedItem.IsSelected = !selectedItem.IsSelected;
         e.Handled = true;
 
-        // Der Space-Toggle soll sich wie eine echte Tabellenbedienung anfühlen. Nur das
-        // DataGrid selbst zu fokussieren reicht in WPF nicht zuverlässig: Pfeiltasten können
-        // dann in die allgemeine Fokusnavigation fallen und zu Filter oder Splitter springen.
-        // Deshalb setzen wir CurrentCell und Tastaturfokus explizit auf die aktuelle Zeile.
-        RestoreEpisodeGridKeyboardFocus(dataGrid, selectedItem);
-        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        // Der Space-Toggle soll sich wie eine echte Tabellenbedienung anfühlen. Die aktuelle
+        // Zelle bleibt sofort gesetzt; aktiv nachfokussiert wird aber nur, wenn WPF den
+        // Tastaturfokus wirklich aus der Tabelle herausbewegt. Das vermeidet sichtbares
+        // Auswahl-Flackern, hält aber den Schutz gegen Fokus-Sprünge zu Filter/Splitter.
+        EnsureEpisodeGridCurrentCell(dataGrid, selectedItem);
+        Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
         {
-            RestoreEpisodeGridKeyboardFocus(dataGrid, selectedItem);
+            if (!dataGrid.IsKeyboardFocusWithin)
+            {
+                RestoreEpisodeGridKeyboardFocus(dataGrid, selectedItem);
+                return;
+            }
+
+            EnsureEpisodeGridCurrentCell(dataGrid, selectedItem);
         }));
     }
 
-    private static void RestoreEpisodeGridKeyboardFocus(DataGrid dataGrid, object selectedItem)
+    private static void EnsureEpisodeGridCurrentCell(DataGrid dataGrid, object selectedItem)
     {
         if (!dataGrid.IsEnabled || dataGrid.Columns.Count == 0)
         {
@@ -104,6 +110,17 @@ public partial class BatchMuxView : UserControl
         dataGrid.CurrentItem = selectedItem;
         dataGrid.CurrentCell = new DataGridCellInfo(selectedItem, focusColumn);
         dataGrid.ScrollIntoView(selectedItem, focusColumn);
+    }
+
+    private static void RestoreEpisodeGridKeyboardFocus(DataGrid dataGrid, object selectedItem)
+    {
+        if (!dataGrid.IsEnabled || dataGrid.Columns.Count == 0)
+        {
+            return;
+        }
+
+        EnsureEpisodeGridCurrentCell(dataGrid, selectedItem);
+        var focusColumn = dataGrid.CurrentCell.Column ?? dataGrid.Columns[0];
         dataGrid.UpdateLayout();
 
         var row = dataGrid.ItemContainerGenerator.ContainerFromItem(selectedItem) as DataGridRow;
