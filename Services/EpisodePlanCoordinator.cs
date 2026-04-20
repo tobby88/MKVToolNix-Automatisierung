@@ -63,6 +63,21 @@ internal interface IEpisodePlanInput
     IReadOnlyList<string> DetectionNotes { get; }
 
     /// <summary>
+    /// Serienname, der aktuell in Dateiname, Zielpfad und Archivvergleich einfließt.
+    /// </summary>
+    string SeriesName { get; }
+
+    /// <summary>
+    /// Staffelnummer, die aktuell in Dateiname, Zielpfad und Archivvergleich einfließt.
+    /// </summary>
+    string SeasonNumber { get; }
+
+    /// <summary>
+    /// Episodennummer oder Bereich, der aktuell in Dateiname, Zielpfad und Archivvergleich einfließt.
+    /// </summary>
+    string EpisodeNumber { get; }
+
+    /// <summary>
     /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
     /// Null oder leer, wenn unbekannt; in diesem Fall wird der <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
     /// </summary>

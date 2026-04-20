@@ -156,7 +156,11 @@ internal sealed class EpisodePlanCache
             input.TitleForMux,
             input.ExcludedSourcePaths.ToList(),
             input.PlannedVideoPaths.ToList(),
-            input.DetectionNotes.ToList());
+            input.DetectionNotes.ToList(),
+            input.SeriesName,
+            input.SeasonNumber,
+            input.EpisodeNumber,
+            input.OriginalLanguage);
     }
 
     private static Task<string> BuildCacheKeyAsync(
@@ -188,6 +192,10 @@ internal sealed class EpisodePlanCache
         AppendValues(builder, input.ExcludedSourcePaths);
         AppendFileValues(builder, input.PlannedVideoPaths);
         AppendValues(builder, input.DetectionNotes);
+        AppendValue(builder, input.SeriesName);
+        AppendValue(builder, input.SeasonNumber);
+        AppendValue(builder, input.EpisodeNumber);
+        AppendValue(builder, input.OriginalLanguage);
         return builder.ToString();
     }
 
@@ -363,5 +371,9 @@ internal sealed class EpisodePlanCache
         string TitleForMux,
         IReadOnlyCollection<string> ExcludedSourcePaths,
         IReadOnlyList<string> PlannedVideoPaths,
-        IReadOnlyList<string> DetectionNotes);
+        IReadOnlyList<string> DetectionNotes,
+        string SeriesName,
+        string SeasonNumber,
+        string EpisodeNumber,
+        string? OriginalLanguage);
 }

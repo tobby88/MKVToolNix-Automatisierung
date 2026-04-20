@@ -234,6 +234,52 @@ public sealed class EpisodePlanCacheTests : IDisposable
         Assert.False(found);
     }
 
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenSeriesMetadataChanges()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = new StubPlanInput
+        {
+            SeriesName = "Pippi Langstrumpf",
+            SeasonNumber = "01",
+            EpisodeNumber = "03"
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        var reassignedInput = input with
+        {
+            SeriesName = "Pippi Langstrumpf",
+            SeasonNumber = "01",
+            EpisodeNumber = "04"
+        };
+
+        var found = cache.TryGet(owner, reassignedInput, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenOriginalLanguageChanges()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = new StubPlanInput
+        {
+            OriginalLanguage = "de"
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        var updatedInput = input with
+        {
+            OriginalLanguage = "swe"
+        };
+
+        var found = cache.TryGet(owner, updatedInput, out _);
+
+        Assert.False(found);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -279,7 +325,7 @@ public sealed class EpisodePlanCacheTests : IDisposable
         return path;
     }
 
-    private sealed class StubPlanInput : IEpisodePlanInput
+    private sealed record StubPlanInput : IEpisodePlanInput
     {
         public string MainVideoPath { get; init; } = @"C:\Temp\episode.mp4";
 
@@ -302,6 +348,12 @@ public sealed class EpisodePlanCacheTests : IDisposable
         public IReadOnlyList<string> PlannedVideoPaths { get; set; } = [@"C:\Temp\episode.mp4", @"C:\Temp\episode-alt.mp4"];
 
         public IReadOnlyList<string> DetectionNotes { get; set; } = ["Hinweis"];
+
+        public string SeriesName { get; init; } = "Beispielserie";
+
+        public string SeasonNumber { get; init; } = "01";
+
+        public string EpisodeNumber { get; init; } = "02";
 
         public string? OriginalLanguage { get; init; } = null;
     }

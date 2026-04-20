@@ -435,6 +435,12 @@ internal partial class EpisodeEditModel
 
     IReadOnlyList<string> IEpisodePlanInput.DetectionNotes => _notes;
 
+    string IEpisodePlanInput.SeriesName => SeriesName;
+
+    string IEpisodePlanInput.SeasonNumber => SeasonNumber;
+
+    string IEpisodePlanInput.EpisodeNumber => EpisodeNumber;
+
     string? IEpisodePlanInput.OriginalLanguage => _tvdbSelection?.OriginalLanguage;
 
     private IReadOnlyList<string> BuildPlannedVideoPaths()
