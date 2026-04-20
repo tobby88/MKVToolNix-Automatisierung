@@ -65,6 +65,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory), unexpectedCommandErrorHandler);
         SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && _episodeCollection.HasUnselectedVisibleItems);
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && _episodeCollection.HasSelectedVisibleItems);
+        ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => !_isBusy && SelectedEpisodeItem is not null);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
         OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0, unexpectedCommandErrorHandler);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
@@ -86,6 +87,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public AsyncRelayCommand ScanDirectoryCommand { get; }
     public RelayCommand SelectAllEpisodesCommand { get; }
     public RelayCommand DeselectAllEpisodesCommand { get; }
+    public RelayCommand ToggleSelectedEpisodeSelectionCommand { get; }
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public AsyncRelayCommand OpenSelectedSourcesCommand { get; }
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
@@ -288,6 +290,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ScanDirectoryCommand.RaiseCanExecuteChanged();
         SelectAllEpisodesCommand.RaiseCanExecuteChanged();
         DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
+        ToggleSelectedEpisodeSelectionCommand.RaiseCanExecuteChanged();
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();

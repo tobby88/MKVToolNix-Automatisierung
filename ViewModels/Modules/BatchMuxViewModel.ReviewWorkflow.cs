@@ -254,4 +254,14 @@ internal sealed partial class BatchMuxViewModel
             ProgressValue);
     }
 
+    private void ToggleSelectedEpisodeSelection()
+    {
+        if (_isBusy || SelectedEpisodeItem is not BatchEpisodeItemViewModel item)
+        {
+            return;
+        }
+
+        item.IsSelected = !item.IsSelected;
+    }
+
 }

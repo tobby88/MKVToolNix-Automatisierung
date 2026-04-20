@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -14,6 +13,13 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class BatchMuxView : UserControl
 {
+    /// <summary>
+    /// RoutedCommand für die zeilenbasierte Space-Bedienung der Batch-Tabelle.
+    /// Der Command bleibt in der View, weil es um Tastaturrouting eines konkreten WPF-Controls geht;
+    /// die fachliche Auswahländerung delegiert danach an das ViewModel.
+    /// </summary>
+    public static RoutedCommand ToggleEpisodeSelectionCommand { get; } = new();
+
     private const double DefaultSelectedUsageMinHeight = 150d;
     private static readonly GridLength DefaultEpisodeListRowHeight = new(1.2, GridUnitType.Star);
     private static readonly GridLength ExpandedEpisodeListRowHeight = new(0.9, GridUnitType.Star);
@@ -30,6 +36,28 @@ public partial class BatchMuxView : UserControl
     public BatchMuxView()
     {
         InitializeComponent();
+        CommandBindings.Add(new CommandBinding(
+            ToggleEpisodeSelectionCommand,
+            ExecuteToggleEpisodeSelectionCommand,
+            CanExecuteToggleEpisodeSelectionCommand));
+    }
+
+    private void CanExecuteToggleEpisodeSelectionCommand(object sender, CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = DataContext is BatchMuxViewModel viewModel
+            && viewModel.ToggleSelectedEpisodeSelectionCommand.CanExecute(null);
+        e.Handled = true;
+    }
+
+    private void ExecuteToggleEpisodeSelectionCommand(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (DataContext is BatchMuxViewModel viewModel
+            && viewModel.ToggleSelectedEpisodeSelectionCommand.CanExecute(null))
+        {
+            viewModel.ToggleSelectedEpisodeSelectionCommand.Execute(null);
+        }
+
+        e.Handled = true;
     }
 
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -64,64 +92,6 @@ public partial class BatchMuxView : UserControl
 
         DetailsExpander.IsExpanded = true;
         DetailsExpander.BringIntoView();
-    }
-
-    private void EpisodeItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Space
-            || DataContext is not BatchMuxViewModel viewModel
-            || !viewModel.IsInteractive
-            || viewModel.SelectedEpisodeItem is null
-            || sender is not DataGrid dataGrid)
-        {
-            return;
-        }
-
-        var selectedItem = viewModel.SelectedEpisodeItem;
-        selectedItem.IsSelected = !selectedItem.IsSelected;
-        e.Handled = true;
-
-        // Der Space-Toggle soll sich wie eine echte Tabellenbedienung anfühlen. Nur das
-        // DataGrid selbst zu fokussieren reicht in WPF nicht zuverlässig: Pfeiltasten können
-        // dann in die allgemeine Fokusnavigation fallen und zu Filter oder Splitter springen.
-        // Deshalb setzen wir CurrentCell und Tastaturfokus explizit auf die aktuelle Zeile.
-        RestoreEpisodeGridKeyboardFocus(dataGrid, selectedItem);
-        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
-        {
-            RestoreEpisodeGridKeyboardFocus(dataGrid, selectedItem);
-        }));
-    }
-
-    private static void RestoreEpisodeGridKeyboardFocus(DataGrid dataGrid, object selectedItem)
-    {
-        if (!dataGrid.IsEnabled || dataGrid.Columns.Count == 0)
-        {
-            return;
-        }
-
-        var focusColumn = dataGrid.CurrentCell.Column ?? dataGrid.Columns[0];
-        dataGrid.SelectedItem = selectedItem;
-        dataGrid.CurrentItem = selectedItem;
-        dataGrid.CurrentCell = new DataGridCellInfo(selectedItem, focusColumn);
-        dataGrid.ScrollIntoView(selectedItem, focusColumn);
-        dataGrid.UpdateLayout();
-
-        var row = dataGrid.ItemContainerGenerator.ContainerFromItem(selectedItem) as DataGridRow;
-        if (row is null)
-        {
-            dataGrid.Focus();
-            Keyboard.Focus(dataGrid);
-            return;
-        }
-
-        var cell = FindVisualChild<DataGridCellsPresenter>(row)
-            ?.ItemContainerGenerator.ContainerFromIndex(dataGrid.Columns.IndexOf(focusColumn)) as DataGridCell;
-        var focusTarget = (IInputElement?)cell ?? row;
-        Keyboard.Focus(focusTarget);
-        if (focusTarget is Control control)
-        {
-            control.Focus();
-        }
     }
 
     private void EpisodeItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -219,27 +189,6 @@ public partial class BatchMuxView : UserControl
             }
 
             current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject current)
-        where T : DependencyObject
-    {
-        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(current); index++)
-        {
-            var child = VisualTreeHelper.GetChild(current, index);
-            if (child is T typedChild)
-            {
-                return typedChild;
-            }
-
-            var descendant = FindVisualChild<T>(child);
-            if (descendant is not null)
-            {
-                return descendant;
-            }
         }
 
         return null;

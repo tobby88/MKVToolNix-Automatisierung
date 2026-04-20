@@ -147,10 +147,12 @@
                           HeadersVisibility="Column"
                           KeyboardNavigation.DirectionalNavigation="Contained"
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
-                          PreviewKeyDown="EpisodeItemsGrid_OnPreviewKeyDown"
                           SelectionChanged="EpisodeItemsGrid_OnSelectionChanged"
                           MinHeight="130"
                           Margin="8">
+                    <DataGrid.InputBindings>
+                        <KeyBinding Key="Space" Command="{x:Static views:BatchMuxView.ToggleEpisodeSelectionCommand}" />
+                    </DataGrid.InputBindings>
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Auswahl" Width="SizeToHeader">
                             <DataGridTemplateColumn.CellTemplate>
