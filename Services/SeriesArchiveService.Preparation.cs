@@ -455,8 +455,8 @@ public sealed partial class SeriesArchiveService
                 TrackHeaderEdits: relevantTrackHeaderEdits,
                 Notes: BuildTrackHeaderNormalizationOnlyNotes(
                     bestExistingVideo,
-                    relevantTrackHeaderEdits.Count > 0,
-                    containerTitleEdit is not null)
+                    relevantTrackHeaderEdits,
+                    containerTitleEdit)
                     .Concat(BuildSubtitleSuppressionNotes(subtitlePlan))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList());

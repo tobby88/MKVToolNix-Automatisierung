@@ -367,6 +367,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(
             plan.Notes,
             note => note.Contains("Benennungen der relevanten Spuren", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            plan.Notes,
+            note => note.Contains("Alter Audiotitel -> Deutsch - E-AC-3", StringComparison.OrdinalIgnoreCase));
 
         var summary = plan.BuildUsageSummary();
         Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);
@@ -427,6 +430,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Equal("Alter Pilot-Titel", plan.ContainerTitleEdit!.CurrentTitle);
         Assert.Equal("Pilot", plan.ContainerTitleEdit.ExpectedTitle);
         Assert.Null(plan.WorkingCopy);
+        Assert.Contains(
+            plan.Notes,
+            note => note.Contains("MKV-Titel: Alter Pilot-Titel -> Pilot", StringComparison.OrdinalIgnoreCase));
 
         var summary = plan.BuildUsageSummary();
         Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);

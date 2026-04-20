@@ -9,17 +9,20 @@ public sealed partial class SeriesArchiveService
 {
     private static IReadOnlyList<string> BuildTrackHeaderNormalizationOnlyNotes(
         ContainerTrackMetadata? bestExistingVideo,
-        bool hasTrackHeaderEdits,
-        bool hasContainerTitleEdit)
+        IReadOnlyList<TrackHeaderEditOperation> trackHeaderEdits,
+        ContainerTitleEditOperation? containerTitleEdit)
     {
-        return
-        [
-            $"Archiv-MKV bereits vorhanden. Die Datei bleibt inhaltlich unverändert; {BuildDirectHeaderNormalizationDescription(hasTrackHeaderEdits, hasContainerTitleEdit)}.",
+        var notes = new List<string>
+        {
+            $"Archiv-MKV bereits vorhanden. Die Datei bleibt inhaltlich unverändert; {BuildDirectHeaderNormalizationDescription(trackHeaderEdits.Count > 0, containerTitleEdit is not null)}.",
             bestExistingVideo is null
                 ? "Die vorhandene Archivdatei liefert weiterhin alle Hauptspuren."
                 : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}.",
             "Es wird weder eine Arbeitskopie erstellt noch ein kompletter Remux-Lauf ausgefuehrt."
-        ];
+        };
+
+        notes.AddRange(BuildDirectHeaderChangeNotes(containerTitleEdit, trackHeaderEdits));
+        return notes;
     }
 
     private static IReadOnlyList<string> BuildKeepExistingPrimaryNotes(
@@ -110,6 +113,30 @@ public sealed partial class SeriesArchiveService
         }
 
         return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
+    private static IReadOnlyList<string> BuildDirectHeaderChangeNotes(
+        ContainerTitleEditOperation? containerTitleEdit,
+        IReadOnlyList<TrackHeaderEditOperation> trackHeaderEdits)
+    {
+        var notes = new List<string>();
+
+        if (containerTitleEdit is not null)
+        {
+            notes.Add($"MKV-Titel: {FormatHeaderValue(containerTitleEdit.CurrentTitle)} -> {FormatHeaderValue(containerTitleEdit.ExpectedTitle)}");
+        }
+
+        notes.AddRange(trackHeaderEdits.Select(edit =>
+            $"{edit.DisplayLabel}: {FormatHeaderValue(edit.CurrentTrackName)} -> {FormatHeaderValue(edit.ExpectedTrackName)}"));
+
+        return notes;
+    }
+
+    private static string FormatHeaderValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "(leer)"
+            : value.Trim();
     }
 
     private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(
