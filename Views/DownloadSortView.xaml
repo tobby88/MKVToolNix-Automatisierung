@@ -77,7 +77,8 @@
                                 <CheckBox HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
                                           Focusable="False"
-                                          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                          IsHitTestVisible="False"
+                                          IsChecked="{Binding IsSelected, Mode=OneWay}" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

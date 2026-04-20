@@ -35,7 +35,8 @@ public partial class DownloadSortView : UserControl
             DataGridSelectionInput.TryHandleMouseToggle(
                 dataGrid,
                 e,
-                viewModel.ToggleSelectedItemSelectionCommand);
+                viewModel.ToggleSelectedItemSelectionCommand,
+                toggleColumnDisplayIndex: 0);
         }
     }
 }

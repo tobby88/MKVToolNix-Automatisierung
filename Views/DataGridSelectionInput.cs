@@ -51,16 +51,27 @@ internal static class DataGridSelectionInput
     /// <param name="dataGrid">Das betroffene DataGrid.</param>
     /// <param name="e">Das PreviewMouseLeftButtonDown-Ereignis des DataGrids.</param>
     /// <param name="toggleCommand">Das fachliche Kommando, das die aktuell markierte Zeile umschaltet.</param>
+    /// <param name="toggleColumnDisplayIndex">
+    /// DisplayIndex der Auswahlspalte. Nur Klicks in diese Spalte loesen den Toggle aus.
+    /// </param>
     /// <returns><see langword="true"/>, wenn der Mausklick verarbeitet wurde.</returns>
-    public static bool TryHandleMouseToggle(DataGrid dataGrid, MouseButtonEventArgs e, ICommand toggleCommand)
+    public static bool TryHandleMouseToggle(
+        DataGrid dataGrid,
+        MouseButtonEventArgs e,
+        ICommand toggleCommand,
+        int toggleColumnDisplayIndex = 0)
     {
         ArgumentNullException.ThrowIfNull(dataGrid);
         ArgumentNullException.ThrowIfNull(e);
         ArgumentNullException.ThrowIfNull(toggleCommand);
 
-        if (e.Handled
-            || e.ChangedButton != MouseButton.Left
-            || FindVisualParent<CheckBox>(e.OriginalSource as DependencyObject) is null)
+        if (e.Handled || e.ChangedButton != MouseButton.Left)
+        {
+            return false;
+        }
+
+        var cell = FindVisualParent<DataGridCell>(e.OriginalSource as DependencyObject);
+        if (cell?.Column is null || cell.Column.DisplayIndex != toggleColumnDisplayIndex)
         {
             return false;
         }
@@ -113,7 +124,7 @@ internal static class DataGridSelectionInput
         // Deshalb restaurieren wir die zuvor aktive Zelle bewusst erst nachgelagert, damit Pfeiltasten
         // weiter im Grid bleiben statt auf Filter, Splitter oder gar nirgendwo zu springen.
         _ = dataGrid.Dispatcher.BeginInvoke(
-            DispatcherPriority.ContextIdle,
+            DispatcherPriority.Input,
             new Action(() => RestoreFocusCore(dataGrid, focusTarget)));
     }
 
@@ -132,8 +143,7 @@ internal static class DataGridSelectionInput
             dataGrid.ScrollIntoView(focusTarget.Item, focusTarget.Column);
             dataGrid.UpdateLayout();
 
-            var cellContent = focusTarget.Column.GetCellContent(focusTarget.Item);
-            if (FindVisualParent<DataGridCell>(cellContent) is DataGridCell cell)
+            if (TryResolveCell(dataGrid, focusTarget.Item, focusTarget.Column) is DataGridCell cell)
             {
                 cell.Focus();
                 Keyboard.Focus(cell);
@@ -152,7 +162,56 @@ internal static class DataGridSelectionInput
             || FindVisualParent<PasswordBox>(source) is not null;
     }
 
+    private static DataGridCell? TryResolveCell(DataGrid dataGrid, object item, DataGridColumn column)
+    {
+        var row = dataGrid.ItemContainerGenerator.ContainerFromItem(item) as DataGridRow;
+        if (row is null)
+        {
+            dataGrid.UpdateLayout();
+            row = dataGrid.ItemContainerGenerator.ContainerFromItem(item) as DataGridRow;
+        }
+
+        if (row is null)
+        {
+            return null;
+        }
+
+        var presenter = GetVisualChild<DataGridCellsPresenter>(row);
+        if (presenter is null)
+        {
+            row.ApplyTemplate();
+            presenter = GetVisualChild<DataGridCellsPresenter>(row);
+        }
+
+        return presenter?.ItemContainerGenerator.ContainerFromIndex(column.DisplayIndex) as DataGridCell;
+    }
+
     private readonly record struct DataGridFocusTarget(object? Item, DataGridColumn? Column, DataGridCellInfo CellInfo);
+
+    private static T? GetVisualChild<T>(DependencyObject? current)
+        where T : DependencyObject
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(current); index++)
+        {
+            var child = VisualTreeHelper.GetChild(current, index);
+            if (child is T typed)
+            {
+                return typed;
+            }
+
+            if (GetVisualChild<T>(child) is T descendant)
+            {
+                return descendant;
+            }
+        }
+
+        return null;
+    }
 
     private static T? FindVisualParent<T>(DependencyObject? current)
         where T : DependencyObject

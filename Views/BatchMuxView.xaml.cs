@@ -49,7 +49,8 @@ public partial class BatchMuxView : UserControl
             DataGridSelectionInput.TryHandleMouseToggle(
                 dataGrid,
                 e,
-                viewModel.ToggleSelectedEpisodeSelectionCommand);
+                viewModel.ToggleSelectedEpisodeSelectionCommand,
+                toggleColumnDisplayIndex: 0);
         }
     }
 
