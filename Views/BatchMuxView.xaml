@@ -145,6 +145,7 @@
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"
+                          KeyboardNavigation.DirectionalNavigation="Contained"
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
                           PreviewKeyDown="EpisodeItemsGrid_OnPreviewKeyDown"
                           SelectionChanged="EpisodeItemsGrid_OnSelectionChanged"
