@@ -127,8 +127,9 @@ internal static class DataGridSelectionInput
     {
         // WPF schiebt nach dem Toggle noch interne CurrentCell-/Edit-Navigation auf den Dispatcher.
         // Die eigentliche Zelle kann dabei durch Template-/Layout-Updates kurz neu aufgebaut werden.
-        // Wir restaurieren deshalb erst nachgelagert den fachlichen Grid-Zustand und legen den
-        // Keyboard-Fokus stabil auf das DataGrid selbst statt auf eine flüchtige Zellinstanz.
+        // Wir restaurieren deshalb erst nachgelagert den fachlichen Grid-Zustand und fokussieren
+        // danach erneut die konkrete Zelle. Nur so bleibt die aktive Auswahlzeile für weitere
+        // Pfeil-/Space-Eingaben stabil "focused" statt nachgelagert grau zu werden.
         _ = dataGrid.Dispatcher.BeginInvoke(
             DispatcherPriority.ContextIdle,
             new Action(() => RestoreFocusCore(dataGrid, focusTarget, remainingRetries: 2)));
@@ -138,7 +139,7 @@ internal static class DataGridSelectionInput
     {
         if (focusTarget.Item is null)
         {
-            FocusGrid(dataGrid);
+            FocusGrid(dataGrid, focusTarget);
             return;
         }
 
@@ -150,7 +151,7 @@ internal static class DataGridSelectionInput
             dataGrid.UpdateLayout();
         }
 
-        FocusGrid(dataGrid);
+        FocusGrid(dataGrid, focusTarget);
 
         if (remainingRetries <= 0)
         {
@@ -158,16 +159,34 @@ internal static class DataGridSelectionInput
         }
 
         // Manche nachgelagerte WPF-Routen greifen erst noch einmal nach dem ContextIdle-Lauf ein.
-        // Bleibt der Fokus dann nicht innerhalb des Grids, ziehen wir ihn genau noch einmal nach.
+        // Bleibt der Fokus dann nicht mehr auf der gewaehlten Zeile, ziehen wir ihn genau noch
+        // einmal nach. IsKeyboardFocusWithin am DataGrid reicht dafuer nicht: WPF laesst die
+        // Auswahl auch dann "selected-unfocused" (grau) wirken, wenn der Fokus auf dem Grid
+        // selbst, aber nicht in einer konkreten Zeile sitzt.
         _ = dataGrid.Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
             new Action(() =>
             {
-                if (!dataGrid.IsKeyboardFocusWithin)
+                if (!IsFocusOnSelectedRow(dataGrid, focusTarget))
                 {
                     RestoreFocusCore(dataGrid, focusTarget, remainingRetries - 1);
                 }
             }));
+    }
+
+    private static bool IsFocusOnSelectedRow(DataGrid dataGrid, DataGridFocusTarget focusTarget)
+    {
+        if (focusTarget.Item is null)
+        {
+            return dataGrid.IsKeyboardFocusWithin;
+        }
+
+        if (dataGrid.ItemContainerGenerator.ContainerFromItem(focusTarget.Item) is DataGridRow row)
+        {
+            return row.IsKeyboardFocusWithin;
+        }
+
+        return dataGrid.IsKeyboardFocusWithin;
     }
 
     private static bool IsEditingElement(DependencyObject? source)
@@ -177,8 +196,13 @@ internal static class DataGridSelectionInput
             || FindVisualParent<PasswordBox>(source) is not null;
     }
 
-    private static void FocusGrid(DataGrid dataGrid)
+    private static void FocusGrid(DataGrid dataGrid, DataGridFocusTarget focusTarget)
     {
+        if (TryFocusCell(dataGrid, focusTarget))
+        {
+            return;
+        }
+
         dataGrid.Focus();
         Keyboard.Focus(dataGrid);
 
@@ -189,6 +213,48 @@ internal static class DataGridSelectionInput
     }
 
     private readonly record struct DataGridFocusTarget(object? Item, DataGridColumn? Column, DataGridCellInfo CellInfo);
+
+    private static bool TryFocusCell(DataGrid dataGrid, DataGridFocusTarget focusTarget)
+    {
+        if (focusTarget.Item is null || focusTarget.Column is null)
+        {
+            return false;
+        }
+
+        if (dataGrid.ItemContainerGenerator.ContainerFromItem(focusTarget.Item) is not DataGridRow row)
+        {
+            return false;
+        }
+
+        row.ApplyTemplate();
+        if (GetCell(row, focusTarget.Column) is not DataGridCell cell)
+        {
+            return false;
+        }
+
+        cell.Focus();
+        Keyboard.Focus(cell);
+
+        if (Window.GetWindow(dataGrid) is Window window)
+        {
+            FocusManager.SetFocusedElement(window, cell);
+        }
+
+        return cell.IsKeyboardFocusWithin;
+    }
+
+    private static DataGridCell? GetCell(DataGridRow row, DataGridColumn column)
+    {
+        if (column.GetCellContent(row)?.Parent is DataGridCell cell)
+        {
+            return cell;
+        }
+
+        row.ApplyTemplate();
+        var presenter = FindVisualChild<DataGridCellsPresenter>(row);
+        presenter?.ApplyTemplate();
+        return presenter?.ItemContainerGenerator.ContainerFromIndex(column.DisplayIndex) as DataGridCell;
+    }
 
     private static T? FindVisualParent<T>(DependencyObject? current)
         where T : DependencyObject
@@ -201,6 +267,31 @@ internal static class DataGridSelectionInput
             }
 
             current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? current)
+        where T : DependencyObject
+    {
+        if (current is null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(current); i++)
+        {
+            var child = VisualTreeHelper.GetChild(current, i);
+            if (child is T typed)
+            {
+                return typed;
+            }
+
+            if (FindVisualChild<T>(child) is T descendant)
+            {
+                return descendant;
+            }
         }
 
         return null;
