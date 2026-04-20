@@ -3,7 +3,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace MkvToolnixAutomatisierung.Views;
 
@@ -49,9 +48,7 @@ internal static class DataGridSelectionInput
             return true;
         }
 
-        var focusTarget = CaptureFocusTarget(dataGrid, e.OriginalSource as DependencyObject);
         toggleCommand.Execute(null);
-        RestoreFocus(dataGrid, focusTarget);
         e.Handled = true;
         return true;
     }
@@ -87,124 +84,37 @@ internal static class DataGridSelectionInput
             return false;
         }
 
-        var focusTarget = CaptureFocusTarget(dataGrid, e.OriginalSource as DependencyObject);
+        var focusTarget = CaptureSelectionTarget(dataGrid, e.OriginalSource as DependencyObject);
         if (focusTarget.Item is not null)
         {
             dataGrid.SelectedItem = focusTarget.Item;
         }
 
-        if (focusTarget.CellInfo.IsValid)
+        if (focusTarget.Column is not null && focusTarget.Item is not null)
         {
-            dataGrid.CurrentCell = focusTarget.CellInfo;
+            dataGrid.CurrentCell = new DataGridCellInfo(focusTarget.Item, focusTarget.Column);
         }
 
         if (!toggleCommand.CanExecute(null))
         {
             e.Handled = true;
-            RestoreFocus(dataGrid, focusTarget);
+            FocusGrid(dataGrid);
             return true;
         }
 
         toggleCommand.Execute(null);
-        RestoreFocus(dataGrid, focusTarget);
+        FocusGrid(dataGrid);
         e.Handled = true;
         return true;
     }
 
-    private static DataGridFocusTarget CaptureFocusTarget(DataGrid dataGrid, DependencyObject? source)
+    private static DataGridSelectionTarget CaptureSelectionTarget(DataGrid dataGrid, DependencyObject? source)
     {
         var row = FindVisualParent<DataGridRow>(source);
         var cell = FindVisualParent<DataGridCell>(source);
         var item = row?.Item ?? dataGrid.SelectedItem ?? dataGrid.CurrentCell.Item;
         var column = cell?.Column ?? dataGrid.CurrentCell.Column;
-        var cellInfo = item is not null && column is not null
-            ? new DataGridCellInfo(item, column)
-            : dataGrid.CurrentCell;
-        return new DataGridFocusTarget(item, column, cellInfo);
-    }
-
-    private static void RestoreFocus(DataGrid dataGrid, DataGridFocusTarget focusTarget)
-    {
-        // Die vorherige Variante wartete immer bis ContextIdle, bevor die Zelle wieder fokussiert
-        // wurde. Das stabilisierte zwar manche WPF-Nachläufer, verursachte aber selbst das sichtbare
-        // "Ausgrauen": Die Zeile verlor den Fokus erst kurz und bekam ihn dann asynchron zurück.
-        // Deshalb restaurieren wir jetzt sofort die aktive Zelle und verwenden den Dispatcher nur
-        // noch als Sicherheitsnetz, falls WPF nachgelagert doch noch einmal hineinfunkt.
-        RestoreFocusState(dataGrid, focusTarget);
-        ScheduleFocusVerification(dataGrid, focusTarget, remainingRetries: 2, DispatcherPriority.Background);
-    }
-
-    private static void RestoreFocusState(DataGrid dataGrid, DataGridFocusTarget focusTarget)
-    {
-        if (focusTarget.Item is null)
-        {
-            FocusGrid(dataGrid, focusTarget);
-            return;
-        }
-
-        dataGrid.SelectedItem = focusTarget.Item;
-        if (focusTarget.Column is not null)
-        {
-            dataGrid.CurrentCell = new DataGridCellInfo(focusTarget.Item, focusTarget.Column);
-            dataGrid.ScrollIntoView(focusTarget.Item, focusTarget.Column);
-            dataGrid.UpdateLayout();
-        }
-
-        FocusGrid(dataGrid, focusTarget);
-    }
-
-    private static void ScheduleFocusVerification(
-        DataGrid dataGrid,
-        DataGridFocusTarget focusTarget,
-        int remainingRetries,
-        DispatcherPriority priority)
-    {
-        if (remainingRetries <= 0)
-        {
-            return;
-        }
-
-        _ = dataGrid.Dispatcher.BeginInvoke(
-            priority,
-            new Action(() => VerifyFocus(dataGrid, focusTarget, remainingRetries)));
-    }
-
-    private static void VerifyFocus(DataGrid dataGrid, DataGridFocusTarget focusTarget, int remainingRetries)
-    {
-        if (IsFocusOnSelectedRow(dataGrid, focusTarget))
-        {
-            return;
-        }
-
-        RestoreFocusState(dataGrid, focusTarget);
-        if (remainingRetries <= 0)
-        {
-            return;
-        }
-
-        // Manche WPF-Pfade laufen noch einmal spaeter, etwa nach Layout-/Template-Neuaufbau.
-        // Reicht die sofortige Rueckfokussierung nicht, pruefen wir mit sinkender Prioritaet
-        // nach und ziehen den Fokus hoechstens noch ein weiteres Mal gezielt zur aktiven Zelle.
-        ScheduleFocusVerification(
-            dataGrid,
-            focusTarget,
-            remainingRetries - 1,
-            DispatcherPriority.ApplicationIdle);
-    }
-
-    private static bool IsFocusOnSelectedRow(DataGrid dataGrid, DataGridFocusTarget focusTarget)
-    {
-        if (focusTarget.Item is null)
-        {
-            return dataGrid.IsKeyboardFocusWithin;
-        }
-
-        if (dataGrid.ItemContainerGenerator.ContainerFromItem(focusTarget.Item) is DataGridRow row)
-        {
-            return row.IsKeyboardFocusWithin;
-        }
-
-        return dataGrid.IsKeyboardFocusWithin;
+        return new DataGridSelectionTarget(item, column);
     }
 
     private static bool IsEditingElement(DependencyObject? source)
@@ -214,13 +124,8 @@ internal static class DataGridSelectionInput
             || FindVisualParent<PasswordBox>(source) is not null;
     }
 
-    private static void FocusGrid(DataGrid dataGrid, DataGridFocusTarget focusTarget)
+    private static void FocusGrid(DataGrid dataGrid)
     {
-        if (TryFocusCell(dataGrid, focusTarget))
-        {
-            return;
-        }
-
         dataGrid.Focus();
         Keyboard.Focus(dataGrid);
 
@@ -230,49 +135,7 @@ internal static class DataGridSelectionInput
         }
     }
 
-    private readonly record struct DataGridFocusTarget(object? Item, DataGridColumn? Column, DataGridCellInfo CellInfo);
-
-    private static bool TryFocusCell(DataGrid dataGrid, DataGridFocusTarget focusTarget)
-    {
-        if (focusTarget.Item is null || focusTarget.Column is null)
-        {
-            return false;
-        }
-
-        if (dataGrid.ItemContainerGenerator.ContainerFromItem(focusTarget.Item) is not DataGridRow row)
-        {
-            return false;
-        }
-
-        row.ApplyTemplate();
-        if (GetCell(row, focusTarget.Column) is not DataGridCell cell)
-        {
-            return false;
-        }
-
-        cell.Focus();
-        Keyboard.Focus(cell);
-
-        if (Window.GetWindow(dataGrid) is Window window)
-        {
-            FocusManager.SetFocusedElement(window, cell);
-        }
-
-        return cell.IsKeyboardFocusWithin;
-    }
-
-    private static DataGridCell? GetCell(DataGridRow row, DataGridColumn column)
-    {
-        if (column.GetCellContent(row)?.Parent is DataGridCell cell)
-        {
-            return cell;
-        }
-
-        row.ApplyTemplate();
-        var presenter = FindVisualChild<DataGridCellsPresenter>(row);
-        presenter?.ApplyTemplate();
-        return presenter?.ItemContainerGenerator.ContainerFromIndex(column.DisplayIndex) as DataGridCell;
-    }
+    private readonly record struct DataGridSelectionTarget(object? Item, DataGridColumn? Column);
 
     private static T? FindVisualParent<T>(DependencyObject? current)
         where T : DependencyObject
@@ -285,31 +148,6 @@ internal static class DataGridSelectionInput
             }
 
             current = VisualTreeHelper.GetParent(current);
-        }
-
-        return null;
-    }
-
-    private static T? FindVisualChild<T>(DependencyObject? current)
-        where T : DependencyObject
-    {
-        if (current is null)
-        {
-            return null;
-        }
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(current); i++)
-        {
-            var child = VisualTreeHelper.GetChild(current, i);
-            if (child is T typed)
-            {
-                return typed;
-            }
-
-            if (FindVisualChild<T>(child) is T descendant)
-            {
-                return descendant;
-            }
         }
 
         return null;

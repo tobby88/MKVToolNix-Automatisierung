@@ -156,24 +156,11 @@
                         <DataGridTemplateColumn Header="Auswahl" Width="SizeToHeader" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               FontFamily="Segoe UI Symbol"
-                                               FontSize="16"
-                                               FontWeight="SemiBold">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="☐" />
-                                                <Setter Property="Foreground" Value="#5F5F5F" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSelected, Mode=OneWay}" Value="True">
-                                                        <Setter Property="Text" Value="☑" />
-                                                        <Setter Property="Foreground" Value="#2E6F43" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                    <CheckBox HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Focusable="False"
+                                              IsHitTestVisible="False"
+                                              IsChecked="{Binding IsSelected, Mode=OneWay}" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
