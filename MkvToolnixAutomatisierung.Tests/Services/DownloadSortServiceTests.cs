@@ -454,6 +454,32 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("DEFEKT:", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Apply_SkipsSidecarOnlyRequest_WhenHealthyLooseVideoStillExists()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Stralsund-Außer Kontrolle (S01_E02) (Audiodeskription)-1030257331.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Stralsund-Außer Kontrolle (S01_E02) (Audiodeskription)-1030257331.txt");
+        CreateFileWithByteLength(videoPath, length: 100 * 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Stralsund",
+            title: "Außer Kontrolle (S01/E02)",
+            duration: "00:05:00");
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Stralsund-Außer Kontrolle", [textPath], "Stralsund")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(videoPath));
+        Assert.True(File.Exists(textPath));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "Stralsund", Path.GetFileName(textPath))));
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("UEBERSPRUNGEN:", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_rootDirectory))

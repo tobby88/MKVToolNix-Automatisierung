@@ -277,6 +277,15 @@ internal sealed class DownloadSortService
                 continue;
             }
 
+            var blockingLooseVideoPath = FindBlockingLooseVideoCompanion(rootDirectory, request.FilePaths);
+            if (!string.IsNullOrWhiteSpace(blockingLooseVideoPath))
+            {
+                skippedGroupCount++;
+                logLines.Add(
+                    $"UEBERSPRUNGEN: {request.DisplayName} -> passende lose MP4 '{Path.GetFileName(blockingLooseVideoPath)}' liegt noch im Download-Ordner und wurde fuer diesen Eintrag nicht mit ausgewaehlt.");
+                continue;
+            }
+
             var targetDirectory = Path.Combine(rootDirectory, targetFolderName);
             Directory.CreateDirectory(targetDirectory);
 
@@ -335,6 +344,50 @@ internal sealed class DownloadSortService
             renamedFolderCount,
             skippedGroupCount,
             logLines);
+    }
+
+    /// <summary>
+    /// Verhindert, dass reine Sidecar-Einträge TXT-/Untertiteldateien still einsortieren, obwohl
+    /// die zugehörige lose MP4 derselben Basis noch separat im Download-Root liegt. Das schützt
+    /// sowohl abgewählte Episoden als auch Dateien, die erst nach dem Scan vollständig erschienen sind.
+    /// Defekte MP4-Dateien bleiben davon bewusst ausgenommen, damit deren gesunde Begleiter weiterhin
+    /// regulär einsortiert werden können.
+    /// </summary>
+    private static string? FindBlockingLooseVideoCompanion(
+        string rootDirectory,
+        IReadOnlyList<string> filePaths)
+    {
+        if (filePaths.Any(path => VideoExtensions.Contains(Path.GetExtension(path))))
+        {
+            return null;
+        }
+
+        foreach (var filePath in filePaths
+                     .Where(path => !string.IsNullOrWhiteSpace(path))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var companionVideoPath = Path.ChangeExtension(filePath, ".mp4");
+            if (!File.Exists(companionVideoPath)
+                || filePaths.Contains(companionVideoPath, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!PathComparisonHelper.IsPathWithinRoot(companionVideoPath, rootDirectory))
+            {
+                continue;
+            }
+
+            var health = MediaFileHealth.CheckMp4File(
+                companionVideoPath,
+                CompanionTextMetadataReader.ReadDetailed(Path.ChangeExtension(companionVideoPath, ".txt")));
+            if (health.IsUsable)
+            {
+                return companionVideoPath;
+            }
+        }
+
+        return null;
     }
 
     private IReadOnlyList<DownloadSortCandidate> BuildCandidates(
