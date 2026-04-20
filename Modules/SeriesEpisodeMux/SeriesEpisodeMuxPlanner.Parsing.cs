@@ -12,6 +12,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var fileNameParts = ParseEpisodeName(filePath);
         var txtTitleParts = ParseTitleDetails(textMetadata.Title);
         var hasExplicitTxtTitle = !string.IsNullOrWhiteSpace(textMetadata.Title);
+        if ((string.IsNullOrWhiteSpace(textMetadata.Topic) || IsGenericMetadataTopic(textMetadata.Topic))
+            && TryExtractSeriesPrefixFromTitle(textMetadata.Title, out var titleSeriesName, out var titlePrefixedParts))
+        {
+            txtTitleParts = titlePrefixedParts;
+            fileNameParts = fileNameParts with { SeriesName = titleSeriesName };
+        }
 
         var hasSpecificTextTopic = !string.IsNullOrWhiteSpace(textMetadata.Topic)
             && !IsGenericMetadataTopic(textMetadata.Topic);
@@ -57,6 +63,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         if (TryParseEpisodeNameWithLeadingEpisodeLabel(normalizedName, out var labeledEpisodeParts))
         {
             return labeledEpisodeParts;
+        }
+
+        if (TryParseEpisodeNameWithLeadingSeriesRubric(normalizedName, out var rubricEpisodeParts))
+        {
+            return rubricEpisodeParts;
         }
 
         var splitIndex = normalizedName.IndexOf(" - ", StringComparison.Ordinal);
@@ -147,6 +158,42 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return true;
     }
 
+    private static bool TryParseEpisodeNameWithLeadingSeriesRubric(
+        string normalizedName,
+        out EpisodeNameParts episodeNameParts)
+    {
+        episodeNameParts = default!;
+
+        // Rubriken wie "Backstage" oder "Der Samstagskrimi" stehen gelegentlich vor dem
+        // eigentlichen Seriennamen. Ohne diese gezielte Erkennung würde z. B.
+        // "Backstage-SOKO Leipzig_ Am Filmset ..." als Serie "Backstage" statt "SOKO Leipzig"
+        // in Detection und TVDB-Matching laufen.
+        var match = Regex.Match(
+            normalizedName,
+            @"^(?<rubric>Backstage|Der Samstagskrimi|Hallo Deutschland|Riverboat)-(?<series>.+?)[_:]\s*(?<title>.+)$",
+            RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var seriesName = NormalizeSeriesName(match.Groups["series"].Value);
+        var titleDetails = ParseTitleDetails(match.Groups["title"].Value);
+        if (string.IsNullOrWhiteSpace(seriesName)
+            || string.IsNullOrWhiteSpace(titleDetails.Title)
+            || IsGenericMetadataTopic(seriesName))
+        {
+            return false;
+        }
+
+        episodeNameParts = new EpisodeNameParts(
+            seriesName,
+            titleDetails.Title,
+            titleDetails.SeasonNumber,
+            titleDetails.EpisodeNumber);
+        return true;
+    }
+
     private static bool TryParseEpisodeNameFromSeriesDirectory(
         string filePath,
         string normalizedName,
@@ -199,7 +246,41 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return false;
         }
 
-        return BuildSeriesIdentityKey(topic) is "filme" or "film";
+        return BuildSeriesIdentityKey(topic) is "filme" or "film" or "backstage" or "der samstagskrimi" or "hallo deutschland" or "riverboat";
+    }
+
+    private static bool TryExtractSeriesPrefixFromTitle(
+        string? rawTitle,
+        out string seriesName,
+        out TitleDetails titleDetails)
+    {
+        seriesName = string.Empty;
+        titleDetails = new TitleDetails("Unbekannter Titel", "xx", "xx");
+
+        if (string.IsNullOrWhiteSpace(rawTitle))
+        {
+            return false;
+        }
+
+        var match = Regex.Match(rawTitle, @"^(?<series>[^:]+?)\s*:\s*(?<title>.+)$");
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var candidateSeriesName = NormalizeSeriesName(match.Groups["series"].Value);
+        var candidateTitleDetails = ParseTitleDetails(match.Groups["title"].Value);
+        if (string.IsNullOrWhiteSpace(candidateSeriesName)
+            || IsGenericMetadataTopic(candidateSeriesName)
+            || string.IsNullOrWhiteSpace(candidateTitleDetails.Title)
+            || string.Equals(candidateTitleDetails.Title, "Unbekannter Titel", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        seriesName = candidateSeriesName;
+        titleDetails = candidateTitleDetails;
+        return true;
     }
 
     private static TitleDetails ParseTitleDetails(string? rawTitle)

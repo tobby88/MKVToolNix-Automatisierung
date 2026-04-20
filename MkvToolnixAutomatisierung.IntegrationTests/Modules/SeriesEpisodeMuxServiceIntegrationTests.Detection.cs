@@ -574,6 +574,34 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_UsesSeriesNameFromTitle_WhenRubricTopicIsGeneric()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-generic-backstage-topic");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-generic-backstage-topic");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Backstage-SOKO Leipzig_ Am Filmset mit den Krimi-Helden (S01_E04)-0868375784.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Backstage-SOKO Leipzig_ Am Filmset mit den Krimi-Helden (S01_E04)-0868375784.txt",
+            "Sender: ZDF\r\nThema: Backstage\r\nTitel: SOKO Leipzig: Am Filmset mit den Krimi-Helden (S01/E04)\r\nDauer: 00:26:55");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(mainVideoPath);
+
+        Assert.Equal("SOKO Leipzig", detected.SeriesName);
+        Assert.Equal("Am Filmset mit den Krimi-Helden", detected.SuggestedTitle);
+        Assert.Equal("01", detected.SeasonNumber);
+        Assert.Equal("04", detected.EpisodeNumber);
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_GroupsEditorialSeriesSuffixVariants_WhenMediathekCodesDiffer()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-editorial-series-suffix");
