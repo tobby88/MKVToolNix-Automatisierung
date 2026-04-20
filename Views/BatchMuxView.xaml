@@ -154,7 +154,7 @@
                         <KeyBinding Key="Space" Command="{x:Static views:BatchMuxView.ToggleEpisodeSelectionCommand}" />
                     </DataGrid.InputBindings>
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Auswahl" Width="SizeToHeader">
+                        <DataGridTemplateColumn Header="Auswahl" Width="SizeToHeader" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <CheckBox HorizontalAlignment="Center"
@@ -167,7 +167,7 @@
                         <DataGridTextColumn Header="Titel" Binding="{Binding Title}" Width="1.1*" MinWidth="140" IsReadOnly="True" />
                         <DataGridTextColumn Header="S/E" Binding="{Binding EpisodeCodeDisplayText}" Width="Auto" MinWidth="48" IsReadOnly="True" />
 
-                        <DataGridTemplateColumn Header="In Bibliothek" Width="Auto" MinWidth="80">
+                        <DataGridTemplateColumn Header="In Bibliothek" Width="Auto" MinWidth="80" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding ArchiveStateTooltip, Mode=OneWay}">
@@ -183,7 +183,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn Header="Pr&#252;fung" Width="Auto" MinWidth="86">
+                        <DataGridTemplateColumn Header="Pr&#252;fung" Width="Auto" MinWidth="86" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding ReviewHintTooltip, Mode=OneWay}">
@@ -199,7 +199,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn Header="Status" Width="Auto" MinWidth="78">
+                        <DataGridTemplateColumn Header="Status" Width="Auto" MinWidth="78" IsReadOnly="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Margin="2" Padding="6,2" CornerRadius="9" BorderThickness="1" ToolTip="{Binding StatusTooltip, Mode=OneWay}">
