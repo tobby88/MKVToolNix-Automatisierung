@@ -156,6 +156,7 @@ public sealed class DownloadSortViewModelTests
         public string? SelectFolder(string title, string initialDirectory) => null;
         public string? SelectExecutable(string title, string filter, string initialDirectory) => null;
         public string? SelectFile(string title, string filter, string initialDirectory) => null;
+        public string[]? SelectFiles(string title, string filter, string initialDirectory) => null;
         public MessageBoxResult AskAudioDescriptionChoice() => MessageBoxResult.Cancel;
         public MessageBoxResult AskSubtitlesChoice() => MessageBoxResult.Cancel;
         public MessageBoxResult AskAttachmentChoice() => MessageBoxResult.Cancel;

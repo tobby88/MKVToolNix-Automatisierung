@@ -15,6 +15,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     private readonly EmbyModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly ObservableCollection<EmbySyncItemViewModel> _items = [];
+    private readonly List<string> _reportPaths = [];
 
     private EmbySyncItemViewModel? _selectedItem;
     private string _serverUrl;
@@ -186,18 +187,24 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         ? "Noch kein Metadatenreport geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
 
+    public string AnalyzeItemsTooltip => HasEmbyApiSettings()
+        ? "Prüft lokale NFO-Dateien und fragt zusätzlich die zugehörigen Emby-Items samt Provider-IDs ab."
+        : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
+
+    public string RunSyncTooltip => "Startet den Emby-Bibliotheksscan, wartet auf neue Serien-Items und schreibt danach die Provider-IDs in die NFO-Dateien zurück.";
+
     private async Task SelectReportAsync()
     {
-        var selectedPath = _dialogService.SelectFile(
-            "Batch-Report neu erzeugter Ausgabedateien auswählen",
+        var selectedPaths = _dialogService.SelectFiles(
+            "Metadatenreports neu erzeugter Ausgabedateien auswählen",
             "Metadatenreports (*.metadata.json;*.json)|*.metadata.json;*.json|Alle Dateien (*.*)|*.*",
             GetInitialReportDirectory());
-        if (string.IsNullOrWhiteSpace(selectedPath))
+        if (selectedPaths is null || selectedPaths.Length == 0)
         {
             return;
         }
 
-        ReportPath = selectedPath;
+        SetReportPaths(selectedPaths);
         await LoadReportAsync();
     }
 
@@ -208,13 +215,21 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
-        var importEntries = _services.Sync.LoadNewOutputReport(ReportPath);
+        var importEntries = _reportPaths
+            .SelectMany(_services.Sync.LoadNewOutputReport)
+            .GroupBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         ReplaceItems(importEntries);
         ProgressValue = importEntries.Count == 0 ? 0 : 20;
         StatusText = importEntries.Count == 0
             ? "Keine MKV-Pfade im Metadatenreport gefunden"
-            : $"Metadatenreport geladen: {importEntries.Count} MKV-Datei(en)";
-        AppendLog($"Metadatenreport geladen: {ReportPath}");
+            : $"Metadatenreport geladen: {importEntries.Count} MKV-Datei(en) aus {_reportPaths.Count} Datei(en)";
+        foreach (var reportPath in _reportPaths)
+        {
+            AppendLog($"Metadatenreport geladen: {reportPath}");
+        }
         return AnalyzeItemsAsync(queryEmby: false);
     }
 
@@ -488,7 +503,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     private bool CanLoadReport()
     {
-        return !_isBusy && File.Exists(ReportPath);
+        return !_isBusy
+            && _reportPaths.Count > 0
+            && _reportPaths.All(File.Exists);
     }
 
     private bool CanUseEmbyApi()
@@ -564,9 +581,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     private string GetInitialReportDirectory()
     {
-        if (!string.IsNullOrWhiteSpace(ReportPath))
+        if (_reportPaths.Count > 0)
         {
-            var directory = Path.GetDirectoryName(ReportPath);
+            var directory = Path.GetDirectoryName(_reportPaths[0]);
             if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
             {
                 return directory;
@@ -587,6 +604,21 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
         var fraction = Math.Clamp((double)index / count, 0, 1);
         return startPercent + (int)Math.Round((endPercent - startPercent) * fraction);
+    }
+
+    private void SetReportPaths(IEnumerable<string> reportPaths)
+    {
+        _reportPaths.Clear();
+        _reportPaths.AddRange(reportPaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+        ReportPath = _reportPaths.Count switch
+        {
+            0 => string.Empty,
+            1 => _reportPaths[0],
+            _ => string.Join(Environment.NewLine, _reportPaths)
+        };
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

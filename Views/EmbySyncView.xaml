@@ -77,31 +77,36 @@
             <TextBlock Grid.Column="0"
                        Margin="0,8,12,8"
                        VerticalAlignment="Center"
-                       Text="Metadatenreport" />
+                       Text="Metadatenreports" />
             <TextBox Grid.Column="1"
                      Margin="0,4,12,4"
                      IsReadOnly="True"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
                      Text="{Binding ReportPath, Mode=OneWay}" />
             <Button Grid.Column="2"
                     Margin="0,2,12,2"
                     Padding="10,6"
                     Command="{Binding SelectReportCommand}"
-                    Content="Liste wählen" />
+                    Content="Reports wählen" />
             <Button Grid.Column="3"
                     Margin="0,2,12,2"
                     Padding="10,6"
                     Command="{Binding LoadReportCommand}"
-                    Content="Laden" />
+                    Content="Reports laden" />
             <Button Grid.Column="4"
                     Margin="0,2,12,2"
                     Padding="10,6"
                     Command="{Binding AnalyzeItemsCommand}"
-                    Content="NFO/Emby prüfen" />
+                    ToolTip="{Binding AnalyzeItemsTooltip, Mode=OneWay}"
+                    Content="NFO/Emby analysieren" />
             <Button Grid.Column="5"
                     Margin="0,2,0,2"
                     Padding="10,6"
                     Command="{Binding RunSyncCommand}"
-                    Content="Abgleich starten" />
+                    ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
+                    Content="Scan + Sync starten" />
         </Grid>
 
         <GroupBox Grid.Row="2" Header="Neue MKV-Dateien">

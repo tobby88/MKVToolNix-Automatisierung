@@ -679,6 +679,7 @@ public sealed class BatchMetadataReviewTests
         public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
         public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
         public string? SelectFile(string title, string filter, string initialDirectory) => throw new NotSupportedException();
+        public string[]? SelectFiles(string title, string filter, string initialDirectory) => throw new NotSupportedException();
         public MessageBoxResult AskAudioDescriptionChoice() => throw new NotSupportedException();
         public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();
         public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();

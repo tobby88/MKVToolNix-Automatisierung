@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -104,6 +105,52 @@ public sealed class EmbySyncViewModelTests
         Assert.Equal(1, vm.MissingIdCount);
     }
 
+    [Fact]
+    public void AnalyzeItemsTooltip_WithoutApiSettings_ExplainsLocalOnlyAnalysis()
+    {
+        var vm = CreateViewModel();
+        vm.ServerUrl = string.Empty;
+        vm.ApiKey = string.Empty;
+
+        Assert.Contains("nur die lokalen NFO-Dateien", vm.AnalyzeItemsTooltip, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SelectReportCommand_LoadsMultipleStructuredReports()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var firstReportPath = WriteMetadataReport(
+                tempDirectory,
+                "first.metadata.json",
+                Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv"),
+                "101");
+            var secondReportPath = WriteMetadataReport(
+                tempDirectory,
+                "second.metadata.json",
+                Path.Combine(tempDirectory, "Serie - S01E02 - Finale.mkv"),
+                "102");
+            var dialogService = new SelectingDialogService([firstReportPath, secondReportPath]);
+            var vm = CreateViewModel(dialogService);
+
+            vm.SelectReportCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 2, TimeSpan.FromSeconds(2)));
+            Assert.Equal(2, vm.ItemCount);
+            Assert.Contains(firstReportPath, vm.ReportPath, StringComparison.Ordinal);
+            Assert.Contains(secondReportPath, vm.ReportPath, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
         public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
@@ -121,7 +168,7 @@ public sealed class EmbySyncViewModelTests
         public void Dispose() { }
     }
 
-    private sealed class NullDialogService : IUserDialogService
+    private class NullDialogService : IUserDialogService
     {
         public string? SelectMainVideo(string initialDirectory) => null;
         public string? SelectAudioDescription(string initialDirectory) => null;
@@ -131,6 +178,7 @@ public sealed class EmbySyncViewModelTests
         public string? SelectFolder(string title, string initialDirectory) => null;
         public string? SelectExecutable(string title, string filter, string initialDirectory) => null;
         public string? SelectFile(string title, string filter, string initialDirectory) => null;
+        public virtual string[]? SelectFiles(string title, string filter, string initialDirectory) => null;
         public MessageBoxResult AskAudioDescriptionChoice() => MessageBoxResult.Cancel;
         public MessageBoxResult AskSubtitlesChoice() => MessageBoxResult.Cancel;
         public MessageBoxResult AskAttachmentChoice() => MessageBoxResult.Cancel;
@@ -148,5 +196,36 @@ public sealed class EmbySyncViewModelTests
         public void ShowInfo(string title, string message) { }
         public void ShowWarning(string title, string message) { }
         public void ShowError(string message) { }
+    }
+
+    private sealed class SelectingDialogService(IReadOnlyList<string> selectedFiles) : NullDialogService
+    {
+        public override string[]? SelectFiles(string title, string filter, string initialDirectory) => selectedFiles.ToArray();
+    }
+
+    private static string WriteMetadataReport(string directory, string fileName, string outputPath, string tvdbEpisodeId)
+    {
+        var reportPath = Path.Combine(directory, fileName);
+        File.WriteAllText(
+            reportPath,
+            BatchOutputMetadataReportJson.Serialize(new BatchOutputMetadataReport
+            {
+                CreatedAt = DateTimeOffset.Now,
+                SourceDirectory = directory,
+                OutputDirectory = directory,
+                Items =
+                [
+                    new BatchOutputMetadataEntry
+                    {
+                        OutputPath = outputPath,
+                        TvdbEpisodeId = tvdbEpisodeId,
+                        ProviderIds = new BatchOutputProviderIds
+                        {
+                            Tvdb = tvdbEpisodeId
+                        }
+                    }
+                ]
+            }));
+        return reportPath;
     }
 }

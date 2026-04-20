@@ -27,6 +27,8 @@ internal interface IUserDialogService
 
     string? SelectFile(string title, string filter, string initialDirectory);
 
+    string[]? SelectFiles(string title, string filter, string initialDirectory);
+
     MessageBoxResult AskAudioDescriptionChoice();
 
     MessageBoxResult AskSubtitlesChoice();
