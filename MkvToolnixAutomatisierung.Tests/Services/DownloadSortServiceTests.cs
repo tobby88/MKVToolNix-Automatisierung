@@ -261,13 +261,21 @@ public sealed class DownloadSortServiceTests : IDisposable
 
         var result = _service.Scan(_rootDirectory);
 
-        var defective = Assert.Single(result.Items);
+        var defective = Assert.Single(result.Items, item => item.State == DownloadSortItemState.Defective);
+        var remaining = Assert.Single(result.Items, item => item.State != DownloadSortItemState.Defective);
+
         Assert.Equal(DownloadSortItemState.Defective, defective.State);
         Assert.Equal("defekt", defective.SuggestedFolderName);
         Assert.Contains(videoPath, defective.FilePaths);
-        Assert.Contains(textPath, defective.FilePaths);
-        Assert.Contains(subtitlePath, defective.FilePaths);
         Assert.Contains("deutlich kleiner", defective.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain(textPath, defective.FilePaths);
+        Assert.DoesNotContain(subtitlePath, defective.FilePaths);
+
+        Assert.Equal(DownloadSortItemState.Ready, remaining.State);
+        Assert.Equal("Neues aus Büttenwarder", remaining.SuggestedFolderName);
+        Assert.Contains(textPath, remaining.FilePaths);
+        Assert.Contains(subtitlePath, remaining.FilePaths);
+        Assert.DoesNotContain(videoPath, remaining.FilePaths);
     }
 
     [Fact]
@@ -285,10 +293,16 @@ public sealed class DownloadSortServiceTests : IDisposable
         var result = _service.Scan(_rootDirectory);
 
         var defective = Assert.Single(result.Items, item => item.State == DownloadSortItemState.Defective);
+        var remaining = Assert.Single(result.Items, item => item.State != DownloadSortItemState.Defective);
         Assert.Equal("defekt", defective.SuggestedFolderName);
         Assert.Contains(videoPath, defective.FilePaths);
-        Assert.Contains(textPath, defective.FilePaths);
         Assert.Contains("auffällig klein", defective.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain(textPath, defective.FilePaths);
+
+        Assert.Equal(DownloadSortItemState.Ready, remaining.State);
+        Assert.Equal("Der Alte", remaining.SuggestedFolderName);
+        Assert.Contains(textPath, remaining.FilePaths);
+        Assert.DoesNotContain(videoPath, remaining.FilePaths);
     }
 
     [Fact]
@@ -418,11 +432,13 @@ public sealed class DownloadSortServiceTests : IDisposable
                 .ToList(),
             scanResult.FolderRenames);
 
-        Assert.Equal(1, applyResult.MovedGroupCount);
+        Assert.Equal(2, applyResult.MovedGroupCount);
         Assert.Equal(3, applyResult.MovedFileCount);
         Assert.True(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(videoPath))));
-        Assert.True(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(textPath))));
-        Assert.True(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(subtitlePath))));
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "Neues aus Büttenwarder", Path.GetFileName(textPath))));
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "Neues aus Büttenwarder", Path.GetFileName(subtitlePath))));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(textPath))));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(subtitlePath))));
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("DEFEKT:", StringComparison.Ordinal));
     }
 

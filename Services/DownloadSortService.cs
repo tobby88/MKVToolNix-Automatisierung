@@ -356,23 +356,6 @@ internal sealed class DownloadSortService
         var defectiveVideoPathSet = defectiveVideoPaths
             .Select(candidate => candidate.FilePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var hasUsableVideo = group.FilePaths
-            .Where(path => VideoExtensions.Contains(Path.GetExtension(path)))
-            .Any(path => !defectiveVideoPathSet.Contains(path));
-        if (!hasUsableVideo)
-        {
-            return
-            [
-                new DownloadSortCandidate(
-                    group.DisplayName,
-                    group.FilePaths,
-                    DetectedSeriesName: null,
-                    SuggestedFolderName: DefectiveFolderName,
-                    DownloadSortItemState.Defective,
-                    defectiveNote)
-            ];
-        }
-
         var candidates = new List<DownloadSortCandidate>();
         candidates.Add(new DownloadSortCandidate(
             group.DisplayName,
@@ -382,10 +365,10 @@ internal sealed class DownloadSortService
             DownloadSortItemState.Defective,
             defectiveNote));
 
-        // Wenn es im selben logischen Paket noch nutzbare Videos gibt, bleiben deren
-        // Begleitdateien beim normalen Sortierkandidaten. Reine Defektpakete werden
-        // dagegen geschlossen nach "defekt" verschoben, damit spätere Mux-/Cleanup-
-        // Schritte keine verwaisten Untertitel im Serienordner übersehen.
+        // Defekte Videos werden sofort isoliert, Begleitdateien dagegen nicht:
+        // Untertitel/TXT sind oft weiter nutzbar und sollen im regulären Serienordner
+        // für einen späteren Mux-Lauf erhalten bleiben. Das spätere Episode-Cleanup
+        // räumt diese Dateien nach erfolgreicher Verarbeitung wieder mit weg.
         var remainingFilePaths = group.FilePaths
             .Except(defectiveVideoPaths.Select(candidate => candidate.FilePath), StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -420,8 +403,8 @@ internal sealed class DownloadSortService
     {
         var firstReason = reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
         return string.IsNullOrWhiteSpace(firstReason)
-            ? "MP4 wirkt defekt oder unvollständig; das betroffene Paket wird geschlossen in den Defekt-Ordner verschoben."
-            : firstReason + " Betroffenes Paket wird geschlossen in den Defekt-Ordner verschoben.";
+            ? "MP4 wirkt defekt oder unvollständig; nur die betroffene MP4 wird in den Defekt-Ordner verschoben."
+            : firstReason + " Nur die betroffene MP4 wird in den Defekt-Ordner verschoben.";
     }
 
     private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(
