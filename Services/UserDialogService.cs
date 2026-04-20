@@ -186,17 +186,19 @@ internal sealed class UserDialogService : IUserDialogService
 
     public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
     {
+        var actionLabel = selectItems ? "\"Alle wählen\"" : "\"Alle abwählen\"";
         var visibleScopeText = selectItems
-            ? "nur die aktuell sichtbaren/gefilterten Episoden auswählen"
-            : "nur die aktuell sichtbaren/gefilterten Episoden abwählen";
+            ? "nur die aktuell sichtbaren, durch den Filter angezeigten Episoden auswählen"
+            : "nur die aktuell sichtbaren, durch den Filter angezeigten Episoden abwählen";
         var fullScopeText = selectItems
-            ? "die Aktion auf alle Episoden dieses Scans erweitern"
-            : "die Auswahl in allen Episoden dieses Scans leeren";
+            ? "auch die aktuell ausgeblendeten Episoden dieses Scans auswählen"
+            : "auch die aktuell ausgeblendeten Episoden dieses Scans abwählen";
         var lines = new[]
         {
-            "Der aktuelle Filter ist aktiv.",
+            $"{actionLabel} wurde ausgeführt, während ein Filter aktiv ist.",
             string.Empty,
-            "Worauf soll sich die Sammelaktion beziehen?",
+            "Soll die Sammelaktion nur auf die aktuell sichtbaren Zeilen wirken",
+            "oder auch auf Einträge, die durch den Filter gerade ausgeblendet sind?",
             string.Empty,
             $"Nein = {visibleScopeText}.",
             $"Ja = {fullScopeText}."
@@ -205,7 +207,7 @@ internal sealed class UserDialogService : IUserDialogService
         return MessageBox.Show(
             GetOwner(),
             string.Join(Environment.NewLine, lines),
-            "Batch-Auswahl eingrenzen",
+            "Filter auf Sammelaktion anwenden",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
