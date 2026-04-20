@@ -53,6 +53,14 @@ public sealed class EpisodeFileNameHelperTests
     }
 
     [Fact]
+    public void BuildEpisodeFileName_NormalizesTypographicApostrophes_AndEllipsis()
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("München Mord", "01", "02", "D’Welt … bleibt");
+
+        Assert.Equal("München Mord - S01E02 - D'Welt ... bleibt.mkv", fileName);
+    }
+
+    [Fact]
     public void BuildEpisodeFileName_ReplacesTitleColonWithReadableSeparator()
     {
         var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Neues aus Büttenwarder", "2014", "05", "Olympische Rekorde (1): Rekord");

@@ -114,6 +114,14 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeSeparators_NormalizesTypographicApostrophes_AndEllipsis()
+    {
+        var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators("D’Welt … bleibt");
+
+        Assert.Equal("D'Welt ... bleibt", normalized);
+    }
+
+    [Fact]
     public void NormalizeSeparators_PreservesInternalHyphensWithinWords()
     {
         var normalized = SeriesEpisodeMuxPlanner.NormalizeSeparators("Der Kroatien-Krimi - Teil 1");

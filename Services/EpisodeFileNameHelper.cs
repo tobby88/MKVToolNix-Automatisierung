@@ -130,15 +130,31 @@ internal static class EpisodeFileNameHelper
         return AppendReservedNameSuffixIfNeeded(trimmedValue);
     }
 
-    private static string NormalizePortableTitleCharacters(string value)
+    /// <summary>
+    /// Vereinheitlicht typografische Zeichenvarianten für stabile Dateinamen und Parservergleiche.
+    /// </summary>
+    internal static string NormalizeTypography(string value)
     {
-        // TV-/Mediathek-Titel enthalten regelmäßig typografische Gedankenstriche. Für
-        // Dateinamen und Ordner sollen diese stabil als normaler Bindestrich landen,
-        // damit spätere Vergleiche nicht an visuell ähnlichen Unicode-Zeichen hängen.
+        // Mediathek-Titel enthalten regelmäßig typografische Unicode-Varianten. Für
+        // Dateinamen, Ordner und Identitätsvergleiche sollen diese stabil auf wenige
+        // ASCII-Formen vereinheitlicht werden, damit Matching und Ausgabepfade nicht an
+        // optisch ähnlichen, aber technisch unterschiedlichen Zeichen hängen bleiben.
         return value
             .Replace('\u2013', '-')
             .Replace('\u2014', '-')
-            .Replace('\u2212', '-');
+            .Replace('\u2212', '-')
+            .Replace('\u2018', '\'')
+            .Replace('\u2019', '\'')
+            .Replace('\u201B', '\'')
+            .Replace('\u2032', '\'')
+            .Replace('\u00B4', '\'')
+            .Replace('\u0060', '\'')
+            .Replace("\u2026", "...");
+    }
+
+    private static string NormalizePortableTitleCharacters(string value)
+    {
+        return NormalizeTypography(value);
     }
 
     private static string AppendReservedNameSuffixIfNeeded(string value)

@@ -453,10 +453,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static string NormalizeDashCharacters(string value)
     {
-        return MojibakeRepair.NormalizeLikelyMojibake(value)
-            .Replace("\u2013", "-")
-            .Replace("\u2014", "-")
-            .Replace("\u2212", "-");
+        return EpisodeFileNameHelper.NormalizeTypography(
+            MojibakeRepair.NormalizeLikelyMojibake(value));
     }
 
     private static string BuildSeriesIdentityKey(string seriesName)
