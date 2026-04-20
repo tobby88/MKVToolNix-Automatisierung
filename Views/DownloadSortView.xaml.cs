@@ -27,4 +27,15 @@ public partial class DownloadSortView : UserControl
                 viewModel.ToggleSelectedItemSelectionCommand);
         }
     }
+
+    private void DownloadItemsGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGrid dataGrid && DataContext is DownloadSortViewModel viewModel)
+        {
+            DataGridSelectionInput.TryHandleMouseToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedItemSelectionCommand);
+        }
+    }
 }

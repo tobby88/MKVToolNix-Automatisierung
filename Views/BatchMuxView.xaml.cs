@@ -42,6 +42,17 @@ public partial class BatchMuxView : UserControl
         }
     }
 
+    private void EpisodeItemsGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGrid dataGrid && DataContext is BatchMuxViewModel viewModel)
+        {
+            DataGridSelectionInput.TryHandleMouseToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedEpisodeSelectionCommand);
+        }
+    }
+
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is DependencyObject originalSource

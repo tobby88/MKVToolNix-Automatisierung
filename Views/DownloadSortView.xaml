@@ -65,6 +65,7 @@
                       ColumnWidth="*"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                       PreviewKeyDown="DownloadItemsGrid_OnPreviewKeyDown"
+                      PreviewMouseLeftButtonDown="DownloadItemsGrid_OnPreviewMouseLeftButtonDown"
                       Margin="8"
                       MinHeight="180">
                 <DataGrid.Columns>

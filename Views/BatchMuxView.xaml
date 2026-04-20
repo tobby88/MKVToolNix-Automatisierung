@@ -140,7 +140,7 @@
                           ItemsSource="{Binding EpisodeItemsView}"
                           SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}"
                           AutoGenerateColumns="False"
-                          IsReadOnly="False"
+                          IsReadOnly="True"
                           IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
@@ -148,6 +148,7 @@
                           KeyboardNavigation.DirectionalNavigation="Contained"
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
                           PreviewKeyDown="EpisodeItemsGrid_OnPreviewKeyDown"
+                          PreviewMouseLeftButtonDown="EpisodeItemsGrid_OnPreviewMouseLeftButtonDown"
                           SelectionChanged="EpisodeItemsGrid_OnSelectionChanged"
                           MinHeight="130"
                           Margin="8">
