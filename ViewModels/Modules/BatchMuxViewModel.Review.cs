@@ -117,6 +117,7 @@ internal sealed partial class BatchMuxViewModel
         if (!string.IsNullOrWhiteSpace(path))
         {
             item.SetOutputPathWithContext(path, _services.OutputPaths.IsArchivePath(path));
+            RefreshOutputTargetCollisions(EpisodeItems);
             SetStatus("Ausgabedatei aktualisiert", ProgressValue);
             ScheduleSelectedItemPlanSummaryRefresh();
         }

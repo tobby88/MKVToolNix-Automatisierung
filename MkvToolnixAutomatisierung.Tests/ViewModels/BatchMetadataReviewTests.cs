@@ -274,6 +274,107 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void RefreshOutputTargetCollisions_ClearsCollisionReview_WhenOutputPathChanges()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var firstItem = CreatePendingReviewItem();
+        firstItem.SetOutputPathWithContext(
+            @"C:\Archive\Pippi Langstrumpf - S01E03 - Pippi auf Sachen-Suche.mkv",
+            isArchiveTargetPath: false);
+        var secondItem = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode-2.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"C:\Temp\episode-2.mp4",
+                SuggestedOutputFilePath = @"C:\Archive\Pippi Langstrumpf - S01E03 - Pippi auf Sachen-Suche.mkv"
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Prüfung erforderlich.",
+                ConfidenceScore: 25,
+                RequiresReview: true,
+                QueryWasAttempted: true,
+                QuerySucceeded: false),
+            outputPath: @"C:\Archive\Pippi Langstrumpf - S01E03 - Pippi auf Sachen-Suche.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        viewModel.EpisodeItems.Add(firstItem);
+        viewModel.EpisodeItems.Add(secondItem);
+
+        viewModel.RefreshOutputTargetCollisions(viewModel.EpisodeItems);
+
+        Assert.True(firstItem.HasPendingPlanReview);
+        Assert.True(secondItem.HasPendingPlanReview);
+
+        secondItem.SetOutputPathWithContext(
+            @"C:\Archive\Pippi Langstrumpf - S01E04 - Mit Pippi Langstrumpf auf der Walz.mkv",
+            isArchiveTargetPath: false);
+        viewModel.RefreshOutputTargetCollisions(viewModel.EpisodeItems);
+
+        Assert.False(firstItem.HasPendingPlanReview);
+        Assert.False(secondItem.HasPendingPlanReview);
+        Assert.DoesNotContain("dieselbe Ausgabedatei", firstItem.NotesDisplayText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dieselbe Ausgabedatei", secondItem.NotesDisplayText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RefreshOutputTargetCollisions_UsesFullOutputPath_InsteadOfOnlyFileName()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var firstItem = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode-a.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"C:\Temp\episode-a.mp4",
+                SuggestedOutputFilePath = @"C:\ArchiveA\Pilot.mkv"
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\ArchiveA\Pilot.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+        var secondItem = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"D:\Temp\episode-b.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"D:\Temp\episode-b.mp4",
+                SuggestedOutputFilePath = @"D:\ArchiveB\Pilot.mkv"
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"D:\ArchiveB\Pilot.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+
+        viewModel.EpisodeItems.Add(firstItem);
+        viewModel.EpisodeItems.Add(secondItem);
+
+        viewModel.RefreshOutputTargetCollisions(viewModel.EpisodeItems);
+
+        Assert.False(firstItem.HasPendingPlanReview);
+        Assert.False(secondItem.HasPendingPlanReview);
+        Assert.DoesNotContain("dieselbe Ausgabedatei", firstItem.NotesDisplayText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dieselbe Ausgabedatei", secondItem.NotesDisplayText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
     {
         var item = BatchEpisodeItemViewModel.CreateFromDetection(

@@ -279,13 +279,14 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
             {
                 if (item.UsesAutomaticOutputPath)
                 {
-                    var outputPath = BuildOutputPath(item);
-                    item.SetAutomaticOutputPathWithContext(outputPath, _services.OutputPaths.IsArchivePath(outputPath));
+                    RefreshAutomaticOutputPath(item, refreshOutputTargetCollisions: false);
                 }
 
                 item.RefreshArchivePresence();
             }
         }
+
+        RefreshOutputTargetCollisions(EpisodeItems);
 
         OnPropertyChanged(nameof(OutputDirectoryHintText));
         OnPropertyChanged(nameof(HasOutputDirectoryHint));

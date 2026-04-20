@@ -239,6 +239,7 @@ internal sealed partial class BatchMuxViewModel
             existingArchiveOutputPath,
             _services.OutputPaths.IsArchivePath(existingArchiveOutputPath));
         _planCache.Invalidate(item);
+        RefreshOutputTargetCollisions(EpisodeItems);
     }
 
     private async Task<List<BatchExecutionWorkItem>> BuildExecutionWorkItemsAsync(
@@ -327,20 +328,79 @@ internal sealed partial class BatchMuxViewModel
         {
             foreach (var item in EpisodeItems)
             {
-                RefreshAutomaticOutputPath(item);
+                RefreshAutomaticOutputPath(item, refreshOutputTargetCollisions: false);
             }
         }
+
+        RefreshOutputTargetCollisions(EpisodeItems);
     }
 
     private void RefreshAutomaticOutputPath(BatchEpisodeItemViewModel item)
+    {
+        RefreshAutomaticOutputPath(item, refreshOutputTargetCollisions: true);
+    }
+
+    /// <summary>
+    /// Aktualisiert den automatisch berechneten Zielpfad eines Eintrags und gleicht bei Bedarf
+    /// anschließend die Batch-weiten Ausgabezielkonflikte neu ab.
+    /// </summary>
+    private void RefreshAutomaticOutputPath(
+        BatchEpisodeItemViewModel item,
+        bool refreshOutputTargetCollisions)
     {
         if (!item.UsesAutomaticOutputPath)
         {
             return;
         }
 
+        var previousOutputPath = item.OutputPath;
         var outputPath = BuildOutputPath(item);
         item.SetAutomaticOutputPathWithContext(outputPath, _services.OutputPaths.IsArchivePath(outputPath));
+        if (refreshOutputTargetCollisions
+            && !string.Equals(previousOutputPath, item.OutputPath, StringComparison.OrdinalIgnoreCase))
+        {
+            RefreshOutputTargetCollisions(EpisodeItems);
+        }
+    }
+
+    /// <summary>
+    /// Leitet sichtbare Konflikte zwischen Batch-Einträgen und ihrem aktuellen Ausgabeziel aus den
+    /// tatsächlich gesetzten Vollpfaden ab. Gleiche Dateinamen in unterschiedlichen Ordnern gelten
+    /// dabei ausdrücklich nicht als Konflikt.
+    /// </summary>
+    internal IReadOnlyList<BatchEpisodeItemViewModel> RefreshOutputTargetCollisions(IEnumerable<BatchEpisodeItemViewModel> items)
+    {
+        var materializedItems = new HashSet<BatchEpisodeItemViewModel>(items, ReferenceEqualityComparer.Instance)
+            .ToList();
+        var collidingItems = materializedItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.OutputPath))
+            .GroupBy(item => NormalizeOutputCollisionPath(item.OutputPath), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .SelectMany(group => group)
+            .ToHashSet<BatchEpisodeItemViewModel>(ReferenceEqualityComparer.Instance);
+
+        var changedItems = new List<BatchEpisodeItemViewModel>();
+        foreach (var item in materializedItems)
+        {
+            if (item.SetOutputTargetCollisionState(collidingItems.Contains(item)))
+            {
+                changedItems.Add(item);
+            }
+        }
+
+        return changedItems;
+    }
+
+    private static string NormalizeOutputCollisionPath(string outputPath)
+    {
+        try
+        {
+            return Path.GetFullPath(outputPath);
+        }
+        catch (Exception)
+        {
+            return outputPath.Trim();
+        }
     }
 
     private void ScheduleSelectedItemPlanSummaryRefresh()

@@ -22,6 +22,7 @@ internal sealed record BatchScanResult(
 /// </summary>
 internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 {
+    private const string OutputCollisionNotePrefix = "Mehrere getrennt erkannte Quellen zeigen auf dieselbe Ausgabedatei";
     private bool _isSelected;
     private bool _isApplyingSharedMetadataState;
     private bool _isArchiveTargetPath;
@@ -171,6 +172,40 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     /// als Vergleichs- und Wiederverwendungsbasis behandelt werden muss.
     /// </summary>
     internal bool HasArchiveComparisonTarget => _isArchiveTargetPath && ArchiveState == EpisodeArchiveState.Existing;
+
+    /// <summary>
+    /// Spiegelt einen aktuell sichtbaren Batch-Ausgabezielkonflikt in den UI-Hinweisen, ohne
+    /// ihn als dauerhafte Detection-Entscheidung in spätere Planläufe einzubrennen.
+    /// </summary>
+    internal bool SetOutputTargetCollisionState(bool hasCollision)
+    {
+        var collisionNote = hasCollision
+            ? BuildOutputTargetCollisionNote(OutputPath)
+            : null;
+        var previousCollisionNote = Notes.FirstOrDefault(IsOutputTargetCollisionNote);
+        var noteChanged = !string.Equals(previousCollisionNote, collisionNote, StringComparison.OrdinalIgnoreCase);
+
+        UpdateNotes(existingNotes => ReplaceOutputTargetCollisionNotes(existingNotes, collisionNote));
+        UpdatePlanNotes(existingNotes => ReplaceOutputTargetCollisionNotes(existingNotes, collisionNote));
+
+        if (noteChanged)
+        {
+            MarkComparisonInputsChanged();
+        }
+
+        if (hasCollision)
+        {
+            SetStatus(BatchEpisodeStatusKind.Warning);
+            return noteChanged;
+        }
+
+        if (noteChanged || StatusKind == BatchEpisodeStatusKind.Warning)
+        {
+            RefreshArchivePresence();
+        }
+
+        return noteChanged;
+    }
 
     /// <summary>
     /// Setzt fachlichen Status und optionalen Anzeige-Override konsistent.
@@ -607,6 +642,32 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     private void MarkComparisonInputsChanged()
     {
         Interlocked.Increment(ref _comparisonInputVersion);
+    }
+
+    private static bool IsOutputTargetCollisionNote(string? note)
+    {
+        return !string.IsNullOrWhiteSpace(note)
+            && note.Contains(OutputCollisionNotePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> ReplaceOutputTargetCollisionNotes(
+        IReadOnlyList<string> existingNotes,
+        string? replacementNote)
+    {
+        var materialized = existingNotes
+            .Where(note => !IsOutputTargetCollisionNote(note))
+            .ToList();
+        if (!string.IsNullOrWhiteSpace(replacementNote))
+        {
+            materialized.Add(replacementNote);
+        }
+
+        return materialized;
+    }
+
+    private static string BuildOutputTargetCollisionNote(string outputPath)
+    {
+        return $"{OutputCollisionNotePrefix} '{Path.GetFileName(outputPath)}'. Bitte Episodencode und Ausgabeziel prüfen.";
     }
 
 }

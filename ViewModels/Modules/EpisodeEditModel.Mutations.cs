@@ -198,6 +198,33 @@ internal partial class EpisodeEditModel
         NotifyNotePropertiesChanged();
     }
 
+    /// <summary>
+    /// Aktualisiert nur die nicht-planerzeugten Basis-Hinweise eines Eintrags. Das wird für
+    /// UI-nahe Zustände wie Batch-Ausgabezielkonflikte verwendet, die sich ohne neue Detection
+    /// aus den bereits sichtbaren Einträgen neu ableiten lassen.
+    /// </summary>
+    protected void UpdateNotes(Func<IReadOnlyList<string>, IEnumerable<string>> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        _notes = update(_notes)
+            .Where(note => !string.IsNullOrWhiteSpace(note))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        NotifyNotePropertiesChanged();
+    }
+
+    /// <summary>
+    /// Aktualisiert die planerzeugten Hinweise gezielt, ohne den gesamten Plantext neu zu setzen.
+    /// Das wird für UI-nahe Korrekturen wie Batch-Ausgabezielkonflikte verwendet, damit veraltete
+    /// Prüfhinweise sofort verschwinden, sobald sich der zugrunde liegende Zielpfad ändert.
+    /// </summary>
+    protected void UpdatePlanNotes(Func<IReadOnlyList<string>, IEnumerable<string>> update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+        SetPlanNotes(update(_planNotes));
+    }
+
     public void SetPlanNotes(IEnumerable<string> notes)
     {
         var previousPlanReviewKey = BuildPlanReviewKey(_planNotes);

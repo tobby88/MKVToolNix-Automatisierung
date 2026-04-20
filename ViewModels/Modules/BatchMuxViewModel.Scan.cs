@@ -67,7 +67,6 @@ internal sealed partial class BatchMuxViewModel
             ResetLog();
             SetStatus("Bereite Batch-Scan vor...", 0);
 
-            var itemsByEpisodeKey = new Dictionary<string, List<BatchEpisodeItemViewModel>>(StringComparer.OrdinalIgnoreCase);
             var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory), cancellationToken);
             var mainVideoFiles = directoryContext.MainVideoFiles;
 
@@ -129,12 +128,7 @@ internal sealed partial class BatchMuxViewModel
                 var localGuess = result.LocalGuess!;
                 var metadataResolution = result.MetadataResolution!;
                 var outputPath = result.OutputPath!;
-                var episodeKey = Path.GetFileName(outputPath);
-
-                IReadOnlyList<BatchEpisodeItemViewModel> existingItemsForOutput = itemsByEpisodeKey.TryGetValue(episodeKey, out var existingItems)
-                    ? existingItems
-                    : [];
-                var relatedExistingItem = existingItemsForOutput.FirstOrDefault(item => IsSameDetectedSourceGroup(item, detected));
+                var relatedExistingItem = scannedItems.FirstOrDefault(item => IsSameDetectedSourceGroup(item, detected));
                 if (relatedExistingItem is not null)
                 {
                     relatedExistingItem.AddRequestedSource(result.SourcePath);
@@ -144,22 +138,7 @@ internal sealed partial class BatchMuxViewModel
 
                 var outputAlreadyExists = File.Exists(outputPath);
                 var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
-                var hasOutputCollision = existingItemsForOutput.Count > 0;
-                var statusKind = hasOutputCollision
-                    ? BatchEpisodeStatusKind.Warning
-                    : DetermineInitialStatus(detected, outputAlreadyExists, isArchiveTargetPath);
-                if (hasOutputCollision)
-                {
-                    var collisionNote = $"Mehrere getrennt erkannte Quellen zeigen auf dieselbe Ausgabedatei '{Path.GetFileName(outputPath)}'. Bitte Episodencode und Ausgabeziel prüfen.";
-                    detected = detected with
-                    {
-                        Notes = detected.Notes
-                            .Concat([collisionNote])
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToList()
-                    };
-                    AppendLog($"KONFLIKT: {Path.GetFileName(result.SourcePath)} -> gleiches Ausgabeziel wie anderer Batch-Eintrag: {Path.GetFileName(outputPath)}");
-                }
+                var statusKind = DetermineInitialStatus(detected, outputAlreadyExists, isArchiveTargetPath);
 
                 var item = BatchEpisodeItemViewModel.CreateFromDetection(
                     requestedMainVideoPath: result.SourcePath,
@@ -172,18 +151,11 @@ internal sealed partial class BatchMuxViewModel
                     isArchiveTargetPath: isArchiveTargetPath);
 
                 scannedItems.Add(item);
-                if (!itemsByEpisodeKey.TryGetValue(episodeKey, out existingItems))
-                {
-                    existingItems = [];
-                    itemsByEpisodeKey[episodeKey] = existingItems;
-                }
-
-                existingItems.Add(item);
-
                 AppendLog(BuildScanSuccessLogLine(result.SourcePath, detected, outputAlreadyExists, isArchiveTargetPath));
             }
 
             _episodeCollection.Reset(scannedItems);
+            RefreshOutputTargetCollisions(EpisodeItems);
 
             var preselectedCount = EpisodeItems.Count(item => item.IsSelected);
             SetStatus(

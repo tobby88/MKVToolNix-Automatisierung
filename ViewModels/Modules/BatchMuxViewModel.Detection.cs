@@ -43,6 +43,7 @@ internal sealed partial class BatchMuxViewModel
                 statusKind: statusKind,
                 isArchiveTargetPath: isArchiveTargetPath);
             item.ReplaceExcludedSourcePaths(excludedSourcePaths ?? []);
+            RefreshOutputTargetCollisions(EpisodeItems);
 
             AppendLog($"AKTUALISIERT: {Path.GetFileName(selectedVideoPath)} -> {Path.GetFileName(item.MainVideoPath)}");
             SetStatus("Eintrag aktualisiert", 100);
