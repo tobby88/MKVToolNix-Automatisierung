@@ -1,4 +1,6 @@
 using System.IO;
+using System.Reflection;
+using System.Text.Json;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -9,10 +11,15 @@ using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
+[Collection("PortableStorage")]
 public sealed class SingleEpisodeMuxViewModelTests
 {
-    public SingleEpisodeMuxViewModelTests()
+    private readonly PortableStorageFixture _storageFixture;
+
+    public SingleEpisodeMuxViewModelTests(PortableStorageFixture storageFixture)
     {
+        _storageFixture = storageFixture;
+        _storageFixture.Reset();
         ViewModelTestContext.EnsureApplication();
     }
 
@@ -155,6 +162,54 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.False(viewModel.HasPendingPlanReview);
         Assert.False(viewModel.HasActionablePlanNotes);
         Assert.DoesNotContain("Archiv prüfen", viewModel.ReviewHint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PersistSingleEpisodeArtifactsIfNeeded_WritesEinzelLogAndMetadataReport_ForNewOutput()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), "single-artifact-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outputDirectory);
+        try
+        {
+            var outputPath = Path.Combine(outputDirectory, "Beispielserie - S01E02 - Pilot.mkv");
+            File.WriteAllText(outputPath, "video");
+            var viewModel = new SingleEpisodeMuxViewModel(
+                ViewModelTestContext.CreateSingleEpisodeServices(batchLogs: new BatchRunLogService()),
+                new UserDialogService());
+            viewModel.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"));
+
+            var persistMethod = typeof(SingleEpisodeMuxViewModel).GetMethod(
+                "PersistSingleEpisodeArtifactsIfNeeded",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(persistMethod);
+
+            persistMethod!.Invoke(
+                viewModel,
+                [
+                    SeriesEpisodeMuxPlan.CreateSkip("mkvmerge.exe", outputPath, "Pilot", "bereits vorhanden"),
+                    false,
+                    false
+                ]);
+
+            var einzelLogPath = Directory.EnumerateFiles(PortableAppStorage.LogsDirectory, "Einzel - *.log.txt").Single();
+            var metadataReportPath = Directory.EnumerateFiles(PortableAppStorage.LogsDirectory, "*.metadata.json").Single();
+
+            Assert.True(File.Exists(einzelLogPath));
+            Assert.True(File.Exists(metadataReportPath));
+            Assert.Contains("Einzel-Log", File.ReadAllText(einzelLogPath), StringComparison.Ordinal);
+
+            using var metadataDocument = JsonDocument.Parse(File.ReadAllText(metadataReportPath));
+            var item = Assert.Single(metadataDocument.RootElement.GetProperty("items").EnumerateArray());
+            Assert.Equal(outputPath, item.GetProperty("outputPath").GetString());
+            Assert.Equal("100", item.GetProperty("providerIds").GetProperty("tvdb").GetString());
+        }
+        finally
+        {
+            if (Directory.Exists(outputDirectory))
+            {
+                Directory.Delete(outputDirectory, recursive: true);
+            }
+        }
     }
 
     private static SingleEpisodeMuxViewModel CreateViewModel()
