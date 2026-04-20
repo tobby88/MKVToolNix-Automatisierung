@@ -27,7 +27,7 @@ public sealed partial class SeriesArchiveService
         bool needsVideoCleanup,
         bool needsManualAttachments,
         bool requiresRelevantTrackNameNormalization,
-        bool hasSuppressedExternalSubtitles)
+        IReadOnlyList<SubtitleFile> suppressedExternalSubtitlePlans)
     {
         var notes = new List<string>
         {
@@ -52,12 +52,30 @@ public sealed partial class SeriesArchiveService
             notes.Add("Alle Inhalte sind bereits vorhanden. Es werden nur die Benennungen der relevanten Spuren vereinheitlicht.");
         }
 
-        if (hasSuppressedExternalSubtitles)
+        if (suppressedExternalSubtitlePlans.Count > 0)
         {
-            notes.Add("Ausgewählte externe Untertitel wurden nicht zusätzlich übernommen, weil die Zieldatei bereits Untertitel desselben Typs und derselben Sprache enthält.");
+            notes.Add(BuildSuppressedExternalSubtitleNote(suppressedExternalSubtitlePlans));
         }
 
         return notes;
+    }
+
+    /// <summary>
+    /// Formuliert unterdrückte externe Untertitel so, dass nur die wirklich schon belegten
+    /// Typ-/Sprach-Slots genannt werden. So bleibt z. B. sichtbar, dass ein neues ASS trotz
+    /// vorhandenen SRT übernommen wurde und nur das SRT selbst entfiel.
+    /// </summary>
+    private static string BuildSuppressedExternalSubtitleNote(IReadOnlyList<SubtitleFile> suppressedExternalSubtitlePlans)
+    {
+        var occupiedSlots = suppressedExternalSubtitlePlans
+            .Select(subtitle => $"{MediaLanguageHelper.GetLanguageDisplayName(subtitle.LanguageCode)} - {subtitle.Kind.DisplayName}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(slot => slot, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return occupiedSlots.Count == 1
+            ? $"Nicht zusätzlich übernommen wurde ein externer Untertitel für den bereits belegten Slot {occupiedSlots[0]}."
+            : $"Nicht zusätzlich übernommen wurden externe Untertitel für bereits belegte Slots: {string.Join(", ", occupiedSlots)}.";
     }
 
     private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(

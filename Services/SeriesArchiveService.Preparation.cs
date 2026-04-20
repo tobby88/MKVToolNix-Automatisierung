@@ -499,7 +499,7 @@ public sealed partial class SeriesArchiveService
                 needsVideoCleanup,
                 needsManualAttachments,
                 requiresRelevantTrackNameNormalization,
-                subtitlePlan.SuppressedExternalPlans.Count > 0));
+                subtitlePlan.SuppressedExternalPlans));
     }
 
     private static ArchiveIntegrationDecision BuildDecisionReplacingExistingPrimary(
@@ -610,7 +610,7 @@ public sealed partial class SeriesArchiveService
     {
         return subtitlePlan.SuppressedExternalPlans.Count == 0
             ? []
-            : ["Ausgewählte externe Untertitel wurden nicht zusätzlich übernommen, weil die Zieldatei bereits Untertitel desselben Typs und derselben Sprache enthält."];
+            : [BuildSuppressedExternalSubtitleNote(subtitlePlan.SuppressedExternalPlans)];
     }
 
     private static IReadOnlyList<ContainerTrackMetadata> GetRetainedNormalAudioTracks(

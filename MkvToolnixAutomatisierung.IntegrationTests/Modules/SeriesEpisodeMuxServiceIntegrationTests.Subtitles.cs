@@ -289,6 +289,10 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            plan.Notes,
+            note => note.Contains("Deutsch - SRT", StringComparison.Ordinal)
+                && !note.Contains("SSA", StringComparison.OrdinalIgnoreCase));
 
         var arguments = plan.BuildArguments();
         AssertContainsSequence(
