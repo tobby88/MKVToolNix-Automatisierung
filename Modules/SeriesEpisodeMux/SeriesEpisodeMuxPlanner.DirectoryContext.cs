@@ -34,9 +34,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
             })
             .ToList();
         var subtitleOnlySeeds = BuildSubtitleOnlySeeds(allFiles, videoSeeds, cancellationToken);
+        var metadataOnlySeeds = BuildMetadataOnlySeeds(allFiles, videoSeeds, subtitleOnlySeeds, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new DirectoryDetectionContext(this, sourceDirectory, companionFilesByBaseName, videoSeeds, subtitleOnlySeeds);
+        return new DirectoryDetectionContext(this, sourceDirectory, companionFilesByBaseName, videoSeeds, subtitleOnlySeeds, metadataOnlySeeds);
     }
 
     private CandidateSeed BuildCandidateSeed(string filePath)
@@ -82,6 +83,39 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         return subtitleOnlySeeds;
+    }
+
+    private IReadOnlyList<CandidateSeed> BuildMetadataOnlySeeds(
+        IReadOnlyList<string> allFiles,
+        IReadOnlyList<CandidateSeed> videoSeeds,
+        IReadOnlyList<CandidateSeed> subtitleOnlySeeds,
+        CancellationToken cancellationToken)
+    {
+        // Manche Sender hinterlassen zusätzliche TXT-Begleiter mit abweichender ID, obwohl
+        // die eigentliche MP4/VTT derselben Folge schon verarbeitet wurde oder in einer
+        // anderen Varianten-Gruppe steckt. Solche TXT-Dateien sollen keine eigene GUI-Zeile
+        // erzeugen, aber am fachlich passenden Episodeneintrag hängen bleiben, damit das
+        // spätere Cleanup keine Reste liegen lässt.
+        var seededLookupKeys = videoSeeds
+            .Select(seed => BuildCompanionLookupKey(seed.FilePath))
+            .Concat(subtitleOnlySeeds.Select(seed => BuildCompanionLookupKey(seed.FilePath)))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var metadataOnlySeeds = new List<CandidateSeed>();
+
+        foreach (var textPath in allFiles
+                     .Where(path => Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (seededLookupKeys.Contains(BuildCompanionLookupKey(textPath)))
+            {
+                continue;
+            }
+
+            metadataOnlySeeds.Add(BuildCandidateSeed(textPath));
+        }
+
+        return metadataOnlySeeds;
     }
 
     private static List<string> FindExactSubtitleFiles(
@@ -297,6 +331,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         private readonly Dictionary<string, CandidateSeed> _candidateSeedsByPath;
         private readonly IReadOnlyList<CandidateSeed> _candidateSeeds;
         private readonly IReadOnlyList<CandidateSeed> _subtitleOnlySeeds;
+        private readonly IReadOnlyList<CandidateSeed> _metadataOnlySeeds;
         private readonly ConcurrentDictionary<string, NormalVideoCandidate> _normalVideoCandidates;
         private readonly ConcurrentDictionary<string, AudioDescriptionCandidate> _audioDescriptionCandidates;
         private readonly ConcurrentDictionary<string, SemaphoreSlim> _normalVideoCandidateGates;
@@ -307,7 +342,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             string sourceDirectory,
             IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName,
             IReadOnlyList<CandidateSeed> candidateSeeds,
-            IReadOnlyList<CandidateSeed> subtitleOnlySeeds)
+            IReadOnlyList<CandidateSeed> subtitleOnlySeeds,
+            IReadOnlyList<CandidateSeed> metadataOnlySeeds)
         {
             _owner = owner;
             SourceDirectory = sourceDirectory;
@@ -317,9 +353,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 StringComparer.OrdinalIgnoreCase);
             _candidateSeedsByPath = candidateSeeds
                 .Concat(subtitleOnlySeeds)
+                .Concat(metadataOnlySeeds)
                 .ToDictionary(seed => seed.FilePath, seed => seed, StringComparer.OrdinalIgnoreCase);
             _candidateSeeds = candidateSeeds.ToList();
             _subtitleOnlySeeds = subtitleOnlySeeds.ToList();
+            _metadataOnlySeeds = metadataOnlySeeds.ToList();
             _normalVideoCandidates = new ConcurrentDictionary<string, NormalVideoCandidate>(StringComparer.OrdinalIgnoreCase);
             _audioDescriptionCandidates = new ConcurrentDictionary<string, AudioDescriptionCandidate>(StringComparer.OrdinalIgnoreCase);
             _normalVideoCandidateGates = new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.OrdinalIgnoreCase);
@@ -354,15 +392,23 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var matchingSubtitleOnlySeeds = _subtitleOnlySeeds
                 .Where(seed => SeedsBelongToSameEpisode(selectedSeed, seed))
                 .ToList();
+            var matchingMetadataOnlySeeds = _metadataOnlySeeds
+                .Where(seed => SeedsBelongToSameEpisode(selectedSeed, seed))
+                .ToList();
 
-            if (matchingSeeds.Count > 0 || matchingSubtitleOnlySeeds.Count > 0)
+            if (matchingSeeds.Count > 0 || matchingSubtitleOnlySeeds.Count > 0 || matchingMetadataOnlySeeds.Count > 0)
             {
                 if (!matchingSeeds.Any(seed => PathComparisonHelper.AreSamePath(seed.FilePath, selectedSeed.FilePath))
-                    && !matchingSubtitleOnlySeeds.Any(seed => PathComparisonHelper.AreSamePath(seed.FilePath, selectedSeed.FilePath)))
+                    && !matchingSubtitleOnlySeeds.Any(seed => PathComparisonHelper.AreSamePath(seed.FilePath, selectedSeed.FilePath))
+                    && !matchingMetadataOnlySeeds.Any(seed => PathComparisonHelper.AreSamePath(seed.FilePath, selectedSeed.FilePath)))
                 {
                     if (SupportedSubtitleExtensions.Contains(Path.GetExtension(selectedSeed.FilePath)))
                     {
                         matchingSubtitleOnlySeeds.Insert(0, selectedSeed);
+                    }
+                    else if (Path.GetExtension(selectedSeed.FilePath).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchingMetadataOnlySeeds.Insert(0, selectedSeed);
                     }
                     else
                     {
@@ -374,14 +420,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     matchingSeeds,
                     matchingSeeds.Where(seed => !EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
                     matchingSeeds.Where(seed => EpisodeFileNameHelper.LooksLikeAudioDescription(seed.FilePath)).ToList(),
-                    matchingSubtitleOnlySeeds);
+                    matchingSubtitleOnlySeeds,
+                    matchingMetadataOnlySeeds);
             }
 
             return new EpisodeSeedCollection(
                 [selectedSeed],
                 EpisodeFileNameHelper.LooksLikeAudioDescription(selectedSeed.FilePath) || SupportedSubtitleExtensions.Contains(Path.GetExtension(selectedSeed.FilePath)) ? [] : [selectedSeed],
                 EpisodeFileNameHelper.LooksLikeAudioDescription(selectedSeed.FilePath) ? [selectedSeed] : [],
-                SupportedSubtitleExtensions.Contains(Path.GetExtension(selectedSeed.FilePath)) ? [selectedSeed] : []);
+                SupportedSubtitleExtensions.Contains(Path.GetExtension(selectedSeed.FilePath)) ? [selectedSeed] : [],
+                Path.GetExtension(selectedSeed.FilePath).Equals(".txt", StringComparison.OrdinalIgnoreCase) ? [selectedSeed] : []);
         }
 
         internal NormalVideoCandidate GetOrCreateNormalVideoCandidate(

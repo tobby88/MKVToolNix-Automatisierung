@@ -190,6 +190,40 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         }
     }
 
+    [Fact]
+    public void CreateDirectoryDetectionContext_CollectsEquivalentMetadataOnlyTxt_WithEpisodeSeed()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var mainVideoPath = Path.Combine(tempDirectory, "Der Staatsanwalt-Tod eines Rebellen (S18_E03)-2000000001.mp4");
+            var mainTextPath = Path.Combine(tempDirectory, "Der Staatsanwalt-Tod eines Rebellen (S18_E03)-2000000001.txt");
+            var metadataOnlyTextPath = Path.Combine(tempDirectory, "Der Staatsanwalt-Tod eines Rebellen (Staffel 18, Folge 3)-0544044864.txt");
+            CreateEmptyFile(mainVideoPath);
+            CreateCompanionText(
+                mainTextPath,
+                topic: "Der Staatsanwalt",
+                title: "Tod eines Rebellen (S18/E03)",
+                duration: "00:59:00");
+            CreateCompanionText(
+                metadataOnlyTextPath,
+                topic: "Der Staatsanwalt",
+                title: "Tod eines Rebellen (Staffel 18, Folge 3)",
+                duration: "00:59:00");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+            var episodeSeeds = context.GetEpisodeSeeds(context.GetSelectedSeed(mainVideoPath));
+
+            Assert.Contains(episodeSeeds.MetadataOnlySeeds, seed => string.Equals(seed.FilePath, metadataOnlyTextPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
     private static SeriesEpisodeMuxPlanner CreatePlanner()
     {
         var settingsStore = new AppSettingsStore();

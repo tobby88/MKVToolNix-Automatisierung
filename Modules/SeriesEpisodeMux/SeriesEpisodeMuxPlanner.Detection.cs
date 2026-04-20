@@ -254,7 +254,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 null,
                 [],
                 CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName),
-                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds], companionFilesByBaseName),
+                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName),
                 audioDescriptionCandidates,
                 sourceHealthNotes);
         }
@@ -270,7 +270,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds], companionFilesByBaseName);
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName);
 
         return new EpisodeDetectionContext(
             directory,

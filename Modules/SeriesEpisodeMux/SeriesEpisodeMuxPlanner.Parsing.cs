@@ -568,7 +568,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<CandidateSeed> AllEpisodeVideoSeeds,
         IReadOnlyList<CandidateSeed> NormalVideoSeeds,
         IReadOnlyList<CandidateSeed> AudioDescriptionSeeds,
-        IReadOnlyList<CandidateSeed> SubtitleOnlySeeds);
+        IReadOnlyList<CandidateSeed> SubtitleOnlySeeds,
+        IReadOnlyList<CandidateSeed> MetadataOnlySeeds);
 
     internal sealed record EpisodeIdentity(string SeriesName, string Title, string SeasonNumber, string EpisodeNumber)
     {
