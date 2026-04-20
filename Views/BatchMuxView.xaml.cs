@@ -13,13 +13,6 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class BatchMuxView : UserControl
 {
-    /// <summary>
-    /// RoutedCommand für die zeilenbasierte Space-Bedienung der Batch-Tabelle.
-    /// Der Command bleibt in der View, weil es um Tastaturrouting eines konkreten WPF-Controls geht;
-    /// die fachliche Auswahländerung delegiert danach an das ViewModel.
-    /// </summary>
-    public static RoutedCommand ToggleEpisodeSelectionCommand { get; } = new();
-
     private const double DefaultSelectedUsageMinHeight = 150d;
     private static readonly GridLength DefaultEpisodeListRowHeight = new(1.2, GridUnitType.Star);
     private static readonly GridLength ExpandedEpisodeListRowHeight = new(0.9, GridUnitType.Star);
@@ -36,28 +29,17 @@ public partial class BatchMuxView : UserControl
     public BatchMuxView()
     {
         InitializeComponent();
-        CommandBindings.Add(new CommandBinding(
-            ToggleEpisodeSelectionCommand,
-            ExecuteToggleEpisodeSelectionCommand,
-            CanExecuteToggleEpisodeSelectionCommand));
     }
 
-    private void CanExecuteToggleEpisodeSelectionCommand(object sender, CanExecuteRoutedEventArgs e)
+    private void EpisodeItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        e.CanExecute = DataContext is BatchMuxViewModel viewModel
-            && viewModel.ToggleSelectedEpisodeSelectionCommand.CanExecute(null);
-        e.Handled = true;
-    }
-
-    private void ExecuteToggleEpisodeSelectionCommand(object sender, ExecutedRoutedEventArgs e)
-    {
-        if (DataContext is BatchMuxViewModel viewModel
-            && viewModel.ToggleSelectedEpisodeSelectionCommand.CanExecute(null))
+        if (sender is DataGrid dataGrid && DataContext is BatchMuxViewModel viewModel)
         {
-            viewModel.ToggleSelectedEpisodeSelectionCommand.Execute(null);
+            DataGridSelectionInput.TryHandleSpaceToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedEpisodeSelectionCommand);
         }
-
-        e.Handled = true;
     }
 
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)

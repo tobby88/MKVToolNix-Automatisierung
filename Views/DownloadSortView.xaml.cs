@@ -1,4 +1,6 @@
 using System.Windows.Controls;
+using System.Windows.Input;
+using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung.Views;
 
@@ -13,5 +15,16 @@ public partial class DownloadSortView : UserControl
     public DownloadSortView()
     {
         InitializeComponent();
+    }
+
+    private void DownloadItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is DataGrid dataGrid && DataContext is DownloadSortViewModel viewModel)
+        {
+            DataGridSelectionInput.TryHandleSpaceToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedItemSelectionCommand);
+        }
     }
 }

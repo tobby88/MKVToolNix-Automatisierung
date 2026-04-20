@@ -37,6 +37,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, unexpectedCommandErrorHandler);
         SelectAllSortableCommand = new RelayCommand(SelectAllSortable, () => !_isBusy && Items.Any(item => DownloadSortItemStates.IsSortable(item.State) && !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
+        ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
         ApplyTargetFolderToMatchingItemsCommand = new RelayCommand(ApplySelectedTargetFolderToMatchingItems, CanApplySelectedTargetFolderToMatchingItems);
         RunSortCommand = new AsyncRelayCommand(RunSortAsync, CanRunSort, unexpectedCommandErrorHandler);
     }
@@ -50,6 +51,8 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     public RelayCommand SelectAllSortableCommand { get; }
 
     public RelayCommand DeselectAllCommand { get; }
+
+    public RelayCommand ToggleSelectedItemSelectionCommand { get; }
 
     public RelayCommand ApplyTargetFolderToMatchingItemsCommand { get; }
 
@@ -71,6 +74,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
             _selectedItem = value;
             OnPropertyChanged();
+            ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
             ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
         }
     }
@@ -302,6 +306,16 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    private void ToggleSelectedItemSelection()
+    {
+        if (_isBusy || SelectedItem is not DownloadSortItemViewModel item)
+        {
+            return;
+        }
+
+        item.IsSelected = !item.IsSelected;
+    }
+
     private void ApplySelectedTargetFolderToMatchingItems()
     {
         var selectedItem = SelectedItem;
@@ -416,6 +430,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ScanCommand.RaiseCanExecuteChanged();
         SelectAllSortableCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
+        ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
         RunSortCommand.RaiseCanExecuteChanged();
     }

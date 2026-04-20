@@ -97,6 +97,23 @@ public sealed class DownloadSortViewModelTests
     }
 
     [Fact]
+    public void ToggleSelectedItemSelectionCommand_TogglesCurrentItem()
+    {
+        var vm = CreateViewModel();
+        var item = CreateSortableItem("S01E01.mp4");
+        item.IsSelected = false;
+        vm.Items.Add(item);
+        vm.SelectedItem = item;
+
+        Assert.True(vm.ToggleSelectedItemSelectionCommand.CanExecute(null));
+
+        vm.ToggleSelectedItemSelectionCommand.Execute(null);
+
+        Assert.True(item.IsSelected);
+        Assert.Same(item, vm.SelectedItem);
+    }
+
+    [Fact]
     public void RunSortCommand_CannotExecute_WhenNoItemsSelected()
     {
         var vm = CreateViewModel();

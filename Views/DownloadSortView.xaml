@@ -52,7 +52,8 @@
         </Border>
 
         <GroupBox Grid.Row="2" Header="Lose Download-Pakete">
-            <DataGrid ItemsSource="{Binding Items}"
+            <DataGrid x:Name="DownloadItemsGrid"
+                      ItemsSource="{Binding Items}"
                       AutoGenerateColumns="False"
                       CanUserResizeColumns="True"
                       CanUserAddRows="False"
@@ -60,14 +61,25 @@
                       HorizontalScrollBarVisibility="Auto"
                       IsReadOnly="False"
                       IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                      KeyboardNavigation.DirectionalNavigation="Contained"
                       ColumnWidth="*"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                      PreviewKeyDown="DownloadItemsGrid_OnPreviewKeyDown"
                       Margin="8"
                       MinHeight="180">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="Auswahl"
-                                            Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="SizeToHeader" />
+                    <DataGridTemplateColumn Header="Auswahl"
+                                            Width="SizeToHeader"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Download"
                                         Binding="{Binding DisplayName}"
                                         Width="2.2*"
