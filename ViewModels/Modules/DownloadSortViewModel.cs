@@ -290,7 +290,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             ProgressValue = 30;
 
             var requests = selectedSortableItems
-                .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.TargetFolderName))
+                .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.TargetFolderName, item.DefectiveFilePaths))
                 .ToList();
 
             var applyResult = await Task.Run(() => _services.DownloadSort.Apply(SourceDirectory, requests, _currentFolderRenames));

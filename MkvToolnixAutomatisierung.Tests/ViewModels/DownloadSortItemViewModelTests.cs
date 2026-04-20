@@ -23,7 +23,7 @@ public sealed class DownloadSortItemViewModelTests
     }
 
     [Fact]
-    public void Constructor_RespectsInitialSelectionFlag_ForSidecarOnlyFollowUps()
+    public void Constructor_RespectsExplicitInitialSelectionFlag()
     {
         var item = new DownloadSortItemViewModel(new DownloadSortCandidate(
             "Stralsund-Außer Kontrolle",

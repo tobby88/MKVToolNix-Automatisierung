@@ -269,15 +269,21 @@ internal sealed class DownloadSortService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var defectiveFilePathSet = (request.DefectiveFilePaths ?? [])
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var regularFilePaths = request.FilePaths
+                .Where(path => !defectiveFilePathSet.Contains(path))
+                .ToList();
             var targetFolderName = NormalizeTargetFolderName(request.TargetFolderName);
-            if (string.IsNullOrWhiteSpace(targetFolderName))
+            if (regularFilePaths.Count > 0 && string.IsNullOrWhiteSpace(targetFolderName))
             {
                 skippedGroupCount++;
                 logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> kein gueltiger Zielordner.");
                 continue;
             }
 
-            var blockingLooseVideoPath = FindBlockingLooseVideoCompanion(rootDirectory, request.FilePaths);
+            var blockingLooseVideoPath = FindBlockingLooseVideoCompanion(rootDirectory, regularFilePaths);
             if (!string.IsNullOrWhiteSpace(blockingLooseVideoPath))
             {
                 skippedGroupCount++;
@@ -286,10 +292,19 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            var targetDirectory = Path.Combine(rootDirectory, targetFolderName);
-            Directory.CreateDirectory(targetDirectory);
+            DownloadSortReplacementDecision replacementDecision;
+            string? targetDirectory = null;
+            if (regularFilePaths.Count > 0)
+            {
+                targetDirectory = Path.Combine(rootDirectory, targetFolderName);
+                Directory.CreateDirectory(targetDirectory);
+                replacementDecision = EvaluateExistingTargetFiles(regularFilePaths, targetDirectory);
+            }
+            else
+            {
+                replacementDecision = new DownloadSortReplacementDecision([], null);
+            }
 
-            var replacementDecision = EvaluateExistingTargetFiles(request.FilePaths, targetDirectory);
             if (replacementDecision.BlockingConflict is { } blockingConflict)
             {
                 skippedGroupCount++;
@@ -298,23 +313,20 @@ internal sealed class DownloadSortService
             }
 
             var groupMovedCount = 0;
-            foreach (var filePath in request.FilePaths)
+            if (targetDirectory is not null)
             {
-                var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
-                if (Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+                groupMovedCount += MoveFiles(regularFilePaths, targetDirectory, targetFolderName, logLines);
+            }
 
-                try
-                {
-                    File.Move(filePath, destinationPath, overwrite: true);
-                    groupMovedCount++;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    logLines.Add($"FEHLER: '{Path.GetFileName(filePath)}' konnte nicht nach '{targetFolderName}' verschoben werden: {ex.Message}");
-                }
+            if (defectiveFilePathSet.Count > 0)
+            {
+                var defectiveDirectory = Path.Combine(rootDirectory, DefectiveFolderName);
+                Directory.CreateDirectory(defectiveDirectory);
+                groupMovedCount += MoveFiles(
+                    request.FilePaths.Where(defectiveFilePathSet.Contains).ToList(),
+                    defectiveDirectory,
+                    DefectiveFolderName,
+                    logLines);
             }
 
             movedFileCount += groupMovedCount;
@@ -332,10 +344,18 @@ internal sealed class DownloadSortService
                 logLines.Add($"ERSETZT: {request.DisplayName} -> {FormatConflictFileList(replacementDecision.ReplaceableConflicts)}");
             }
 
-            var operationLabel = string.Equals(targetFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase)
-                ? "DEFEKT"
-                : "SORTIERT";
-            logLines.Add($"{operationLabel}: {request.DisplayName} -> {targetFolderName} ({request.FilePaths.Count} Datei(en))");
+            if (regularFilePaths.Count > 0)
+            {
+                var operationLabel = string.Equals(targetFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase)
+                    ? "DEFEKT"
+                    : "SORTIERT";
+                logLines.Add($"{operationLabel}: {request.DisplayName} -> {targetFolderName} ({regularFilePaths.Count} Datei(en))");
+            }
+
+            if (defectiveFilePathSet.Count > 0)
+            {
+                logLines.Add($"DEFEKT: {request.DisplayName} -> {DefectiveFolderName} ({defectiveFilePathSet.Count} Datei(en))");
+            }
         }
 
         return new DownloadSortApplyResult(
@@ -344,6 +364,39 @@ internal sealed class DownloadSortService
             renamedFolderCount,
             skippedGroupCount,
             logLines);
+    }
+
+    /// <summary>
+    /// Verschiebt eine vorbereitete Teilmenge von Dateien in genau einen Zielordner und protokolliert
+    /// einzelne Move-Fehler, ohne den restlichen Gruppenlauf abzubrechen.
+    /// </summary>
+    private static int MoveFiles(
+        IReadOnlyList<string> filePaths,
+        string targetDirectory,
+        string targetFolderName,
+        ICollection<string> logLines)
+    {
+        var movedCount = 0;
+        foreach (var filePath in filePaths)
+        {
+            var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
+            if (Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Move(filePath, destinationPath, overwrite: true);
+                movedCount++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logLines.Add($"FEHLER: '{Path.GetFileName(filePath)}' konnte nicht nach '{targetFolderName}' verschoben werden: {ex.Message}");
+            }
+        }
+
+        return movedCount;
     }
 
     /// <summary>
@@ -395,7 +448,7 @@ internal sealed class DownloadSortService
         DownloadFileGroup group,
         IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
     {
-        var defectiveVideoPaths = group.FilePaths
+        var defectiveVideoCandidates = group.FilePaths
             .Where(path => VideoExtensions.Contains(Path.GetExtension(path)))
             .Select(path => new
             {
@@ -405,44 +458,51 @@ internal sealed class DownloadSortService
             .Where(candidate => !candidate.Health.IsUsable)
             .ToList();
 
-        if (defectiveVideoPaths.Count == 0)
+        if (defectiveVideoCandidates.Count == 0)
         {
             return [BuildCandidate(rootDirectory, group.DisplayName, group.FilePaths, folderRenames)];
         }
 
-        var defectiveNote = BuildDefectiveVideoNote(defectiveVideoPaths.Select(candidate => candidate.Health.Reason).ToList());
-        var defectiveVideoPathSet = defectiveVideoPaths
+        var defectiveFilePaths = defectiveVideoCandidates
             .Select(candidate => candidate.FilePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var candidates = new List<DownloadSortCandidate>();
-        candidates.Add(new DownloadSortCandidate(
-            group.DisplayName,
-            defectiveVideoPaths.Select(candidate => candidate.FilePath).ToList(),
-            DetectedSeriesName: null,
-            SuggestedFolderName: DefectiveFolderName,
-            DownloadSortItemState.Defective,
-            defectiveNote));
-
-        // Defekte Videos werden sofort isoliert, Begleitdateien dagegen nicht:
-        // Untertitel/TXT sind oft weiter nutzbar und sollen im regulären Serienordner
-        // für einen späteren Mux-Lauf erhalten bleiben. Das spätere Episode-Cleanup
-        // räumt diese Dateien nach erfolgreicher Verarbeitung wieder mit weg.
         var remainingFilePaths = group.FilePaths
-            .Except(defectiveVideoPaths.Select(candidate => candidate.FilePath), StringComparer.OrdinalIgnoreCase)
+            .Except(defectiveFilePaths, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (remainingFilePaths.Count > 0)
+
+        // Ein einzelnes MP4+TXT-Paar ohne weitere Dateien bildet keinen nutzbaren
+        // Serienkandidaten mehr. In diesem Sonderfall darf die TXT direkt mit der
+        // defekten MP4 im Defekt-Ordner landen.
+        if (ShouldRouteOnlyTxtCompanionToDefective(group.FilePaths, defectiveFilePaths))
         {
-            var remainingCandidate = BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames);
-            candidates.Add(remainingCandidate with
+            var textCompanionPath = Path.ChangeExtension(defectiveVideoCandidates[0].FilePath, ".txt");
+            if (remainingFilePaths.Remove(textCompanionPath))
             {
-                IsInitiallySelected = false,
-                Note = MergeNotes(
-                    remainingCandidate.Note,
-                    "Nur Begleitdateien einer defekten MP4; standardmäßig nicht vorausgewählt.")
-            });
+                defectiveFilePaths.Add(textCompanionPath);
+            }
         }
 
-        return candidates;
+        var seriesCandidate = remainingFilePaths.Count == 0
+            ? null
+            : BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames);
+        var targetFolderName = seriesCandidate?.SuggestedFolderName ?? DefectiveFolderName;
+        var note = BuildDefectiveCandidateNote(
+            defectiveVideoCandidates.Select(candidate => candidate.Health.Reason).ToList(),
+            remainingFilePaths,
+            targetFolderName,
+            defectiveFilePaths);
+
+        return
+        [
+            new DownloadSortCandidate(
+                group.DisplayName,
+                group.FilePaths,
+                seriesCandidate?.DetectedSeriesName,
+                targetFolderName,
+                DownloadSortItemState.Defective,
+                MergeNotes(seriesCandidate?.Note ?? string.Empty, note),
+                DefectiveFilePaths: defectiveFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList())
+        ];
     }
 
     private DownloadSortCandidate BuildCandidate(
@@ -464,12 +524,58 @@ internal sealed class DownloadSortService
             note);
     }
 
-    private static string BuildDefectiveVideoNote(IReadOnlyList<string?> reasons)
+    private static bool ShouldRouteOnlyTxtCompanionToDefective(
+        IReadOnlyList<string> groupFilePaths,
+        IReadOnlyCollection<string> defectiveVideoPaths)
+    {
+        if (defectiveVideoPaths.Count != 1 || groupFilePaths.Count != 2)
+        {
+            return false;
+        }
+
+        var defectiveVideoPath = defectiveVideoPaths.Single();
+        var textCompanionPath = Path.ChangeExtension(defectiveVideoPath, ".txt");
+        return groupFilePaths.Any(path => string.Equals(path, textCompanionPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BuildDefectiveCandidateNote(
+        IReadOnlyList<string?> reasons,
+        IReadOnlyList<string> remainingFilePaths,
+        string targetFolderName,
+        IReadOnlySet<string> defectiveFilePaths)
     {
         var firstReason = reasons.FirstOrDefault(reason => !string.IsNullOrWhiteSpace(reason));
-        return string.IsNullOrWhiteSpace(firstReason)
-            ? "MP4 wirkt defekt oder unvollständig; nur die betroffene MP4 wird in den Defekt-Ordner verschoben."
-            : firstReason + " Nur die betroffene MP4 wird in den Defekt-Ordner verschoben.";
+        var baseText = string.IsNullOrWhiteSpace(firstReason)
+            ? "MP4 wirkt defekt oder unvollständig."
+            : firstReason;
+
+        if (remainingFilePaths.Count == 0)
+        {
+            return $"{baseText} Alle zugehörigen Dateien werden gemeinsam in den Defekt-Ordner verschoben.";
+        }
+
+        var routedCompanionNames = defectiveFilePaths
+            .Where(path => !VideoExtensions.Contains(Path.GetExtension(path)))
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Cast<string>()
+            .ToList();
+        var companionNote = routedCompanionNames.Count == 0
+            ? string.Empty
+            : $" {FormatFileNameList(routedCompanionNames)} geht zusammen mit der defekten MP4 in den Defekt-Ordner.";
+
+        return $"{baseText} Die betroffene MP4 wird in den Defekt-Ordner verschoben, nutzbare Begleitdateien nach '{targetFolderName}'.{companionNote}";
+    }
+
+    private static string FormatFileNameList(IReadOnlyList<string> fileNames)
+    {
+        return fileNames.Count switch
+        {
+            0 => "Keine Datei",
+            1 => $"'{fileNames[0]}'",
+            2 => $"'{fileNames[0]}' und '{fileNames[1]}'",
+            _ => string.Join(", ", fileNames.Take(fileNames.Count - 1).Select(name => $"'{name}'")) + $" und '{fileNames[^1]}'"
+        };
     }
 
     private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(
@@ -1096,7 +1202,8 @@ internal sealed record DownloadSortCandidate(
     string SuggestedFolderName,
     DownloadSortItemState State,
     string Note,
-    bool IsInitiallySelected = true);
+    bool IsInitiallySelected = true,
+    IReadOnlyList<string>? DefectiveFilePaths = null);
 
 /// <summary>
 /// Sichere Vorab-Umbenennung eines bestehenden Serienordners auf einen kanonischen Namen.
@@ -1119,7 +1226,8 @@ internal sealed record DownloadSortTargetEvaluation(
 internal sealed record DownloadSortMoveRequest(
     string DisplayName,
     IReadOnlyList<string> FilePaths,
-    string TargetFolderName);
+    string TargetFolderName,
+    IReadOnlyList<string>? DefectiveFilePaths = null);
 
 /// <summary>
 /// Zusammenfassung eines ausgeführten Sortierlaufs.

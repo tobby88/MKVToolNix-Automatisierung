@@ -18,6 +18,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     {
         DisplayName = candidate.DisplayName;
         FilePaths = candidate.FilePaths;
+        DefectiveFilePaths = candidate.DefectiveFilePaths ?? [];
         InitialTargetFolderName = candidate.SuggestedFolderName;
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
@@ -30,6 +31,12 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public string DisplayName { get; }
 
     public IReadOnlyList<string> FilePaths { get; }
+
+    /// <summary>
+    /// Teilmenge von <see cref="FilePaths"/>, die beim Einsortieren bewusst in den
+    /// Defekt-Ordner statt in den gewählten Serienordner verschoben wird.
+    /// </summary>
+    public IReadOnlyList<string> DefectiveFilePaths { get; }
 
     /// <summary>
     /// Ursprünglich automatisch erkannter Zielordner; bleibt stabil, damit ein manuell
