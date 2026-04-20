@@ -144,7 +144,10 @@ internal static class MkvMergeIdentifyParser
             }
         }
 
-        return new ContainerMetadata(trackMetadata, attachments);
+        return new ContainerMetadata(
+            ReadContainerTitle(trackDocument.RootElement),
+            trackMetadata,
+            attachments);
     }
 
     private static string NormalizeTrackCodecName(string type, JsonElement track, JsonElement properties)
@@ -229,6 +232,23 @@ internal static class MkvMergeIdentifyParser
         }
 
         return MojibakeRepair.NormalizeLikelyMojibake(value);
+    }
+
+    private static string ReadContainerTitle(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("container", out var containerElement)
+            || containerElement.ValueKind != JsonValueKind.Object
+            || !containerElement.TryGetProperty("properties", out var propertiesElement)
+            || propertiesElement.ValueKind != JsonValueKind.Object
+            || !propertiesElement.TryGetProperty("title", out var titleElement))
+        {
+            return string.Empty;
+        }
+
+        var title = titleElement.GetString();
+        return string.IsNullOrWhiteSpace(title)
+            ? string.Empty
+            : NormalizeDisplayText(title.Trim());
     }
 
     private static bool ReadBooleanProperty(JsonElement properties, string propertyName)

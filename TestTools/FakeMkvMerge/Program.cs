@@ -218,6 +218,22 @@ internal static class Program
 
             var propertyName = assignment[..separatorIndex];
             var propertyValue = assignment[(separatorIndex + 1)..];
+            if (string.Equals(currentSelector, "info", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(propertyName, "title", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.Error.WriteLine($"FakeMkvMerge: Nicht unterstützte Container-Eigenschaft '{propertyName}'.");
+                    return 5;
+                }
+
+                var containerNode = rootNode["container"] as JsonObject ?? new JsonObject();
+                rootNode["container"] = containerNode;
+                var containerProperties = containerNode["properties"] as JsonObject ?? new JsonObject();
+                containerNode["properties"] = containerProperties;
+                containerProperties["title"] = propertyValue;
+                continue;
+            }
+
             if (!string.Equals(propertyName, "name", StringComparison.OrdinalIgnoreCase))
             {
                 Console.Error.WriteLine($"FakeMkvMerge: Nicht unterstützte Eigenschaft '{propertyName}'.");

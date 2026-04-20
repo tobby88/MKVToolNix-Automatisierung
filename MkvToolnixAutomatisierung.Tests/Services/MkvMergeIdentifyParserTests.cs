@@ -166,6 +166,11 @@ public sealed class MkvMergeIdentifyParserTests
     {
         using var doc = JsonDocument.Parse("""
             {
+                "container": {
+                    "properties": {
+                        "title": "Pilot"
+                    }
+                },
                 "tracks": [
                     {
                         "id": 0, "type": "video", "codec": "V_MPEG4/ISO/AVC",
@@ -189,6 +194,7 @@ public sealed class MkvMergeIdentifyParserTests
 
         var result = MkvMergeIdentifyParser.CreateContainerMetadata(doc, "test.mkv");
 
+        Assert.Equal("Pilot", result.Title);
         Assert.Equal(3, result.Tracks.Count);
         Assert.Equal("video", result.Tracks[0].Type, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("H.264", result.Tracks[0].CodecLabel);

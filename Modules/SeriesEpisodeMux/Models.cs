@@ -142,6 +142,7 @@ public sealed record ContainerAttachmentMetadata(
 /// Zusammenfassung aller Tracks und Anhänge eines Containers.
 /// </summary>
 public sealed record ContainerMetadata(
+    string Title,
     IReadOnlyList<ContainerTrackMetadata> Tracks,
     IReadOnlyList<ContainerAttachmentMetadata> Attachments);
 
@@ -161,6 +162,15 @@ public sealed record TrackHeaderEditOperation(
     string DisplayLabel,
     string CurrentTrackName,
     string ExpectedTrackName);
+
+/// <summary>
+/// Beschreibt eine direkte Anpassung des Container-Titels einer vorhandenen MKV-Datei.
+/// </summary>
+/// <param name="CurrentTitle">Aktuell im Matroska-Header gespeicherter Titel.</param>
+/// <param name="ExpectedTitle">Projektweit erwarteter Episodentitel für denselben Container.</param>
+public sealed record ContainerTitleEditOperation(
+    string CurrentTitle,
+    string ExpectedTitle);
 
 /// <summary>
 /// Beschreibt Bestandteile der bisherigen Zieldatei, die durch die neue Planung entfallen oder ersetzt werden.

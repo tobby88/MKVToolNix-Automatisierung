@@ -46,6 +46,14 @@ internal static class FakeMkvMergeTestHelper
         WriteProbeFileWithAttachments(mediaFilePath, [], tracks);
     }
 
+    public static void WriteProbeFileWithContainerTitle(
+        string mediaFilePath,
+        string? containerTitle,
+        params object[] tracks)
+    {
+        WriteProbeFileCore(mediaFilePath, [], 0, null, containerTitle, tracks);
+    }
+
     public static void WriteProbeFileWithDelay(
         string mediaFilePath,
         int delayBeforeOutputMilliseconds,
@@ -81,11 +89,31 @@ internal static class FakeMkvMergeTestHelper
         WriteProbeFileWithAttachments(mediaFilePath, attachments, delayBeforeOutputMilliseconds: 0, invocationLogFilePath: null, tracks);
     }
 
+    public static void WriteProbeFileWithAttachmentsAndContainerTitle(
+        string mediaFilePath,
+        IReadOnlyList<object> attachments,
+        string? containerTitle,
+        params object[] tracks)
+    {
+        WriteProbeFileCore(mediaFilePath, attachments, 0, null, containerTitle, tracks);
+    }
+
     public static void WriteProbeFileWithAttachments(
         string mediaFilePath,
         IReadOnlyList<object> attachments,
         int delayBeforeOutputMilliseconds,
         string? invocationLogFilePath,
+        params object[] tracks)
+    {
+        WriteProbeFileCore(mediaFilePath, attachments, delayBeforeOutputMilliseconds, invocationLogFilePath, containerTitle: null, tracks);
+    }
+
+    private static void WriteProbeFileCore(
+        string mediaFilePath,
+        IReadOnlyList<object> attachments,
+        int delayBeforeOutputMilliseconds,
+        string? invocationLogFilePath,
+        string? containerTitle,
         params object[] tracks)
     {
         WriteJsonFile(
@@ -94,6 +122,15 @@ internal static class FakeMkvMergeTestHelper
             {
                 delayBeforeOutputMilliseconds,
                 invocationLogFilePath,
+                container = containerTitle is null
+                    ? null
+                    : new
+                    {
+                        properties = new
+                        {
+                            title = containerTitle
+                        }
+                    },
                 tracks,
                 attachments
             });

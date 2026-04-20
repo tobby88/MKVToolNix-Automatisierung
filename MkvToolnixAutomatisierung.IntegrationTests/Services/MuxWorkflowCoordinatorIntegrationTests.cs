@@ -144,8 +144,9 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
     public async Task ExecuteMuxAsync_HeaderEditOnly_UsesMkvPropEditWithoutWorkingCopy()
     {
         var outputPath = CreateFile("header-edit", "archive");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
+            "Alter Episodentitel",
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel"));
 
@@ -183,6 +184,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
             usageComparison: ArchiveUsageComparison.Empty,
             workingCopy: null,
             mkvPropEditPath: mkvPropEditPath,
+            containerTitleEdit: new ContainerTitleEditOperation("Alter Episodentitel", "Episode"),
             trackHeaderEdits:
             [
                 new TrackHeaderEditOperation("track:2", "Alter Audiotitel", "Alter Audiotitel", "Deutsch - E-AC-3")
@@ -195,6 +197,7 @@ public sealed class MuxWorkflowCoordinatorIntegrationTests : IDisposable
         Assert.False(result.HasWarning);
         Assert.Equal("archive", File.ReadAllText(outputPath));
         var updatedProbeJson = File.ReadAllText(outputPath + ".mkvmerge.json");
+        Assert.Contains("\"title\": \"Episode\"", updatedProbeJson, StringComparison.Ordinal);
         Assert.Contains("Deutsch - E-AC-3", updatedProbeJson, StringComparison.Ordinal);
         Assert.DoesNotContain("Alter Audiotitel", updatedProbeJson, StringComparison.Ordinal);
     }

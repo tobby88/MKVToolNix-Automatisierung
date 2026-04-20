@@ -200,8 +200,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
+            "Pilot",
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));

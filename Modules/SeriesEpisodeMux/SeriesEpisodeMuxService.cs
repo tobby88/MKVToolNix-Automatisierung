@@ -148,7 +148,7 @@ public sealed class SeriesEpisodeMuxService
         Action<MuxExecutionUpdate>? onUpdate = null,
         CancellationToken cancellationToken = default)
     {
-        if (plan.HasTrackHeaderEdits)
+        if (plan.HasHeaderEdits)
         {
             return await ExecuteTrackHeaderEditAsync(plan, onOutput, onUpdate, cancellationToken);
         }

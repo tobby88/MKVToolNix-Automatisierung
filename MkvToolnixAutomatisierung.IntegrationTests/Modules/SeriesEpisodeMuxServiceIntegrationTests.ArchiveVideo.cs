@@ -289,9 +289,10 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachmentsAndContainerTitle(
             outputPath,
             [CreateAttachment("cover.jpg")],
+            "Pilot",
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
@@ -340,9 +341,10 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachmentsAndContainerTitle(
             outputPath,
             [CreateAttachment("cover.jpg")],
+            "Pilot",
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel"),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
@@ -378,6 +380,61 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var arguments = plan.BuildArguments();
         Assert.Equal(outputPath, arguments[0]);
         AssertContainsSequence(arguments, "--edit", "track:2", "--set", "name=Deutsch - E-AC-3");
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_UsesDirectHeaderEditForContainerTitleNormalization()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-title-only");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-title-only");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachmentsAndContainerTitle(
+            outputPath,
+            [],
+            "Alter Pilot-Titel",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.True(plan.HasHeaderEdits);
+        Assert.False(plan.HasTrackHeaderEdits);
+        Assert.NotNull(plan.ContainerTitleEdit);
+        Assert.Equal("Alter Pilot-Titel", plan.ContainerTitleEdit!.CurrentTitle);
+        Assert.Equal("Pilot", plan.ContainerTitleEdit.ExpectedTitle);
+        Assert.Null(plan.WorkingCopy);
+
+        var summary = plan.BuildUsageSummary();
+        Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);
+        Assert.Equal("Es wird nur der MKV-Titel direkt im Header vereinheitlicht", summary.ArchiveDetails);
+
+        var arguments = plan.BuildArguments();
+        Assert.Equal(outputPath, arguments[0]);
+        AssertContainsSequence(arguments, "--edit", "info", "--set", "title=Pilot");
     }
 
     [Fact]
@@ -600,8 +657,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var doubleEpisodePath = Path.Combine(seasonDirectory, "Beispielserie - S2014E05-E06 - Rififi.mkv");
         CreateFile(seasonDirectory, Path.GetFileName(outputPath), "archive-single");
         CreateFile(seasonDirectory, Path.GetFileName(doubleEpisodePath), "archive-double");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
+            "Rififi (2) ... es geht weiter (mit Audiodeskription)",
             CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "Deutsch - HD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
@@ -651,8 +709,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             "Season 2015",
             "Beispielserie - S2015E02-E03 - Olympische Rekorde.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
+            "Olympische Rekorde",
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
             CreateSubtitleTrack(2, "SubStationAlpha", trackName: "Deutsch (hörgeschädigte) - SSA", isHearingImpaired: true),
@@ -812,8 +871,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             "Specials",
             "Neues aus Büttenwarder - S00E22 - Büttenwarder mobil - Killerkralles Mondn Beik.mkv");
         CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
-        FakeMkvMergeTestHelper.WriteProbeFile(
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
+            "Büttenwarder mobil - Killerkralles Mondn Beik",
             CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de", trackName: "Deutsch - HD - H.264"),
             CreateAudioTrack(1, "AAC", language: "de", trackName: "Deutsch - AAC"));
 

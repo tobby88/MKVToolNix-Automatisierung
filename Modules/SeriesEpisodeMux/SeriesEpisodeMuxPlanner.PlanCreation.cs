@@ -169,7 +169,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             primaryAudioLanguage,
             primaryAudioCodecLabel,
             audioDescriptionMetadata);
-        var mkvPropEditPath = archiveDecision.TrackHeaderEdits.Count > 0
+        var mkvPropEditPath = archiveDecision.TrackHeaderEdits.Count > 0 || archiveDecision.ContainerTitleEdit is not null
             ? _locator.FindMkvPropEditPath()
             : null;
 
@@ -196,6 +196,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.WorkingCopy,
             mkvPropEditPath,
             archiveDecision.TrackHeaderEdits,
+            archiveDecision.ContainerTitleEdit,
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             request.OriginalLanguage);
     }

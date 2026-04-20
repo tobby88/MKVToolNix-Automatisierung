@@ -7,11 +7,14 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
-    private static IReadOnlyList<string> BuildTrackHeaderNormalizationOnlyNotes(ContainerTrackMetadata? bestExistingVideo)
+    private static IReadOnlyList<string> BuildTrackHeaderNormalizationOnlyNotes(
+        ContainerTrackMetadata? bestExistingVideo,
+        bool hasTrackHeaderEdits,
+        bool hasContainerTitleEdit)
     {
         return
         [
-            "Archiv-MKV bereits vorhanden. Die Datei bleibt inhaltlich unverändert; nur die Benennungen der relevanten Spuren werden direkt im Matroska-Header vereinheitlicht.",
+            $"Archiv-MKV bereits vorhanden. Die Datei bleibt inhaltlich unverändert; {BuildDirectHeaderNormalizationDescription(hasTrackHeaderEdits, hasContainerTitleEdit)}.",
             bestExistingVideo is null
                 ? "Die vorhandene Archivdatei liefert weiterhin alle Hauptspuren."
                 : $"Vorhandene Videospur wird beibehalten: {bestExistingVideo.VideoWidth}px / {bestExistingVideo.CodecLabel}.",
@@ -26,7 +29,8 @@ public sealed partial class SeriesArchiveService
         bool needsAdditionalVideo,
         bool needsVideoCleanup,
         bool needsManualAttachments,
-        bool requiresRelevantTrackNameNormalization,
+        bool hasTrackHeaderEdits,
+        bool hasContainerTitleEdit,
         IReadOnlyList<SubtitleFile> suppressedExternalSubtitlePlans)
     {
         var notes = new List<string>
@@ -47,9 +51,9 @@ public sealed partial class SeriesArchiveService
             && !needsAdditionalVideo
             && !needsVideoCleanup
             && !needsManualAttachments
-            && requiresRelevantTrackNameNormalization)
+            && (hasTrackHeaderEdits || hasContainerTitleEdit))
         {
-            notes.Add("Alle Inhalte sind bereits vorhanden. Es werden nur die Benennungen der relevanten Spuren vereinheitlicht.");
+            notes.Add($"Alle Inhalte sind bereits vorhanden. {BuildDirectHeaderNormalizationDescription(hasTrackHeaderEdits, hasContainerTitleEdit, capitalizeFirstLetter: true)}.");
         }
 
         if (suppressedExternalSubtitlePlans.Count > 0)
@@ -76,6 +80,36 @@ public sealed partial class SeriesArchiveService
         return occupiedSlots.Count == 1
             ? $"Nicht zusätzlich übernommen wurde ein externer Untertitel für den bereits belegten Slot {occupiedSlots[0]}."
             : $"Nicht zusätzlich übernommen wurden externe Untertitel für bereits belegte Slots: {string.Join(", ", occupiedSlots)}.";
+    }
+
+    private static ContainerTitleEditOperation? BuildRelevantContainerTitleEdit(string? currentTitle, string expectedTitle)
+    {
+        var normalizedCurrentTitle = (currentTitle ?? string.Empty).Trim();
+        var normalizedExpectedTitle = expectedTitle.Trim();
+        return string.Equals(normalizedCurrentTitle, normalizedExpectedTitle, StringComparison.Ordinal)
+            ? null
+            : new ContainerTitleEditOperation(normalizedCurrentTitle, normalizedExpectedTitle);
+    }
+
+    private static string BuildDirectHeaderNormalizationDescription(
+        bool hasTrackHeaderEdits,
+        bool hasContainerTitleEdit,
+        bool capitalizeFirstLetter = false)
+    {
+        var text = (hasTrackHeaderEdits, hasContainerTitleEdit) switch
+        {
+            (true, true) => "es werden nur der MKV-Titel und die Benennungen der relevanten Spuren direkt im Matroska-Header vereinheitlicht",
+            (true, false) => "es werden nur die Benennungen der relevanten Spuren direkt im Matroska-Header vereinheitlicht",
+            (false, true) => "es wird nur der MKV-Titel direkt im Matroska-Header vereinheitlicht",
+            _ => "es werden nur Header-Metadaten direkt im Matroska-Header vereinheitlicht"
+        };
+
+        if (!capitalizeFirstLetter || string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
     private static EpisodeUsageSummary BuildReuseOnlySkipUsageSummary(

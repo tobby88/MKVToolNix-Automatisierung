@@ -139,6 +139,48 @@ public sealed class SeriesEpisodeMuxPlanTests
         Assert.Equal("mkvpropedit", plan.ExecutionToolDisplayName);
     }
 
+    [Fact]
+    public void BuildArguments_UsesMkvPropEditForContainerTitleNormalization()
+    {
+        var plan = new SeriesEpisodeMuxPlan(
+            mkvMergePath: @"C:\Tools\mkvmerge.exe",
+            outputFilePath: @"C:\Temp\output.mkv",
+            title: "Pilot",
+            videoSources:
+            [
+                new VideoSourcePlan(@"C:\Temp\output.mkv", 0, "Deutsch - FHD - H.264", IsDefaultTrack: true)
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(@"C:\Temp\output.mkv", 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null,
+            mkvPropEditPath: @"C:\Tools\mkvpropedit.exe",
+            containerTitleEdit: new ContainerTitleEditOperation("Alter Titel", "Pilot"),
+            notes: []);
+
+        var arguments = plan.BuildArguments();
+
+        Assert.Equal(@"C:\Temp\output.mkv", arguments[0]);
+        AssertContainsSequence(arguments, "--edit", "info", "--set", "title=Pilot");
+        Assert.True(plan.HasHeaderEdits);
+        Assert.False(plan.HasTrackHeaderEdits);
+    }
+
     private static SeriesEpisodeMuxPlan CreatePlan(IReadOnlyList<SubtitleFile> subtitleFiles)
     {
         return new SeriesEpisodeMuxPlan(

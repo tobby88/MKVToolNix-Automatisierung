@@ -108,7 +108,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             }
 
             SetStatus(
-                _currentPlan.HasTrackHeaderEdits
+                _currentPlan.HasHeaderEdits
                     ? "Header-Metadaten werden aktualisiert..."
                     : "Muxing läuft...",
                 0);
@@ -121,13 +121,13 @@ internal sealed partial class SingleEpisodeMuxViewModel
             if (result.ExitCode == 0 && !result.HasWarning)
             {
                 SetStatus(
-                    _currentPlan.HasTrackHeaderEdits
+                    _currentPlan.HasHeaderEdits
                         ? "Header-Metadaten erfolgreich aktualisiert"
                         : "Muxing erfolgreich abgeschlossen",
                     100);
                 _dialogService.ShowInfo(
                     "Erfolg",
-                    _currentPlan.HasTrackHeaderEdits
+                    _currentPlan.HasHeaderEdits
                         ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{_currentPlan.OutputFilePath}"
                         : $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
                 PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: false);
@@ -137,13 +137,13 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
             {
                 SetStatus(
-                    _currentPlan.HasTrackHeaderEdits
+                    _currentPlan.HasHeaderEdits
                         ? "Header-Metadaten mit Warnungen aktualisiert"
                         : "Muxing mit Warnungen abgeschlossen",
                     100);
                 _dialogService.ShowWarning(
                     "Warnung",
-                    _currentPlan.HasTrackHeaderEdits
+                    _currentPlan.HasHeaderEdits
                         ? $"Die Header-Metadaten wurden aktualisiert, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}"
                         : $"Die MKV wurde erstellt, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
                 PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: true);
@@ -152,7 +152,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             else
             {
                 SetStatus(
-                    _currentPlan.HasTrackHeaderEdits
+                    _currentPlan.HasHeaderEdits
                         ? $"Header-Aktualisierung fehlgeschlagen (Exit-Code {result.ExitCode})"
                         : $"Muxing fehlgeschlagen (Exit-Code {result.ExitCode})",
                     0);
@@ -287,9 +287,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
             return;
         }
 
-        if (plan.HasTrackHeaderEdits)
+        if (plan.HasHeaderEdits)
         {
-            OutputTargetStatusText = "Am Ziel liegt bereits eine passende MKV. Es werden nur die relevanten Spurnamen direkt im Matroska-Header vereinheitlicht; eine Arbeitskopie und ein kompletter Remux sind nicht nötig.";
+            OutputTargetStatusText = plan.ContainerTitleEdit is null
+                ? "Am Ziel liegt bereits eine passende MKV. Es werden nur die relevanten Spurnamen direkt im Matroska-Header vereinheitlicht; eine Arbeitskopie und ein kompletter Remux sind nicht nötig."
+                : "Am Ziel liegt bereits eine passende MKV. Es werden nur Header-Metadaten wie MKV-Titel und relevante Spurnamen direkt im Matroska-Header vereinheitlicht; eine Arbeitskopie und ein kompletter Remux sind nicht nötig.";
             return;
         }
 
@@ -348,7 +350,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         _ = Application.Current.Dispatcher.BeginInvoke(() =>
         {
             var progressValue = update.ProgressPercent ?? ProgressValue;
-            var baseText = _currentPlan?.HasTrackHeaderEdits == true
+            var baseText = _currentPlan?.HasHeaderEdits == true
                 ? "Header-Metadaten werden aktualisiert..."
                 : "Muxing läuft...";
             var statusText = update.ProgressPercent is int progressPercent

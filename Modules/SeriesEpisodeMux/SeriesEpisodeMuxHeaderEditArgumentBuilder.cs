@@ -6,13 +6,13 @@ namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 internal static class SeriesEpisodeMuxHeaderEditArgumentBuilder
 {
     /// <summary>
-    /// Erzeugt die vollständige Argumentliste für direkte Tracknamen-Anpassungen an einer vorhandenen Zieldatei.
+    /// Erzeugt die vollständige Argumentliste für direkte Header-Anpassungen an einer vorhandenen Zieldatei.
     /// </summary>
     /// <param name="plan">Vollständig aufgelöster Plan mit direkten Header-Anpassungen.</param>
     /// <returns>Argumentliste für <c>mkvpropedit.exe</c>.</returns>
     public static IReadOnlyList<string> Build(SeriesEpisodeMuxPlan plan)
     {
-        if (!plan.HasTrackHeaderEdits)
+        if (!plan.HasHeaderEdits)
         {
             throw new InvalidOperationException("Für diesen Plan sind keine direkten Header-Anpassungen hinterlegt.");
         }
@@ -21,6 +21,17 @@ internal static class SeriesEpisodeMuxHeaderEditArgumentBuilder
         {
             plan.OutputFilePath
         };
+
+        if (plan.ContainerTitleEdit is not null)
+        {
+            arguments.AddRange(
+            [
+                "--edit",
+                "info",
+                "--set",
+                $"title={plan.ContainerTitleEdit.ExpectedTitle}"
+            ]);
+        }
 
         foreach (var headerEdit in plan.TrackHeaderEdits)
         {

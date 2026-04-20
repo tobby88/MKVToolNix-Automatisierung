@@ -39,6 +39,11 @@ public sealed class SeriesEpisodeMuxPlan
     /// Zieldatei inhaltlich unverändert und es werden nur ihre relevanten Tracknamen direkt
     /// im Header vereinheitlicht.
     /// </param>
+    /// <param name="containerTitleEdit">
+    /// Optionale direkte Angleichung des MKV-Titels im vorhandenen Zielcontainer. Dieser
+    /// Sonderpfad wird nur genutzt, wenn inhaltlich kein Remux nötig ist und lediglich
+    /// Header-Metadaten vereinheitlicht werden müssen.
+    /// </param>
     /// <param name="notes">Zusätzliche Hinweise für GUI und Vorschau.</param>
     /// <param name="originalLanguage">
     /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
@@ -67,6 +72,7 @@ public sealed class SeriesEpisodeMuxPlan
         FileCopyPlan? workingCopy,
         string? mkvPropEditPath = null,
         IReadOnlyList<TrackHeaderEditOperation>? trackHeaderEdits = null,
+        ContainerTitleEditOperation? containerTitleEdit = null,
         IReadOnlyList<string>? notes = null,
         string? originalLanguage = null)
     {
@@ -80,7 +86,8 @@ public sealed class SeriesEpisodeMuxPlan
             throw new ArgumentException("Mindestens eine normale Audiospur muss vorhanden sein.", nameof(audioSources));
         }
 
-        if (trackHeaderEdits is { Count: > 0 } && string.IsNullOrWhiteSpace(mkvPropEditPath))
+        if ((trackHeaderEdits is { Count: > 0 } || containerTitleEdit is not null)
+            && string.IsNullOrWhiteSpace(mkvPropEditPath))
         {
             throw new ArgumentException("Für direkte Header-Anpassungen muss ein mkvpropedit-Pfad vorhanden sein.", nameof(mkvPropEditPath));
         }
@@ -110,6 +117,7 @@ public sealed class SeriesEpisodeMuxPlan
         WorkingCopy = workingCopy;
         MkvPropEditPath = mkvPropEditPath;
         TrackHeaderEdits = trackHeaderEdits ?? [];
+        ContainerTitleEdit = containerTitleEdit;
         Notes = notes ?? [];
         OriginalLanguage = string.IsNullOrWhiteSpace(originalLanguage) ? null : originalLanguage.Trim();
     }
@@ -147,6 +155,7 @@ public sealed class SeriesEpisodeMuxPlan
         WorkingCopy = null;
         MkvPropEditPath = null;
         TrackHeaderEdits = [];
+        ContainerTitleEdit = null;
         Notes = notes;
         OriginalLanguage = null;
     }
@@ -182,9 +191,14 @@ public sealed class SeriesEpisodeMuxPlan
     public bool HasTrackHeaderEdits => TrackHeaderEdits.Count > 0;
 
     /// <summary>
+    /// Kennzeichnet einen Plan, der ausschließlich vorhandene Header-Metadaten direkt aktualisiert.
+    /// </summary>
+    public bool HasHeaderEdits => HasTrackHeaderEdits || ContainerTitleEdit is not null;
+
+    /// <summary>
     /// Liefert den Pfad zum für diesen Plan tatsächlich auszuführenden MKVToolNix-Werkzeug.
     /// </summary>
-    public string ExecutionToolPath => HasTrackHeaderEdits
+    public string ExecutionToolPath => HasHeaderEdits
         ? MkvPropEditPath ?? throw new InvalidOperationException("Für direkte Header-Anpassungen fehlt der mkvpropedit-Pfad.")
         : MkvMergePath;
 
@@ -299,6 +313,11 @@ public sealed class SeriesEpisodeMuxPlan
     public ArchiveUsageComparison UsageComparison { get; }
 
     /// <summary>
+    /// Optionale direkte Angleichung des MKV-Titels im vorhandenen Zielcontainer.
+    /// </summary>
+    public ContainerTitleEditOperation? ContainerTitleEdit { get; }
+
+    /// <summary>
     /// Optionale direkte Header-Anpassungen für den vorhandenen Zielcontainer.
     /// </summary>
     public IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits { get; }
@@ -346,7 +365,7 @@ public sealed class SeriesEpisodeMuxPlan
     /// <returns>Argumentliste für das zum Plan passende MKVToolNix-Werkzeug.</returns>
     public IReadOnlyList<string> BuildArguments()
     {
-        return HasTrackHeaderEdits
+        return HasHeaderEdits
             ? SeriesEpisodeMuxHeaderEditArgumentBuilder.Build(this)
             : SeriesEpisodeMuxArgumentBuilder.Build(this);
     }

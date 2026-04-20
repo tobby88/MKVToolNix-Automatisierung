@@ -43,6 +43,7 @@ public sealed partial class SeriesArchiveService
             plannedVideos,
             preferredExistingVideoTracks,
             existingArchive.VideoTracks);
+        var containerTitleEdit = BuildRelevantContainerTitleEdit(existingArchive.Container.Title, request.Title);
         var attachmentReusePlan = await BuildAttachmentReusePlanAsync(
             mkvMergePath,
             outputPath,
@@ -64,6 +65,7 @@ public sealed partial class SeriesArchiveService
                 bestExistingVideo,
                 existingAudioDescription,
                 workingCopyPlan,
+                containerTitleEdit,
                 attachmentReusePlan);
         }
 
@@ -86,6 +88,7 @@ public sealed partial class SeriesArchiveService
                 bestExistingVideo,
                 existingAudioDescription,
                 workingCopyPlan,
+                containerTitleEdit,
                 attachmentReusePlan)
             : BuildDecisionReplacingExistingPrimary(
                 outputPath,
@@ -362,6 +365,7 @@ public sealed partial class SeriesArchiveService
         ContainerTrackMetadata? bestExistingVideo,
         ContainerTrackMetadata? existingAudioDescription,
         FileCopyPlan workingCopyPlan,
+        ContainerTitleEditOperation? containerTitleEdit,
         AttachmentReusePlan attachmentReusePlan)
     {
         var retainedNormalAudioTracks = SelectRetainedExistingNormalAudioTracksForSelectedFreshVideos(
@@ -393,14 +397,14 @@ public sealed partial class SeriesArchiveService
             existingAudioDescription,
             existingArchive.SubtitleTracks,
             subtitlePlan.EmbeddedPlans);
-        var requiresRelevantTrackNameNormalization = relevantTrackHeaderEdits.Count > 0;
+        var requiresRelevantHeaderNormalization = relevantTrackHeaderEdits.Count > 0 || containerTitleEdit is not null;
 
         if (!needsAudioDescription
             && !needsSubtitleSupplement
             && !needsAdditionalVideo
             && !needsVideoCleanup
             && !needsManualAttachments
-            && !requiresRelevantTrackNameNormalization)
+            && !requiresRelevantHeaderNormalization)
         {
             return ArchiveIntegrationDecision.CreateSkip(
                 outputPath,
@@ -423,7 +427,7 @@ public sealed partial class SeriesArchiveService
             && !needsAdditionalVideo
             && !needsVideoCleanup
             && !needsManualAttachments
-            && requiresRelevantTrackNameNormalization)
+            && requiresRelevantHeaderNormalization)
         {
             return new ArchiveIntegrationDecision(
                 OutputFilePath: outputPath,
@@ -447,8 +451,12 @@ public sealed partial class SeriesArchiveService
                 FallbackToRequestAttachments: false,
                 PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
                 UsageComparison: ArchiveUsageComparison.Empty,
+                ContainerTitleEdit: containerTitleEdit,
                 TrackHeaderEdits: relevantTrackHeaderEdits,
-                Notes: BuildTrackHeaderNormalizationOnlyNotes(bestExistingVideo)
+                Notes: BuildTrackHeaderNormalizationOnlyNotes(
+                    bestExistingVideo,
+                    relevantTrackHeaderEdits.Count > 0,
+                    containerTitleEdit is not null)
                     .Concat(BuildSubtitleSuppressionNotes(subtitlePlan))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList());
@@ -489,6 +497,7 @@ public sealed partial class SeriesArchiveService
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
+            ContainerTitleEdit: null,
             TrackHeaderEdits: [],
             SkipUsageSummary: null,
             Notes: BuildKeepExistingPrimaryNotes(
@@ -498,7 +507,8 @@ public sealed partial class SeriesArchiveService
                 needsAdditionalVideo,
                 needsVideoCleanup,
                 needsManualAttachments,
-                requiresRelevantTrackNameNormalization,
+                relevantTrackHeaderEdits.Count > 0,
+                containerTitleEdit is not null,
                 subtitlePlan.SuppressedExternalPlans));
     }
 
@@ -595,6 +605,7 @@ public sealed partial class SeriesArchiveService
             FallbackToRequestAttachments: false,
             PreservedAttachmentNames: attachmentReusePlan.PreservedAttachmentNames,
             UsageComparison: usageComparison,
+            ContainerTitleEdit: null,
             TrackHeaderEdits: [],
             Notes:
             [

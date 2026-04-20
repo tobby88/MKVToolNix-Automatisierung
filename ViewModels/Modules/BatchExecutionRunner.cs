@@ -306,7 +306,7 @@ internal sealed class BatchExecutionRunner
     {
         return result.HasWarning
             ? $"Warnung ({plan.ExecutionToolDisplayName} meldet Warnungen)"
-            : plan.HasTrackHeaderEdits
+            : plan.HasHeaderEdits
                 ? "Warnung (Header aktualisiert, Exit-Code 1)"
                 : "Warnung (Datei erstellt, Exit-Code 1)";
     }

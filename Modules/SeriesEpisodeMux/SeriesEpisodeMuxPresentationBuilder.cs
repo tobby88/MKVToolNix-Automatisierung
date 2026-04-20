@@ -136,9 +136,17 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             builder.AppendLine($"Untertitel: {(plan.SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", plan.SubtitleFiles.Select(file => file.PreviewLabel)))}");
             builder.AppendLine($"Anhänge: {BuildAttachmentPreview(plan)}");
 
-            if (plan.HasTrackHeaderEdits)
+            if (plan.HasHeaderEdits)
             {
                 builder.AppendLine("Direkte Header-Anpassungen:");
+                if (plan.ContainerTitleEdit is not null)
+                {
+                    var currentTitle = string.IsNullOrWhiteSpace(plan.ContainerTitleEdit.CurrentTitle)
+                        ? "(leer)"
+                        : plan.ContainerTitleEdit.CurrentTitle;
+                    builder.AppendLine($"- MKV-Titel: {currentTitle} -> {plan.ContainerTitleEdit.ExpectedTitle}");
+                }
+
                 foreach (var headerEdit in plan.TrackHeaderEdits)
                 {
                     var currentName = string.IsNullOrWhiteSpace(headerEdit.CurrentTrackName)
@@ -177,11 +185,11 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
     private static (string ArchiveAction, string ArchiveDetails) BuildArchiveStatus(SeriesEpisodeMuxPlan plan)
     {
-        if (plan.HasTrackHeaderEdits)
+        if (plan.HasHeaderEdits)
         {
             return (
                 "Zieldatei bleibt inhaltlich unverändert",
-                "Es werden nur die Benennungen der relevanten Spuren direkt im Header vereinheitlicht");
+                BuildHeaderEditArchiveDetails(plan));
         }
 
         var archiveAction = plan.WorkingCopy is not null
@@ -275,5 +283,18 @@ internal static class SeriesEpisodeMuxPresentationBuilder
     private static string BuildExistingTargetDisplayText(string value)
     {
         return $"Aus Zieldatei: {value}";
+    }
+
+    private static string BuildHeaderEditArchiveDetails(SeriesEpisodeMuxPlan plan)
+    {
+        var hasTitleEdit = plan.ContainerTitleEdit is not null;
+        var hasTrackEdits = plan.HasTrackHeaderEdits;
+
+        return (hasTitleEdit, hasTrackEdits) switch
+        {
+            (true, true) => "Es werden nur der MKV-Titel und die Benennungen der relevanten Spuren direkt im Header vereinheitlicht",
+            (true, false) => "Es wird nur der MKV-Titel direkt im Header vereinheitlicht",
+            _ => "Es werden nur die Benennungen der relevanten Spuren direkt im Header vereinheitlicht"
+        };
     }
 }
