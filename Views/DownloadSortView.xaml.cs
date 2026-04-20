@@ -17,6 +17,10 @@ public partial class DownloadSortView : UserControl
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Leitet <kbd>Space</kbd> für die Auswahlspalte an den gemeinsamen DataGrid-Helfer weiter.
+    /// Dadurch verhalten sich Einsortieren und Batch-Tabelle bei der Tastaturbedienung konsistent.
+    /// </summary>
     private void DownloadItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is DataGrid dataGrid && DataContext is DownloadSortViewModel viewModel)
@@ -28,6 +32,9 @@ public partial class DownloadSortView : UserControl
         }
     }
 
+    /// <summary>
+    /// Macht die Auswahlspalte im Einsortieren-Modul per einfachem Linksklick bedienbar.
+    /// </summary>
     private void DownloadItemsGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is DataGrid dataGrid && DataContext is DownloadSortViewModel viewModel)

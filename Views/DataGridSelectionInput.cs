@@ -108,6 +108,11 @@ internal static class DataGridSelectionInput
         return true;
     }
 
+    /// <summary>
+    /// Ermittelt die fachlich aktive Zeile und Spalte aus dem ursprünglichen WPF-Ereignis.
+    /// Die Information reicht aus, um bei Mausklicks Auswahl und CurrentCell synchron auf
+    /// denselben Batch-/Download-Eintrag zu setzen, ohne einen separaten Editpfad zu öffnen.
+    /// </summary>
     private static DataGridSelectionTarget CaptureSelectionTarget(DataGrid dataGrid, DependencyObject? source)
     {
         var row = FindVisualParent<DataGridRow>(source);
@@ -117,6 +122,10 @@ internal static class DataGridSelectionInput
         return new DataGridSelectionTarget(item, column);
     }
 
+    /// <summary>
+    /// Bearbeitbare Eingabeelemente behalten ihr Standardverhalten. Die Auswahl-Shortcuts gelten
+    /// nur fuer reine Zeilenoberflächen, nicht etwa fuer TextBoxen in Edit-Templates.
+    /// </summary>
     private static bool IsEditingElement(DependencyObject? source)
     {
         return FindVisualParent<TextBoxBase>(source) is not null
@@ -124,6 +133,11 @@ internal static class DataGridSelectionInput
             || FindVisualParent<PasswordBox>(source) is not null;
     }
 
+    /// <summary>
+    /// Legt den Tastaturfokus nach einem expliziten Toggle wieder auf das Grid selbst.
+    /// Seit dem Fix in <c>BatchEpisodeItemViewModel.OnPropertyChanged</c> ist kein zusätzlicher
+    /// Dispatcher-Nachlauf mehr nötig; das Grid darf direkt fokussiert bleiben.
+    /// </summary>
     private static void FocusGrid(DataGrid dataGrid)
     {
         dataGrid.Focus();
@@ -137,6 +151,9 @@ internal static class DataGridSelectionInput
 
     private readonly record struct DataGridSelectionTarget(object? Item, DataGridColumn? Column);
 
+    /// <summary>
+    /// Läuft die visuelle Elternkette nach oben, bis ein passendes WPF-Element gefunden wird.
+    /// </summary>
     private static T? FindVisualParent<T>(DependencyObject? current)
         where T : DependencyObject
     {

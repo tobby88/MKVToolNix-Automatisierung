@@ -92,6 +92,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         _isSelected = isSelected;
     }
 
+    /// <summary>
+    /// Kennzeichnet, ob die Episode aktuell für Pflichtprüfungen oder Batch-Ausführung markiert ist.
+    /// </summary>
     public bool IsSelected
     {
         get => _isSelected;
@@ -107,10 +110,16 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Liefert den sichtbaren Batch-Status einschließlich optionaler textlicher Override-Fälle.
+    /// </summary>
     public string Status => string.IsNullOrWhiteSpace(_statusTextOverride)
         ? EpisodeEditTextBuilder.BuildBatchStatusText(StatusKind)
         : _statusTextOverride;
 
+    /// <summary>
+    /// Fachlicher Statusschlüssel der Batch-Zeile. Daraus werden Anzeige, Sortierung und Badge-Farben abgeleitet.
+    /// </summary>
     public BatchEpisodeStatusKind StatusKind
     {
         get => _statusKind;
@@ -132,8 +141,14 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Vereinfacht Fehlerfilter und Fehler-Badge-Logik in der Batch-Liste.
+    /// </summary>
     public bool HasErrorStatus => StatusKind == BatchEpisodeStatusKind.Error;
 
+    /// <summary>
+    /// Sortierschlüssel für die Status-basierte Batch-Sortierung.
+    /// </summary>
     public int StatusSortKey => (int)StatusKind;
 
     public string StatusBadgeBackground => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBackground(StatusKind);
@@ -142,8 +157,15 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
 
     public string StatusTooltip => EpisodeEditTextBuilder.BuildBatchStatusTooltip(StatusKind, Status);
 
+    /// <summary>
+    /// Kennzeichnet den Spezialfall, dass am Ziel bereits eine Bibliotheksdatei liegt, die fachlich
+    /// als Vergleichs- und Wiederverwendungsbasis behandelt werden muss.
+    /// </summary>
     internal bool HasArchiveComparisonTarget => _isArchiveTargetPath && ArchiveState == EpisodeArchiveState.Existing;
 
+    /// <summary>
+    /// Setzt fachlichen Status und optionalen Anzeige-Override konsistent.
+    /// </summary>
     public void SetStatus(BatchEpisodeStatusKind statusKind, string? statusText = null)
     {
         var previousStatus = Status;
@@ -164,6 +186,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Baut eine normale Batch-Zeile aus einem erfolgreichen Detection- und Metadaten-Ergebnis auf.
+    /// </summary>
     public static BatchEpisodeItemViewModel CreateFromDetection(
         string requestedMainVideoPath,
         EpisodeMetadataGuess localGuess,
@@ -216,6 +241,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return item;
     }
 
+    /// <summary>
+    /// Baut einen rein fehlerhaften Listenplatzhalter, wenn bereits während Scan oder Detection
+    /// keine sinnvoll bearbeitbare Episode erzeugt werden konnte.
+    /// </summary>
     public static BatchEpisodeItemViewModel CreateErrorItem(string requestedMainVideoPath, string errorMessage)
     {
         return new BatchEpisodeItemViewModel(
@@ -251,6 +280,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             notes: [errorMessage]);
     }
 
+    /// <summary>
+    /// Übernimmt ein neues Detection-Ergebnis in eine bestehende Batch-Zeile und markiert sie wieder als ausgewählt.
+    /// </summary>
     public void ApplyDetection(
         string requestedMainVideoPath,
         EpisodeMetadataGuess localGuess,
@@ -300,6 +332,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         base.SetAutomaticOutputPath(outputPath);
     }
 
+    /// <summary>
+    /// Setzt einen manuell gewählten Ausgabepfad zusammen mit seinem Archiv-Kontext.
+    /// </summary>
     public void SetOutputPathWithContext(string outputPath, bool isArchiveTargetPath)
     {
         _isArchiveTargetPath = isArchiveTargetPath;
@@ -307,6 +342,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         ApplyArchiveState(refreshArchiveState: false);
     }
 
+    /// <summary>
+    /// Setzt einen automatisch bestimmten Ausgabepfad zusammen mit seinem Archiv-Kontext.
+    /// Der Archivvergleich wird nur dann neu berechnet, wenn sich der effektive Zielpfad wirklich geändert hat.
+    /// </summary>
     public void SetAutomaticOutputPathWithContext(string outputPath, bool isArchiveTargetPath)
     {
         var previousOutputPath = OutputPath;
@@ -342,6 +381,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         IsSelected = true;
     }
 
+    /// <summary>
+    /// Aktualisiert Status und Archivpräsenz, wenn sich die Zieldatei außerhalb der Zeile geändert hat.
+    /// </summary>
     public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null, string? statusText = null)
     {
         if (statusText is null
@@ -354,6 +396,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         ApplyArchiveState(statusOverride, preservePlanSummary: true, statusText: statusText);
     }
 
+    /// <summary>
+    /// Leitet aus Archivlage, Hauptquelle und offenen Planhinweisen den aktuellen Batch-Status ab.
+    /// </summary>
     private void ApplyArchiveState(
         BatchEpisodeStatusKind? statusOverride = null,
         bool preservePlanSummary = false,
@@ -381,6 +426,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Erzeugt eine erste textuelle Plan-Zusammenfassung, solange der eigentliche Archivvergleich
+    /// noch nicht durchgelaufen ist.
+    /// </summary>
     private static string BuildPendingPlanSummary(bool outputExists, bool isArchiveTargetPath, bool hasPrimaryVideoSource)
     {
         if (!hasPrimaryVideoSource)
@@ -403,6 +452,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         return "Am Ziel liegt noch keine MKV. Neue Datei wird erstellt.";
     }
 
+    /// <summary>
+    /// Erzeugt die analoge Pending-Zusammenfassung für die sichtbare Verwendungsübersicht.
+    /// </summary>
     private static EpisodeUsageSummary BuildPendingUsageSummary(bool outputExists, bool isArchiveTargetPath, bool hasPrimaryVideoSource)
     {
         if (!hasPrimaryVideoSource)
@@ -435,6 +487,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             "Neue MKV wird erstellt");
     }
 
+    /// <summary>
+    /// Leitet den Standardstatus aus Archivkontext, Hauptquelle und offenen fachlichen Hinweisen ab.
+    /// </summary>
     private static BatchEpisodeStatusKind ResolveDefaultStatus(
         bool hasArchiveComparisonTarget,
         bool hasPrimaryVideoSource,
@@ -455,6 +510,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             : BatchEpisodeStatusKind.Warning;
     }
 
+    /// <summary>
+    /// Formuliert den sichtbaren Warntext für Zusatzmaterial ohne frische Hauptquelle.
+    /// </summary>
     private string BuildMissingPrimaryVideoStatusText()
     {
         return HasArchiveComparisonTarget
@@ -462,6 +520,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             : "Warnung (nur Zusatzmaterial ohne vorhandene Bibliotheks-MKV)";
     }
 
+    /// <summary>
+    /// Liefert den aktuell sichtbaren Status-Override zurück, falls einer gesetzt ist.
+    /// </summary>
     private string? GetCurrentStatusTextOverride()
     {
         var defaultStatusText = EpisodeEditTextBuilder.BuildBatchStatusText(StatusKind);
@@ -470,6 +531,11 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             : Status;
     }
 
+    /// <summary>
+    /// Reagiert auf manuelle Metadatenänderungen und markiert diese als bewusste lokale Korrektur.
+    /// Der <see cref="CallerMemberNameAttribute"/> ist hier entscheidend: Ohne ihn würden reine
+    /// Auswahl-Toggles als <c>null</c>-PropertyChange hochlaufen und unnötige Plan-Refreshes auslösen.
+    /// </summary>
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         base.OnPropertyChanged(propertyName);
@@ -485,6 +551,9 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Entfernt eine vorhandene TVDB-Bindung, sobald sichtbare Kerndaten der Episode manuell überschrieben wurden.
+    /// </summary>
     private void HandleManualMetadataOverride()
     {
         if (!string.IsNullOrWhiteSpace(MetadataStatusText) || RequiresMetadataReview)
@@ -494,6 +563,10 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Bündelt Metadatenänderungen, bei denen keine rekursive Reaktion auf die eigenen Property-Changes
+    /// ausgelöst werden soll.
+    /// </summary>
     private void ApplySharedMetadataState(Action applyAction)
     {
         _isApplyingSharedMetadataState = true;

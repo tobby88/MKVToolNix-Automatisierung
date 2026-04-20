@@ -30,6 +30,10 @@ public partial class BatchMuxView : UserControl
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Leitet <kbd>Space</kbd> in der Episodenliste an den gemeinsamen Grid-Helfer weiter.
+    /// Die eigentliche Auswahländerung bleibt im ViewModel; die View kapselt nur das WPF-Tastaturrouting.
+    /// </summary>
     private void EpisodeItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is DataGrid dataGrid && DataContext is BatchMuxViewModel viewModel)
@@ -41,6 +45,10 @@ public partial class BatchMuxView : UserControl
         }
     }
 
+    /// <summary>
+    /// Macht die Auswahlspalte per einfachem Linksklick bedienbar, ohne dass zuerst eine DataGrid-Zelle
+    /// in den Vordergrund geholt werden muss.
+    /// </summary>
     private void EpisodeItemsGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is DataGrid dataGrid && DataContext is BatchMuxViewModel viewModel)
@@ -53,6 +61,10 @@ public partial class BatchMuxView : UserControl
         }
     }
 
+    /// <summary>
+    /// Doppelklicks auf die Auswahlspalte sollen nur die Auswahl ändern, aber keine weiteren Aktionen
+    /// wie Quellenprüfung, TVDB-Dialog oder Detailansicht auslösen.
+    /// </summary>
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is DataGrid
@@ -87,6 +99,11 @@ public partial class BatchMuxView : UserControl
         DetailsExpander.BringIntoView();
     }
 
+    /// <summary>
+    /// Spiegelt während eines laufenden Batchs die aktuell verarbeitete Episode im sichtbaren
+    /// Tabellenfenster wider. Im interaktiven Zustand bleibt die Tabelle dagegen komplett in Ruhe,
+    /// damit normale Auswahl- und Tastaturbedienung keine Scrollsprünge auslöst.
+    /// </summary>
     private void EpisodeItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (sender is not DataGrid dataGrid
@@ -109,6 +126,9 @@ public partial class BatchMuxView : UserControl
         }));
     }
 
+    /// <summary>
+    /// Hält das sichtbare Batch-Protokoll automatisch am Ende, sobald neuer Text aus Scan oder Mux ankommt.
+    /// </summary>
     private void BatchLogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
         // Das Batch-Protokoll ist ein fortlaufender Sitzungslog. Neue Zeilen sollen beim
@@ -116,11 +136,18 @@ public partial class BatchMuxView : UserControl
         ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(sender as TextBox);
     }
 
+    /// <summary>
+    /// Scrollt beim Öffnen des Protokolls direkt zur neuesten Zeile.
+    /// </summary>
     private void BatchLogExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
         ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(BatchLogTextBox);
     }
 
+    /// <summary>
+    /// Schaltet den unteren Bereich in den Bearbeitungsmodus um. Dabei wird nur die Verwendungsübersicht
+    /// ausgeblendet; der Hauptsplitter zwischen Tabelle und Details bleibt bewusst erhalten.
+    /// </summary>
     private void DetailsExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
         // Der grobe Trenner bleibt zwischen Episodenliste und gesamtem Detailbereich erhalten.
@@ -140,6 +167,9 @@ public partial class BatchMuxView : UserControl
         }));
     }
 
+    /// <summary>
+    /// Stellt nach dem Schließen der Detailkorrekturen die normale Zweiteilung des unteren Bereichs wieder her.
+    /// </summary>
     private void DetailsExpander_OnCollapsed(object sender, RoutedEventArgs e)
     {
         // Nach dem Schliessen stellen wir die normale Uebersicht wieder her.
@@ -155,6 +185,9 @@ public partial class BatchMuxView : UserControl
         }
     }
 
+    /// <summary>
+    /// Hält die erweiterte Detailfläche bei Größenänderungen des Hosts synchron.
+    /// </summary>
     private void DetailsHost_OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (!DetailsExpander.IsExpanded)
@@ -174,11 +207,17 @@ public partial class BatchMuxView : UserControl
         DetailsExpander.Height = Math.Max(0d, DetailsHost.ActualHeight);
     }
 
+    /// <summary>
+    /// Lässt in numerischen Staffel-/Folgenfeldern nur Ziffern zu.
+    /// </summary>
     private void EpisodeIndexTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         e.Handled = e.Text.Any(character => !char.IsDigit(character));
     }
 
+    /// <summary>
+    /// Verhindert nicht-numerische Einfügeinhalte in Staffel-/Folgenfeldern.
+    /// </summary>
     private void EpisodeIndexTextBox_OnPasting(object sender, DataObjectPastingEventArgs e)
     {
         if (!e.DataObject.GetDataPresent(DataFormats.Text))
@@ -194,6 +233,9 @@ public partial class BatchMuxView : UserControl
         }
     }
 
+    /// <summary>
+    /// Erlaubt für Mehrfachfolgen neben Ziffern auch Bindestrich und das interne <c>E</c>-Segment.
+    /// </summary>
     private void EpisodeRangeTextBox_OnPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
         e.Handled = e.Text.Any(character =>
@@ -203,6 +245,9 @@ public partial class BatchMuxView : UserControl
             && character != 'e');
     }
 
+    /// <summary>
+    /// Prüft eingefügte Mehrfachfolgen-Angaben über dieselbe Normalisierung wie der eigentliche Episodencode.
+    /// </summary>
     private void EpisodeRangeTextBox_OnPasting(object sender, DataObjectPastingEventArgs e)
     {
         if (!e.DataObject.GetDataPresent(DataFormats.Text))

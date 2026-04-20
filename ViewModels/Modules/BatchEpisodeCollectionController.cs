@@ -80,14 +80,40 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         ApplyViewConfiguration();
     }
 
+    /// <summary>
+    /// Signalisiert, dass sich CanExecute-relevante Zustände der Batch-Aktionen geändert haben.
+    /// </summary>
     public event Action? CommandsChanged;
+
+    /// <summary>
+    /// Engere Variante von <see cref="CommandsChanged"/> nur für reine Auswahländerungen.
+    /// Dadurch muss das Batch-Grid beim Space-Toggle nicht unnötig alle Commands neu routen.
+    /// </summary>
     public event Action? SelectionStateChanged;
+
+    /// <summary>
+    /// Meldet Änderungen, die Zähler, Badges oder andere Übersichtsflächen neu berechnen müssen.
+    /// </summary>
     public event Action? OverviewChanged;
+
+    /// <summary>
+    /// Meldet Änderungen an Metadaten, die den automatisch berechneten Ausgabepfad beeinflussen.
+    /// </summary>
     public event Action<BatchEpisodeItemViewModel>? AutomaticOutputInputsChanged;
+
+    /// <summary>
+    /// Meldet Änderungen am ausgewählten Eintrag, die die Plan-/Verwendungsdarstellung neu aufbauen müssen.
+    /// </summary>
     public event Action? SelectedItemPlanInputsChanged;
 
+    /// <summary>
+    /// Rohsammlung aller Batch-Einträge unabhängig von Filter- oder Sortierregeln.
+    /// </summary>
     public ObservableCollection<BatchEpisodeItemViewModel> Items => _items;
 
+    /// <summary>
+    /// WPF-View über <see cref="Items"/> inklusive aktiver Filter- und Sortierlogik.
+    /// </summary>
     public ICollectionView View => _view;
 
     public IReadOnlyList<BatchEpisodeFilterOption> FilterModes { get; }
@@ -112,6 +138,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public bool HasSelectedVisibleItems => VisibleItems.Any(item => item.IsSelected);
 
+    /// <summary>
+    /// Setzt einen neuen Filter und plant den View-Refresh dispatcher-sicher nachgelagert ein.
+    /// </summary>
     public bool SetFilterMode(BatchEpisodeFilterOption? value)
     {
         if (value is null || EqualityComparer<BatchEpisodeFilterOption>.Default.Equals(_selectedFilterMode, value))
@@ -125,6 +154,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Setzt die Sortierung der sichtbaren Batch-Liste um.
+    /// </summary>
     public bool SetSortMode(BatchEpisodeSortOption? value)
     {
         if (value is null || EqualityComparer<BatchEpisodeSortOption>.Default.Equals(_selectedSortMode, value))
@@ -137,6 +169,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Ersetzt den gesamten Batch-Inhalt inklusive Eventverkabelung.
+    /// </summary>
     public void Reset(IEnumerable<BatchEpisodeItemViewModel> items)
     {
         _deferCollectionNotifications = true;
@@ -164,12 +199,18 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         OverviewChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Leert die Batch-Liste und vergisst die aktuelle Auswahl.
+    /// </summary>
     public void Clear()
     {
         Reset([]);
         SelectedItem = null;
     }
 
+    /// <summary>
+    /// Wählt nur die aktuell sichtbaren/gefilterten Einträge aus.
+    /// </summary>
     public int SelectAllVisible()
     {
         var changedCount = 0;
@@ -182,6 +223,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return changedCount;
     }
 
+    /// <summary>
+    /// Wählt alle Batch-Einträge unabhängig vom aktiven Filter aus.
+    /// </summary>
     public int SelectAllItems()
     {
         var changedCount = 0;
@@ -194,6 +238,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return changedCount;
     }
 
+    /// <summary>
+    /// Entfernt die Auswahl nur von aktuell sichtbaren/gefilterten Einträgen.
+    /// </summary>
     public int DeselectAllVisible()
     {
         var changedCount = 0;
@@ -206,6 +253,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         return changedCount;
     }
 
+    /// <summary>
+    /// Entfernt die Auswahl von allen Batch-Einträgen unabhängig vom aktiven Filter.
+    /// </summary>
     public int DeselectAllItems()
     {
         var changedCount = 0;
@@ -223,6 +273,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     // direkt nach dem Filterwechsel geklicktes "Alle wählen" kurz wieder alle Einträge treffen.
     private IEnumerable<BatchEpisodeItemViewModel> VisibleItems => _items.Where(item => FilterEpisodeItem(item));
 
+    /// <summary>
+    /// Löst die Eventverkabelung aller aktuell gehaltenen Batch-Einträge.
+    /// </summary>
     public void Dispose()
     {
         _items.CollectionChanged -= Items_CollectionChanged;
@@ -232,6 +285,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Prüft, ob ein Eintrag unter dem aktuell gesetzten Filter sichtbar sein soll.
+    /// </summary>
     private bool FilterEpisodeItem(object item)
     {
         if (item is not BatchEpisodeItemViewModel episode)
@@ -249,6 +305,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         };
     }
 
+    /// <summary>
+    /// Baut die Sortierbeschreibung der WPF-View aus dem aktuell gewählten Sortiermodus neu auf.
+    /// </summary>
     private void ApplyViewConfiguration()
     {
         using (_view.DeferRefresh())
@@ -276,6 +335,10 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reagiert auf echte Änderungen an der Sammlung selbst. Einzelne Property-Änderungen laufen
+    /// separat über <see cref="EpisodeItem_PropertyChanged"/>.
+    /// </summary>
     private void Items_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_deferCollectionNotifications)
@@ -287,6 +350,10 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         OverviewChanged?.Invoke();
     }
 
+    /// <summary>
+    /// Zentraler Verteiler für zeilenbezogene Änderungen. Von hier aus wird entschieden, welche
+    /// UI-Teilbereiche wirklich aktualisiert werden müssen und welche bewusst unberührt bleiben.
+    /// </summary>
     private void EpisodeItem_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(BatchEpisodeItemViewModel.IsSelected))
@@ -329,6 +396,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Entscheidet, ob eine Zeilenänderung die aktuelle Filter-/Sortieransicht neu berechnen muss.
+    /// </summary>
     private bool ShouldRefreshView(string? propertyName)
     {
         if (propertyName is null)
@@ -353,6 +423,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         };
     }
 
+    /// <summary>
+    /// Entscheidet, ob die kompakten Batch-Zähler und Übersichtsbadges neu berechnet werden müssen.
+    /// </summary>
     private static bool ShouldRefreshOverview(string? propertyName)
     {
         return propertyName is null
@@ -368,6 +441,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.OutputPath);
     }
 
+    /// <summary>
+    /// Begrenzt teure Plan-Refreshes auf Eigenschaften, die die geplante Verwendung tatsächlich verändern.
+    /// </summary>
     private static bool ShouldRefreshSelectedItemPlanSummary(string? propertyName)
     {
         return propertyName is null
@@ -383,6 +459,10 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.OutputPath);
     }
 
+    /// <summary>
+    /// Plant einen verzögerten Refresh der WPF-View ein. Läuft gerade noch eine Grid-Edit-Transaktion,
+    /// wird der eigentliche Refresh erst nach deren Abschluss ausgeführt.
+    /// </summary>
     private void RequestViewRefresh()
     {
         if (_viewRefreshPending)
@@ -418,6 +498,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             && (editableCollectionView.IsAddingNew || editableCollectionView.IsEditingItem);
     }
 
+    /// <summary>
+    /// Führt einen zuvor angeforderten View-Refresh aus, sobald keine offene Edit-Transaktion mehr besteht.
+    /// </summary>
     private void ProcessPendingViewRefresh()
     {
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
