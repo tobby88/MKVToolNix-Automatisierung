@@ -1,5 +1,6 @@
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using System.Runtime.CompilerServices;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -469,7 +470,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             : Status;
     }
 
-    protected override void OnPropertyChanged(string? propertyName = null)
+    protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         base.OnPropertyChanged(propertyName);
 
