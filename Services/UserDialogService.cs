@@ -246,21 +246,21 @@ internal sealed class UserDialogService : IUserDialogService
     public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
     {
         var actionLabel = selectItems ? "\"Alle wählen\"" : "\"Alle abwählen\"";
+        var actionVerb = selectItems ? "auswählen" : "abwählen";
         var visibleScopeText = selectItems
-            ? "nur die aktuell sichtbaren, durch den Filter angezeigten Episoden auswählen"
-            : "nur die aktuell sichtbaren, durch den Filter angezeigten Episoden abwählen";
+            ? "Nein = nur die aktuell sichtbaren Folgen auswählen."
+            : "Nein = nur die aktuell sichtbaren Folgen abwählen.";
         var fullScopeText = selectItems
-            ? "auch die aktuell ausgeblendeten Episoden dieses Scans auswählen"
-            : "auch die aktuell ausgeblendeten Episoden dieses Scans abwählen";
+            ? "Ja = auch die durch den Filter gerade ausgeblendeten Folgen auswählen."
+            : "Ja = auch die durch den Filter gerade ausgeblendeten Folgen abwählen.";
         var lines = new[]
         {
             $"{actionLabel} wurde ausgeführt, während ein Filter aktiv ist.",
             string.Empty,
-            "Soll die Sammelaktion nur auf die aktuell sichtbaren Zeilen wirken",
-            "oder auch auf Einträge, die durch den Filter gerade ausgeblendet sind?",
+            $"Sollen auch ausgeblendete Folgen {actionVerb} werden?",
             string.Empty,
-            $"Nein = {visibleScopeText}.",
-            $"Ja = {fullScopeText}."
+            visibleScopeText,
+            fullScopeText
         };
 
         return MessageBox.Show(
