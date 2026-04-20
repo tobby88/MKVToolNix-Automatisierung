@@ -24,6 +24,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private int _progressValue;
     private bool _isBusy;
 
+    /// <summary>
+    /// Initialisiert das Einsortieren-Modul samt Scan-, Auswahl- und Ausführungskommandos.
+    /// </summary>
     public DownloadSortViewModel(
         DownloadSortModuleServices services,
         IUserDialogService dialogService)
@@ -58,10 +61,19 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand RunSortCommand { get; }
 
+    /// <summary>
+    /// Alle aktuell erkannten Einsortier-Pakete.
+    /// </summary>
     public ObservableCollection<DownloadSortItemViewModel> Items => _items;
 
+    /// <summary>
+    /// Vorschlags- und Bestandsliste möglicher Zielordner für die bearbeitbare Zielordner-Spalte.
+    /// </summary>
     public ObservableCollection<string> TargetFolderOptions => _targetFolderOptions;
 
+    /// <summary>
+    /// Der aktuell in der Einsortier-Tabelle markierte Eintrag.
+    /// </summary>
     public DownloadSortItemViewModel? SelectedItem
     {
         get => _selectedItem;
@@ -165,6 +177,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public string RunSortTooltip => "Fuehrt die ausgewaehlten Ordnerumbenennungen und Dateiverschiebungen aus und scannt danach erneut.";
 
+    /// <summary>
+    /// Öffnet die Ordnerwahl und startet danach direkt einen neuen Scan.
+    /// </summary>
     private async Task SelectSourceDirectoryAsync()
     {
         var initialDirectory = Directory.Exists(SourceDirectory)
@@ -182,6 +197,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         await ScanAsync();
     }
 
+    /// <summary>
+    /// Startet einen vollständigen Scan des Downloadordners, sofern das Modul interaktiv ist.
+    /// </summary>
     private async Task ScanAsync()
     {
         if (!CanScan())
@@ -192,6 +210,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         await ScanCoreAsync(resetLog: true);
     }
 
+    /// <summary>
+    /// Umschließt den eigentlichen Scan mit Busy-Verwaltung.
+    /// </summary>
     private async Task ScanCoreAsync(bool resetLog)
     {
         try
@@ -205,6 +226,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Übernimmt das Scan-Ergebnis in die bindbaren Tabellen- und Hilfsstrukturen der View.
+    /// </summary>
     private void ApplyScanResult(DownloadSortScanResult scanResult)
     {
         foreach (var existingItem in Items)
@@ -245,6 +269,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    /// <summary>
+    /// Führt die eigentliche Einsortierung der ausgewählten Pakete aus und scannt anschließend erneut.
+    /// </summary>
     private async Task RunSortAsync()
     {
         var selectedSortableItems = Items
@@ -286,6 +313,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Markiert alle aktuell einsortierbaren Einträge zur Ausführung.
+    /// </summary>
     private void SelectAllSortable()
     {
         foreach (var item in Items.Where(item => DownloadSortItemStates.IsSortable(item.State)))
@@ -296,6 +326,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    /// <summary>
+    /// Hebt die Auswahl aller aktuell markierten Einsortier-Einträge auf.
+    /// </summary>
     private void DeselectAll()
     {
         foreach (var item in Items.Where(item => item.IsSelected))
@@ -306,6 +339,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    /// <summary>
+    /// Schaltet die Auswahl des aktuell markierten Einsortier-Eintrags um.
+    /// </summary>
     private void ToggleSelectedItemSelection()
     {
         if (_isBusy || SelectedItem is not DownloadSortItemViewModel item)
@@ -316,6 +352,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         item.IsSelected = !item.IsSelected;
     }
 
+    /// <summary>
+    /// Übernimmt den Zielordner des ausgewählten Eintrags gesammelt auf passende weitere Einträge.
+    /// </summary>
     private void ApplySelectedTargetFolderToMatchingItems()
     {
         var selectedItem = SelectedItem;
@@ -339,6 +378,10 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    /// <summary>
+    /// Reagiert auf Änderungen einzelner Tabellenzeilen und aktualisiert bei Bedarf Zielbewertung,
+    /// Zielordnerliste sowie Kopfbereich/Kommandos.
+    /// </summary>
     private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DownloadSortItemViewModel item)
@@ -367,6 +410,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Prüft, ob der Zielordner des markierten Eintrags auf weitere passende Zeilen übertragen werden kann.
+    /// </summary>
     private bool CanApplySelectedTargetFolderToMatchingItems()
     {
         var selectedItem = SelectedItem;
@@ -392,16 +438,25 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             && !string.Equals(candidate.TargetFolderName, selectedItem.TargetFolderName, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Prüft, ob ein neuer Scan derzeit erlaubt ist.
+    /// </summary>
     private bool CanScan()
     {
         return !_isBusy && Directory.Exists(SourceDirectory);
     }
 
+    /// <summary>
+    /// Prüft, ob mindestens ein ausgewählter, einsortierbarer Eintrag vorhanden ist.
+    /// </summary>
     private bool CanRunSort()
     {
         return !_isBusy && Items.Any(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State));
     }
 
+    /// <summary>
+    /// Kapselt den Busy-Zustand des Einsortieren-Moduls.
+    /// </summary>
     private void SetBusy(bool isBusy)
     {
         if (_isBusy == isBusy)
@@ -414,6 +469,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    /// <summary>
+    /// Aktualisiert Zähler, Zusammenfassungstext und alle vom Zustand abhängigen Kommandos.
+    /// </summary>
     private void RefreshSummaryAndCommands()
     {
         OnPropertyChanged(nameof(ItemCount));
@@ -435,6 +493,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RunSortCommand.RaiseCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Baut die Vorschlagsliste für Zielordner aus bestehenden Ordnern, Scan-Ergebnissen und Rename-Plänen neu auf.
+    /// </summary>
     private void RefreshTargetFolderOptions(DownloadSortScanResult scanResult)
     {
         var options = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -468,6 +529,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Ergänzt einen manuell eingetippten Zielordner in der Vorschlagsliste, falls er dort noch fehlt.
+    /// </summary>
     private void EnsureTargetFolderOption(string? folderName)
     {
         if (string.IsNullOrWhiteSpace(folderName)
@@ -479,6 +543,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         _targetFolderOptions.Add(folderName);
     }
 
+    /// <summary>
+    /// Fügt einen Zielordner nur dann in eine Optionsmenge ein, wenn er tatsächlich belegt ist.
+    /// </summary>
     private static void AddTargetFolderOption(ISet<string> options, string? folderName)
     {
         if (!string.IsNullOrWhiteSpace(folderName))
@@ -487,6 +554,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Hängt neue Logzeilen an das sichtbare Einsortier-Protokoll an.
+    /// </summary>
     private void AppendLog(IEnumerable<string> lines)
     {
         var materialized = lines
@@ -502,6 +572,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             : LogText + Environment.NewLine + string.Join(Environment.NewLine, materialized);
     }
 
+    /// <summary>
+    /// Führt den eigentlichen Download-Scan aus und aktualisiert danach Status, Fortschritt und Ergebnisliste.
+    /// </summary>
     private async Task ScanCoreWithoutBusyAsync(bool resetLog)
     {
         if (resetLog)
@@ -522,12 +595,18 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             : $"Scan abgeschlossen: {ReadyCount} bereit{BuildReplacementSummarySegment()}{BuildDefectiveSummarySegment()}, {ReviewCount} pruefen, {ConflictCount} Konflikt(e)";
     }
 
+    /// <summary>
+    /// Übernimmt Fortschrittsmeldungen des Scan-Services direkt in die ViewModel-Anzeige.
+    /// </summary>
     private void HandleDownloadSortScanProgress(DownloadSortScanProgress progress)
     {
         StatusText = progress.StatusText;
         ProgressValue = progress.ProgressPercent;
     }
 
+    /// <summary>
+    /// Baut den optionalen Summary-Teil für Ersetzungsfälle.
+    /// </summary>
     private string BuildReplacementSummarySegment()
     {
         return ReplacementCount == 0
@@ -535,6 +614,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             : $", {ReplacementCount} ersetzen";
     }
 
+    /// <summary>
+    /// Baut den optionalen Summary-Teil für als defekt erkannte Pakete.
+    /// </summary>
     private string BuildDefectiveSummarySegment()
     {
         return DefectiveCount == 0
@@ -542,6 +624,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             : $", {DefectiveCount} defekt";
     }
 
+    /// <summary>
+    /// Standard-PropertyChanged-Helfer des ViewModels.
+    /// </summary>
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

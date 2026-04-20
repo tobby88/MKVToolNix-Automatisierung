@@ -39,6 +39,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private bool _isSelectedItemPlanSummaryFrozen;
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
 
+    /// <summary>
+    /// Initialisiert das Batch-Modul samt Hilfsdiensten, Review-Workflow und Batch-Kommandos.
+    /// </summary>
     public BatchMuxViewModel(
         BatchModuleServices services,
         IUserDialogService dialogService,
@@ -102,9 +105,19 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public AsyncRelayCommand RunBatchCommand { get; }
     public RelayCommand CancelBatchOperationCommand { get; }
 
+    /// <summary>
+    /// Hält die aktuell laufende, entkoppelte Aktualisierung der Detail-/Planansicht des ausgewählten Eintrags.
+    /// </summary>
     internal Task? SelectedItemPlanSummaryRefreshTask { get; private set; }
 
+    /// <summary>
+    /// Rohsammlung aller Batch-Zeilen.
+    /// </summary>
     public ObservableCollection<BatchEpisodeItemViewModel> EpisodeItems => _episodeCollection.Items;
+
+    /// <summary>
+    /// Gefilterte und sortierte Sicht auf <see cref="EpisodeItems"/> für die DataGrid-Bindung.
+    /// </summary>
     public ICollectionView EpisodeItemsView => _episodeCollection.View;
     public IReadOnlyList<BatchEpisodeFilterOption> FilterModes => _episodeCollection.FilterModes;
     public IReadOnlyList<BatchEpisodeSortOption> SortModes => _episodeCollection.SortModes;
@@ -230,6 +243,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     public string CancelBatchOperationText => _operationController.CancelButtonText;
 
+    /// <summary>
+    /// Repräsentiert den aktuell im Grid markierten Eintrag und stößt bei Wechseln die
+    /// abhängigen Command- und Detailaktualisierungen an.
+    /// </summary>
     public BatchEpisodeItemViewModel? SelectedEpisodeItem
     {
         get => _selectedEpisodeItem;
@@ -248,6 +265,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         }
     }
 
+    /// <summary>
+    /// Reagiert auf einen globalen Wechsel des Archivwurzelpfads und richtet automatische Ziele,
+    /// Archivstatus und Detailansicht der bereits geladenen Batch-Zeilen neu aus.
+    /// </summary>
     public void HandleArchiveConfigurationChanged()
     {
         _planCache.Clear();
@@ -277,6 +298,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         RefreshCommands();
     }
 
+    /// <summary>
+    /// Kapselt den Busy-Zustand des Batch-Moduls und aktualisiert die davon abhängige UI.
+    /// </summary>
     private void SetBusy(bool isBusy)
     {
         _isBusy = isBusy;
@@ -284,6 +308,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         RefreshCommands();
     }
 
+    /// <summary>
+    /// Hebt alle Kommandos neu aus, deren Ausführbarkeit sich durch Busy-Zustand,
+    /// Auswahl, Scanergebnis oder Reviewstatus verändert haben könnte.
+    /// </summary>
     private void RefreshCommands()
     {
         SelectSourceDirectoryCommand.RaiseCanExecuteChanged();
@@ -306,6 +334,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         CancelBatchOperationCommand.RaiseCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Aktualisiert nur die Batch-Kommandos, die direkt von der Menge ausgewählter Folgen abhängen.
+    /// Diese abgespeckte Variante vermeidet unnötige WPF-Neuroutings beim Space-Toggle im Grid.
+    /// </summary>
     private void RefreshSelectionCommands()
     {
         // Die Zeilenauswahl beeinflusst nur Batch-Aktionen, die über die Menge der aktivierten Folgen
@@ -317,6 +349,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         RunBatchCommand.RaiseCanExecuteChanged();
     }
 
+    /// <summary>
+    /// Entfernt alle geladenen Batch-Episoden und leert auch abhängige Hilfsstrukturen wie den Plan-Cache.
+    /// </summary>
     private void ClearEpisodeItems()
     {
         _planCache.Clear();
@@ -334,12 +369,18 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ClearEpisodeItems();
     }
 
+    /// <summary>
+    /// Setzt sichtbaren Statustext und Prozentfortschritt konsistent.
+    /// </summary>
     private void SetStatus(string text, int progress)
     {
         StatusText = text;
         ProgressValue = Math.Clamp(progress, 0, 100);
     }
 
+    /// <summary>
+    /// Aktualisiert die aggregierten Zähler für Kopfbereich und Statusübersichten.
+    /// </summary>
     private void RefreshOverview()
     {
         OnPropertyChanged(nameof(EpisodeCount));
@@ -348,6 +389,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         OnPropertyChanged(nameof(PendingCheckCount));
     }
 
+    /// <summary>
+    /// Startet einen explizit abbrechbaren Batch-Vorgang und liefert dessen CancellationToken zurück.
+    /// </summary>
     private CancellationToken BeginBatchOperation(BatchOperationKind operationKind)
     {
         var token = _operationController.Begin(operationKind);
@@ -355,12 +399,18 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         return token;
     }
 
+    /// <summary>
+    /// Markiert einen zuvor gestarteten Batch-Vorgang als abgeschlossen.
+    /// </summary>
     private void CompleteBatchOperation(BatchOperationKind operationKind)
     {
         _operationController.Complete(operationKind);
         NotifyBatchOperationStateChanged();
     }
 
+    /// <summary>
+    /// Löst den Benutzerabbruch des aktuell laufenden Batch-Scans oder Batch-Laufs aus.
+    /// </summary>
     private void CancelCurrentBatchOperation()
     {
         if (!_operationController.CancelCurrentOperation())
@@ -378,6 +428,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         NotifyBatchOperationStateChanged();
     }
 
+    /// <summary>
+    /// Aktualisiert alle UI-Eigenschaften und Kommandos, die vom Status des OperationControllers abhängen.
+    /// </summary>
     private void NotifyBatchOperationStateChanged()
     {
         OnPropertyChanged(nameof(CancelBatchOperationText));
@@ -406,6 +459,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         _isSelectedItemPlanSummaryFrozen = false;
     }
 
+    /// <summary>
+    /// Standard-PropertyChanged-Helfer des ViewModels.
+    /// </summary>
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

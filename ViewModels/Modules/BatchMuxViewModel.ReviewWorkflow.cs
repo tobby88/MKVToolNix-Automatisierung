@@ -9,6 +9,9 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 // Dieser Partial verbindet das allgemeine Review-Workflow-Objekt mit den Batch-Zeilen.
 internal sealed partial class BatchMuxViewModel
 {
+    /// <summary>
+    /// Startet alle noch offenen Pflichtprüfungen für die aktuell ausgewählten Batch-Episoden.
+    /// </summary>
     private async Task ReviewPendingSourcesAsync()
     {
         var selectedItems = EpisodeItems.Where(item => item.IsSelected).ToList();
@@ -35,6 +38,9 @@ internal sealed partial class BatchMuxViewModel
         }
     }
 
+    /// <summary>
+    /// Führt die manuelle Quellenprüfung für einen einzelnen Batch-Eintrag aus.
+    /// </summary>
     private async Task<bool> ReviewEpisodeAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
     {
         return await _reviewWorkflow.ReviewManualSourceAsync(
@@ -57,6 +63,10 @@ internal sealed partial class BatchMuxViewModel
             tentativeExclusions => ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions));
     }
 
+    /// <summary>
+    /// Führt die TVDB-/Metadatenprüfung für einen einzelnen Batch-Eintrag aus und aktualisiert
+    /// anschließend bei Bedarf Archivvergleich und Detaildarstellung.
+    /// </summary>
     private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
     {
         // Die explizite Detailaktion im Batch soll den TVDB-Dialog immer wieder öffnen können.
@@ -99,11 +109,18 @@ internal sealed partial class BatchMuxViewModel
         return outcome != EpisodeMetadataReviewOutcome.Cancelled;
     }
 
+    /// <summary>
+    /// Prüft, ob für mindestens einen ausgewählten Eintrag noch Pflichtprüfungen offen sind.
+    /// </summary>
     private bool CanReviewPendingSources()
     {
         return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.HasPendingChecks);
     }
 
+    /// <summary>
+    /// Arbeitet Quellenprüfung, TVDB-Prüfung und fachliche Planhinweise der Reihe nach ab.
+    /// Der Ablauf ist bewusst sequentiell, damit der Benutzer jeden Eintrag kontrolliert freigeben kann.
+    /// </summary>
     private async Task<bool> EnsurePendingChecksApprovedAsync(
         IReadOnlyList<BatchEpisodeItemViewModel> readyItems,
         CancellationToken cancellationToken = default)
@@ -175,6 +192,9 @@ internal sealed partial class BatchMuxViewModel
         return true;
     }
 
+    /// <summary>
+    /// Bestimmt das Startverzeichnis für "Ausgabe ändern" bevorzugt aus dem aktuell gewählten Zielpfad.
+    /// </summary>
     private static string ResolveSelectedOutputDirectory(BatchEpisodeItemViewModel item)
     {
         var outputDirectory = Path.GetDirectoryName(item.OutputPath);
@@ -187,6 +207,9 @@ internal sealed partial class BatchMuxViewModel
         return ResolveSelectedItemDirectory(item);
     }
 
+    /// <summary>
+    /// Läuft von einem möglicherweise noch nicht existierenden Zielpfad nach oben bis zum ersten vorhandenen Ordner.
+    /// </summary>
     private static string? ResolveNearestExistingDirectory(string? directoryPath)
     {
         if (string.IsNullOrWhiteSpace(directoryPath))
@@ -208,6 +231,9 @@ internal sealed partial class BatchMuxViewModel
         return null;
     }
 
+    /// <summary>
+    /// Fallback-Verzeichnis aus bekannten Quell- oder Zielpfaden des aktuell gewählten Eintrags.
+    /// </summary>
     private static string ResolveSelectedItemDirectory(BatchEpisodeItemViewModel item)
     {
         var paths = item.SourceFilePaths
@@ -226,6 +252,9 @@ internal sealed partial class BatchMuxViewModel
         return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
+    /// <summary>
+    /// Wählt alle sichtbaren oder optional alle Batch-Episoden aus, abhängig vom aktiven Filter und der Dialogentscheidung.
+    /// </summary>
     private void SelectAllEpisodes()
     {
         var includeHiddenItems = SelectedFilterMode.Key != BatchEpisodeFilterMode.All
@@ -240,6 +269,9 @@ internal sealed partial class BatchMuxViewModel
             ProgressValue);
     }
 
+    /// <summary>
+    /// Hebt die Auswahl aller sichtbaren oder optional aller Batch-Episoden auf.
+    /// </summary>
     private void DeselectAllEpisodes()
     {
         var includeHiddenItems = SelectedFilterMode.Key != BatchEpisodeFilterMode.All
@@ -254,6 +286,9 @@ internal sealed partial class BatchMuxViewModel
             ProgressValue);
     }
 
+    /// <summary>
+    /// Schaltet die Auswahl des aktuell markierten Batch-Eintrags um.
+    /// </summary>
     private void ToggleSelectedEpisodeSelection()
     {
         if (_isBusy || SelectedEpisodeItem is not BatchEpisodeItemViewModel item)

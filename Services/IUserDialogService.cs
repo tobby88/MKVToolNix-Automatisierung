@@ -11,32 +11,74 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </remarks>
 internal interface IUserDialogService
 {
+    /// <summary>
+    /// Öffnet die Auswahl einer primären Videoquelle.
+    /// </summary>
     string? SelectMainVideo(string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Auswahl einer AD-Quelle.
+    /// </summary>
     string? SelectAudioDescription(string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Mehrfachauswahl externer Untertiteldateien.
+    /// </summary>
     string[]? SelectSubtitles(string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Mehrfachauswahl von TXT-Anhängen.
+    /// </summary>
     string[]? SelectAttachments(string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Auswahl des Zielpfads für eine MKV-Ausgabe.
+    /// </summary>
     string? SelectOutput(string initialDirectory, string fileName);
 
+    /// <summary>
+    /// Öffnet einen Ordnerdialog.
+    /// </summary>
     string? SelectFolder(string title, string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Auswahl einer ausführbaren Datei.
+    /// </summary>
     string? SelectExecutable(string title, string filter, string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Auswahl einer einzelnen Datei.
+    /// </summary>
     string? SelectFile(string title, string filter, string initialDirectory);
 
+    /// <summary>
+    /// Öffnet die Auswahl mehrerer Dateien.
+    /// </summary>
     string[]? SelectFiles(string title, string filter, string initialDirectory);
 
+    /// <summary>
+    /// Fragt, ob eine AD manuell gesetzt oder geleert werden soll.
+    /// </summary>
     MessageBoxResult AskAudioDescriptionChoice();
 
+    /// <summary>
+    /// Fragt, ob Untertitel manuell gesetzt oder geleert werden sollen.
+    /// </summary>
     MessageBoxResult AskSubtitlesChoice();
 
+    /// <summary>
+    /// Fragt, ob Anhänge manuell gesetzt oder geleert werden sollen.
+    /// </summary>
     MessageBoxResult AskAttachmentChoice();
 
+    /// <summary>
+    /// Fragt die explizite Freigabe zum Start eines Einzel-Muxlaufs ab.
+    /// </summary>
     bool ConfirmMuxStart();
 
+    /// <summary>
+    /// Fragt die explizite Freigabe zum Start des Batch-Laufs ab.
+    /// </summary>
     bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes);
 
     /// <summary>
@@ -46,12 +88,24 @@ internal interface IUserDialogService
     /// <returns><see langword="true"/>, wenn die Aktion auf alle Batch-Einträge erweitert werden soll.</returns>
     bool ConfirmApplyBatchSelectionToAllItems(bool selectItems);
 
+    /// <summary>
+    /// Fragt das Kopieren einer vorhandenen Zieldatei als Arbeitskopie ab.
+    /// </summary>
     bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan);
 
+    /// <summary>
+    /// Fragt das Aufräumen der Einzelfolgen-Quelldateien ab.
+    /// </summary>
     bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles);
 
+    /// <summary>
+    /// Fragt, ob der Done-Ordner eines Batch-Laufs gesammelt in den Papierkorb verschoben werden soll.
+    /// </summary>
     bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory);
 
+    /// <summary>
+    /// Fragt, ob der Done-Ordner zur manuellen Kontrolle geöffnet werden soll.
+    /// </summary>
     bool AskOpenDoneDirectory(string doneDirectory);
 
     /// <summary>
@@ -71,13 +125,28 @@ internal interface IUserDialogService
     /// </remarks>
     bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths);
 
+    /// <summary>
+    /// Öffnet einen beliebigen Datei- oder Ordnerpfad mit der Standardanwendung.
+    /// </summary>
     void OpenPathWithDefaultApp(string path);
 
+    /// <summary>
+    /// Fragt das Ergebnis einer manuellen Quellenprüfung ab.
+    /// </summary>
     MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative);
 
+    /// <summary>
+    /// Zeigt eine reine Informationsmeldung.
+    /// </summary>
     void ShowInfo(string title, string message);
 
+    /// <summary>
+    /// Zeigt eine Warnmeldung.
+    /// </summary>
     void ShowWarning(string title, string message);
 
+    /// <summary>
+    /// Zeigt eine Fehlermeldung.
+    /// </summary>
     void ShowError(string message);
 }

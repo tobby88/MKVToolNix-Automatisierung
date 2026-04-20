@@ -9,6 +9,9 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal sealed class UserDialogService : IUserDialogService
 {
+    /// <summary>
+    /// Öffnet die Auswahl der primären Videodatei im Einzelmodus.
+    /// </summary>
     public string? SelectMainVideo(string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -23,6 +26,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    /// <summary>
+    /// Öffnet die Auswahl einer Audiodeskriptions-Datei.
+    /// </summary>
     public string? SelectAudioDescription(string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -36,6 +42,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    /// <summary>
+    /// Öffnet die Mehrfachauswahl externer Untertiteldateien.
+    /// </summary>
     public string[]? SelectSubtitles(string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -50,6 +59,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
     }
 
+    /// <summary>
+    /// Öffnet die Mehrfachauswahl von TXT-Anhängen.
+    /// </summary>
     public string[]? SelectAttachments(string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -64,6 +76,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
     }
 
+    /// <summary>
+    /// Öffnet die Auswahl eines MKV-Zielpfads.
+    /// </summary>
     public string? SelectOutput(string initialDirectory, string fileName)
     {
         var dialog = new SaveFileDialog
@@ -80,6 +95,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    /// <summary>
+    /// Öffnet einen generischen Ordnerdialog.
+    /// </summary>
     public string? SelectFolder(string title, string initialDirectory)
     {
         var dialog = new OpenFolderDialog
@@ -92,6 +110,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
+    /// <summary>
+    /// Öffnet die Auswahl einer ausführbaren Datei, etwa für mkvmerge oder ffprobe.
+    /// </summary>
     public string? SelectExecutable(string title, string filter, string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -106,6 +127,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    /// <summary>
+    /// Öffnet die Auswahl einer einzelnen Datei für generische Import-/Konfigurationsfälle.
+    /// </summary>
     public string? SelectFile(string title, string filter, string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -120,6 +144,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
     }
 
+    /// <summary>
+    /// Öffnet die Auswahl mehrerer Dateien für generische Import-/Konfigurationsfälle.
+    /// </summary>
     public string[]? SelectFiles(string title, string filter, string initialDirectory)
     {
         var dialog = new OpenFileDialog
@@ -134,6 +161,9 @@ internal sealed class UserDialogService : IUserDialogService
         return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
     }
 
+    /// <summary>
+    /// Baut die Drei-Wege-Entscheidung für AD-Korrekturen auf.
+    /// </summary>
     public MessageBoxResult AskAudioDescriptionChoice()
     {
         return AskSelectionOrClearChoice(
@@ -143,6 +173,9 @@ internal sealed class UserDialogService : IUserDialogService
             clearActionText: "AD-Datei leeren");
     }
 
+    /// <summary>
+    /// Baut die Drei-Wege-Entscheidung für Untertitel-Korrekturen auf.
+    /// </summary>
     public MessageBoxResult AskSubtitlesChoice()
     {
         return AskSelectionOrClearChoice(
@@ -152,6 +185,9 @@ internal sealed class UserDialogService : IUserDialogService
             clearActionText: "Untertitel leeren");
     }
 
+    /// <summary>
+    /// Baut die Drei-Wege-Entscheidung für Anhangs-Korrekturen auf.
+    /// </summary>
     public MessageBoxResult AskAttachmentChoice()
     {
         return AskSelectionOrClearChoice(
@@ -161,6 +197,9 @@ internal sealed class UserDialogService : IUserDialogService
             clearActionText: "Anhänge leeren");
     }
 
+    /// <summary>
+    /// Fragt den Start eines Einzel-Muxlaufs ab.
+    /// </summary>
     public bool ConfirmMuxStart()
     {
         return MessageBox.Show(
@@ -171,6 +210,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt den Start eines vollständigen Batch-Laufs mit optionalem Archivkopier-Hinweis ab.
+    /// </summary>
     public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes)
     {
         var lines = new List<string>
@@ -198,6 +240,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt bei aktivem Filter, ob eine Sammelauswahl nur sichtbare oder alle Batch-Zeilen betreffen soll.
+    /// </summary>
     public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
     {
         var actionLabel = selectItems ? "\"Alle wählen\"" : "\"Alle abwählen\"";
@@ -226,6 +271,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt das Kopieren einer vorhandenen Zieldatei als lokale Arbeitskopie ab.
+    /// </summary>
     public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan)
     {
         return MessageBox.Show(
@@ -236,6 +284,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt das Aufräumen der Einzelfolgen-Quelldateien ab.
+    /// </summary>
     public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles)
     {
         var lines = new List<string>
@@ -265,6 +316,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt das spätere Recyceln des Done-Ordners nach einem Batch-Lauf ab.
+    /// </summary>
     public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory)
     {
         return MessageBox.Show(
@@ -275,6 +329,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt, ob der Done-Ordner zunächst zur manuellen Kontrolle geöffnet werden soll.
+    /// </summary>
     public bool AskOpenDoneDirectory(string doneDirectory)
     {
         return MessageBox.Show(
@@ -285,6 +342,9 @@ internal sealed class UserDialogService : IUserDialogService
             MessageBoxImage.Question) == MessageBoxResult.Yes;
     }
 
+    /// <summary>
+    /// Fragt die explizite Freigabe eines fachlichen Planhinweises ab.
+    /// </summary>
     public bool ConfirmPlanReview(string episodeTitle, string reviewText)
     {
         var lines = new List<string>
