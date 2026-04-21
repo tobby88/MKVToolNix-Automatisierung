@@ -110,6 +110,31 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void MissingIdCount_IgnoresEntriesWithoutApplicableNfoSync()
+    {
+        var vm = CreateViewModel();
+        var syncableItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
+        var embyOnlyItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Trailer.mkv", EmbyProviderIds.Empty);
+        embyOnlyItem.ApplyAnalysis(new EmbyFileAnalysis(
+            embyOnlyItem.MediaFilePath,
+            @"C:\Videos\Serie - S00E01 - Trailer.nfo",
+            MediaFileExists: true,
+            NfoExists: false,
+            NfoProviderIds: EmbyProviderIds.Empty,
+            EmbyItem: new EmbyItem(
+                "emby-trailer",
+                "Trailer",
+                embyOnlyItem.MediaFilePath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)),
+            WarningMessage: null));
+        vm.Items.Add(syncableItem);
+        vm.Items.Add(embyOnlyItem);
+
+        Assert.Equal(1, vm.MissingIdCount);
+        Assert.Contains("ohne erwartete TVDB-/IMDB-ID", vm.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnalyzeItemsTooltip_WithoutApiSettings_ExplainsLocalOnlyAnalysis()
     {
         var vm = CreateViewModel();
@@ -144,9 +169,9 @@ public sealed class EmbySyncViewModelTests
         var vm = CreateViewModel();
 
         Assert.Contains("Reports wählen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("NFO/Emby prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
         Assert.Contains("Emby scannen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("TVDB prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("NFO/Emby prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("TVDB- und IMDB-Felder", vm.WorkflowInfoText, StringComparison.Ordinal);
         Assert.Contains("NFO-Sync", vm.WorkflowInfoText, StringComparison.Ordinal);
     }
 

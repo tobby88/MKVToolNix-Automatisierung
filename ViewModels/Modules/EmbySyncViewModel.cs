@@ -188,21 +188,17 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     public int SelectedCount => Items.Count(item => item.IsSelected);
 
-    public int MissingIdCount => Items.Count(item => !item.HasProviderIds);
+    public int MissingIdCount => Items.Count(item => item.SupportsProviderIdSync && !item.HasProviderIds);
 
     public string SummaryText => ItemCount == 0
         ? "Noch kein Metadatenreport geladen."
-        : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne TVDB-/IMDB-ID.";
+        : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne erwartete TVDB-/IMDB-ID.";
 
     public string AnalyzeItemsTooltip => HasEmbyApiSettings()
         ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
         : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
-
-    public string ReviewSelectedMetadataTooltip => TryGetSelectedMetadataGuess(out _, out var reason)
-        ? "Öffnet die bekannte TVDB-Suche für die aktuell ausgewählte MKV."
-        : reason;
 
     public string RunSyncTooltip => "Schreibt die aktuell sichtbaren TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
 
@@ -211,10 +207,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     /// </summary>
     public string WorkflowInfoText =>
         "1. Reports wählen importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien direkt. "
-        + "2. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
-        + "3. Emby scannen startet bei Bedarf den passenden Serienbibliotheksscan und lädt neue Emby-Treffer nach. "
-        + "4. TVDB prüfen öffnet bei Bedarf die bekannte TVDB-Suche für die ausgewählte MKV. "
-        + "5. NFO-Sync schreibt erst danach die aktuell sichtbaren IDs in die NFO-Dateien zurück.";
+        + "2. Emby scannen startet bei Bedarf den passenden Serienbibliotheksscan und lädt neue Emby-Treffer nach. "
+        + "3. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
+        + "4. TVDB- und IMDB-Felder in der Tabelle sind direkt editierbar; die TVDB-Suche öffnest du je Zeile über den TVDB-Button. "
+        + "5. NFO-Sync schreibt erst danach die aktuell sichtbaren IDs in die NFO-Dateien zurück. Einträge ohne Episoden-NFO (z. B. trailers oder backdrops) werden dabei nur als Emby-Treffer geführt.";
 
     private async Task SelectReportAsync()
     {
@@ -440,6 +436,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
                 var item = selectedItems[index];
                 StatusText = $"Aktualisiere NFO {index + 1}/{selectedItems.Count}...";
                 ProgressValue = ScaleProgress(index, selectedItems.Count, 10, 95);
+
+                if (!item.SupportsProviderIdSync)
+                {
+                    item.SetStatus("Ohne NFO-Sync", "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Ein TVDB-/IMDB-Sync ist hier nicht nötig.");
+                    continue;
+                }
 
                 if (!item.ProviderIds.HasAny)
                 {
@@ -695,7 +697,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     {
         if (e.PropertyName is nameof(EmbySyncItemViewModel.IsSelected)
             or nameof(EmbySyncItemViewModel.TvdbId)
-            or nameof(EmbySyncItemViewModel.ImdbId))
+            or nameof(EmbySyncItemViewModel.ImdbId)
+            or nameof(EmbySyncItemViewModel.SupportsProviderIdSync))
         {
             RefreshSummaryAndCommands();
         }

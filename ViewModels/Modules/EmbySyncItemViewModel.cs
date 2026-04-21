@@ -16,7 +16,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly EmbyProviderIds _reportedProviderIds;
+    private readonly EpisodeMetadataGuess? _metadataGuess;
     private bool _isSelected = true;
+    private bool _supportsProviderIdSync = true;
     private string _tvdbId = string.Empty;
     private string _imdbId = string.Empty;
     private string _embyItemId = string.Empty;
@@ -35,6 +37,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         _reportedProviderIds = providerIds ?? EmbyProviderIds.Empty;
         _tvdbId = _reportedProviderIds.TvdbId ?? string.Empty;
         _imdbId = _reportedProviderIds.ImdbId ?? string.Empty;
+        _metadataGuess = TryParseMetadataGuess(mediaFilePath);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -59,6 +62,28 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public string MediaFileName => Path.GetFileName(MediaFilePath);
 
     public string NfoPath { get; private set; }
+
+    /// <summary>
+    /// Kennzeichnet, ob für diese Zeile überhaupt ein lokaler NFO-Sync fachlich sinnvoll ist.
+    /// </summary>
+    public bool SupportsProviderIdSync
+    {
+        get => _supportsProviderIdSync;
+        private set
+        {
+            if (_supportsProviderIdSync == value)
+            {
+                return;
+            }
+
+            _supportsProviderIdSync = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanReviewTvdb));
+            OnPropertyChanged(nameof(CanEditProviderIds));
+            OnPropertyChanged(nameof(ProviderIdEditTooltip));
+            OnPropertyChanged(nameof(TvdbLookupTooltip));
+        }
+    }
 
     public string TvdbId
     {
@@ -141,6 +166,27 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
     public bool HasProviderIds => !string.IsNullOrWhiteSpace(TvdbId) || !string.IsNullOrWhiteSpace(ImdbId);
 
+    /// <summary>
+    /// Sichtbare TVDB-Suche ist nur dann sinnvoll, wenn der Dateiname vorbefüllt werden kann und
+    /// die Zeile später tatsächlich in eine Episoden-NFO zurückgeschrieben wird.
+    /// </summary>
+    public bool CanReviewTvdb => SupportsProviderIdSync && _metadataGuess is not null;
+
+    /// <summary>
+    /// Kennzeichnet die gelb hinterlegten TVDB-/IMDB-Felder als aktiv editierbar.
+    /// </summary>
+    public bool CanEditProviderIds => SupportsProviderIdSync;
+
+    public string ProviderIdEditTooltip => SupportsProviderIdSync
+        ? "Direkt editierbar. Diese IDs werden beim NFO-Sync in die lokale Episoden-NFO geschrieben."
+        : "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. TVDB-/IMDB-Sync ist hier nicht anwendbar.";
+
+    public string TvdbLookupTooltip => !SupportsProviderIdSync
+        ? "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Eine TVDB-Korrektur ist hier nicht nötig."
+        : _metadataGuess is not null
+            ? "Öffnet die TVDB-Suche für genau diese MKV-Zeile."
+            : "Die MKV-Benennung kann nicht automatisch in die TVDB-Suche übernommen werden.";
+
     public EmbyProviderIds ProviderIds => new(
         string.IsNullOrWhiteSpace(TvdbId) ? null : TvdbId,
         string.IsNullOrWhiteSpace(ImdbId) ? null : ImdbId);
@@ -151,6 +197,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         NfoPath = analysis.NfoPath;
         OnPropertyChanged(nameof(NfoPath));
+        SupportsProviderIdSync = true;
 
         var providerIds = ProviderIds
             .MergeFallback(_reportedProviderIds)
@@ -175,7 +222,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         if (!analysis.NfoExists)
         {
-            SetStatus("NFO fehlt", "Bitte Emby zuerst scannen lassen, damit die Episoden-NFO angelegt wird.");
+            SupportsProviderIdSync = analysis.EmbyItem is null;
+            SetStatus(
+                analysis.EmbyItem is null ? "NFO fehlt" : "Ohne NFO-Sync",
+                analysis.EmbyItem is null
+                    ? "Bitte Emby zuerst scannen lassen, damit die Episoden-NFO angelegt wird."
+                    : $"Emby-Item gefunden: {analysis.EmbyItem.Name}. Für diesen Pfad legt Emby keine Episoden-NFO an (z. B. trailers oder backdrops); TVDB-/IMDB-Sync ist hier nicht anwendbar.");
             return;
         }
 
@@ -231,6 +283,14 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             ImdbId = providerIds.ImdbId!;
         }
 
+        if (!SupportsProviderIdSync)
+        {
+            SetStatus(
+                "Ohne NFO-Sync",
+                $"Emby-Item gefunden: {item.Name}. Für diesen Pfad legt Emby keine Episoden-NFO an (z. B. trailers oder backdrops); TVDB-/IMDB-Sync ist hier nicht anwendbar.");
+            return;
+        }
+
         SetStatus(
             HasProviderIds ? "Bereit" : "IDs fehlen",
             BuildProviderMismatchNote(
@@ -244,21 +304,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     /// </summary>
     public bool TryBuildMetadataGuess(out EpisodeMetadataGuess? guess)
     {
-        var fileName = Path.GetFileNameWithoutExtension(MediaFilePath);
-        var normalizedFileName = EpisodeFileNameHelper.NormalizeTypography(fileName);
-        var match = EpisodeFileNamePattern.Match(normalizedFileName);
-        if (!match.Success)
-        {
-            guess = null;
-            return false;
-        }
-
-        guess = new EpisodeMetadataGuess(
-            match.Groups["series"].Value.Trim(),
-            match.Groups["title"].Value.Trim(),
-            match.Groups["season"].Value.Trim(),
-            match.Groups["episode"].Value.Trim());
-        return true;
+        guess = _metadataGuess;
+        return guess is not null;
     }
 
     /// <summary>
@@ -328,6 +375,23 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         return mismatches.Count == 0
             ? null
             : $"Für den Sync ist TVDB-ID {preferredTvdbId} vorgemerkt; {string.Join(", ", mismatches)}. Beim Sync wird diese ID in die NFO geschrieben.";
+    }
+
+    private static EpisodeMetadataGuess? TryParseMetadataGuess(string mediaFilePath)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(mediaFilePath);
+        var normalizedFileName = EpisodeFileNameHelper.NormalizeTypography(fileName);
+        var match = EpisodeFileNamePattern.Match(normalizedFileName);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return new EpisodeMetadataGuess(
+            match.Groups["series"].Value.Trim(),
+            match.Groups["title"].Value.Trim(),
+            match.Groups["season"].Value.Trim(),
+            match.Groups["episode"].Value.Trim());
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

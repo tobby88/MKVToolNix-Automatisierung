@@ -92,6 +92,33 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void ApplyAnalysis_WithEmbyItemButWithoutNfo_DisablesProviderIdSync()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Trailer.mkv", EmbyProviderIds.Empty);
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S00E01 - Trailer.nfo",
+            MediaFileExists: true,
+            NfoExists: false,
+            NfoProviderIds: EmbyProviderIds.Empty,
+            EmbyItem: new EmbyItem(
+                "emby-trailer",
+                "Trailer",
+                vm.MediaFilePath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)),
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.False(vm.SupportsProviderIdSync);
+        Assert.False(vm.CanEditProviderIds);
+        Assert.False(vm.CanReviewTvdb);
+        Assert.Equal("Ohne NFO-Sync", vm.StatusText);
+        Assert.Contains("keine Episoden-NFO", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("nicht anwendbar", vm.ProviderIdEditTooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ApplyAnalysis_KeepsManualTvdbOverride_OverLaterNfoAndEmbyData()
     {
         var vm = new EmbySyncItemViewModel(
