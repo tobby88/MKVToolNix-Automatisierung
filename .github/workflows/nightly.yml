@@ -110,7 +110,7 @@ jobs:
           Set-Content -LiteralPath '.\artifacts\release\nightly-notes.md' -Value $notes -NoNewline
 
       - name: Upload nightly artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-win-x64
           path: .\artifacts\release\MkvToolnixAutomatisierung-nightly-win-x64.exe
