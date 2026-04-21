@@ -16,37 +16,22 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,12" IsEnabled="{Binding IsInteractive}">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="170" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="150" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
-            <TextBox Grid.Row="0"
-                     Grid.Column="1"
-                     Margin="0,4,12,4"
-                     Text="{Binding ApiKey, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="TVDB-API-Schl&#252;ssel f&#252;r die automatische Serien- und Episodensuche." />
-            <Button Grid.Row="0"
-                    Grid.Column="2"
+            <TextBlock Grid.Column="0"
+                       Margin="0,8,12,8"
+                       VerticalAlignment="Center"
+                       Foreground="#44515D"
+                       Text="TVDB-Zugangsdaten werden zentral im Einstellungsdialog verwaltet." />
+            <Button Grid.Column="1"
                     Margin="0,2,0,2"
                     Padding="10,6"
                     IsEnabled="{Binding IsInteractive}"
-                    Click="SaveSettingsButton_Click"
-                    Content="Speichern" />
-
-            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
-            <PasswordBox x:Name="PinPasswordBox"
-                         Grid.Row="1"
-                         Grid.Column="1"
-                         Margin="0,4,12,4"
-                         PasswordChanged="PinPasswordBox_PasswordChanged"
-                         ToolTip="Nur eintragen, wenn TVDB zus&#228;tzlich eine PIN verlangt." />
+                    Click="OpenSettingsButton_Click"
+                    Content="Einstellungen" />
         </Grid>
 
         <Grid Grid.Row="1" IsEnabled="{Binding IsInteractive}">

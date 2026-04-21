@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 
@@ -11,6 +12,7 @@ namespace MkvToolnixAutomatisierung.Windows;
 public partial class TvdbLookupWindow : Window
 {
     private readonly TvdbLookupWindowViewModel _viewModel;
+    private readonly IAppSettingsDialogService? _settingsDialog;
     private bool _loadedOnce;
 
     /// <summary>
@@ -18,12 +20,16 @@ public partial class TvdbLookupWindow : Window
     /// </summary>
     /// <param name="lookupService">Service für TVDB-Suche, Episodenladen und Settings-Persistenz.</param>
     /// <param name="guess">Lokal erkannter Startvorschlag für Serie, Staffel, Folge und Titel.</param>
-    internal TvdbLookupWindow(EpisodeMetadataLookupService lookupService, EpisodeMetadataGuess guess)
+    /// <param name="settingsDialog">Zentraler Einstellungsdialog zum Nachpflegen von API-Key und PIN.</param>
+    internal TvdbLookupWindow(
+        EpisodeMetadataLookupService lookupService,
+        EpisodeMetadataGuess guess,
+        IAppSettingsDialogService? settingsDialog = null)
     {
         InitializeComponent();
         _viewModel = new TvdbLookupWindowViewModel(lookupService, guess);
+        _settingsDialog = settingsDialog;
         DataContext = _viewModel;
-        PinPasswordBox.Password = _viewModel.Pin;
         Loaded += TvdbLookupWindow_Loaded;
     }
 
@@ -53,15 +59,17 @@ public partial class TvdbLookupWindow : Window
         await RunUiActionAsync(() => _viewModel.SearchSeriesAsync(autoLoadEpisodes: true), "TVDB-Fehler");
     }
 
-    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
+    private void OpenSettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        try
+        if (_settingsDialog is null)
         {
-            _viewModel.SaveSettings();
+            MessageBox.Show(this, "Der zentrale Einstellungsdialog ist hier nicht verfügbar.", "Hinweis", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
         }
-        catch (Exception ex)
+
+        if (_settingsDialog.ShowDialog(this, AppSettingsPage.Tvdb))
         {
-            MessageBox.Show(this, ex.Message, "Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+            _viewModel.ReloadStoredSettings();
         }
     }
 
@@ -113,11 +121,6 @@ public partial class TvdbLookupWindow : Window
     private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         await RunUiActionAsync(() => _viewModel.HandleSelectedSeriesSelectionChangedAsync(), "TVDB-Fehler");
-    }
-
-    private void PinPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
-    {
-        _viewModel.Pin = PinPasswordBox.Password;
     }
 
     private async Task RunUiActionAsync(Func<Task> action, string errorTitle)

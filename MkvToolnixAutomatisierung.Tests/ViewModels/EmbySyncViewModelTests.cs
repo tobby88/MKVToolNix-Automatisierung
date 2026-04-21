@@ -19,28 +19,8 @@ public sealed class EmbySyncViewModelTests
         var metadataStore = new AppMetadataStore(settingsStore);
         var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient());
         var syncService = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
-        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService, episodeMetadata);
+        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService, episodeMetadata, new NullSettingsDialogService());
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
-    }
-
-    [Fact]
-    public void ServerUrl_SetWithLeadingAndTrailingWhitespace_GetsNormalized()
-    {
-        var vm = CreateViewModel();
-
-        vm.ServerUrl = "  http://emby:8096  ";
-
-        Assert.Equal("http://emby:8096", vm.ServerUrl);
-    }
-
-    [Fact]
-    public void ApiKey_SetWithWhitespace_GetsNormalized()
-    {
-        var vm = CreateViewModel();
-
-        vm.ApiKey = "  abc-def-key  ";
-
-        Assert.Equal("abc-def-key", vm.ApiKey);
     }
 
     [Fact]
@@ -67,36 +47,6 @@ public sealed class EmbySyncViewModelTests
         var vm = CreateViewModel();
 
         Assert.True(vm.IsInteractive);
-    }
-
-    [Fact]
-    public void TestConnectionCommand_CannotExecute_WhenServerUrlEmpty()
-    {
-        var vm = CreateViewModel();
-        vm.ServerUrl = string.Empty;
-        vm.ApiKey = "some-key";
-
-        Assert.False(vm.TestConnectionCommand.CanExecute(null));
-    }
-
-    [Fact]
-    public void TestConnectionCommand_CannotExecute_WhenApiKeyEmpty()
-    {
-        var vm = CreateViewModel();
-        vm.ServerUrl = "http://emby:8096";
-        vm.ApiKey = string.Empty;
-
-        Assert.False(vm.TestConnectionCommand.CanExecute(null));
-    }
-
-    [Fact]
-    public void TestConnectionCommand_CanExecute_WhenBothServerUrlAndApiKeySet()
-    {
-        var vm = CreateViewModel();
-        vm.ServerUrl = "http://emby:8096";
-        vm.ApiKey = "some-key";
-
-        Assert.True(vm.TestConnectionCommand.CanExecute(null));
     }
 
     [Fact]
@@ -138,8 +88,6 @@ public sealed class EmbySyncViewModelTests
     public void AnalyzeItemsTooltip_WithoutApiSettings_ExplainsLocalOnlyAnalysis()
     {
         var vm = CreateViewModel();
-        vm.ServerUrl = string.Empty;
-        vm.ApiKey = string.Empty;
 
         Assert.Contains("nur die lokalen NFO-Dateien", vm.AnalyzeItemsTooltip, StringComparison.OrdinalIgnoreCase);
     }
@@ -232,6 +180,14 @@ public sealed class EmbySyncViewModelTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class NullSettingsDialogService : IAppSettingsDialogService
+    {
+        public bool ShowDialog(System.Windows.Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive)
+        {
+            return false;
         }
     }
 

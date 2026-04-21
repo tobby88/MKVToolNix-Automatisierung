@@ -13,7 +13,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Verwaltet den nachgelagerten Emby-Abgleich für neu erzeugte MKV-Dateien und deren NFO-Provider-IDs.
 /// </summary>
-internal sealed class EmbySyncViewModel : INotifyPropertyChanged
+internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSettingsAwareModule
 {
     private readonly EmbyModuleServices _services;
     private readonly IUserDialogService _dialogService;
@@ -21,8 +21,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     private readonly List<string> _reportPaths = [];
 
     private EmbySyncItemViewModel? _selectedItem;
-    private string _serverUrl;
-    private string _apiKey;
     private string _reportPath = string.Empty;
     private string _statusText = "Bereit";
     private string _logText = string.Empty;
@@ -33,18 +31,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     {
         _services = services;
         _dialogService = dialogService;
-        var settings = _services.Settings.Load();
-        _serverUrl = settings.ServerUrl;
-        _apiKey = settings.ApiKey;
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, CanUseEmbyApi, unexpectedCommandErrorHandler);
+        OpenSettingsCommand = new RelayCommand(OpenSettings, () => !_isBusy);
         AnalyzeItemsCommand = new AsyncRelayCommand(AnalyzeItemsAsync, () => !_isBusy && Items.Count > 0, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
-        SaveSettingsCommand = new RelayCommand(SaveSettings, () => !_isBusy);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
     }
@@ -53,7 +47,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand SelectReportCommand { get; }
 
-    public AsyncRelayCommand TestConnectionCommand { get; }
+    public RelayCommand OpenSettingsCommand { get; }
 
     public AsyncRelayCommand AnalyzeItemsCommand { get; }
 
@@ -62,8 +56,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
 
     public AsyncRelayCommand RunSyncCommand { get; }
-
-    public RelayCommand SaveSettingsCommand { get; }
 
     public RelayCommand SelectAllCommand { get; }
 
@@ -82,40 +74,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             }
 
             _selectedItem = value;
-            OnPropertyChanged();
-            RefreshCommands();
-        }
-    }
-
-    public string ServerUrl
-    {
-        get => _serverUrl;
-        set
-        {
-            var normalized = (value ?? string.Empty).Trim();
-            if (_serverUrl == normalized)
-            {
-                return;
-            }
-
-            _serverUrl = normalized;
-            OnPropertyChanged();
-            RefreshCommands();
-        }
-    }
-
-    public string ApiKey
-    {
-        get => _apiKey;
-        set
-        {
-            var normalized = (value ?? string.Empty).Trim();
-            if (_apiKey == normalized)
-            {
-                return;
-            }
-
-            _apiKey = normalized;
             OnPropertyChanged();
             RefreshCommands();
         }
@@ -196,7 +154,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     public string AnalyzeItemsTooltip => HasEmbyApiSettings()
         ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
-        : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
+        : "Prüft nur die lokalen NFO-Dateien. Server und API-Key werden zentral im Einstellungsdialog gepflegt.";
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
 
@@ -242,21 +200,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         return AnalyzeItemsAsync(queryEmby: false);
     }
 
-    private async Task TestConnectionAsync()
-    {
-        await RunBusyAsync(async () =>
-        {
-            var settings = BuildSettingsFromInput();
-            SaveSettings(settings);
-            StatusText = "Prüfe Emby-Verbindung...";
-            ProgressValue = 20;
-            var serverInfo = await _services.Sync.TestConnectionAsync(settings);
-            ProgressValue = 100;
-            StatusText = $"Emby verbunden: {serverInfo.ServerName} ({serverInfo.Version})";
-            AppendLog(StatusText);
-        });
-    }
-
     private Task AnalyzeItemsAsync()
     {
         return AnalyzeItemsAsync(queryEmby: true);
@@ -271,13 +214,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
         await RunBusyAsync(async () =>
         {
-            var settings = BuildSettingsFromInput();
+            var settings = LoadConfiguredSettings();
             var canQueryEmby = queryEmby && HasEmbyApiSettings();
             var archiveRootPath = _services.ArchiveSettings.Load().DefaultSeriesArchiveRootPath;
             EmbyLibraryMatch? libraryMatch = null;
             if (canQueryEmby)
             {
-                SaveSettings(settings);
                 libraryMatch = await _services.Sync.FindSeriesLibraryAsync(settings, archiveRootPath, CancellationToken.None);
                 if (libraryMatch is null)
                 {
@@ -326,8 +268,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
         await RunBusyAsync(async () =>
         {
-            var settings = BuildSettingsFromInput();
-            SaveSettings(settings);
+            var settings = LoadConfiguredSettings();
             var archiveSettings = _services.ArchiveSettings.Load();
             EmbyLibraryMatch? libraryMatch = null;
 
@@ -375,7 +316,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             return;
         }
 
-        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess!)
+        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess!, _services.SettingsDialog)
         {
             Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
                 ?? Application.Current?.MainWindow
@@ -416,8 +357,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
         await RunBusyAsync(async () =>
         {
-            var settings = BuildSettingsFromInput();
-            SaveSettings(settings);
+            var settings = LoadConfiguredSettings();
             var updatedCount = 0;
             var skippedCount = 0;
 
@@ -589,25 +529,25 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
-    private void SaveSettings()
+    public void HandleGlobalSettingsChanged()
     {
-        SaveSettings(BuildSettingsFromInput());
-        StatusText = "Emby-Einstellungen gespeichert.";
+        RefreshCommands();
     }
 
-    private void SaveSettings(AppEmbySettings settings)
+    private void OpenSettings()
     {
-        _services.Settings.Save(settings);
-    }
-
-    private AppEmbySettings BuildSettingsFromInput()
-    {
-        return new AppEmbySettings
+        var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+            ?? Application.Current?.MainWindow;
+        if (_services.SettingsDialog.ShowDialog(owner, AppSettingsPage.Emby))
         {
-            ServerUrl = string.IsNullOrWhiteSpace(ServerUrl) ? AppEmbySettings.DefaultServerUrl : ServerUrl,
-            ApiKey = ApiKey,
-            ScanWaitTimeoutSeconds = _services.Settings.Load().ScanWaitTimeoutSeconds
-        }.Clone();
+            RefreshCommands();
+            StatusText = "Einstellungen aktualisiert.";
+        }
+    }
+
+    private AppEmbySettings LoadConfiguredSettings()
+    {
+        return _services.Settings.Load();
     }
 
     private async Task RunBusyAsync(Func<Task> action)
@@ -623,20 +563,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
     }
 
-    private bool CanUseEmbyApi()
-    {
-        return !_isBusy && HasEmbyApiSettings();
-    }
-
     private bool HasEmbyApiSettings()
     {
-        return !string.IsNullOrWhiteSpace(ServerUrl)
-            && !string.IsNullOrWhiteSpace(ApiKey);
+        var settings = LoadConfiguredSettings();
+        return !string.IsNullOrWhiteSpace(settings.ServerUrl)
+            && !string.IsNullOrWhiteSpace(settings.ApiKey);
     }
 
     private bool CanRunScan()
     {
-        return CanUseEmbyApi() && Items.Any(item => item.IsSelected);
+        return !_isBusy && HasEmbyApiSettings() && Items.Any(item => item.IsSelected);
     }
 
     private bool CanReviewSelectedMetadata()
@@ -646,7 +582,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     private bool CanRunSync()
     {
-        return CanUseEmbyApi() && Items.Any(item => item.IsSelected);
+        return !_isBusy && HasEmbyApiSettings() && Items.Any(item => item.IsSelected);
     }
 
     private void SetBusy(bool isBusy)
@@ -673,12 +609,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     private void RefreshCommands()
     {
         SelectReportCommand.RaiseCanExecuteChanged();
-        TestConnectionCommand.RaiseCanExecuteChanged();
+        OpenSettingsCommand.RaiseCanExecuteChanged();
         AnalyzeItemsCommand.RaiseCanExecuteChanged();
         RunScanCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
-        SaveSettingsCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
     }

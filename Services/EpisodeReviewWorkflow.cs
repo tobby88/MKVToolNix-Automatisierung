@@ -71,11 +71,16 @@ internal sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
 {
     private readonly IUserDialogService _dialogService;
     private readonly EpisodeMetadataLookupService _episodeMetadata;
+    private readonly IAppSettingsDialogService? _settingsDialog;
 
-    public EpisodeReviewWorkflow(IUserDialogService dialogService, EpisodeMetadataLookupService episodeMetadata)
+    public EpisodeReviewWorkflow(
+        IUserDialogService dialogService,
+        EpisodeMetadataLookupService episodeMetadata,
+        IAppSettingsDialogService? settingsDialog = null)
     {
         _dialogService = dialogService;
         _episodeMetadata = episodeMetadata;
+        _settingsDialog = settingsDialog;
     }
 
     public async Task<bool> ReviewManualSourceAsync(
@@ -160,7 +165,7 @@ internal sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
             item.SeasonNumber,
             item.EpisodeNumber);
 
-        var dialog = new TvdbLookupWindow(_episodeMetadata, guess)
+        var dialog = new TvdbLookupWindow(_episodeMetadata, guess, _settingsDialog)
         {
             Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
                 ?? Application.Current?.MainWindow

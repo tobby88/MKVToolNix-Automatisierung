@@ -45,11 +45,12 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public BatchMuxViewModel(
         BatchModuleServices services,
         IUserDialogService dialogService,
+        IAppSettingsDialogService? settingsDialog = null,
         IEpisodeReviewWorkflow? reviewWorkflow = null)
     {
         _services = services;
         _dialogService = dialogService;
-        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
+        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata, settingsDialog);
         _episodeCollection = new BatchEpisodeCollectionController();
         _executionRunner = new BatchExecutionRunner(services.FileCopy, services.MuxWorkflow, services.Cleanup);
         _logBuffer = new BufferedTextStore(

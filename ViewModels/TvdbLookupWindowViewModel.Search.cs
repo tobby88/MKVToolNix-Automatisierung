@@ -32,7 +32,7 @@ internal sealed partial class TvdbLookupWindowViewModel
             if (string.IsNullOrWhiteSpace(currentSettings.TvdbApiKey))
             {
                 ClearLoadedResults();
-                StatusText = "TVDB-API-Key fehlt. Bitte zuerst eintragen und dann suchen.";
+                StatusText = "TVDB-API-Key fehlt. Bitte zuerst im zentralen Einstellungsdialog hinterlegen.";
                 UpdateComparisonSummary();
                 return;
             }

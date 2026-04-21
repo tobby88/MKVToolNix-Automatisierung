@@ -99,6 +99,47 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(1, archiveAwareModule.CallCount);
     }
 
+    [Fact]
+    public void OpenSettingsCommand_WhenAccepted_RefreshesStatuses_AndNotifiesAffectedModules()
+    {
+        var archiveAwareModule = new StubArchiveAndSettingsAwareModule();
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-after-settings");
+        Directory.CreateDirectory(archiveRoot);
+        var ffprobePath = CreateFile(Path.Combine("ffmpeg", "ffprobe.exe"));
+        var mkvMergePath = CreateFile(Path.Combine("mkvtoolnix", "mkvmerge.exe"));
+        _ = CreateFile(Path.Combine("mkvtoolnix", "mkvpropedit.exe"));
+        var toolPathStore = CreateToolPathStore();
+        MainWindowModuleServices services = null!;
+        var settingsDialog = new StubSettingsDialog(() =>
+        {
+            services.Archive.ConfigureArchiveRootDirectory(archiveRoot);
+            toolPathStore.Save(new AppToolPathSettings
+            {
+                FfprobePath = ffprobePath,
+                MkvToolNixDirectoryPath = Path.GetDirectoryName(mkvMergePath)!
+            });
+        });
+        services = ViewModelTestContext.CreateMainWindowServices(
+            toolPathStore,
+            ffprobeLocator: new StubFfprobeLocator(ffprobePath),
+            mkvToolNixLocator: new StubMkvToolNixLocator(mkvMergePath),
+            settingsDialog: settingsDialog);
+        services.Archive.ConfigureArchiveRootDirectory(_tempDirectory);
+        var viewModel = new MainWindowViewModel(
+            [new ModuleNavigationItem("Einzelepisode", "Erkennen", archiveAwareModule)],
+            services);
+
+        viewModel.OpenSettingsCommand.Execute(null);
+
+        Assert.Equal(AppSettingsPage.Archive, settingsDialog.LastInitialPage);
+        Assert.Equal(archiveRoot, viewModel.ArchiveRootDirectory);
+        Assert.True(viewModel.IsArchiveAvailable);
+        Assert.True(viewModel.IsFfprobeAvailable);
+        Assert.True(viewModel.IsMkvToolNixAvailable);
+        Assert.Equal(1, archiveAwareModule.SettingsChangedCallCount);
+        Assert.Equal(1, archiveAwareModule.ArchiveChangedCallCount);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -126,8 +167,7 @@ public sealed class MainWindowViewModelTests : IDisposable
 
         return new MainWindowViewModel(
             modules ?? [new ModuleNavigationItem("Einzelepisode", "Erkennen", new object())],
-            services,
-            new UserDialogService());
+            services);
     }
 
     private string CreateFile(string relativePath, string content = "tool")
@@ -188,6 +228,35 @@ public sealed class MainWindowViewModelTests : IDisposable
         public void HandleArchiveConfigurationChanged()
         {
             CallCount++;
+        }
+    }
+
+    private sealed class StubArchiveAndSettingsAwareModule : IArchiveConfigurationAwareModule, IGlobalSettingsAwareModule
+    {
+        public int ArchiveChangedCallCount { get; private set; }
+
+        public int SettingsChangedCallCount { get; private set; }
+
+        public void HandleArchiveConfigurationChanged()
+        {
+            ArchiveChangedCallCount++;
+        }
+
+        public void HandleGlobalSettingsChanged()
+        {
+            SettingsChangedCallCount++;
+        }
+    }
+
+    private sealed class StubSettingsDialog(Action onAccept) : IAppSettingsDialogService
+    {
+        public AppSettingsPage? LastInitialPage { get; private set; }
+
+        public bool ShowDialog(System.Windows.Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive)
+        {
+            LastInitialPage = initialPage;
+            onAccept();
+            return true;
         }
     }
 }

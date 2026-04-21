@@ -112,11 +112,32 @@ internal sealed record DownloadSortModuleServices(
 /// <param name="ArchiveSettings">Persistenter Store für den Standardpfad der Serienbibliothek.</param>
 /// <param name="Sync">Fachservice für JSON-Metadatenreport-Import, NFO-Provider-IDs und Emby-API-Aktionen.</param>
 /// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Emby-Zeilen.</param>
+/// <param name="SettingsDialog">Zentraler Einstellungsdialog für Emby-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
     AppArchiveSettingsStore ArchiveSettings,
     EmbyMetadataSyncService Sync,
-    EpisodeMetadataLookupService EpisodeMetadata);
+    EpisodeMetadataLookupService EpisodeMetadata,
+    IAppSettingsDialogService SettingsDialog);
+
+/// <summary>
+/// Bündelt die Stores und Infrastruktur für den zentralen Einstellungsdialog.
+/// </summary>
+/// <param name="Archive">Archivdienst für die live wirksame Serienwurzel.</param>
+/// <param name="ToolPaths">Persistenter Store für ffprobe- und MKVToolNix-Pfade.</param>
+/// <param name="FfprobeLocator">Locator für die aktuell auflösbare <c>ffprobe.exe</c>.</param>
+/// <param name="MkvToolNixLocator">Locator für die aktuell auflösbare MKVToolNix-Installation.</param>
+/// <param name="EpisodeMetadata">TVDB-Settings- und Mappingstore samt Lookup-Logik.</param>
+/// <param name="EmbySettings">Persistenter Store für Emby-Serveradresse und API-Key.</param>
+/// <param name="EmbySync">Fachservice für Emby-Verbindungstest und nachgelagerten NFO-/Refresh-Abgleich.</param>
+internal sealed record AppSettingsModuleServices(
+    SeriesArchiveService Archive,
+    AppToolPathStore ToolPaths,
+    IFfprobeLocator FfprobeLocator,
+    IMkvToolNixLocator MkvToolNixLocator,
+    EpisodeMetadataLookupService EpisodeMetadata,
+    AppEmbySettingsStore EmbySettings,
+    EmbyMetadataSyncService EmbySync);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.
@@ -125,8 +146,10 @@ internal sealed record EmbyModuleServices(
 /// <param name="ToolPaths">Persistenter Store für MKVToolNix- und ffprobe-Pfade.</param>
 /// <param name="FfprobeLocator">Locator für die aktuell nutzbare <c>ffprobe.exe</c>.</param>
 /// <param name="MkvToolNixLocator">Locator für die aktuell nutzbare <c>mkvmerge.exe</c>.</param>
+/// <param name="SettingsDialog">Zentraler Einstellungsdialog für selten geänderte App-Konfiguration.</param>
 internal sealed record MainWindowModuleServices(
     SeriesArchiveService Archive,
     AppToolPathStore ToolPaths,
     IFfprobeLocator FfprobeLocator,
-    IMkvToolNixLocator MkvToolNixLocator);
+    IMkvToolNixLocator MkvToolNixLocator,
+    IAppSettingsDialogService SettingsDialog);

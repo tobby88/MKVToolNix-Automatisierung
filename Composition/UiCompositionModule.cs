@@ -20,6 +20,17 @@ internal static class UiCompositionModule
     public static void Register(IServiceCollection services)
     {
         services.AddSingleton<IUserDialogService>(_ => new UserDialogService());
+        services.AddSingleton<AppSettingsModuleServices>(provider => new AppSettingsModuleServices(
+            provider.GetRequiredService<SeriesArchiveService>(),
+            provider.GetRequiredService<AppToolPathStore>(),
+            provider.GetRequiredService<IFfprobeLocator>(),
+            provider.GetRequiredService<IMkvToolNixLocator>(),
+            provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<AppEmbySettingsStore>(),
+            provider.GetRequiredService<EmbyMetadataSyncService>()));
+        services.AddSingleton<IAppSettingsDialogService>(provider => new AppSettingsDialogService(
+            provider.GetRequiredService<AppSettingsModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<SharedEpisodeModuleServices>(provider => new SharedEpisodeModuleServices(
             provider.GetRequiredService<SeriesEpisodeMuxService>(),
             provider.GetRequiredService<EpisodePlanCoordinator>(),
@@ -45,18 +56,22 @@ internal static class UiCompositionModule
             provider.GetRequiredService<AppEmbySettingsStore>(),
             provider.GetRequiredService<AppArchiveSettingsStore>(),
             provider.GetRequiredService<EmbyMetadataSyncService>(),
-            provider.GetRequiredService<EpisodeMetadataLookupService>()));
+            provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),
             provider.GetRequiredService<IFfprobeLocator>(),
-            provider.GetRequiredService<IMkvToolNixLocator>()));
+            provider.GetRequiredService<IMkvToolNixLocator>(),
+            provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<SingleEpisodeMuxViewModel>(provider => new SingleEpisodeMuxViewModel(
             provider.GetRequiredService<SingleEpisodeModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<IUserDialogService>(),
+            provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<BatchMuxViewModel>(provider => new BatchMuxViewModel(
             provider.GetRequiredService<BatchModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<IUserDialogService>(),
+            provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<DownloadSortViewModel>(provider => new DownloadSortViewModel(
             provider.GetRequiredService<DownloadSortModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
@@ -82,7 +97,6 @@ internal static class UiCompositionModule
                     "Neue MKV-Dateien scannen und NFO-IDs abgleichen",
                     provider.GetRequiredService<EmbySyncViewModel>())
             ],
-            provider.GetRequiredService<MainWindowModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<MainWindowModuleServices>()));
     }
 }

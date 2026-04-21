@@ -41,11 +41,12 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public SingleEpisodeMuxViewModel(
         SingleEpisodeModuleServices services,
         IUserDialogService dialogService,
+        IAppSettingsDialogService? settingsDialog = null,
         IEpisodeReviewWorkflow? reviewWorkflow = null)
     {
         _services = services;
         _dialogService = dialogService;
-        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata);
+        _reviewWorkflow = reviewWorkflow ?? new EpisodeReviewWorkflow(dialogService, services.EpisodeMetadata, settingsDialog);
         _previewOutputBuffer = new BufferedTextStore(
             flush => _ = Application.Current.Dispatcher.BeginInvoke(flush),
             text => PreviewText = text,

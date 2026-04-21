@@ -8,13 +8,12 @@ using MkvToolnixAutomatisierung.ViewModels.Modules;
 namespace MkvToolnixAutomatisierung.ViewModels;
 
 /// <summary>
-/// Verwaltet Modulnavigation und globale Status-/Konfigurationsaktionen im Hauptfenster.
+/// Verwaltet Modulnavigation und kompakte globale Statusanzeige des Hauptfensters.
 /// </summary>
 internal sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
     private readonly MainWindowModuleServices _services;
-    private readonly IUserDialogService _dialogService;
     private bool _isFfprobeAvailable;
     private string? _ffprobePath;
     private string? _ffprobeStatusDetail;
@@ -27,16 +26,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public MainWindowViewModel(
         IReadOnlyList<ModuleNavigationItem> modules,
-        MainWindowModuleServices services,
-        IUserDialogService dialogService)
+        MainWindowModuleServices services)
     {
         _services = services;
-        _dialogService = dialogService;
         Modules = new ObservableCollection<ModuleNavigationItem>(modules);
         _selectedModule = Modules.First();
-        SelectFfprobeCommand = new RelayCommand(SelectFfprobePath);
-        SelectMkvToolNixCommand = new RelayCommand(SelectMkvToolNixDirectory);
-        SelectArchiveRootCommand = new RelayCommand(SelectArchiveRootDirectory);
+        OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
         RefreshToolStatus();
         RefreshArchiveStatus();
     }
@@ -59,6 +54,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(MediaProbeStatusText));
             OnPropertyChanged(nameof(MediaProbeStatusTooltip));
+            OnPropertyChanged(nameof(SystemStatusSummary));
         }
     }
 
@@ -92,6 +88,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(MkvToolNixStatusText));
             OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
+            OnPropertyChanged(nameof(SystemStatusSummary));
         }
     }
 
@@ -127,6 +124,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ArchiveStatusTooltip));
             OnPropertyChanged(nameof(HasArchiveNotice));
             OnPropertyChanged(nameof(ArchiveNoticeText));
+            OnPropertyChanged(nameof(SystemStatusSummary));
         }
     }
 
@@ -154,7 +152,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     public string MediaProbeStatusTooltip => IsFfprobeAvailable
         ? $"ffprobe gefunden und aktiv:{Environment.NewLine}{FfprobePath}"
         : string.IsNullOrWhiteSpace(FfprobePath)
-            ? "ffprobe wurde nicht gefunden. Klicken, um ffprobe.exe auszuwählen. Bis dahin nutzt die App für Laufzeiten den Windows-Fallback."
+            ? "ffprobe wurde nicht gefunden. Im Einstellungsdialog kann bei Bedarf ein expliziter Pfad gesetzt werden."
             : $"ffprobe aktuell nicht verfügbar:{Environment.NewLine}{FfprobePath}{Environment.NewLine}{Environment.NewLine}{_ffprobeStatusDetail}";
 
     public string MkvToolNixStatusText => IsMkvToolNixAvailable
@@ -164,7 +162,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     public string MkvToolNixStatusTooltip => IsMkvToolNixAvailable
         ? $"MKVToolNix gefunden:{Environment.NewLine}{Path.GetDirectoryName(MkvMergePath ?? string.Empty) ?? MkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvmerge.exe:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvpropedit.exe:{Environment.NewLine}{_mkvPropEditPath}"
         : string.IsNullOrWhiteSpace(MkvMergePath)
-            ? "MKVToolNix wurde nicht gefunden. Klicken, um den MKVToolNix-Ordner auszuwählen."
+            ? "MKVToolNix wurde nicht gefunden. Im Einstellungsdialog kann bei Bedarf ein Ordner gesetzt werden."
             : $"MKVToolNix aktuell nicht vollständig verfügbar:{Environment.NewLine}{MkvMergePath}{Environment.NewLine}{Environment.NewLine}{_mkvToolNixStatusDetail}";
 
     public string ArchiveStatusText => IsArchiveAvailable
@@ -172,8 +170,8 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         : "Archiv: fehlt";
 
     public string ArchiveStatusTooltip => IsArchiveAvailable
-        ? $"Serienbibliothek gefunden:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern."
-        : $"Konfigurierte Serienbibliothek nicht erreichbar:{Environment.NewLine}{ArchiveRootDirectory}{Environment.NewLine}{Environment.NewLine}Klicken, um den Standardpfad zu ändern.";
+        ? $"Serienbibliothek gefunden:{Environment.NewLine}{ArchiveRootDirectory}"
+        : $"Konfigurierte Serienbibliothek nicht erreichbar:{Environment.NewLine}{ArchiveRootDirectory}";
 
     public bool HasArchiveNotice => !IsArchiveAvailable;
 
@@ -186,6 +184,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     public string PortableModeText => "Portable: lokale Daten in .\\Data";
 
     public string PortableModeTooltip => $"Portable Modus aktiv:{Environment.NewLine}{PortableAppStorage.DataDirectory}";
+
+    public string SystemStatusSummary => string.Join(
+        Environment.NewLine,
+        ArchiveStatusText,
+        MkvToolNixStatusText,
+        MediaProbeStatusText);
 
     public string QuickHelpText
     {
@@ -202,21 +206,16 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             return string.Join(
                 Environment.NewLine,
                 "Erststart:",
-                "1. Prüfen, ob MKVToolNix links unten bereit ist.",
-                "2. Optional ffprobe auswählen, falls genauere Laufzeiten gewünscht sind.",
-                "3. Serienbibliothek links unten bei Bedarf anpassen.",
-                "4. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
+                "1. Selten geänderte Pfade und API-Schlüssel über 'Einstellungen' hinterlegen.",
+                "2. Archiv- und Toolstatus darunter kurz prüfen.",
+                "3. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
                 string.Empty,
                 "Aktuelles Modul:",
                 moduleHint);
         }
     }
 
-    public RelayCommand SelectFfprobeCommand { get; }
-
-    public RelayCommand SelectMkvToolNixCommand { get; }
-
-    public RelayCommand SelectArchiveRootCommand { get; }
+    public RelayCommand OpenSettingsCommand { get; }
 
     public ModuleNavigationItem SelectedModule
     {
@@ -232,58 +231,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(QuickHelpText));
         }
-    }
-
-    private void SelectFfprobePath()
-    {
-        var initialDirectory = GetInitialDirectory(FfprobePath);
-        var selectedPath = _dialogService.SelectExecutable(
-            "ffprobe.exe auswählen",
-            "ffprobe.exe|ffprobe.exe|Ausführbare Dateien (*.exe)|*.exe",
-            initialDirectory);
-
-        if (string.IsNullOrWhiteSpace(selectedPath))
-        {
-            return;
-        }
-
-        var settings = _services.ToolPaths.Load();
-        settings.FfprobePath = selectedPath;
-        _services.ToolPaths.Save(settings);
-        RefreshToolStatus();
-    }
-
-    private void SelectMkvToolNixDirectory()
-    {
-        var initialDirectory = GetInitialDirectory(MkvMergePath);
-        var selectedDirectory = _dialogService.SelectFolder(
-            "MKVToolNix-Ordner auswählen",
-            initialDirectory);
-
-        if (string.IsNullOrWhiteSpace(selectedDirectory))
-        {
-            return;
-        }
-
-        var settings = _services.ToolPaths.Load();
-        settings.MkvToolNixDirectoryPath = selectedDirectory;
-        _services.ToolPaths.Save(settings);
-        RefreshToolStatus();
-    }
-
-    private void SelectArchiveRootDirectory()
-    {
-        var initialDirectory = GetInitialDirectory(ArchiveRootDirectory);
-        var selectedDirectory = _dialogService.SelectFolder(
-            "Standard-Serienbibliothek auswählen",
-            initialDirectory);
-
-        if (string.IsNullOrWhiteSpace(selectedDirectory))
-        {
-            return;
-        }
-
-        UpdateArchiveRootDirectory(selectedDirectory);
     }
 
     /// <summary>
@@ -302,19 +249,40 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         NotifyArchiveConfigurationChanged();
     }
 
+    private void OpenSettingsDialog()
+    {
+        var previousArchiveRoot = ArchiveRootDirectory;
+        var accepted = _services.SettingsDialog.ShowDialog(
+            System.Windows.Application.Current?.MainWindow,
+            AppSettingsPage.Archive);
+        if (!accepted)
+        {
+            return;
+        }
+
+        RefreshToolStatus();
+        RefreshArchiveStatus();
+        NotifyGlobalSettingsChanged();
+        if (!string.Equals(previousArchiveRoot, ArchiveRootDirectory, StringComparison.OrdinalIgnoreCase))
+        {
+            NotifyArchiveConfigurationChanged();
+        }
+
+        OnPropertyChanged(nameof(SystemStatusSummary));
+    }
+
     private void RefreshToolStatus()
     {
         var settings = _services.ToolPaths.Load();
         var detectedFfprobePath = _services.FfprobeLocator.TryFindFfprobePath();
-        // Fehlgeschlagene Auto-Erkennung darf den zuletzt gespeicherten Pfad nicht aus den Settings entfernen.
         var resolvedFfprobePath = !string.IsNullOrWhiteSpace(detectedFfprobePath)
             ? detectedFfprobePath
             : NormalizeConfiguredExecutablePath(settings.FfprobePath, "ffprobe.exe");
         FfprobePath = resolvedFfprobePath;
         IsFfprobeAvailable = !string.IsNullOrWhiteSpace(detectedFfprobePath) && File.Exists(detectedFfprobePath);
         SetFfprobeStatusDetail(string.IsNullOrWhiteSpace(settings.FfprobePath)
-            ? "Klicken, um ffprobe.exe auszuwählen. Bis dahin nutzt die App für Laufzeiten den Windows-Fallback."
-            : "Der gespeicherte Pfad bleibt erhalten. Klicken, um ffprobe.exe neu auszuwählen oder den Windows-Fallback weiter zu nutzen.");
+            ? "Im Einstellungsdialog kann bei Bedarf ein expliziter ffprobe-Pfad hinterlegt werden."
+            : "Der gespeicherte Pfad bleibt erhalten. Im Einstellungsdialog kann ffprobe neu gesetzt werden.");
 
         string? detectedMkvMergePath = null;
         string? detectedMkvPropEditPath = null;
@@ -343,15 +311,14 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             && File.Exists(detectedMkvMergePath)
             && File.Exists(detectedMkvPropEditPath);
         SetMkvToolNixStatusDetail(string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
-            ? "Klicken, um den MKVToolNix-Ordner auszuwählen."
-            : $"Der gespeicherte Pfad bleibt erhalten. {mkvToolNixError?.Message ?? "Klicken, um den MKVToolNix-Ordner neu auszuwählen."}");
+            ? "Im Einstellungsdialog kann bei Bedarf ein MKVToolNix-Ordner gesetzt werden."
+            : $"Der gespeicherte Pfad bleibt erhalten. {mkvToolNixError?.Message ?? "Im Einstellungsdialog kann der Pfad angepasst werden."}");
 
         var normalizedFfprobePath = detectedFfprobePath;
         var normalizedMkvToolPath = string.IsNullOrWhiteSpace(detectedMkvMergePath)
             ? null
             : Path.GetDirectoryName(detectedMkvMergePath) ?? detectedMkvMergePath;
 
-        // Persistiert wird nur eine tatsächlich funktionierende Auflösung, nicht ein vorübergehender Fehlerzustand.
         if ((!string.IsNullOrWhiteSpace(normalizedFfprobePath)
                 && !string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase))
             || (!string.IsNullOrWhiteSpace(normalizedMkvToolPath)
@@ -388,25 +355,15 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private static string GetInitialDirectory(string? filePath)
+    private void NotifyGlobalSettingsChanged()
     {
-        if (!string.IsNullOrWhiteSpace(filePath))
+        foreach (var module in Modules)
         {
-            if (Directory.Exists(filePath))
+            if (module.ContentViewModel is IGlobalSettingsAwareModule settingsAwareModule)
             {
-                return filePath;
-            }
-
-            var parent = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
-            {
-                return parent;
+                settingsAwareModule.HandleGlobalSettingsChanged();
             }
         }
-
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Downloads");
     }
 
     private void SetFfprobeStatusDetail(string detail)

@@ -17,8 +17,6 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private bool _isInitialized;
     private bool _suppressSeriesSelectionChanged;
-    private string _apiKey;
-    private string _pin;
     private string _seriesSearchText;
     private string _episodeSearchText;
     private string _comparisonSummaryText;
@@ -35,10 +33,6 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     {
         _lookupService = lookupService;
         _guess = guess;
-
-        var settings = _lookupService.LoadSettings();
-        _apiKey = settings.TvdbApiKey;
-        _pin = settings.TvdbPin;
         _seriesSearchText = guess.SeriesName;
         _episodeSearchText = guess.EpisodeTitle;
         _comparisonSummaryText = "Noch kein TVDB-Treffer ausgewählt.";
@@ -54,42 +48,6 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     /// Vorbelegung aus lokal erkannten Serien- und Episodendaten.
     /// </summary>
     public string GuessSummaryText { get; }
-
-    /// <summary>
-    /// Aktuell eingetragener TVDB-API-Key.
-    /// </summary>
-    public string ApiKey
-    {
-        get => _apiKey;
-        set
-        {
-            if (_apiKey == value)
-            {
-                return;
-            }
-
-            _apiKey = value;
-            OnPropertyChanged();
-        }
-    }
-
-    /// <summary>
-    /// Optional eingetragene TVDB-PIN.
-    /// </summary>
-    public string Pin
-    {
-        get => _pin;
-        set
-        {
-            if (_pin == value)
-            {
-                return;
-            }
-
-            _pin = value;
-            OnPropertyChanged();
-        }
-    }
 
     /// <summary>
     /// Suchtext für TVDB-Serien.
@@ -250,12 +208,11 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     public bool CanApply => SelectedSeriesItem is not null && SelectedEpisodeItem is not null;
 
     /// <summary>
-    /// Persistiert die aktuell sichtbaren Zugangsdaten, ohne den Dialog zu schließen.
+    /// Lädt nach einem zentralen Settings-Update die gespeicherten Zugangsdaten neu.
     /// </summary>
-    public void SaveSettings()
+    public void ReloadStoredSettings()
     {
-        _lookupService.SaveSettings(BuildTransientSettings());
-        StatusText = $"TVDB-Einstellungen gespeichert: {_lookupService.SettingsFilePath}";
+        StatusText = "TVDB-Einstellungen neu geladen.";
     }
 
     /// <summary>
@@ -263,7 +220,6 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public void RememberLocalDetectionChoice()
     {
-        _lookupService.SaveSettings(BuildTransientSettings());
     }
 
     /// <summary>
@@ -291,7 +247,6 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
             return false;
         }
 
-        _lookupService.SaveSettings(BuildTransientSettings());
         _lookupService.SaveSeriesMapping(_guess.SeriesName, SelectedSeriesItem.Series);
 
         selection = new TvdbEpisodeSelection(
@@ -307,12 +262,7 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
 
     private AppMetadataSettings BuildTransientSettings()
     {
-        return new AppMetadataSettings
-        {
-            TvdbApiKey = ApiKey.Trim(),
-            TvdbPin = Pin.Trim(),
-            SeriesMappings = _lookupService.LoadSettings().SeriesMappings
-        };
+        return _lookupService.LoadSettings();
     }
 
     private void UpdateComparisonSummary()

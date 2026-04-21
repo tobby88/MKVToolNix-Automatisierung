@@ -1,0 +1,200 @@
+<Window x:Class="MkvToolnixAutomatisierung.Windows.AppSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Einstellungen"
+        Width="940"
+        Height="720"
+        MinWidth="820"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl x:Name="SettingsTabControl">
+            <TabItem Header="Archiv">
+                <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="150" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Standard-Archivpfad" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,4,12,4"
+                             Text="{Binding ArchiveRootDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="0,2,0,2"
+                            Padding="10,6"
+                            Click="SelectArchiveButton_Click"
+                            Content="Ordner wählen" />
+
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="1"
+                               Foreground="#4D5B68"
+                               Text="{Binding ArchiveStatusText}"
+                               ToolTip="{Binding ArchiveStatusTooltip}" />
+
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="1"
+                               Margin="0,10,0,0"
+                               Foreground="#4D5B68"
+                               Text="{Binding SettingsFilePath}" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Werkzeuge">
+                <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="150" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="MKVToolNix-Ordner" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,4,12,4"
+                             Text="{Binding MkvToolNixDirectoryPath, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="0,2,0,2"
+                            Padding="10,6"
+                            Click="SelectMkvToolNixButton_Click"
+                            Content="Ordner wählen" />
+
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="1"
+                               Foreground="#4D5B68"
+                               Text="{Binding MkvToolNixStatusText}"
+                               ToolTip="{Binding MkvToolNixStatusTooltip}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,14,12,8" VerticalAlignment="Center" Text="ffprobe.exe" />
+                    <TextBox Grid.Row="2"
+                             Grid.Column="1"
+                             Margin="0,10,12,4"
+                             Text="{Binding FfprobePath, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="2"
+                            Grid.Column="2"
+                            Margin="0,8,0,2"
+                            Padding="10,6"
+                            Click="SelectFfprobeButton_Click"
+                            Content="Datei wählen" />
+
+                    <TextBlock Grid.Row="3"
+                               Grid.Column="1"
+                               Foreground="#4D5B68"
+                               Text="{Binding FfprobeStatusText}"
+                               ToolTip="{Binding FfprobeStatusTooltip}" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="TVDB">
+                <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,4,0,4"
+                             Text="{Binding TvdbApiKey, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
+                    <TextBox Grid.Row="1"
+                             Grid.Column="1"
+                             Margin="0,4,0,4"
+                             Text="{Binding TvdbPin, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Emby">
+                <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="180" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="150" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Server" />
+                    <TextBox Grid.Row="0"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,4,0,4"
+                             Text="{Binding EmbyServerUrl, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="API-Key" />
+                    <TextBox Grid.Row="1"
+                             Grid.Column="1"
+                             Grid.ColumnSpan="2"
+                             Margin="0,4,0,4"
+                             Text="{Binding EmbyApiKey, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Scan-Wartezeit" />
+                    <TextBox Grid.Row="2"
+                             Grid.Column="1"
+                             Margin="0,4,12,4"
+                             Text="{Binding EmbyScanWaitTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="2"
+                            Grid.Column="2"
+                            Margin="0,2,0,2"
+                            Padding="10,6"
+                            Click="TestEmbyConnectionButton_Click"
+                            Content="Verbindung testen" />
+
+                    <TextBlock Grid.Row="3"
+                               Grid.Column="1"
+                               Grid.ColumnSpan="2"
+                               Foreground="#4D5B68"
+                               Text="Die Wartezeit gilt nur für das Nachladen neu sichtbarer Emby-Items nach einem Scan." />
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="1" Margin="0,12,0,0" LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left"
+                       VerticalAlignment="Center"
+                       Foreground="#44515D"
+                       Text="{Binding StatusText}" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Width="120"
+                        Margin="0,0,12,0"
+                        Padding="10,6"
+                        Click="CancelButton_Click"
+                        Content="Abbrechen" />
+                <Button Width="140"
+                        Padding="10,6"
+                        Click="SaveButton_Click"
+                        Content="Übernehmen" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

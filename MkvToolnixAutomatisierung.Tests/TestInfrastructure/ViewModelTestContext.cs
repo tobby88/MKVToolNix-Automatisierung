@@ -69,7 +69,8 @@ internal static class ViewModelTestContext
         AppToolPathStore? toolPathStore = null,
         SeriesArchiveService? archiveService = null,
         IFfprobeLocator? ffprobeLocator = null,
-        IMkvToolNixLocator? mkvToolNixLocator = null)
+        IMkvToolNixLocator? mkvToolNixLocator = null,
+        IAppSettingsDialogService? settingsDialog = null)
     {
         var settingsStore = new AppSettingsStore();
         var effectiveToolPathStore = toolPathStore ?? new AppToolPathStore(settingsStore);
@@ -81,7 +82,8 @@ internal static class ViewModelTestContext
             effectiveArchiveService,
             effectiveToolPathStore,
             ffprobeLocator ?? new MkvToolNixFreeFfprobeLocator(),
-            mkvToolNixLocator ?? new MkvToolNixLocator(effectiveToolPathStore));
+            mkvToolNixLocator ?? new MkvToolNixLocator(effectiveToolPathStore),
+            settingsDialog ?? new NullSettingsDialogService());
     }
 
     private static TestServiceGraph CreateServiceGraph(
@@ -147,6 +149,14 @@ internal static class ViewModelTestContext
         public string? TryFindFfprobePath()
         {
             return null;
+        }
+    }
+
+    private sealed class NullSettingsDialogService : IAppSettingsDialogService
+    {
+        public bool ShowDialog(System.Windows.Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive)
+        {
+            return false;
         }
     }
 

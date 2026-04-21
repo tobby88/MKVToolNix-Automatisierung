@@ -706,7 +706,7 @@ public sealed class BatchMetadataReviewTests
         return new BatchMuxViewModel(
             ViewModelTestContext.CreateBatchServices(),
             dialogService ?? new FakeDialogService(),
-            reviewWorkflow);
+            reviewWorkflow: reviewWorkflow);
     }
 
     private static BatchEpisodeItemViewModel CreatePendingReviewItem()
