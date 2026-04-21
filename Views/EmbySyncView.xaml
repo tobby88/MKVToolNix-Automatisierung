@@ -126,7 +126,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0"
@@ -136,17 +135,11 @@
                         Content="2. Emby scannen"
                         ToolTip="{Binding RunScanTooltip, Mode=OneWay}" />
                 <Button Grid.Column="1"
-                        Margin="0,0,12,8"
-                        Padding="10,6"
-                        Command="{Binding AnalyzeItemsCommand}"
-                        ToolTip="{Binding AnalyzeItemsTooltip, Mode=OneWay}"
-                        Content="3. NFO/Emby prüfen" />
-                <Button Grid.Column="2"
                         Margin="0,0,0,8"
                         Padding="10,6"
                         Command="{Binding RunSyncCommand}"
                         ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                        Content="5. NFO-Sync" />
+                        Content="3. NFO-Sync" />
             </Grid>
         </Grid>
 

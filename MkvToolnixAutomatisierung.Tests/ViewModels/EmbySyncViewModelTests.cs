@@ -85,14 +85,6 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void AnalyzeItemsTooltip_WithoutApiSettings_ExplainsLocalOnlyAnalysis()
-    {
-        var vm = CreateViewModel();
-
-        Assert.Contains("nur die lokalen NFO-Dateien", vm.AnalyzeItemsTooltip, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void RunScanTooltip_ExplainsSeriesLibraryScanAndBackgroundWork()
     {
         var vm = CreateViewModel();
@@ -137,6 +129,7 @@ public sealed class EmbySyncViewModelTests
             Assert.Equal(2, vm.ItemCount);
             Assert.Contains(firstReportPath, vm.ReportPath, StringComparison.Ordinal);
             Assert.Contains(secondReportPath, vm.ReportPath, StringComparison.Ordinal);
+            Assert.Contains("Prüfung abgeschlossen", vm.StatusText, StringComparison.Ordinal);
         }
         finally
         {

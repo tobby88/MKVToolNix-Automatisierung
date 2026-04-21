@@ -94,11 +94,12 @@ Nach jedem Batch-Lauf:
 
 ## Typischer Workflow: Emby-Abgleich
 
-1. Emby-Serveradresse und API-Key eintragen und `Verbindung testen`.
+1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
 2. Den nach einem Batch-Lauf erzeugten Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` laden.
-3. `NFO/Emby prüfen`, um vorhandene Provider-IDs aus NFO und Emby-Item zu übernehmen.
-4. Fehlende TVDB-/IMDB-IDs bei Bedarf manuell ergänzen.
-5. `Abgleich starten`, um einen Emby-Library-Scan anzustoßen, NFO-Provider-IDs zu schreiben und geänderte Items gezielt zu refreshen.
+3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch die bereits sichtbaren Emby-Einträge.
+4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
+5. Fehlende TVDB-/IMDB-IDs bei Bedarf manuell ergänzen.
+6. `NFO-Sync`, um TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und geänderte Items gezielt zu refreshen.
 
 Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs.
 

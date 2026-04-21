@@ -34,7 +34,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        AnalyzeItemsCommand = new AsyncRelayCommand(AnalyzeItemsAsync, () => !_isBusy && Items.Count > 0, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
@@ -45,8 +44,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public AsyncRelayCommand SelectReportCommand { get; }
-
-    public AsyncRelayCommand AnalyzeItemsCommand { get; }
 
     public AsyncRelayCommand RunScanCommand { get; }
 
@@ -149,13 +146,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ? "Noch kein Metadatenreport geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne erwartete TVDB-/IMDB-ID.";
 
-    public string AnalyzeItemsTooltip => HasEmbyApiSettings()
-        ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
-        : "Prüft nur die lokalen NFO-Dateien. Server und API-Key werden zentral im Einstellungsdialog gepflegt.";
-
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
 
-    public string RunSyncTooltip => "Schreibt die aktuell sichtbaren TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
+    public string RunSyncTooltip => "Schreibt die zuletzt automatisch geprüften TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
 
     private async Task SelectReportAsync()
     {
@@ -194,15 +187,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         {
             AppendLog($"Metadatenreport geladen: {reportPath}");
         }
-        return AnalyzeItemsAsync(queryEmby: false);
+        return AnalyzeItemsAsync();
     }
 
-    private Task AnalyzeItemsAsync()
-    {
-        return AnalyzeItemsAsync(queryEmby: true);
-    }
-
-    private async Task AnalyzeItemsAsync(bool queryEmby)
+    private async Task AnalyzeItemsAsync()
     {
         if (Items.Count == 0)
         {
@@ -212,7 +200,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         await RunBusyAsync(async () =>
         {
             var settings = LoadConfiguredSettings();
-            var canQueryEmby = queryEmby && HasEmbyApiSettings();
+            var canQueryEmby = HasEmbyApiSettings();
             var archiveRootPath = _services.ArchiveSettings.Load().DefaultSeriesArchiveRootPath;
             EmbyLibraryMatch? libraryMatch = null;
             if (canQueryEmby)
@@ -595,7 +583,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private void RefreshCommands()
     {
         SelectReportCommand.RaiseCanExecuteChanged();
-        AnalyzeItemsCommand.RaiseCanExecuteChanged();
         RunScanCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
