@@ -34,7 +34,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        OpenSettingsCommand = new RelayCommand(OpenSettings, () => !_isBusy);
         AnalyzeItemsCommand = new AsyncRelayCommand(AnalyzeItemsAsync, () => !_isBusy && Items.Count > 0, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
@@ -46,8 +45,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public AsyncRelayCommand SelectReportCommand { get; }
-
-    public RelayCommand OpenSettingsCommand { get; }
 
     public AsyncRelayCommand AnalyzeItemsCommand { get; }
 
@@ -534,17 +531,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         RefreshCommands();
     }
 
-    private void OpenSettings()
-    {
-        var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
-            ?? Application.Current?.MainWindow;
-        if (_services.SettingsDialog.ShowDialog(owner, AppSettingsPage.Emby))
-        {
-            RefreshCommands();
-            StatusText = "Einstellungen aktualisiert.";
-        }
-    }
-
     private AppEmbySettings LoadConfiguredSettings()
     {
         return _services.Settings.Load();
@@ -609,7 +595,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private void RefreshCommands()
     {
         SelectReportCommand.RaiseCanExecuteChanged();
-        OpenSettingsCommand.RaiseCanExecuteChanged();
         AnalyzeItemsCommand.RaiseCanExecuteChanged();
         RunScanCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();

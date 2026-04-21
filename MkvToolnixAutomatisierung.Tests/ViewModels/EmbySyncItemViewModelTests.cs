@@ -1,3 +1,4 @@
+using System.IO;
 using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -119,6 +120,31 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("Neutral", vm.StatusTone);
         Assert.Contains("keine Episoden-NFO", vm.Note, StringComparison.Ordinal);
         Assert.Contains("nicht anwendbar", vm.ProviderIdEditTooltip, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Videos\Serie\trailers\Serie - S00E01 - Trailer.mkv")]
+    [InlineData(@"C:\Videos\Serie\backdrops\Serie - S00E02 - Hintergrundbild.mkv")]
+    public void ApplyAnalysis_RecognizesEmbyAssetFoldersWithoutScan(string mediaFilePath)
+    {
+        var vm = new EmbySyncItemViewModel(mediaFilePath, EmbyProviderIds.Empty);
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            Path.ChangeExtension(vm.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: false,
+            NfoProviderIds: EmbyProviderIds.Empty,
+            EmbyItem: null,
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.False(vm.SupportsProviderIdSync);
+        Assert.False(vm.CanEditProviderIds);
+        Assert.False(vm.CanReviewTvdb);
+        Assert.Equal("Ohne NFO-Sync", vm.StatusText);
+        Assert.Contains("Asset-Ordner", vm.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("Bitte Emby zuerst scannen", vm.Note, StringComparison.Ordinal);
     }
 
     [Fact]

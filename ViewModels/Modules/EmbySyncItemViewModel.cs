@@ -15,6 +15,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private static readonly Regex EpisodeFileNamePattern = new(
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly HashSet<string> EmbyAssetFoldersWithoutEpisodeNfo = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "trailers",
+        "backdrops"
+    };
     private readonly EmbyProviderIds _reportedProviderIds;
     private readonly EpisodeMetadataGuess? _metadataGuess;
     private bool _isSelected = true;
@@ -238,6 +243,15 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         if (!analysis.NfoExists)
         {
+            if (IsNonEpisodeAssetPath(MediaFilePath))
+            {
+                SupportsProviderIdSync = false;
+                SetStatus(
+                    "Ohne NFO-Sync",
+                    "Der Pfad liegt in einem Emby-Asset-Ordner wie trailers oder backdrops. Dafür legt Emby keine Episoden-NFO an; TVDB-/IMDB-Sync ist hier nicht anwendbar.");
+                return;
+            }
+
             SupportsProviderIdSync = analysis.EmbyItem is null;
             SetStatus(
                 analysis.EmbyItem is null ? "NFO fehlt" : "Ohne NFO-Sync",
@@ -408,6 +422,19 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             match.Groups["title"].Value.Trim(),
             match.Groups["season"].Value.Trim(),
             match.Groups["episode"].Value.Trim());
+    }
+
+    private static bool IsNonEpisodeAssetPath(string mediaFilePath)
+    {
+        var directory = Path.GetDirectoryName(mediaFilePath);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return false;
+        }
+
+        return directory
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment => EmbyAssetFoldersWithoutEpisodeNfo.Contains(segment));
     }
 
     private static string MapStatusTone(string statusText)

@@ -89,7 +89,6 @@
                 <ColumnDefinition Width="150" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Row="0"
@@ -114,14 +113,6 @@
                     MinWidth="150"
                     Command="{Binding SelectReportCommand}"
                     Content="1. Reports wählen" />
-            <Button Grid.Row="0"
-                    Grid.Column="3"
-                    Margin="12,2,0,2"
-                    Padding="10,6"
-                    MinWidth="130"
-                    Command="{Binding OpenSettingsCommand}"
-                    Content="Einstellungen"
-                    ToolTip="Server, API-Key und andere selten geänderte Optionen zentral konfigurieren." />
 
             <TextBlock Grid.Row="1"
                        Grid.Column="0"
@@ -130,7 +121,7 @@
                        Text="Workflow" />
             <Grid Grid.Row="1"
                   Grid.Column="1"
-                  Grid.ColumnSpan="3"
+                  Grid.ColumnSpan="2"
                   Margin="0,2,0,2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
