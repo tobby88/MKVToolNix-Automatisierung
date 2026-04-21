@@ -92,7 +92,15 @@ public sealed class EmbyMetadataSyncServiceTests
     {
         var client = new RecordingEmbyClient
         {
-            ItemByPath = new EmbyItem("library-1", "Serien", @"Z:\Videos\Serien", new Dictionary<string, string>())
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    [@"Z:\Videos\Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
         };
         var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
 
@@ -101,9 +109,10 @@ public sealed class EmbyMetadataSyncServiceTests
             @"Z:\Videos\Serien");
 
         Assert.False(result.UsedGlobalLibraryScan);
-        Assert.Equal(@"Z:\Videos\Serien", client.LastFindPath);
         Assert.Equal("library-1", client.LastItemFileScanItemId);
         Assert.Equal(0, client.TriggerLibraryScanCallCount);
+        Assert.Equal("library-1", result.Library?.Id);
+        Assert.Equal(@"Z:\Videos\Serien", result.MatchedLibraryPath);
     }
 
     [Fact]
@@ -117,13 +126,44 @@ public sealed class EmbyMetadataSyncServiceTests
             @"Z:\Videos\Serien");
 
         Assert.True(result.UsedGlobalLibraryScan);
-        Assert.Equal(@"Z:\Videos\Serien", client.LastFindPath);
         Assert.Equal(1, client.TriggerLibraryScanCallCount);
         Assert.Null(client.LastItemFileScanItemId);
+        Assert.Null(result.Library);
+    }
+
+    [Fact]
+    public async Task FindSeriesLibraryAsync_MatchesNestedConfiguredArchivePath_ToLibraryLocation()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    [@"Z:\Videos\Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Unterordner");
+
+        Assert.NotNull(result);
+        Assert.Equal("library-1", result.Library.Id);
+        Assert.Equal(@"Z:\Videos\Serien", result.MatchedLocation);
     }
 
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
@@ -156,13 +196,16 @@ public sealed class EmbyMetadataSyncServiceTests
 
     private sealed class RecordingEmbyClient : IEmbyClient
     {
-        public EmbyItem? ItemByPath { get; init; }
+        public IReadOnlyList<EmbyLibraryFolder> Libraries { get; init; } = [];
 
         public string? LastFindPath { get; private set; }
 
         public string? LastItemFileScanItemId { get; private set; }
 
         public int TriggerLibraryScanCallCount { get; private set; }
+
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => Task.FromResult(Libraries);
 
         public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
@@ -182,7 +225,7 @@ public sealed class EmbyMetadataSyncServiceTests
         public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
         {
             LastFindPath = mediaFilePath;
-            return Task.FromResult(ItemByPath);
+            return Task.FromResult<EmbyItem?>(null);
         }
 
         public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)

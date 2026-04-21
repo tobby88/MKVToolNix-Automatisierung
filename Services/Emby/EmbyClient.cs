@@ -11,6 +11,11 @@ namespace MkvToolnixAutomatisierung.Services.Emby;
 internal interface IEmbyClient : IDisposable
 {
     /// <summary>
+    /// Liest die in Emby konfigurierten Bibliotheken inklusive Pfaden und aktuellem Refreshstatus.
+    /// </summary>
+    Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Liest grundlegende Serverinformationen, um Adresse und API-Key zu prüfen.
     /// </summary>
     Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default);
@@ -72,6 +77,25 @@ internal sealed class EmbyClient : IEmbyClient
             ReadString(root, "ServerName") ?? "(unbekannter Emby-Server)",
             ReadString(root, "Version") ?? "(unbekannte Version)",
             ReadString(root, "Id") ?? string.Empty);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendAsync(settings, HttpMethod.Get, "Library/VirtualFolders/Query", EmptyQueryParameters, cancellationToken);
+        using var document = await ReadJsonAsync(response, cancellationToken);
+        if (!document.RootElement.TryGetProperty("Items", out var itemsElement)
+            || itemsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return itemsElement
+            .EnumerateArray()
+            .Select(ParseLibraryFolder)
+            .Where(folder => folder is not null)
+            .Cast<EmbyLibraryFolder>()
+            .ToList();
     }
 
     /// <inheritdoc />
@@ -352,6 +376,34 @@ internal sealed class EmbyClient : IEmbyClient
         return new EmbyItem(id, name, path, providerIds);
     }
 
+    private static EmbyLibraryFolder? ParseLibraryFolder(JsonElement itemElement)
+    {
+        var id = ReadString(itemElement, "ItemId") ?? ReadString(itemElement, "Id");
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return null;
+        }
+
+        var locations = itemElement.TryGetProperty("Locations", out var locationsElement)
+            && locationsElement.ValueKind == JsonValueKind.Array
+                ? locationsElement
+                    .EnumerateArray()
+                    .Where(location => location.ValueKind == JsonValueKind.String)
+                    .Select(location => location.GetString())
+                    .Where(location => !string.IsNullOrWhiteSpace(location))
+                    .Select(location => location!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                : [];
+
+        return new EmbyLibraryFolder(
+            id,
+            ReadString(itemElement, "Name") ?? string.Empty,
+            locations,
+            ReadDouble(itemElement, "RefreshProgress"),
+            ReadString(itemElement, "RefreshStatus"));
+    }
+
     private static string? ReadString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var property)
@@ -359,12 +411,38 @@ internal sealed class EmbyClient : IEmbyClient
                 ? property.GetString()
                 : null;
     }
+
+    private static double? ReadDouble(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number
+            && property.TryGetDouble(out var number))
+        {
+            return number;
+        }
+
+        return null;
+    }
 }
 
 /// <summary>
 /// Grunddaten eines Emby-Servers für Verbindungstest und Statusanzeige.
 /// </summary>
 internal sealed record EmbyServerInfo(string ServerName, string Version, string Id);
+
+/// <summary>
+/// Repräsentiert eine in Emby konfigurierte Bibliothek samt aktuellem Refreshstatus.
+/// </summary>
+internal sealed record EmbyLibraryFolder(
+    string Id,
+    string Name,
+    IReadOnlyList<string> Locations,
+    double? RefreshProgress,
+    string? RefreshStatus);
 
 /// <summary>
 /// Minimale Emby-Item-Repräsentation inklusive Provider-IDs aus der Serverdatenbank.

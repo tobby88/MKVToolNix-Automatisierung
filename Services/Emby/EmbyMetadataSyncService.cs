@@ -1,4 +1,5 @@
 using System.Globalization;
+using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Services.Emby;
 
@@ -47,6 +48,51 @@ internal sealed class EmbyMetadataSyncService
     }
 
     /// <summary>
+    /// Sucht die zu einem lokalen Archivwurzelpfad passende Emby-Bibliothek anhand der in Emby
+    /// konfigurierten Virtual Folders. Damit muss die Bibliothekswurzel nicht mehr als normales
+    /// Medien-Item auffindbar sein.
+    /// </summary>
+    public async Task<EmbyLibraryMatch?> FindSeriesLibraryAsync(
+        AppEmbySettings settings,
+        string? archiveRootPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(archiveRootPath))
+        {
+            return null;
+        }
+
+        var libraries = await _embyClient.GetLibrariesAsync(settings, cancellationToken);
+        var exactMatch = libraries
+            .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
+            .FirstOrDefault(match => PathComparisonHelper.AreSamePath(match.MatchedLocation, archiveRootPath));
+        if (exactMatch is not null)
+        {
+            return exactMatch;
+        }
+
+        return libraries
+            .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
+            .FirstOrDefault(match =>
+                PathComparisonHelper.IsPathWithinRoot(archiveRootPath, match.MatchedLocation)
+                || PathComparisonHelper.IsPathWithinRoot(match.MatchedLocation, archiveRootPath));
+    }
+
+    /// <summary>
+    /// Liest einen aktuellen Snapshot einer einzelnen Emby-Bibliothek.
+    /// </summary>
+    public async Task<EmbyLibraryFolder?> GetLibraryByIdAsync(
+        AppEmbySettings settings,
+        string libraryId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(libraryId);
+
+        var libraries = await _embyClient.GetLibrariesAsync(settings, cancellationToken);
+        return libraries.FirstOrDefault(library => string.Equals(library.Id, libraryId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Startet bevorzugt einen gezielten Scan der konfigurierten Serienbibliothek.
     /// Falls Emby den Bibliothekswurzelpfad nicht direkt als Item auflösen kann,
     /// wird konservativ auf den globalen Library-Scan zurückgefallen.
@@ -56,26 +102,29 @@ internal sealed class EmbyMetadataSyncService
         string? archiveRootPath,
         CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrWhiteSpace(archiveRootPath))
+        var matchedLibrary = await FindSeriesLibraryAsync(settings, archiveRootPath, cancellationToken);
+        if (matchedLibrary is not null)
         {
-            var libraryRootItem = await _embyClient.FindItemByPathAsync(settings, archiveRootPath, cancellationToken);
-            if (libraryRootItem is not null)
-            {
-                await _embyClient.TriggerItemFileScanAsync(settings, libraryRootItem.Id, cancellationToken);
-                return new EmbyLibraryScanTriggerResult(
-                    UsedGlobalLibraryScan: false,
-                    $"Serienbibliotheksscan angestoßen: {archiveRootPath}");
-            }
+            await _embyClient.TriggerItemFileScanAsync(settings, matchedLibrary.Library.Id, cancellationToken);
+            return new EmbyLibraryScanTriggerResult(
+                UsedGlobalLibraryScan: false,
+                $"Serienbibliotheksscan angestoßen: {matchedLibrary.Library.Name} ({matchedLibrary.MatchedLocation})",
+                matchedLibrary.Library,
+                matchedLibrary.MatchedLocation);
         }
 
         await _embyClient.TriggerLibraryScanAsync(settings, cancellationToken);
         return string.IsNullOrWhiteSpace(archiveRootPath)
             ? new EmbyLibraryScanTriggerResult(
                 UsedGlobalLibraryScan: true,
-                "Globaler Emby-Library-Scan angestoßen, weil kein Serienbibliothekspfad konfiguriert ist.")
+                "Globaler Emby-Library-Scan angestoßen, weil kein Serienbibliothekspfad konfiguriert ist.",
+                Library: null,
+                MatchedLibraryPath: null)
             : new EmbyLibraryScanTriggerResult(
                 UsedGlobalLibraryScan: true,
-                $"Globaler Emby-Library-Scan angestoßen, weil die Serienbibliothek in Emby nicht direkt gefunden wurde: {archiveRootPath}");
+                $"Globaler Emby-Library-Scan angestoßen, weil in Emby keine passende Serienbibliothek zur Archivwurzel gefunden wurde: {archiveRootPath}",
+                Library: null,
+                MatchedLibraryPath: null);
     }
 
     /// <summary>
@@ -184,7 +233,16 @@ internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds Pro
 /// </summary>
 internal sealed record EmbyLibraryScanTriggerResult(
     bool UsedGlobalLibraryScan,
-    string Message);
+    string Message,
+    EmbyLibraryFolder? Library,
+    string? MatchedLibraryPath);
+
+/// <summary>
+/// Zuordnung zwischen konfigurierter Archivwurzel und der dazu passenden Emby-Bibliothek.
+/// </summary>
+internal sealed record EmbyLibraryMatch(
+    EmbyLibraryFolder Library,
+    string MatchedLocation);
 
 /// <summary>
 /// Kombiniert lokale NFO-Daten und optionale Emby-Item-Daten für eine einzelne MKV.

@@ -64,6 +64,40 @@ public sealed class EmbyClientTests
     }
 
     [Fact]
+    public async Task GetLibrariesAsync_ParsesLocationsAndRefreshStatus()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "ItemId": "library-1",
+                      "Name": "Serien",
+                      "Locations": [
+                        "Z:\\Videos\\Serien"
+                      ],
+                      "RefreshProgress": 42.4,
+                      "RefreshStatus": "Running"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var libraries = await client.GetLibrariesAsync(CreateSettings());
+
+        var library = Assert.Single(libraries);
+        Assert.Equal("library-1", library.Id);
+        Assert.Equal("Serien", library.Name);
+        Assert.Equal(@"Z:\Videos\Serien", Assert.Single(library.Locations));
+        Assert.Equal(42.4, library.RefreshProgress);
+        Assert.Equal("Running", library.RefreshStatus);
+    }
+
+    [Fact]
     public async Task TriggerLibraryScanAsync_PostsRefreshEndpoint()
     {
         HttpRequestMessage? capturedRequest = null;
