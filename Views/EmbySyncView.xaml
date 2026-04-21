@@ -173,12 +173,12 @@
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="MKV"
                                         Binding="{Binding MediaFileName}"
-                                        Width="1.6*"
-                                        MinWidth="180"
+                                        Width="2.4*"
+                                        MinWidth="240"
                                         IsReadOnly="True" />
                     <DataGridTemplateColumn Header="TVDB-ID"
-                                            Width="1.1*"
-                                            MinWidth="200">
+                                            Width="180"
+                                            MinWidth="150">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid Margin="4,2">
@@ -204,8 +204,8 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="IMDB-ID"
-                                            Width="0.9*"
-                                            MinWidth="140">
+                                            Width="120"
+                                            MinWidth="110">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <TextBox Margin="4,2"
