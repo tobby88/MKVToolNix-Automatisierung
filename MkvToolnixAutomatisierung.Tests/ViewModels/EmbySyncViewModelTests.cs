@@ -104,6 +104,23 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void ToggleSelectedItemSelectionCommand_TogglesSelectedRow()
+    {
+        var vm = CreateViewModel();
+        var item = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
+        vm.Items.Add(item);
+        vm.SelectedItem = item;
+
+        vm.ToggleSelectedItemSelectionCommand.Execute(null);
+
+        Assert.False(item.IsSelected);
+
+        vm.ToggleSelectedItemSelectionCommand.Execute(null);
+
+        Assert.True(item.IsSelected);
+    }
+
+    [Fact]
     public void SelectReportCommand_LoadsMultipleStructuredReports()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));

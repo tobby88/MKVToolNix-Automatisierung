@@ -248,7 +248,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
                 SupportsProviderIdSync = false;
                 SetStatus(
                     "Ohne NFO-Sync",
-                    "Der Pfad liegt in einem Emby-Asset-Ordner wie trailers oder backdrops. Dafür legt Emby keine Episoden-NFO an; TVDB-/IMDB-Sync ist hier nicht anwendbar.");
+                    "Emby-Asset ohne Episoden-NFO.");
                 return;
             }
 
@@ -256,8 +256,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             SetStatus(
                 analysis.EmbyItem is null ? "NFO fehlt" : "Ohne NFO-Sync",
                 analysis.EmbyItem is null
-                    ? "Bitte Emby zuerst scannen lassen, damit die Episoden-NFO angelegt wird."
-                    : $"Emby-Item gefunden: {analysis.EmbyItem.Name}. Für diesen Pfad legt Emby keine Episoden-NFO an (z. B. trailers oder backdrops); TVDB-/IMDB-Sync ist hier nicht anwendbar.");
+                    ? "NFO fehlt. Erst Emby scannen."
+                    : "Emby-Asset ohne Episoden-NFO.");
             return;
         }
 
@@ -276,8 +276,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
                 HasProviderIds ? "Lokal bereit" : "IDs fehlen",
                 providerMismatchNote
                 ?? (HasProviderIds
-                    ? "Provider-IDs liegen lokal vor; Emby-Item wurde noch nicht gefunden."
-                    : "Weder NFO noch Emby liefern TVDB-/IMDB-IDs. IDs bitte manuell ergänzen oder Emby-Metadaten prüfen."));
+                    ? "IDs lokal vorhanden."
+                    : "Keine TVDB-/IMDB-ID."));
             return;
         }
 
@@ -285,8 +285,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             HasProviderIds ? "Bereit" : "IDs fehlen",
             providerMismatchNote
             ?? (HasProviderIds
-                ? $"Emby-Item gefunden: {analysis.EmbyItem.Name}"
-                : "Emby-Item gefunden, aber ohne TVDB-/IMDB-ID."));
+                ? "IDs vorhanden."
+                : "Keine TVDB-/IMDB-ID."));
     }
 
     public void ApplyEmbyItem(EmbyItem? item)
@@ -317,7 +317,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         {
             SetStatus(
                 "Ohne NFO-Sync",
-                $"Emby-Item gefunden: {item.Name}. Für diesen Pfad legt Emby keine Episoden-NFO an (z. B. trailers oder backdrops); TVDB-/IMDB-Sync ist hier nicht anwendbar.");
+                "Emby-Asset ohne Episoden-NFO.");
             return;
         }
 
@@ -326,7 +326,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             BuildProviderMismatchNote(
                 nfoTvdbId: null,
                 embyTvdbId: embyProviderIds.TvdbId)
-            ?? $"Emby-Item gefunden: {item.Name}");
+            ?? (HasProviderIds
+                ? "IDs vorhanden."
+                : "Keine TVDB-/IMDB-ID."));
     }
 
     /// <summary>
@@ -362,8 +364,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         SetStatus(
             "Aktualisiert",
             metadataRefreshTriggered
-                ? "NFO aktualisiert und Emby-Metadatenrefresh angestoßen."
-                : "NFO aktualisiert. Emby-Item wurde noch nicht gefunden, daher kein gezielter Refresh.");
+                ? "NFO aktualisiert, Emby-Refresh angestoßen."
+                : "NFO aktualisiert, Emby-Item noch nicht gefunden.");
     }
 
     /// <inheritdoc/>
@@ -404,7 +406,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         return mismatches.Count == 0
             ? null
-            : $"Für den Sync ist TVDB-ID {preferredTvdbId} vorgemerkt; {string.Join(", ", mismatches)}. Beim Sync wird diese ID in die NFO geschrieben.";
+            : $"TVDB {preferredTvdbId} vorgesehen ({string.Join(", ", mismatches)}).";
     }
 
     private static EpisodeMetadataGuess? TryParseMetadataGuess(string mediaFilePath)

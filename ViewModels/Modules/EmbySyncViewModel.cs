@@ -35,6 +35,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
+        ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
@@ -46,6 +47,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public AsyncRelayCommand SelectReportCommand { get; }
 
     public AsyncRelayCommand RunScanCommand { get; }
+
+    public RelayCommand ToggleSelectedItemSelectionCommand { get; }
 
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
 
@@ -514,6 +517,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         RefreshSummaryAndCommands();
     }
 
+    private void ToggleSelectedItemSelection()
+    {
+        if (_isBusy || SelectedItem is not EmbySyncItemViewModel item)
+        {
+            return;
+        }
+
+        item.IsSelected = !item.IsSelected;
+    }
+
     public void HandleGlobalSettingsChanged()
     {
         RefreshCommands();
@@ -584,6 +597,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     {
         SelectReportCommand.RaiseCanExecuteChanged();
         RunScanCommand.RaiseCanExecuteChanged();
+        ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();

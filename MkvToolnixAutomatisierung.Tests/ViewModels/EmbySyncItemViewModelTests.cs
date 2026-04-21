@@ -35,7 +35,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("100", vm.TvdbId);
         Assert.Equal("Bereit", vm.StatusText);
         Assert.Equal("Ready", vm.StatusTone);
-        Assert.Contains("TVDB-ID 100 vorgemerkt", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("NFO: 200", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: 300", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby-ID: emby-1", vm.StatusTooltip, StringComparison.Ordinal);
@@ -62,7 +62,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("100", vm.TvdbId);
         Assert.Equal("tt9876543", vm.ImdbId);
         Assert.Equal("Bereit", vm.StatusText);
-        Assert.Contains("TVDB-ID 100 vorgemerkt", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: 300", vm.Note, StringComparison.Ordinal);
     }
 
@@ -91,7 +91,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("200", vm.TvdbId);
         Assert.Equal("tt9876543", vm.ImdbId);
         Assert.Equal("Bereit", vm.StatusText);
-        Assert.Equal("Emby-Item gefunden: Pilot", vm.Note);
+        Assert.Equal("IDs vorhanden.", vm.Note);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.False(vm.CanReviewTvdb);
         Assert.Equal("Ohne NFO-Sync", vm.StatusText);
         Assert.Equal("Neutral", vm.StatusTone);
-        Assert.Contains("keine Episoden-NFO", vm.Note, StringComparison.Ordinal);
+        Assert.Equal("Emby-Asset ohne Episoden-NFO.", vm.Note);
         Assert.Contains("nicht anwendbar", vm.ProviderIdEditTooltip, StringComparison.Ordinal);
     }
 
@@ -143,7 +143,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.False(vm.CanEditProviderIds);
         Assert.False(vm.CanReviewTvdb);
         Assert.Equal("Ohne NFO-Sync", vm.StatusText);
-        Assert.Contains("Asset-Ordner", vm.Note, StringComparison.Ordinal);
+        Assert.Equal("Emby-Asset ohne Episoden-NFO.", vm.Note);
         Assert.DoesNotContain("Bitte Emby zuerst scannen", vm.Note, StringComparison.Ordinal);
     }
 
@@ -173,7 +173,7 @@ public sealed class EmbySyncItemViewModelTests
         vm.ApplyAnalysis(analysis);
 
         Assert.Equal("555", vm.TvdbId);
-        Assert.Contains("TVDB-ID 555 vorgemerkt", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("TVDB 555 vorgesehen", vm.Note, StringComparison.Ordinal);
     }
 
     [Fact]

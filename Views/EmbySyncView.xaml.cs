@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung.Views;
@@ -15,6 +16,35 @@ public partial class EmbySyncView : UserControl
     public EmbySyncView()
     {
         InitializeComponent();
+    }
+
+    /// <summary>
+    /// Leitet <kbd>Space</kbd> in der Emby-Tabelle an die gemeinsame Auswahlhilfe weiter.
+    /// </summary>
+    private void EmbyItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is DataGrid dataGrid && DataContext is EmbySyncViewModel viewModel)
+        {
+            DataGridSelectionInput.TryHandleSpaceToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedItemSelectionCommand);
+        }
+    }
+
+    /// <summary>
+    /// Behandelt direkte Klicks in die Auswahlspalte sofort als fachlichen Toggle, statt das
+    /// Grid erst in einen separaten Editmodus zu schicken.
+    /// </summary>
+    private void EmbyItemsGrid_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGrid dataGrid && DataContext is EmbySyncViewModel viewModel)
+        {
+            DataGridSelectionInput.TryHandleMouseToggle(
+                dataGrid,
+                e,
+                viewModel.ToggleSelectedItemSelectionCommand);
+        }
     }
 
     /// <summary>

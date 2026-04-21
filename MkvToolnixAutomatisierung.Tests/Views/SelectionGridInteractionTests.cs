@@ -7,6 +7,8 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -113,6 +115,53 @@ public sealed class SelectionGridInteractionTests
 
                 Assert.False(item.IsSelected);
                 Assert.Same(item, grid.SelectedItem);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task EmbySelectionGrid_SpaceToggle_UsesSharedKeyboardSelectionHandling()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateEmbySyncViewModel();
+            var item = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
+            viewModel.Items.Add(item);
+
+            var view = new EmbySyncView
+            {
+                DataContext = viewModel
+            };
+            var window = new Window
+            {
+                Content = view,
+                Width = 840,
+                Height = 520,
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Left = -10000,
+                Top = -10000
+            };
+
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+
+                var grid = Assert.IsType<DataGrid>(FindVisualChild<DataGrid>(view));
+                FocusSelectionCell(grid, item);
+                await WpfTestHost.WaitForIdleAsync();
+
+                PressSpaceOnFocusedElement();
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.False(item.IsSelected);
+                Assert.True(grid.IsKeyboardFocusWithin);
+                Assert.Same(item, viewModel.SelectedItem);
             }
             finally
             {
@@ -254,6 +303,94 @@ public sealed class SelectionGridInteractionTests
         }
 
         return null;
+    }
+
+    private static EmbySyncViewModel CreateEmbySyncViewModel()
+    {
+        var settingsStore = new AppSettingsStore();
+        var services = new EmbyModuleServices(
+            new AppEmbySettingsStore(settingsStore),
+            new AppArchiveSettingsStore(settingsStore),
+            new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService()),
+            new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
+            new NullSettingsDialogService());
+        return new EmbySyncViewModel(services, new NullDialogService());
+    }
+
+    private sealed class ThrowingEmbyClient : IEmbyClient
+    {
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class ThrowingTvdbClient : ITvdbClient
+    {
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(string apiKey, string? pin, string query, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(string apiKey, string? pin, int seriesId, string? language = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class NullSettingsDialogService : IAppSettingsDialogService
+    {
+        public bool ShowDialog(Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive)
+        {
+            return false;
+        }
+    }
+
+    private sealed class NullDialogService : IUserDialogService
+    {
+        public string? SelectMainVideo(string initialDirectory) => null;
+        public string? SelectAudioDescription(string initialDirectory) => null;
+        public string[]? SelectSubtitles(string initialDirectory) => null;
+        public string[]? SelectAttachments(string initialDirectory) => null;
+        public string? SelectOutput(string initialDirectory, string fileName) => null;
+        public string? SelectFolder(string title, string initialDirectory) => null;
+        public string? SelectExecutable(string title, string filter, string initialDirectory) => null;
+        public string? SelectFile(string title, string filter, string initialDirectory) => null;
+        public string[]? SelectFiles(string title, string filter, string initialDirectory) => null;
+        public MessageBoxResult AskAudioDescriptionChoice() => MessageBoxResult.Cancel;
+        public MessageBoxResult AskSubtitlesChoice() => MessageBoxResult.Cancel;
+        public MessageBoxResult AskAttachmentChoice() => MessageBoxResult.Cancel;
+        public bool ConfirmMuxStart() => false;
+        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => false;
+        public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems) => false;
+        public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan) => false;
+        public bool ConfirmSingleEpisodeCleanup(IReadOnlyList<string> usedFiles, IReadOnlyList<string> unusedFiles) => false;
+        public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory) => false;
+        public bool AskOpenDoneDirectory(string doneDirectory) => false;
+        public bool ConfirmPlanReview(string episodeTitle, string reviewText) => false;
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => false;
+        public void OpenPathWithDefaultApp(string path) { }
+        public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => MessageBoxResult.Cancel;
+        public void ShowInfo(string title, string message) { }
+        public void ShowWarning(string title, string message) { }
+        public void ShowError(string message) { }
     }
 
     private interface SelectionTestItemContract : INotifyPropertyChanged

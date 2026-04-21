@@ -152,13 +152,25 @@
                       HorizontalScrollBarVisibility="Auto"
                       IsReadOnly="False"
                       ColumnWidth="*"
+                      PreviewKeyDown="EmbyItemsGrid_OnPreviewKeyDown"
+                      PreviewMouseLeftButtonDown="EmbyItemsGrid_OnPreviewMouseLeftButtonDown"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                       Margin="8"
                       MinHeight="220">
                 <DataGrid.Columns>
-                    <DataGridCheckBoxColumn Header="Auswahl"
-                                            Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            Width="SizeToHeader" />
+                    <DataGridTemplateColumn Header="Auswahl"
+                                            Width="SizeToHeader"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Focusable="False"
+                                          IsHitTestVisible="False"
+                                          IsChecked="{Binding IsSelected, Mode=OneWay}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="MKV"
                                         Binding="{Binding MediaFileName}"
                                         Width="1.6*"
