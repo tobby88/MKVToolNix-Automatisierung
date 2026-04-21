@@ -1,6 +1,8 @@
 # MKVToolNix-Automatisierung
 
-[![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/workflows/CI%20and%20Docs/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
+[![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
+[![Latest release](https://img.shields.io/github/v/release/tobby88/MKVToolNix-Automatisierung)](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest)
+[![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE.md)
 
 ## Wichtiger Hinweis
 
@@ -52,12 +54,14 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 ## Erststart
 
 1. App starten.
-2. Links unten prüfen, ob `mkvmerge: bereit` angezeigt wird. Falls nicht, den MKVToolNix-Ordner auswählen.
-3. Optional `ffprobe` auswählen, wenn Laufzeiten möglichst zuverlässig über `ffprobe` ermittelt werden sollen.
-4. Bei Bedarf links unten die Standard-Serienbibliothek anpassen.
-5. Bei Bedarf den TVDB-Dialog öffnen und API-Key sowie optional eine PIN speichern.
-6. Bei Bedarf im Modul `Emby-Abgleich` Emby-Server und API-Key eintragen.
-7. Danach mit `Einzel-Mux`, `Batch-Mux`, `Einsortieren` oder `Emby-Abgleich` arbeiten.
+2. Über `Einstellungen` die selten geänderten Dinge zentral hinterlegen:
+   - Standard-Archivpfad
+   - MKVToolNix-Ordner
+   - optional `ffprobe.exe`
+   - optional TVDB-API-Key und PIN
+   - optional Emby-Server und API-Key
+3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
+4. Danach mit `Einzel-Mux`, `Batch-Mux`, `Einsortieren` oder `Emby-Abgleich` arbeiten.
 
 ## Typischer Workflow: Einzel-Mux
 
@@ -95,11 +99,12 @@ Nach jedem Batch-Lauf:
 ## Typischer Workflow: Emby-Abgleich
 
 1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
-2. Den nach einem Batch-Lauf erzeugten Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` laden.
-3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch die bereits sichtbaren Emby-Einträge.
+2. Den nach einem Batch- oder Einzel-Lauf erzeugten Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` laden.
+3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
 4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
-5. Fehlende TVDB-/IMDB-IDs bei Bedarf manuell ergänzen.
-6. `NFO-Sync`, um TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und geänderte Items gezielt zu refreshen.
+5. Fehlende oder falsche TVDB-IDs bei Bedarf je Zeile über den `TVDB`-Button korrigieren.
+6. Fehlende oder falsche IMDB-IDs bei Bedarf je Zeile über den `IMDb`-Button ergänzen oder korrigieren.
+7. `NFO-Sync`, um geänderte TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
 Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs.
 
@@ -186,7 +191,7 @@ Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
 
 - `mkvmerge.exe` wird automatisch im neuesten Ordner `%USERPROFILE%\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
-- Die Standard-Serienbibliothek ist links unten konfigurierbar und wird lokal in `.\Data\settings.json` gespeichert.
+- Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
 
 ## Starten
