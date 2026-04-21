@@ -2,6 +2,8 @@ bin/
 obj/
 .codex-function-test/
 .claude/
+.appdata/
+.dotnet-cli/
 *.user
 *.suo
 *.tmp

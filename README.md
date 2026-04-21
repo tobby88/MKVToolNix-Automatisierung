@@ -32,6 +32,20 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 
+## Screenshots
+
+### Batch-Mux
+
+![Batch-Mux](docs/images/readme/batch-mux.png)
+
+### Einsortieren
+
+![Einsortieren](docs/images/readme/download-sort.png)
+
+### Emby-Abgleich
+
+![Emby-Abgleich](docs/images/readme/emby-sync.png)
+
 ## Voraussetzungen
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
@@ -227,6 +241,14 @@ Die erzeugte Seite landet unter `.\docs\_site`.
 Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
 
 Zusätzlich hält `.github/dependabot.yml` Versionsupdates für GitHub Actions und NuGet-Pakete automatisch im Blick.
+
+README-Screenshots neu erzeugen:
+
+```powershell
+.\scripts\generate-readme-screenshots.ps1
+```
+
+Die PNGs landen danach unter `.\docs\images\readme\`.
 
 ### Releases
 

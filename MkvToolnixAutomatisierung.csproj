@@ -11,7 +11,7 @@
     <LangVersion>latest</LangVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- WPF-Hilfsprojekte und lokale Debug-Helfer dürfen nie in den App-Compile-Glob geraten. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;scratch\**;MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;scratch\**;tools\**;MkvToolnixAutomatisierung.Tests\**;MkvToolnixAutomatisierung.IntegrationTests\**;TestTools\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
