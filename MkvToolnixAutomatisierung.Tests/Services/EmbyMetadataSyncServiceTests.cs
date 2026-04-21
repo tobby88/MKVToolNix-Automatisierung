@@ -157,6 +157,69 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Equal(@"Z:\Videos\Serien", result.MatchedLocation);
     }
 
+    [Fact]
+    public async Task FindSeriesLibraryAsync_MatchesLinuxLibraryBySharedTrailingSegments()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    ["/mnt/raid/Videos/Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien");
+
+        Assert.NotNull(result);
+        Assert.Equal("library-1", result.Library.Id);
+        Assert.Equal("/mnt/raid/Videos/Serien", result.MatchedLocation);
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_UsesTranslatedLibraryPath_WhenEmbyStoresLinuxPaths()
+    {
+        var expectedLookupPath = "/mnt/raid/Videos/Serien/Serie/Season 01/Serie - S01E01 - Pilot.mkv";
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    ["/mnt/raid/Videos/Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ],
+            ItemByPath = new Dictionary<string, EmbyItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                [expectedLookupPath] = new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    expectedLookupPath,
+                    new Dictionary<string, string>())
+            }
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var item = await service.FindItemByPathAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Serie\Season 01\Serie - S01E01 - Pilot.mkv",
+            @"Z:\Videos\Serien");
+
+        Assert.NotNull(item);
+        Assert.Equal("emby-1", item!.Id);
+        Assert.Contains(expectedLookupPath, client.FindRequests);
+        Assert.DoesNotContain(@"Z:\Videos\Serien\Serie\Season 01\Serie - S01E01 - Pilot.mkv", client.FindRequests);
+    }
+
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
@@ -198,11 +261,15 @@ public sealed class EmbyMetadataSyncServiceTests
     {
         public IReadOnlyList<EmbyLibraryFolder> Libraries { get; init; } = [];
 
+        public IReadOnlyDictionary<string, EmbyItem> ItemByPath { get; init; } = new Dictionary<string, EmbyItem>(StringComparer.OrdinalIgnoreCase);
+
         public string? LastFindPath { get; private set; }
 
         public string? LastItemFileScanItemId { get; private set; }
 
         public int TriggerLibraryScanCallCount { get; private set; }
+
+        public List<string> FindRequests { get; } = [];
 
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
             => Task.FromResult(Libraries);
@@ -225,7 +292,8 @@ public sealed class EmbyMetadataSyncServiceTests
         public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
         {
             LastFindPath = mediaFilePath;
-            return Task.FromResult<EmbyItem?>(null);
+            FindRequests.Add(mediaFilePath);
+            return Task.FromResult(ItemByPath.TryGetValue(mediaFilePath, out var item) ? item : null);
         }
 
         public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)

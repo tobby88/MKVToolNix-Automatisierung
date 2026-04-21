@@ -272,9 +272,20 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         {
             var settings = BuildSettingsFromInput();
             var canQueryEmby = queryEmby && HasEmbyApiSettings();
+            var archiveRootPath = _services.ArchiveSettings.Load().DefaultSeriesArchiveRootPath;
+            EmbyLibraryMatch? libraryMatch = null;
             if (canQueryEmby)
             {
                 SaveSettings(settings);
+                libraryMatch = await _services.Sync.FindSeriesLibraryAsync(settings, archiveRootPath, CancellationToken.None);
+                if (libraryMatch is null)
+                {
+                    AppendLog($"Keine passende Emby-Serienbibliothek zur Archivwurzel gefunden: {archiveRootPath}");
+                }
+                else
+                {
+                    AppendLog($"Emby-Serienbibliothek erkannt: {libraryMatch.Library.Name} ({libraryMatch.MatchedLocation})");
+                }
             }
 
             var items = Items.ToList();
@@ -290,6 +301,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
                     settings,
                     item.MediaFilePath,
                     canQueryEmby,
+                    archiveRootPath,
+                    libraryMatch,
                     CancellationToken.None);
                 item.ApplyAnalysis(analysis);
             }
@@ -315,6 +328,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             var settings = BuildSettingsFromInput();
             SaveSettings(settings);
             var archiveSettings = _services.ArchiveSettings.Load();
+            EmbyLibraryMatch? libraryMatch = null;
 
             StatusText = "Starte Emby-Scan...";
             ProgressValue = 5;
@@ -327,15 +341,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             {
                 AppendLog("Hinweis: Für den globalen Emby-Fallback ist derzeit kein bibliotheksscharfer Serverfortschritt verfügbar.");
             }
-            else if (scanTrigger.Library is not null)
+            else if (scanTrigger.Library is not null && !string.IsNullOrWhiteSpace(scanTrigger.MatchedLibraryPath))
             {
+                libraryMatch = new EmbyLibraryMatch(scanTrigger.Library, scanTrigger.MatchedLibraryPath!);
                 await WaitForSeriesLibraryScanAsync(settings, scanTrigger.Library);
             }
 
             StatusText = "Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
             ProgressValue = Math.Max(ProgressValue, 50);
-            await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems);
-            await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems);
+            await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
+            await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
             var updatedCount = 0;
             var skippedCount = 0;
 
@@ -388,7 +403,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         });
     }
 
-    private async Task ResolveEmbyItemsWithinBudgetAsync(AppEmbySettings settings, IReadOnlyList<EmbySyncItemViewModel> selectedItems)
+    private async Task ResolveEmbyItemsWithinBudgetAsync(
+        AppEmbySettings settings,
+        IReadOnlyList<EmbySyncItemViewModel> selectedItems,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch)
     {
         var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600));
         var pendingItems = selectedItems
@@ -402,7 +421,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             StatusText = $"Suche neue Emby-Items ({selectedItems.Count - pendingItems.Count}/{selectedItems.Count})...";
             foreach (var item in pendingItems.ToList())
             {
-                var embyItem = await _services.Sync.FindItemByPathAsync(settings, item.MediaFilePath);
+                var embyItem = await _services.Sync.FindItemByPathAsync(
+                    settings,
+                    item.MediaFilePath,
+                    archiveRootPath,
+                    libraryMatch);
                 if (embyItem is null)
                 {
                     continue;
@@ -434,7 +457,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     private async Task RefreshSelectedAnalysesAfterLibraryScanAsync(
         AppEmbySettings settings,
-        IReadOnlyList<EmbySyncItemViewModel> selectedItems)
+        IReadOnlyList<EmbySyncItemViewModel> selectedItems,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch)
     {
         for (var index = 0; index < selectedItems.Count; index++)
         {
@@ -449,6 +474,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
                 settings,
                 item.MediaFilePath,
                 queryEmby: true,
+                archiveRootPath,
+                libraryMatch,
                 CancellationToken.None);
             item.ApplyAnalysis(analysis);
         }

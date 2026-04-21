@@ -71,11 +71,17 @@ internal sealed class EmbyMetadataSyncService
             return exactMatch;
         }
 
-        return libraries
+        var rootMatch = libraries
             .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
             .FirstOrDefault(match =>
                 PathComparisonHelper.IsPathWithinRoot(archiveRootPath, match.MatchedLocation)
                 || PathComparisonHelper.IsPathWithinRoot(match.MatchedLocation, archiveRootPath));
+        if (rootMatch is not null)
+        {
+            return rootMatch;
+        }
+
+        return FindSuffixMatchedLibrary(libraries, archiveRootPath);
     }
 
     /// <summary>
@@ -134,6 +140,8 @@ internal sealed class EmbyMetadataSyncService
         AppEmbySettings settings,
         string mediaFilePath,
         bool queryEmby,
+        string? archiveRootPath = null,
+        EmbyLibraryMatch? libraryMatch = null,
         CancellationToken cancellationToken = default)
     {
         var localAnalysis = AnalyzeLocalFile(mediaFilePath);
@@ -142,7 +150,12 @@ internal sealed class EmbyMetadataSyncService
             return localAnalysis;
         }
 
-        var embyItem = await _embyClient.FindItemByPathAsync(settings, mediaFilePath, cancellationToken);
+        var embyItem = await FindItemByPathAsync(
+            settings,
+            mediaFilePath,
+            archiveRootPath,
+            libraryMatch,
+            cancellationToken);
         return localAnalysis.WithEmbyItem(embyItem);
     }
 
@@ -171,9 +184,16 @@ internal sealed class EmbyMetadataSyncService
     public Task<EmbyItem?> FindItemByPathAsync(
         AppEmbySettings settings,
         string mediaFilePath,
+        string? archiveRootPath = null,
+        EmbyLibraryMatch? libraryMatch = null,
         CancellationToken cancellationToken = default)
     {
-        return _embyClient.FindItemByPathAsync(settings, mediaFilePath, cancellationToken);
+        return FindItemByPathInternalAsync(
+            settings,
+            mediaFilePath,
+            archiveRootPath,
+            libraryMatch,
+            cancellationToken);
     }
 
     /// <summary>
@@ -223,6 +243,169 @@ internal sealed class EmbyMetadataSyncService
             : item.ProviderIds!.Imdb;
 
         return new EmbyProviderIds(tvdbId, imdbId);
+    }
+
+    private async Task<EmbyItem?> FindItemByPathInternalAsync(
+        AppEmbySettings settings,
+        string mediaFilePath,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch,
+        CancellationToken cancellationToken)
+    {
+        foreach (var lookupPath in await BuildLookupPathsAsync(settings, mediaFilePath, archiveRootPath, libraryMatch, cancellationToken))
+        {
+            var embyItem = await _embyClient.FindItemByPathAsync(settings, lookupPath, cancellationToken);
+            if (embyItem is not null)
+            {
+                return embyItem;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<IReadOnlyList<string>> BuildLookupPathsAsync(
+        AppEmbySettings settings,
+        string mediaFilePath,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch,
+        CancellationToken cancellationToken)
+    {
+        var lookupPaths = new List<string>();
+        // Emby kann auf Linux laufen, während die App Windows-Pfade kennt. Deshalb versuchen wir
+        // zuerst den zur gematchten Bibliothek übersetzten Archivpfad und erst danach den Rohpfad.
+        var translatedLookupPath = await TryTranslateMediaPathToEmbyLibraryAsync(
+            settings,
+            mediaFilePath,
+            archiveRootPath,
+            libraryMatch,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(translatedLookupPath))
+        {
+            lookupPaths.Add(translatedLookupPath);
+        }
+
+        if (!lookupPaths.Contains(mediaFilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            lookupPaths.Add(mediaFilePath);
+        }
+
+        return lookupPaths;
+    }
+
+    private async Task<string?> TryTranslateMediaPathToEmbyLibraryAsync(
+        AppEmbySettings settings,
+        string mediaFilePath,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(archiveRootPath))
+        {
+            return null;
+        }
+
+        var relativePath = PathComparisonHelper.TryGetRelativePathWithinRoot(mediaFilePath, archiveRootPath);
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return null;
+        }
+
+        var effectiveLibraryMatch = libraryMatch
+            ?? await FindSeriesLibraryAsync(settings, archiveRootPath, cancellationToken);
+        if (effectiveLibraryMatch is null)
+        {
+            return null;
+        }
+
+        return CombineLibraryLocationWithRelativePath(effectiveLibraryMatch.MatchedLocation, relativePath);
+    }
+
+    private static EmbyLibraryMatch? FindSuffixMatchedLibrary(
+        IReadOnlyList<EmbyLibraryFolder> libraries,
+        string archiveRootPath)
+    {
+        // Für typische Heimserver-Setups unterscheiden sich lokale Windows- und Emby-Linuxpfade
+        // oft nur im Präfix (z. B. Z:\Videos\Serien vs. /mnt/raid/Videos/Serien). In diesem Fall
+        // ist die gemeinsame Pfadendung die robusteste, noch konservative Fallback-Heuristik.
+        var archiveSegments = GetComparablePathSegments(archiveRootPath);
+        if (archiveSegments.Count == 0)
+        {
+            return null;
+        }
+
+        var minimumScore = Math.Min(2, archiveSegments.Count);
+        var candidates = libraries
+            .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
+            .Select(match => new
+            {
+                Match = match,
+                Score = CountCommonTrailingSegments(archiveSegments, GetComparablePathSegments(match.MatchedLocation))
+            })
+            .Where(candidate => candidate.Score >= minimumScore)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var highestScore = candidates.Max(candidate => candidate.Score);
+        var bestCandidates = candidates
+            .Where(candidate => candidate.Score == highestScore)
+            .Select(candidate => candidate.Match)
+            .Distinct()
+            .ToList();
+
+        return bestCandidates.Count == 1
+            ? bestCandidates[0]
+            : null;
+    }
+
+    private static string CombineLibraryLocationWithRelativePath(string libraryLocation, string relativePath)
+    {
+        var preferredSeparator = libraryLocation.Contains('/')
+            ? '/'
+            : '\\';
+        var trimmedLibraryLocation = libraryLocation.TrimEnd('/', '\\');
+        var relativeSegments = relativePath
+            .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return relativeSegments.Length == 0
+            ? trimmedLibraryLocation
+            : trimmedLibraryLocation + preferredSeparator + string.Join(preferredSeparator, relativeSegments);
+    }
+
+    private static int CountCommonTrailingSegments(IReadOnlyList<string> leftSegments, IReadOnlyList<string> rightSegments)
+    {
+        var count = 0;
+        var leftIndex = leftSegments.Count - 1;
+        var rightIndex = rightSegments.Count - 1;
+        while (leftIndex >= 0
+               && rightIndex >= 0
+               && string.Equals(leftSegments[leftIndex], rightSegments[rightIndex], StringComparison.OrdinalIgnoreCase))
+        {
+            count++;
+            leftIndex--;
+            rightIndex--;
+        }
+
+        return count;
+    }
+
+    private static IReadOnlyList<string> GetComparablePathSegments(string path)
+    {
+        return path
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(segment => !LooksLikeWindowsDrive(segment))
+            .ToList();
+    }
+
+    private static bool LooksLikeWindowsDrive(string segment)
+    {
+        return segment.Length == 2
+            && char.IsLetter(segment[0])
+            && segment[1] == ':';
     }
 }
 
