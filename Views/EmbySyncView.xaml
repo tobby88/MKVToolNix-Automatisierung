@@ -69,10 +69,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="150" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="150" />
-                <ColumnDefinition Width="130" />
-                <ColumnDefinition Width="170" />
-                <ColumnDefinition Width="150" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Column="0"
@@ -88,32 +85,40 @@
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
                      Text="{Binding ReportPath, Mode=OneWay}" />
-            <Button Grid.Column="2"
-                    Margin="0,2,12,2"
-                    Padding="10,6"
-                    VerticalAlignment="Top"
-                    Command="{Binding SelectReportCommand}"
-                    Content="Reports wählen" />
-            <Button Grid.Column="3"
-                    Margin="0,2,12,2"
-                    Padding="10,6"
-                    VerticalAlignment="Top"
-                    Command="{Binding LoadReportCommand}"
-                    Content="Reports laden" />
-            <Button Grid.Column="4"
-                    Margin="0,2,12,2"
-                    Padding="10,6"
-                    VerticalAlignment="Top"
-                    Command="{Binding AnalyzeItemsCommand}"
-                    ToolTip="{Binding AnalyzeItemsTooltip, Mode=OneWay}"
-                    Content="NFO/Emby prüfen" />
-            <Button Grid.Column="5"
-                    Margin="0,2,0,2"
-                    Padding="10,6"
-                    VerticalAlignment="Top"
-                    Command="{Binding RunSyncCommand}"
-                    ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                    Content="Scan + NFO-Sync" />
+            <WrapPanel Grid.Column="2"
+                       Margin="0,2,0,2"
+                       VerticalAlignment="Top"
+                       ItemWidth="130">
+                <Button Margin="0,0,12,8"
+                        Padding="10,6"
+                        MinWidth="130"
+                        Command="{Binding SelectReportCommand}"
+                        Content="Reports wählen" />
+                <Button Margin="0,0,12,8"
+                        Padding="10,6"
+                        MinWidth="130"
+                        Command="{Binding AnalyzeItemsCommand}"
+                        ToolTip="{Binding AnalyzeItemsTooltip, Mode=OneWay}"
+                        Content="NFO/Emby prüfen" />
+                <Button Margin="0,0,12,8"
+                        Padding="10,6"
+                        MinWidth="130"
+                        Command="{Binding RunScanCommand}"
+                        ToolTip="{Binding RunScanTooltip, Mode=OneWay}"
+                        Content="Emby scannen" />
+                <Button Margin="0,0,12,8"
+                        Padding="10,6"
+                        MinWidth="130"
+                        Command="{Binding ReviewSelectedMetadataCommand}"
+                        ToolTip="{Binding ReviewSelectedMetadataTooltip, Mode=OneWay}"
+                        Content="TVDB prüfen" />
+                <Button Margin="0,0,0,8"
+                        Padding="10,6"
+                        MinWidth="130"
+                        Command="{Binding RunSyncCommand}"
+                        ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
+                        Content="NFO-Sync" />
+            </WrapPanel>
         </Grid>
 
         <Border Grid.Row="2"

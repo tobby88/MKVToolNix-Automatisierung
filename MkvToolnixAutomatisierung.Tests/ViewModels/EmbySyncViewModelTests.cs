@@ -3,6 +3,7 @@ using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
@@ -15,8 +16,10 @@ public sealed class EmbySyncViewModelTests
         var settingsStore = new AppSettingsStore();
         var embySettings = new AppEmbySettingsStore(settingsStore);
         var archiveSettings = new AppArchiveSettingsStore(settingsStore);
+        var metadataStore = new AppMetadataStore(settingsStore);
+        var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient());
         var syncService = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
-        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService);
+        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService, episodeMetadata);
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
     }
 
@@ -117,14 +120,22 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncTooltip_ExplainsSeriesLibraryScanAndBackgroundWork()
+    public void RunScanTooltip_ExplainsSeriesLibraryScanAndBackgroundWork()
     {
         var vm = CreateViewModel();
 
-        Assert.Contains("Serienbibliothek", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Serienbibliothek", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Serverfortschritt", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Emby-Treffer", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RunSyncTooltip_ExplainsPureNfoSync()
+    {
+        var vm = CreateViewModel();
+
+        Assert.Contains("ohne zusätzlichen Bibliotheksscan", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NFO-Dateien", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Serverfortschritt", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("global", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -132,9 +143,11 @@ public sealed class EmbySyncViewModelTests
     {
         var vm = CreateViewModel();
 
-        Assert.Contains("Reports laden", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("Reports wählen", vm.WorkflowInfoText, StringComparison.Ordinal);
         Assert.Contains("NFO/Emby prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("Scan + NFO-Sync", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("Emby scannen", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("TVDB prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
+        Assert.Contains("NFO-Sync", vm.WorkflowInfoText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -194,6 +207,19 @@ public sealed class EmbySyncViewModelTests
             => throw new NotSupportedException();
 
         public void Dispose() { }
+    }
+
+    private sealed class ThrowingTvdbClient : ITvdbClient
+    {
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(string apiKey, string? pin, string query, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(string apiKey, string? pin, int seriesId, string? language = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
     }
 
     private class NullDialogService : IUserDialogService

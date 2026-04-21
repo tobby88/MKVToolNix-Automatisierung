@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -10,6 +12,9 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataErrorInfo
 {
+    private static readonly Regex EpisodeFileNamePattern = new(
+        @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly EmbyProviderIds _reportedProviderIds;
     private bool _isSelected = true;
     private string _tvdbId = string.Empty;
@@ -147,7 +152,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         NfoPath = analysis.NfoPath;
         OnPropertyChanged(nameof(NfoPath));
 
-        var providerIds = _reportedProviderIds.MergeFallback(analysis.EffectiveProviderIds);
+        var providerIds = ProviderIds
+            .MergeFallback(_reportedProviderIds)
+            .MergeFallback(analysis.EffectiveProviderIds);
         if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             TvdbId = providerIds.TvdbId!;
@@ -211,7 +218,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         var embyProviderIds = new EmbyProviderIds(
             item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
             item.GetProviderId("Imdb"));
-        var providerIds = _reportedProviderIds.MergeFallback(embyProviderIds);
+        var providerIds = ProviderIds
+            .MergeFallback(_reportedProviderIds)
+            .MergeFallback(embyProviderIds);
         if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             TvdbId = providerIds.TvdbId!;
@@ -228,6 +237,41 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
                 nfoTvdbId: null,
                 embyTvdbId: embyProviderIds.TvdbId)
             ?? $"Emby-Item gefunden: {item.Name}");
+    }
+
+    /// <summary>
+    /// Baut aus dem standardisierten MKV-Dateinamen den lokalen TVDB-Startvorschlag.
+    /// </summary>
+    public bool TryBuildMetadataGuess(out EpisodeMetadataGuess? guess)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(MediaFilePath);
+        var normalizedFileName = EpisodeFileNameHelper.NormalizeTypography(fileName);
+        var match = EpisodeFileNamePattern.Match(normalizedFileName);
+        if (!match.Success)
+        {
+            guess = null;
+            return false;
+        }
+
+        guess = new EpisodeMetadataGuess(
+            match.Groups["series"].Value.Trim(),
+            match.Groups["title"].Value.Trim(),
+            match.Groups["season"].Value.Trim(),
+            match.Groups["episode"].Value.Trim());
+        return true;
+    }
+
+    /// <summary>
+    /// Übernimmt eine manuell bestätigte TVDB-Zuordnung in die sichtbaren Provider-IDs.
+    /// </summary>
+    public void ApplyTvdbSelection(TvdbEpisodeSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+
+        TvdbId = selection.TvdbEpisodeId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        SetStatus(
+            string.IsNullOrWhiteSpace(EmbyItemId) ? "TVDB gewählt" : "Bereit",
+            $"TVDB manuell gewählt: S{selection.SeasonNumber}E{selection.EpisodeNumber} - {selection.EpisodeTitle}");
     }
 
     public void SetStatus(string statusText, string note)
@@ -260,27 +304,30 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
     private string? BuildProviderMismatchNote(string? nfoTvdbId, string? embyTvdbId)
     {
-        if (string.IsNullOrWhiteSpace(_reportedProviderIds.TvdbId))
+        var preferredTvdbId = string.IsNullOrWhiteSpace(TvdbId)
+            ? _reportedProviderIds.TvdbId
+            : TvdbId;
+        if (string.IsNullOrWhiteSpace(preferredTvdbId))
         {
             return null;
         }
 
         var mismatches = new List<string>();
         if (!string.IsNullOrWhiteSpace(nfoTvdbId)
-            && !string.Equals(nfoTvdbId, _reportedProviderIds.TvdbId, StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(nfoTvdbId, preferredTvdbId, StringComparison.OrdinalIgnoreCase))
         {
             mismatches.Add($"NFO: {nfoTvdbId}");
         }
 
         if (!string.IsNullOrWhiteSpace(embyTvdbId)
-            && !string.Equals(embyTvdbId, _reportedProviderIds.TvdbId, StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(embyTvdbId, preferredTvdbId, StringComparison.OrdinalIgnoreCase))
         {
             mismatches.Add($"Emby: {embyTvdbId}");
         }
 
         return mismatches.Count == 0
             ? null
-            : $"JSON-Report liefert TVDB-ID {_reportedProviderIds.TvdbId}; {string.Join(", ", mismatches)}. Beim Sync wird die Report-ID in die NFO geschrieben.";
+            : $"Für den Sync ist TVDB-ID {preferredTvdbId} vorgemerkt; {string.Join(", ", mismatches)}. Beim Sync wird diese ID in die NFO geschrieben.";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

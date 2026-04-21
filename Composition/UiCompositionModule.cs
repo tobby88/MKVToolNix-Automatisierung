@@ -44,7 +44,8 @@ internal static class UiCompositionModule
         services.AddSingleton<EmbyModuleServices>(provider => new EmbyModuleServices(
             provider.GetRequiredService<AppEmbySettingsStore>(),
             provider.GetRequiredService<AppArchiveSettingsStore>(),
-            provider.GetRequiredService<EmbyMetadataSyncService>()));
+            provider.GetRequiredService<EmbyMetadataSyncService>(),
+            provider.GetRequiredService<EpisodeMetadataLookupService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),

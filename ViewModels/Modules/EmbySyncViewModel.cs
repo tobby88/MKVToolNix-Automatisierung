@@ -1,9 +1,12 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
+using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -36,9 +39,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        LoadReportCommand = new AsyncRelayCommand(LoadReportAsync, CanLoadReport, unexpectedCommandErrorHandler);
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, CanUseEmbyApi, unexpectedCommandErrorHandler);
         AnalyzeItemsCommand = new AsyncRelayCommand(AnalyzeItemsAsync, () => !_isBusy && Items.Count > 0, unexpectedCommandErrorHandler);
+        RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
+        ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
         SaveSettingsCommand = new RelayCommand(SaveSettings, () => !_isBusy);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
@@ -49,11 +53,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     public AsyncRelayCommand SelectReportCommand { get; }
 
-    public AsyncRelayCommand LoadReportCommand { get; }
-
     public AsyncRelayCommand TestConnectionCommand { get; }
 
     public AsyncRelayCommand AnalyzeItemsCommand { get; }
+
+    public AsyncRelayCommand RunScanCommand { get; }
+
+    public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
 
     public AsyncRelayCommand RunSyncCommand { get; }
 
@@ -77,6 +83,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
             _selectedItem = value;
             OnPropertyChanged();
+            RefreshCommands();
         }
     }
 
@@ -191,15 +198,23 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
         : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
 
-    public string RunSyncTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und schreibt danach TVDB-/IMDB-IDs in die lokalen NFO-Dateien zurück. Nur wenn keine passende Bibliothek gefunden wird, bleibt der globale Fallback übrig.";
+    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
+
+    public string ReviewSelectedMetadataTooltip => TryGetSelectedMetadataGuess(out _, out var reason)
+        ? "Öffnet die bekannte TVDB-Suche für die aktuell ausgewählte MKV."
+        : reason;
+
+    public string RunSyncTooltip => "Schreibt die aktuell sichtbaren TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
 
     /// <summary>
     /// Kurzer Ablaufhinweis für den manuellen Emby-Schritt.
     /// </summary>
     public string WorkflowInfoText =>
-        "1. Reports laden importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien. "
+        "1. Reports wählen importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien direkt. "
         + "2. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
-        + "3. Scan + NFO-Sync startet bevorzugt den passenden Serienbibliotheksscan, verfolgt dessen Serverfortschritt und schreibt danach die IDs in die NFO-Dateien zurück.";
+        + "3. Emby scannen startet bei Bedarf den passenden Serienbibliotheksscan und lädt neue Emby-Treffer nach. "
+        + "4. TVDB prüfen öffnet bei Bedarf die bekannte TVDB-Suche für die ausgewählte MKV. "
+        + "5. NFO-Sync schreibt erst danach die aktuell sichtbaren IDs in die NFO-Dateien zurück.";
 
     private async Task SelectReportAsync()
     {
@@ -213,12 +228,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
 
         SetReportPaths(selectedPaths);
-        await LoadReportAsync();
+        await ImportSelectedReportsAsync();
     }
 
-    private Task LoadReportAsync()
+    private Task ImportSelectedReportsAsync()
     {
-        if (!CanLoadReport())
+        if (_reportPaths.Count == 0 || _reportPaths.Any(path => !File.Exists(path)))
         {
             return Task.CompletedTask;
         }
@@ -314,12 +329,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         });
     }
 
-    private async Task RunSyncAsync()
+    private async Task RunScanAsync()
     {
         var selectedItems = Items.Where(item => item.IsSelected).ToList();
         if (selectedItems.Count == 0)
         {
-            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den Emby-Abgleich ausgewählt.");
+            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den Emby-Scan ausgewählt.");
             return;
         }
 
@@ -351,6 +366,72 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             ProgressValue = Math.Max(ProgressValue, 50);
             await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
             await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
+
+            ProgressValue = 100;
+            StatusText = scanTrigger.UsedGlobalLibraryScan
+                ? "Emby-Scan und Nachprüfung abgeschlossen. Der globale Server-Scan kann noch im Hintergrund weiterlaufen."
+                : "Emby-Scan und Nachprüfung abgeschlossen.";
+            AppendLog(StatusText);
+            RefreshSummaryAndCommands();
+        });
+    }
+
+    private async Task ReviewSelectedMetadataAsync()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        if (!TryGetSelectedMetadataGuess(out var guess, out var reason))
+        {
+            _dialogService.ShowWarning("TVDB-Prüfung", reason);
+            return;
+        }
+
+        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess!)
+        {
+            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+                ?? Application.Current?.MainWindow
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            AppendLog($"TVDB-Prüfung abgebrochen: {SelectedItem.MediaFileName}");
+            return;
+        }
+
+        if (dialog.KeepLocalDetection)
+        {
+            AppendLog($"Lokale TVDB-Erkennung beibehalten: {SelectedItem.MediaFileName}");
+            return;
+        }
+
+        if (dialog.SelectedEpisodeSelection is null)
+        {
+            return;
+        }
+
+        SelectedItem.ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
+        AppendLog(
+            $"TVDB manuell gesetzt: {SelectedItem.MediaFileName} -> "
+            + $"S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
+        StatusText = "TVDB-Zuordnung aktualisiert. Vor dem NFO-Sync bitte bei Bedarf nochmals prüfen.";
+        RefreshSummaryAndCommands();
+    }
+
+    private async Task RunSyncAsync()
+    {
+        var selectedItems = Items.Where(item => item.IsSelected).ToList();
+        if (selectedItems.Count == 0)
+        {
+            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den NFO-Sync ausgewählt.");
+            return;
+        }
+
+        await RunBusyAsync(async () =>
+        {
+            var settings = BuildSettingsFromInput();
+            SaveSettings(settings);
             var updatedCount = 0;
             var skippedCount = 0;
 
@@ -358,7 +439,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             {
                 var item = selectedItems[index];
                 StatusText = $"Aktualisiere NFO {index + 1}/{selectedItems.Count}...";
-                ProgressValue = ScaleProgress(index, selectedItems.Count, 80, 95);
+                ProgressValue = ScaleProgress(index, selectedItems.Count, 10, 95);
 
                 if (!item.ProviderIds.HasAny)
                 {
@@ -393,11 +474,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             }
 
             ProgressValue = 100;
-            StatusText =
-                $"Lokaler NFO-Abgleich abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen. "
-                + (scanTrigger.UsedGlobalLibraryScan
-                    ? "Der globale Server-Scan kann noch im Hintergrund weiterlaufen."
-                    : "Der Serienbibliotheksscan kann serverseitig noch im Hintergrund weiterlaufen.");
+            StatusText = $"NFO-Sync abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen.";
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
         });
@@ -554,13 +631,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
     }
 
-    private bool CanLoadReport()
-    {
-        return !_isBusy
-            && _reportPaths.Count > 0
-            && _reportPaths.All(File.Exists);
-    }
-
     private bool CanUseEmbyApi()
     {
         return !_isBusy && HasEmbyApiSettings();
@@ -570,6 +640,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     {
         return !string.IsNullOrWhiteSpace(ServerUrl)
             && !string.IsNullOrWhiteSpace(ApiKey);
+    }
+
+    private bool CanRunScan()
+    {
+        return CanUseEmbyApi() && Items.Any(item => item.IsSelected);
+    }
+
+    private bool CanReviewSelectedMetadata()
+    {
+        return !_isBusy && TryGetSelectedMetadataGuess(out _, out _);
     }
 
     private bool CanRunSync()
@@ -601,9 +681,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     private void RefreshCommands()
     {
         SelectReportCommand.RaiseCanExecuteChanged();
-        LoadReportCommand.RaiseCanExecuteChanged();
         TestConnectionCommand.RaiseCanExecuteChanged();
         AnalyzeItemsCommand.RaiseCanExecuteChanged();
+        RunScanCommand.RaiseCanExecuteChanged();
+        ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
         SaveSettingsCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
@@ -751,6 +832,25 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             1 => _reportPaths[0],
             _ => string.Join(Environment.NewLine, _reportPaths)
         };
+    }
+
+    private bool TryGetSelectedMetadataGuess(out EpisodeMetadataGuess? guess, out string reason)
+    {
+        if (SelectedItem is null)
+        {
+            guess = null;
+            reason = "Bitte zuerst eine MKV-Zeile auswählen.";
+            return false;
+        }
+
+        if (SelectedItem.TryBuildMetadataGuess(out guess))
+        {
+            reason = string.Empty;
+            return true;
+        }
+
+        reason = "Die ausgewählte MKV folgt nicht der erwarteten Episodenbenennung und kann deshalb nicht automatisch in die TVDB-Suche vorbefüllt werden.";
+        return false;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -111,10 +111,12 @@ internal sealed record DownloadSortModuleServices(
 /// <param name="Settings">Persistenter Store für Emby-Adresse und API-Key.</param>
 /// <param name="ArchiveSettings">Persistenter Store für den Standardpfad der Serienbibliothek.</param>
 /// <param name="Sync">Fachservice für JSON-Metadatenreport-Import, NFO-Provider-IDs und Emby-API-Aktionen.</param>
+/// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Emby-Zeilen.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
     AppArchiveSettingsStore ArchiveSettings,
-    EmbyMetadataSyncService Sync);
+    EmbyMetadataSyncService Sync,
+    EpisodeMetadataLookupService EpisodeMetadata);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.
