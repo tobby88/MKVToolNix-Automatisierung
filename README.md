@@ -1,6 +1,7 @@
 # MKVToolNix-Automatisierung
 
 [![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
+[![Nightly Build](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/nightly.yml/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/nightly.yml)
 [![Latest release](https://img.shields.io/github/v/release/tobby88/MKVToolNix-Automatisierung)](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE.md)
 
@@ -255,6 +256,8 @@ Die PNGs landen danach unter `.\docs\images\readme\`.
 Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt ein Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
 
 Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
+
+Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und aktualisiert das GitHub-Prerelease nur dann automatisch, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
 
 ## Projektaufbau
 

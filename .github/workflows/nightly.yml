@@ -1,0 +1,152 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '25 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: false
+
+jobs:
+  determine-run:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.decide.outputs.proceed }}
+      version: ${{ steps.decide.outputs.version }}
+      current_sha: ${{ steps.decide.outputs.current_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether nightly needs an update
+        id: decide
+        shell: bash
+        run: |
+          current_sha="$(git rev-parse HEAD)"
+          nightly_sha=""
+
+          if git rev-parse -q --verify refs/tags/nightly >/dev/null; then
+            nightly_sha="$(git rev-list -n 1 nightly)"
+          fi
+
+          proceed="true"
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" && -n "$nightly_sha" && "$nightly_sha" == "$current_sha" ]]; then
+            proceed="false"
+          fi
+
+          echo "current_sha=$current_sha" >> "$GITHUB_OUTPUT"
+          echo "version=0.0.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+
+          if [[ "$proceed" == "false" ]]; then
+            echo "Nightly-Build wird übersprungen: nightly zeigt bereits auf $current_sha."
+          else
+            echo "Nightly-Build läuft für $current_sha."
+          fi
+
+  nightly:
+    if: needs.determine-run.outputs.proceed == 'true'
+    needs: determine-run
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore app
+        run: dotnet restore .\MkvToolnixAutomatisierung.csproj
+
+      - name: Restore unit tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj
+
+      - name: Restore integration tests
+        run: dotnet restore .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj
+
+      - name: Build app
+        run: dotnet build .\MkvToolnixAutomatisierung.csproj --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test .\MkvToolnixAutomatisierung.Tests\MkvToolnixAutomatisierung.Tests.csproj --configuration Release --no-restore
+
+      - name: Run integration tests
+        run: dotnet test .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Publish nightly executable
+        shell: pwsh
+        run: |
+          .\scripts\publish-release.ps1 -Version '${{ needs.determine-run.outputs.version }}' -RuntimeIdentifier 'win-x64'
+          $sourcePath = ".\artifacts\release\MkvToolnixAutomatisierung-v${{ needs.determine-run.outputs.version }}-win-x64.exe"
+          $nightlyAssetPath = '.\artifacts\release\MkvToolnixAutomatisierung-nightly-win-x64.exe'
+          Copy-Item -LiteralPath $sourcePath -Destination $nightlyAssetPath -Force
+
+      - name: Build nightly notes
+        shell: pwsh
+        run: |
+          $notes = @"
+          ## Nightly Build
+
+          Dieser Vorabstand wird automatisch aktualisiert, sobald neue Commits auf master vorliegen.
+
+          - Commit: ${{ needs.determine-run.outputs.current_sha }}
+          - Erstellt: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')
+          - Buildtyp: framework-dependent Single-File (win-x64)
+
+          Hinweis: Das Prerelease nightly ist rollierend und wird bei späteren Nightly-Builds überschrieben.
+          "@
+          Set-Content -LiteralPath '.\artifacts\release\nightly-notes.md' -Value $notes -NoNewline
+
+      - name: Upload nightly artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-win-x64
+          path: .\artifacts\release\MkvToolnixAutomatisierung-nightly-win-x64.exe
+
+      - name: Update nightly tag
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -f nightly ${{ needs.determine-run.outputs.current_sha }}
+          git push origin refs/tags/nightly --force
+
+      - name: Create or update nightly prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tagName = 'nightly'
+          $assetPath = '.\artifacts\release\MkvToolnixAutomatisierung-nightly-win-x64.exe'
+          $notesPath = '.\artifacts\release\nightly-notes.md'
+
+          & gh release view $tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            & gh release edit $tagName --title $tagName --notes-file $notesPath
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Das vorhandene Nightly-Prerelease konnte nicht aktualisiert werden.'
+            }
+
+            & gh release upload $tagName $assetPath --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Das Nightly-Asset konnte nicht aktualisiert werden.'
+            }
+          }
+          else {
+            & gh release create $tagName $assetPath --title $tagName --notes-file $notesPath --prerelease
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Das Nightly-Prerelease konnte nicht erstellt werden.'
+            }
+          }
