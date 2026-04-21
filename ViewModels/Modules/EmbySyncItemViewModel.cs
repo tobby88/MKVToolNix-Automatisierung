@@ -131,6 +131,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _embyItemId = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusTooltip));
         }
     }
 
@@ -161,6 +162,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _note = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusTooltip));
         }
     }
 
@@ -180,6 +182,20 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public string ProviderIdEditTooltip => SupportsProviderIdSync
         ? "Direkt editierbar. Diese IDs werden beim NFO-Sync in die lokale Episoden-NFO geschrieben."
         : "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. TVDB-/IMDB-Sync ist hier nicht anwendbar.";
+
+    /// <summary>
+    /// Kleine Zustandsklassen reichen für die Tabelle aus; die fachliche Detailbegründung bleibt im Hinweis.
+    /// </summary>
+    public string StatusTone => MapStatusTone(StatusText);
+
+    /// <summary>
+    /// Zeigt den Statushinweis an und hängt die Emby-ID nur noch als Debug-Kontext an.
+    /// </summary>
+    public string StatusTooltip => string.IsNullOrWhiteSpace(EmbyItemId)
+        ? Note
+        : string.IsNullOrWhiteSpace(Note)
+            ? $"Emby-ID: {EmbyItemId}"
+            : $"{Note}{Environment.NewLine}Emby-ID: {EmbyItemId}";
 
     public string TvdbLookupTooltip => !SupportsProviderIdSync
         ? "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Eine TVDB-Korrektur ist hier nicht nötig."
@@ -394,8 +410,24 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             match.Groups["episode"].Value.Trim());
     }
 
+    private static string MapStatusTone(string statusText)
+    {
+        return statusText switch
+        {
+            "Bereit" or "TVDB gewählt" or "Lokal bereit" => "Ready",
+            "NFO aktuell" or "Aktualisiert" => "Done",
+            "IDs fehlen" or "NFO fehlt" or "NFO prüfen" or "Übersprungen" => "Warning",
+            "Fehlt" => "Error",
+            _ => "Neutral"
+        };
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        if (propertyName == nameof(StatusText))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(StatusTone)));
+        }
     }
 }

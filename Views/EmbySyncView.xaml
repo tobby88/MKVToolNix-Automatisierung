@@ -22,6 +22,52 @@
             <Setter Property="MinWidth" Value="58" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+
+        <Style x:Key="StatusBadgeBorderStyle" TargetType="Border">
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="#FFF3F4F6" />
+            <Setter Property="BorderBrush" Value="#FFD0D7DE" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Ready">
+                    <Setter Property="Background" Value="#FFE9F8EE" />
+                    <Setter Property="BorderBrush" Value="#FF63A46C" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Done">
+                    <Setter Property="Background" Value="#FFE9F2FF" />
+                    <Setter Property="BorderBrush" Value="#FF4C84D3" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Warning">
+                    <Setter Property="Background" Value="#FFFFF4D6" />
+                    <Setter Property="BorderBrush" Value="#FFD6A62A" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Error">
+                    <Setter Property="Background" Value="#FFFDEBEC" />
+                    <Setter Property="BorderBrush" Value="#FFC94F57" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StatusBadgeTextStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#FF5F6B76" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Ready">
+                    <Setter Property="Foreground" Value="#FF1E6E35" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Done">
+                    <Setter Property="Foreground" Value="#FF1F5FB8" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Warning">
+                    <Setter Property="Foreground" Value="#FF8A5A00" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Error">
+                    <Setter Property="Foreground" Value="#FFAA2E34" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
@@ -230,18 +276,23 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Emby"
-                                        Binding="{Binding EmbyItemId}"
-                                        Width="0.7*"
-                                        MinWidth="90"
-                                        IsReadOnly="True" />
-                    <DataGridTextColumn Header="Status"
-                                        Binding="{Binding StatusText}"
-                                        Width="Auto"
-                                        MinWidth="100"
-                                        IsReadOnly="True" />
+                    <DataGridTemplateColumn Header="Status"
+                                            Width="Auto"
+                                            MinWidth="120"
+                                            IsReadOnly="True">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border Margin="4,2"
+                                        Style="{StaticResource StatusBadgeBorderStyle}"
+                                        ToolTip="{Binding StatusTooltip}">
+                                    <TextBlock Style="{StaticResource StatusBadgeTextStyle}"
+                                               Text="{Binding StatusText}" />
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="Hinweis"
-                                            Width="2.2*"
+                                            Width="2.5*"
                                             MinWidth="260"
                                             IsReadOnly="True">
                         <DataGridTemplateColumn.CellTemplate>
