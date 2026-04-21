@@ -33,11 +33,12 @@ public sealed class EmbySyncItemViewModelTests
         vm.ApplyAnalysis(analysis);
 
         Assert.Equal("100", vm.TvdbId);
-        Assert.Equal("Bereit", vm.StatusText);
-        Assert.Equal("Ready", vm.StatusTone);
+        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Warning", vm.StatusTone);
         Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("NFO: 200", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: 300", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("IMDB-ID fehlt", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby-ID: emby-1", vm.StatusTooltip, StringComparison.Ordinal);
     }
 
@@ -92,6 +93,26 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("tt9876543", vm.ImdbId);
         Assert.Equal("Bereit", vm.StatusText);
         Assert.Equal("IDs vorhanden.", vm.Note);
+    }
+
+    [Fact]
+    public void ApplyAnalysis_WithOnlyTvdbId_StaysInWarningStateUntilImdbExists()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("200", null));
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", null),
+            EmbyItem: null,
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Warning", vm.StatusTone);
+        Assert.Equal("IMDB-ID fehlt.", vm.Note);
     }
 
     [Fact]
@@ -199,9 +220,22 @@ public sealed class EmbySyncItemViewModelTests
         vm.ApplyTvdbSelection(new TvdbEpisodeSelection(1, "Serie", 12345, "Pilot", "01", "01"));
 
         Assert.Equal("12345", vm.TvdbId);
-        Assert.Equal("TVDB gewählt", vm.StatusText);
-        Assert.Equal("Ready", vm.StatusTone);
+        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Warning", vm.StatusTone);
         Assert.Contains("TVDB manuell gewählt", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyImdbSelection_CompletesProviderIdsAndMarksRowReady()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null));
+
+        vm.ApplyImdbSelection("tt1234567");
+
+        Assert.Equal("tt1234567", vm.ImdbId);
+        Assert.Equal("Bereit", vm.StatusText);
+        Assert.Equal("Ready", vm.StatusTone);
+        Assert.Contains("IMDb manuell gesetzt", vm.Note, StringComparison.Ordinal);
     }
 
     [Theory]

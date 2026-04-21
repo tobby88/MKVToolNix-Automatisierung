@@ -204,15 +204,29 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTemplateColumn Header="IMDB-ID"
-                                            Width="100"
-                                            MinWidth="96">
+                                            Width="150"
+                                            MinWidth="150">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBox Margin="4,2"
-                                         Style="{StaticResource EditableIdTextBoxStyle}"
-                                         IsEnabled="{Binding CanEditProviderIds}"
-                                         ToolTip="{Binding ProviderIdEditTooltip}"
-                                         Text="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
+                                <Grid Margin="4,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBox Grid.Column="0"
+                                             Style="{StaticResource EditableIdTextBoxStyle}"
+                                             IsEnabled="{Binding CanEditProviderIds}"
+                                             ToolTip="{Binding ProviderIdEditTooltip}"
+                                             Text="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
+                                    <Button Grid.Column="1"
+                                            Margin="6,0,0,0"
+                                            Style="{StaticResource RowActionButtonStyle}"
+                                            Click="ImdbLookupButton_OnClick"
+                                            Content="IMDb"
+                                            IsEnabled="{Binding CanReviewImdb}"
+                                            ToolTip="{Binding ImdbLookupTooltip}" />
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

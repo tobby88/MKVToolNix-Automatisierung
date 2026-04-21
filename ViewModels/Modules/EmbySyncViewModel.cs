@@ -37,6 +37,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
+        ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, CanReviewSelectedImdb);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
@@ -51,6 +52,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public RelayCommand ToggleSelectedItemSelectionCommand { get; }
 
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
+
+    public RelayCommand ReviewSelectedImdbCommand { get; }
 
     public AsyncRelayCommand RunSyncCommand { get; }
 
@@ -144,10 +147,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public int SelectedCount => Items.Count(item => item.IsSelected);
 
     public int MissingIdCount => Items.Count(item => item.SupportsProviderIdSync && !item.HasProviderIds);
+    
+    public int IncompleteIdCount => Items.Count(item => item.SupportsProviderIdSync && !item.HasCompleteProviderIds);
 
     public string SummaryText => ItemCount == 0
         ? "Noch kein Metadatenreport geladen."
-        : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {MissingIdCount} ohne erwartete TVDB-/IMDB-ID.";
+        : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {IncompleteIdCount} ohne vollständige TVDB-/IMDB-ID.";
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
 
@@ -378,7 +383,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
                 if (!updateResult.NfoChanged)
                 {
-                    item.SetStatus("NFO aktuell", updateResult.Message);
+                    if (item.HasCompleteProviderIds)
+                    {
+                        item.SetStatus("NFO aktuell", updateResult.Message);
+                    }
+                    else
+                    {
+                        item.MarkCurrentWithMissingIds();
+                    }
                     continue;
                 }
 
@@ -567,6 +579,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         return !_isBusy && TryGetSelectedMetadataGuess(out _, out _);
     }
 
+    private bool CanReviewSelectedImdb()
+    {
+        return !_isBusy && SelectedItem?.CanReviewImdb == true;
+    }
+
     private bool CanRunSync()
     {
         return !_isBusy && HasEmbyApiSettings() && Items.Any(item => item.IsSelected);
@@ -589,6 +606,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         OnPropertyChanged(nameof(ItemCount));
         OnPropertyChanged(nameof(SelectedCount));
         OnPropertyChanged(nameof(MissingIdCount));
+        OnPropertyChanged(nameof(IncompleteIdCount));
         OnPropertyChanged(nameof(SummaryText));
         RefreshCommands();
     }
@@ -599,6 +617,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         RunScanCommand.RaiseCanExecuteChanged();
         ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
+        ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
@@ -609,6 +628,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         if (e.PropertyName is nameof(EmbySyncItemViewModel.IsSelected)
             or nameof(EmbySyncItemViewModel.TvdbId)
             or nameof(EmbySyncItemViewModel.ImdbId)
+            or nameof(EmbySyncItemViewModel.HasCompleteProviderIds)
             or nameof(EmbySyncItemViewModel.SupportsProviderIdSync))
         {
             RefreshSummaryAndCommands();
@@ -765,6 +785,31 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         reason = "Die ausgewählte MKV folgt nicht der erwarteten Episodenbenennung und kann deshalb nicht automatisch in die TVDB-Suche vorbefüllt werden.";
         return false;
+    }
+
+    private void ReviewSelectedImdb()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        SelectedItem.TryBuildMetadataGuess(out var guess);
+        var dialog = new ImdbLookupWindow(guess, SelectedItem.ImdbId)
+        {
+            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+                ?? Application.Current?.MainWindow
+        };
+        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedImdbId))
+        {
+            AppendLog($"IMDb-Prüfung abgebrochen: {SelectedItem.MediaFileName}");
+            return;
+        }
+
+        SelectedItem.ApplyImdbSelection(dialog.SelectedImdbId);
+        AppendLog($"IMDb manuell gesetzt: {SelectedItem.MediaFileName} -> {dialog.SelectedImdbId}");
+        StatusText = "IMDb-Zuordnung aktualisiert. Vor dem NFO-Sync bitte bei Bedarf nochmals prüfen.";
+        RefreshSummaryAndCommands();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

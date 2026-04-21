@@ -57,6 +57,7 @@ public sealed class EmbySyncViewModelTests
         vm.Items.Add(new EmbySyncItemViewModel(@"C:\Videos\S01E02.mkv", new EmbyProviderIds("12345", null)));
 
         Assert.Equal(1, vm.MissingIdCount);
+        Assert.Equal(2, vm.IncompleteIdCount);
     }
 
     [Fact]
@@ -80,8 +81,8 @@ public sealed class EmbySyncViewModelTests
         vm.Items.Add(syncableItem);
         vm.Items.Add(embyOnlyItem);
 
-        Assert.Equal(1, vm.MissingIdCount);
-        Assert.Contains("ohne erwartete TVDB-/IMDB-ID", vm.SummaryText, StringComparison.Ordinal);
+        Assert.Equal(1, vm.IncompleteIdCount);
+        Assert.Contains("ohne vollständige TVDB-/IMDB-ID", vm.SummaryText, StringComparison.Ordinal);
     }
 
     [Fact]

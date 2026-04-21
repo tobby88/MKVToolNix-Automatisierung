@@ -69,6 +69,16 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public string NfoPath { get; private set; }
 
     /// <summary>
+    /// Kennzeichnet, ob bereits eine TVDB-ID gesetzt ist.
+    /// </summary>
+    public bool HasTvdbId => !string.IsNullOrWhiteSpace(TvdbId);
+
+    /// <summary>
+    /// Kennzeichnet, ob bereits eine IMDb-ID gesetzt ist.
+    /// </summary>
+    public bool HasImdbId => !string.IsNullOrWhiteSpace(ImdbId);
+
+    /// <summary>
     /// Kennzeichnet, ob für diese Zeile überhaupt ein lokaler NFO-Sync fachlich sinnvoll ist.
     /// </summary>
     public bool SupportsProviderIdSync
@@ -84,9 +94,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             _supportsProviderIdSync = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanReviewTvdb));
+            OnPropertyChanged(nameof(CanReviewImdb));
             OnPropertyChanged(nameof(CanEditProviderIds));
             OnPropertyChanged(nameof(ProviderIdEditTooltip));
             OnPropertyChanged(nameof(TvdbLookupTooltip));
+            OnPropertyChanged(nameof(ImdbLookupTooltip));
         }
     }
 
@@ -103,7 +115,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _tvdbId = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasTvdbId));
             OnPropertyChanged(nameof(HasProviderIds));
+            OnPropertyChanged(nameof(HasCompleteProviderIds));
         }
     }
 
@@ -120,7 +134,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _imdbId = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasImdbId));
             OnPropertyChanged(nameof(HasProviderIds));
+            OnPropertyChanged(nameof(HasCompleteProviderIds));
         }
     }
 
@@ -174,10 +190,21 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public bool HasProviderIds => !string.IsNullOrWhiteSpace(TvdbId) || !string.IsNullOrWhiteSpace(ImdbId);
 
     /// <summary>
+    /// Für einen vollständigen Emby-Abgleich werden derzeit sowohl TVDB- als auch IMDb-ID erwartet.
+    /// </summary>
+    public bool HasCompleteProviderIds => HasTvdbId && HasImdbId;
+
+    /// <summary>
     /// Sichtbare TVDB-Suche ist nur dann sinnvoll, wenn der Dateiname vorbefüllt werden kann und
     /// die Zeile später tatsächlich in eine Episoden-NFO zurückgeschrieben wird.
     /// </summary>
     public bool CanReviewTvdb => SupportsProviderIdSync && _metadataGuess is not null;
+
+    /// <summary>
+    /// Die IMDb-Prüfung bleibt auch ohne perfekte Vorbelegung sinnvoll, weil der Dialog notfalls
+    /// immer noch eine Browser-Suche und das manuelle Einfügen einer IMDb-ID anbietet.
+    /// </summary>
+    public bool CanReviewImdb => SupportsProviderIdSync;
 
     /// <summary>
     /// Kennzeichnet die gelb hinterlegten TVDB-/IMDB-Felder als aktiv editierbar.
@@ -207,6 +234,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         : _metadataGuess is not null
             ? "Öffnet die TVDB-Suche für genau diese MKV-Zeile."
             : "Die MKV-Benennung kann nicht automatisch in die TVDB-Suche übernommen werden.";
+
+    public string ImdbLookupTooltip => !SupportsProviderIdSync
+        ? "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Eine IMDb-Korrektur ist hier nicht nötig."
+        : _metadataGuess is not null
+            ? "Öffnet die IMDb-Suchhilfe für genau diese MKV-Zeile."
+            : "Öffnet die IMDb-Suchhilfe. Die Suche muss hier ohne Dateiname-Vorbelegung angepasst werden.";
 
     public EmbyProviderIds ProviderIds => new(
         string.IsNullOrWhiteSpace(TvdbId) ? null : TvdbId,
@@ -273,20 +306,14 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         if (analysis.EmbyItem is null)
         {
             SetStatus(
-                HasProviderIds ? "Lokal bereit" : "IDs fehlen",
-                providerMismatchNote
-                ?? (HasProviderIds
-                    ? "IDs lokal vorhanden."
-                    : "Keine TVDB-/IMDB-ID."));
+                HasCompleteProviderIds ? "Lokal bereit" : "IDs fehlen",
+                BuildProviderStateNote(providerMismatchNote, embyItemKnown: false));
             return;
         }
 
         SetStatus(
-            HasProviderIds ? "Bereit" : "IDs fehlen",
-            providerMismatchNote
-            ?? (HasProviderIds
-                ? "IDs vorhanden."
-                : "Keine TVDB-/IMDB-ID."));
+            HasCompleteProviderIds ? "Bereit" : "IDs fehlen",
+            BuildProviderStateNote(providerMismatchNote, embyItemKnown: true));
     }
 
     public void ApplyEmbyItem(EmbyItem? item)
@@ -322,13 +349,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
 
         SetStatus(
-            HasProviderIds ? "Bereit" : "IDs fehlen",
-            BuildProviderMismatchNote(
+            HasCompleteProviderIds ? "Bereit" : "IDs fehlen",
+            BuildProviderStateNote(
+                BuildProviderMismatchNote(
                 nfoTvdbId: null,
-                embyTvdbId: embyProviderIds.TvdbId)
-            ?? (HasProviderIds
-                ? "IDs vorhanden."
-                : "Keine TVDB-/IMDB-ID."));
+                embyTvdbId: embyProviderIds.TvdbId),
+                embyItemKnown: true));
     }
 
     /// <summary>
@@ -349,8 +375,25 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         TvdbId = selection.TvdbEpisodeId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         SetStatus(
-            string.IsNullOrWhiteSpace(EmbyItemId) ? "TVDB gewählt" : "Bereit",
+            string.IsNullOrWhiteSpace(EmbyItemId)
+                ? (HasCompleteProviderIds ? "TVDB gewählt" : "IDs fehlen")
+                : (HasCompleteProviderIds ? "Bereit" : "IDs fehlen"),
             $"TVDB manuell gewählt: S{selection.SeasonNumber}E{selection.EpisodeNumber} - {selection.EpisodeTitle}");
+    }
+
+    /// <summary>
+    /// Übernimmt eine manuell bestätigte IMDb-ID in die sichtbaren Provider-IDs.
+    /// </summary>
+    public void ApplyImdbSelection(string imdbId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imdbId);
+
+        ImdbId = imdbId.Trim();
+        SetStatus(
+            HasCompleteProviderIds
+                ? (string.IsNullOrWhiteSpace(EmbyItemId) ? "Bereit" : "Bereit")
+                : "IDs fehlen",
+            $"IMDb manuell gesetzt: {ImdbId}");
     }
 
     public void SetStatus(string statusText, string note)
@@ -361,11 +404,30 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
     public void MarkUpdated(bool metadataRefreshTriggered)
     {
+        if (HasCompleteProviderIds)
+        {
+            SetStatus(
+                "Aktualisiert",
+                metadataRefreshTriggered
+                    ? "NFO aktualisiert, Emby-Refresh angestoßen."
+                    : "NFO aktualisiert, Emby-Item noch nicht gefunden.");
+            return;
+        }
+
         SetStatus(
-            "Aktualisiert",
+            "IDs fehlen",
             metadataRefreshTriggered
-                ? "NFO aktualisiert, Emby-Refresh angestoßen."
-                : "NFO aktualisiert, Emby-Item noch nicht gefunden.");
+                ? $"NFO aktualisiert. {BuildProviderCoverageNote()} Emby-Refresh angestoßen."
+                : $"NFO aktualisiert. {BuildProviderCoverageNote()}");
+    }
+
+    /// <summary>
+    /// Kennzeichnet, dass die NFO bereits den aktuell verfügbaren Stand widerspiegelt, fachlich
+    /// aber noch Provider-IDs fehlen.
+    /// </summary>
+    public void MarkCurrentWithMissingIds()
+    {
+        SetStatus("IDs fehlen", $"NFO aktuell. {BuildProviderCoverageNote()}");
     }
 
     /// <inheritdoc/>
@@ -407,6 +469,41 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         return mismatches.Count == 0
             ? null
             : $"TVDB {preferredTvdbId} vorgesehen ({string.Join(", ", mismatches)}).";
+    }
+
+    private string BuildProviderStateNote(string? providerMismatchNote, bool embyItemKnown)
+    {
+        var providerCoverage = embyItemKnown
+            ? BuildProviderCoverageNote()
+            : BuildProviderCoverageNote(localOnly: true);
+        if (string.IsNullOrWhiteSpace(providerMismatchNote))
+        {
+            return providerCoverage;
+        }
+
+        return HasCompleteProviderIds
+            ? providerMismatchNote
+            : $"{providerMismatchNote} {providerCoverage}";
+    }
+
+    private string BuildProviderCoverageNote(bool localOnly = false)
+    {
+        if (HasCompleteProviderIds)
+        {
+            return localOnly ? "IDs lokal vorhanden." : "IDs vorhanden.";
+        }
+
+        if (HasTvdbId && !HasImdbId)
+        {
+            return "IMDB-ID fehlt.";
+        }
+
+        if (!HasTvdbId && HasImdbId)
+        {
+            return "TVDB-ID fehlt.";
+        }
+
+        return "Keine TVDB-/IMDB-ID.";
     }
 
     private static EpisodeMetadataGuess? TryParseMetadataGuess(string mediaFilePath)

@@ -83,4 +83,23 @@ public partial class EmbySyncView : UserControl
             viewModel.ReviewSelectedMetadataCommand.Execute(null);
         }
     }
+
+    /// <summary>
+    /// Öffnet die IMDb-Suchhilfe gezielt für die angeklickte Tabellenzeile.
+    /// </summary>
+    private void ImdbLookupButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not EmbySyncViewModel viewModel
+            || sender is not FrameworkElement element
+            || element.DataContext is not EmbySyncItemViewModel item)
+        {
+            return;
+        }
+
+        viewModel.SelectedItem = item;
+        if (viewModel.ReviewSelectedImdbCommand.CanExecute(null))
+        {
+            viewModel.ReviewSelectedImdbCommand.Execute(null);
+        }
+    }
 }
