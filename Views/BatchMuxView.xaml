@@ -43,6 +43,29 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="PrimaryActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#FF1F5FB8" />
+            <Setter Property="BorderBrush" Value="#FF174A90" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF174A90" />
+                    <Setter Property="BorderBrush" Value="#FF123A72" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF123A72" />
+                    <Setter Property="BorderBrush" Value="#FF0D2C57" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#FF5F6B76" />
+                    <Setter Property="Background" Value="#FFE5E7EB" />
+                    <Setter Property="BorderBrush" Value="#FFD0D7DE" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -629,7 +652,7 @@
                 <Button Width="130" Margin="0,0,12,0" Padding="10,6" Command="{Binding SelectAllEpisodesCommand}" Content="Alle w&#228;hlen" />
                 <Button Width="140" Margin="0,0,12,0" Padding="10,6" Command="{Binding DeselectAllEpisodesCommand}" Content="Alle abw&#228;hlen" />
                 <Button Width="180" Margin="0,0,12,0" Padding="10,6" Command="{Binding ReviewPendingSourcesCommand}" ToolTip="{Binding ReviewPendingSourcesTooltip, Mode=OneWay}" Content="Pflichtchecks starten" />
-                <Button Width="170" Margin="0,0,12,0" Padding="10,6" Command="{Binding RunBatchCommand}" ToolTip="{Binding RunBatchTooltip, Mode=OneWay}" Content="Batch starten" />
+                <Button Width="170" Margin="0,0,12,0" Style="{StaticResource PrimaryActionButtonStyle}" Command="{Binding RunBatchCommand}" ToolTip="{Binding RunBatchTooltip, Mode=OneWay}" Content="Batch starten" />
             </WrapPanel>
         </DockPanel>
     </Grid>

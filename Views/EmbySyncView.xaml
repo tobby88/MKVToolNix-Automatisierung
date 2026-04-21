@@ -31,6 +31,14 @@
             <Setter Property="BorderBrush" Value="#FF174A90" />
             <Setter Property="BorderThickness" Value="1" />
             <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF174A90" />
+                    <Setter Property="BorderBrush" Value="#FF123A72" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF123A72" />
+                    <Setter Property="BorderBrush" Value="#FF0D2C57" />
+                </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Foreground" Value="#FF5F6B76" />
                     <Setter Property="Background" Value="#FFE5E7EB" />
@@ -114,7 +122,7 @@
                     Padding="10,6"
                     VerticalAlignment="Top"
                     Command="{Binding SelectReportCommand}"
-                    Content="1. Reports wählen" />
+                    Content="Reports wählen" />
             <Border Grid.Row="0"
                      Grid.Column="1"
                     Margin="0,2,0,2"
@@ -144,7 +152,7 @@
                     Padding="10,6"
                     VerticalAlignment="Top"
                     Command="{Binding RunScanCommand}"
-                    Content="2. Emby scannen"
+                    Content="Emby scannen"
                     ToolTip="{Binding RunScanTooltip, Mode=OneWay}" />
             <Border Grid.Row="1"
                   Grid.Column="1"
@@ -332,7 +340,7 @@
                     Style="{StaticResource PrimaryActionButtonStyle}"
                     Command="{Binding RunSyncCommand}"
                     ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                    Content="3. Änderungen in Emby schreiben" />
+                    Content="Änderungen in Emby schreiben" />
             <ProgressBar Grid.Column="4"
                          Height="18"
                          Minimum="0"
