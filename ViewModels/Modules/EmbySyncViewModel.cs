@@ -191,7 +191,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         ? "Prüft lokale NFO-Dateien und liest zusätzlich die aktuell in Emby sichtbaren Episoden samt Provider-IDs ein."
         : "Prüft nur die lokalen NFO-Dateien. Für den zusätzlichen Emby-Abgleich bitte Server und API-Key eintragen.";
 
-    public string RunSyncTooltip => "Startet bevorzugt nur den Scan der Serienbibliothek, wartet begrenzt auf neue Emby-Items und schreibt danach TVDB-/IMDB-IDs in die lokalen NFO-Dateien zurück. Der serverseitige Scan kann danach noch weiterlaufen.";
+    public string RunSyncTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und schreibt danach TVDB-/IMDB-IDs in die lokalen NFO-Dateien zurück. Nur wenn keine passende Bibliothek gefunden wird, bleibt der globale Fallback übrig.";
 
     /// <summary>
     /// Kurzer Ablaufhinweis für den manuellen Emby-Schritt.
@@ -199,7 +199,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
     public string WorkflowInfoText =>
         "1. Reports laden importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien. "
         + "2. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
-        + "3. Scan + NFO-Sync startet bevorzugt nur den Serienbibliotheksscan und schreibt danach die IDs in die NFO-Dateien zurück.";
+        + "3. Scan + NFO-Sync startet bevorzugt den passenden Serienbibliotheksscan, verfolgt dessen Serverfortschritt und schreibt danach die IDs in die NFO-Dateien zurück.";
 
     private async Task SelectReportAsync()
     {
@@ -322,9 +322,18 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
                 settings,
                 archiveSettings.DefaultSeriesArchiveRootPath);
             ProgressValue = 10;
-            StatusText = $"{scanTrigger.Message} Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
             AppendLog(scanTrigger.Message);
+            if (scanTrigger.UsedGlobalLibraryScan)
+            {
+                AppendLog("Hinweis: Für den globalen Emby-Fallback ist derzeit kein bibliotheksscharfer Serverfortschritt verfügbar.");
+            }
+            else if (scanTrigger.Library is not null)
+            {
+                await WaitForSeriesLibraryScanAsync(settings, scanTrigger.Library);
+            }
 
+            StatusText = "Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
+            ProgressValue = Math.Max(ProgressValue, 50);
             await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems);
             await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems);
             var updatedCount = 0;
@@ -334,7 +343,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             {
                 var item = selectedItems[index];
                 StatusText = $"Aktualisiere NFO {index + 1}/{selectedItems.Count}...";
-                ProgressValue = ScaleProgress(index, selectedItems.Count, 55, 95);
+                ProgressValue = ScaleProgress(index, selectedItems.Count, 80, 95);
 
                 if (!item.ProviderIds.HasAny)
                 {
@@ -404,8 +413,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             }
 
             ProgressValue = pendingItems.Count == 0
-                ? 55
-                : Math.Min(54, 15 + attempt * 4);
+                ? 70
+                : Math.Min(69, 50 + attempt * 4);
 
             if (pendingItems.Count > 0)
             {
@@ -431,7 +440,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         {
             var item = selectedItems[index];
             StatusText = $"Prüfe NFO nach Emby-Scan {index + 1}/{selectedItems.Count}...";
-            ProgressValue = ScaleProgress(index, selectedItems.Count, 45, 55);
+            ProgressValue = ScaleProgress(index, selectedItems.Count, 70, 80);
 
             // Nach einem Library-Scan kann Emby die NFO erst jetzt angelegt oder Provider-IDs
             // ergänzt haben. Diese zweite, kurze Prüfung verhindert, dass wir mit veraltetem
@@ -612,6 +621,51 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
             : PortableAppStorage.AppDirectory;
     }
 
+    private async Task WaitForSeriesLibraryScanAsync(AppEmbySettings settings, EmbyLibraryFolder library)
+    {
+        var timeoutSeconds = Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600);
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        var activationDeadline = DateTime.UtcNow.AddSeconds(Math.Min(timeoutSeconds, 10));
+        var sawActiveServerProgress = false;
+
+        while (DateTime.UtcNow <= deadline)
+        {
+            var currentLibrary = await _services.Sync.GetLibraryByIdAsync(settings, library.Id, CancellationToken.None);
+            if (currentLibrary is null)
+            {
+                AppendLog($"Serienbibliothek konnte nach dem Start nicht mehr von Emby gelesen werden: {library.Name}");
+                return;
+            }
+
+            if (TryGetActiveLibraryScanState(currentLibrary, out var progressPercent, out var refreshStatusText))
+            {
+                sawActiveServerProgress = true;
+                ProgressValue = ScalePercent(progressPercent, 10, 50);
+                StatusText = string.IsNullOrWhiteSpace(refreshStatusText)
+                    ? $"Serienbibliothek scannt... {progressPercent}%"
+                    : $"Serienbibliothek scannt... {progressPercent}% ({refreshStatusText})";
+            }
+            else if (sawActiveServerProgress)
+            {
+                ProgressValue = 50;
+                StatusText = $"Serienbibliotheksscan abgeschlossen: {currentLibrary.Name}";
+                AppendLog(StatusText);
+                return;
+            }
+            else if (DateTime.UtcNow >= activationDeadline)
+            {
+                AppendLog($"Emby meldet für '{currentLibrary.Name}' keinen expliziten Refresh-Fortschritt. Fahre mit dem lokalen Abgleich fort.");
+                ProgressValue = 50;
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+
+        AppendLog($"Timeout beim Warten auf den Emby-Serienbibliotheksscan: {library.Name}");
+        ProgressValue = 50;
+    }
+
     private static int ScaleProgress(int index, int count, int startPercent, int endPercent)
     {
         if (count <= 0)
@@ -620,6 +674,40 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
         }
 
         var fraction = Math.Clamp((double)index / count, 0, 1);
+        return startPercent + (int)Math.Round((endPercent - startPercent) * fraction);
+    }
+
+    private static bool TryGetActiveLibraryScanState(
+        EmbyLibraryFolder library,
+        out int progressPercent,
+        out string? refreshStatusText)
+    {
+        progressPercent = Math.Clamp((int)Math.Round(library.RefreshProgress ?? 0), 0, 100);
+        refreshStatusText = string.IsNullOrWhiteSpace(library.RefreshStatus)
+            ? null
+            : library.RefreshStatus.Trim();
+
+        if (progressPercent is > 0 and < 100)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(refreshStatusText)
+            && !IsCompletedLibraryScanStatus(refreshStatusText);
+    }
+
+    private static bool IsCompletedLibraryScanStatus(string refreshStatusText)
+    {
+        return refreshStatusText.Contains("idle", StringComparison.OrdinalIgnoreCase)
+            || refreshStatusText.Contains("ready", StringComparison.OrdinalIgnoreCase)
+            || refreshStatusText.Contains("complete", StringComparison.OrdinalIgnoreCase)
+            || refreshStatusText.Contains("finished", StringComparison.OrdinalIgnoreCase)
+            || refreshStatusText.Contains("stopped", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int ScalePercent(int progressPercent, int startPercent, int endPercent)
+    {
+        var fraction = Math.Clamp(progressPercent / 100d, 0, 1);
         return startPercent + (int)Math.Round((endPercent - startPercent) * fraction);
     }
 

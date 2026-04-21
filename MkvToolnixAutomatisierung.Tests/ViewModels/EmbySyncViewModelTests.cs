@@ -123,7 +123,8 @@ public sealed class EmbySyncViewModelTests
 
         Assert.Contains("Serienbibliothek", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NFO-Dateien", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("weiterlaufen", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Serverfortschritt", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("global", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -174,6 +175,9 @@ public sealed class EmbySyncViewModelTests
 
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 

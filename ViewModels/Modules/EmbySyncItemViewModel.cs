@@ -10,6 +10,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataErrorInfo
 {
+    private readonly EmbyProviderIds _reportedProviderIds;
     private bool _isSelected = true;
     private string _tvdbId = string.Empty;
     private string _imdbId = string.Empty;
@@ -26,8 +27,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     {
         MediaFilePath = mediaFilePath;
         NfoPath = Path.ChangeExtension(mediaFilePath, ".nfo");
-        _tvdbId = providerIds.TvdbId ?? string.Empty;
-        _imdbId = providerIds.ImdbId ?? string.Empty;
+        _reportedProviderIds = providerIds ?? EmbyProviderIds.Empty;
+        _tvdbId = _reportedProviderIds.TvdbId ?? string.Empty;
+        _imdbId = _reportedProviderIds.ImdbId ?? string.Empty;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -145,7 +147,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         NfoPath = analysis.NfoPath;
         OnPropertyChanged(nameof(NfoPath));
 
-        var providerIds = analysis.EffectiveProviderIds;
+        var providerIds = _reportedProviderIds.MergeFallback(analysis.EffectiveProviderIds);
         if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             TvdbId = providerIds.TvdbId!;
@@ -176,21 +178,26 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             return;
         }
 
+        var providerMismatchNote = BuildProviderMismatchNote(
+            analysis.NfoProviderIds.TvdbId,
+            analysis.EmbyItem?.GetProviderId("Tvdb") ?? analysis.EmbyItem?.GetProviderId("TvdbSeries"));
         if (analysis.EmbyItem is null)
         {
             SetStatus(
                 HasProviderIds ? "Lokal bereit" : "IDs fehlen",
-                HasProviderIds
+                providerMismatchNote
+                ?? (HasProviderIds
                     ? "Provider-IDs liegen lokal vor; Emby-Item wurde noch nicht gefunden."
-                    : "Weder NFO noch Emby liefern TVDB-/IMDB-IDs. IDs bitte manuell ergänzen oder Emby-Metadaten prüfen.");
+                    : "Weder NFO noch Emby liefern TVDB-/IMDB-IDs. IDs bitte manuell ergänzen oder Emby-Metadaten prüfen."));
             return;
         }
 
         SetStatus(
             HasProviderIds ? "Bereit" : "IDs fehlen",
-            HasProviderIds
+            providerMismatchNote
+            ?? (HasProviderIds
                 ? $"Emby-Item gefunden: {analysis.EmbyItem.Name}"
-                : "Emby-Item gefunden, aber ohne TVDB-/IMDB-ID.");
+                : "Emby-Item gefunden, aber ohne TVDB-/IMDB-ID."));
     }
 
     public void ApplyEmbyItem(EmbyItem? item)
@@ -201,20 +208,26 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
 
         EmbyItemId = item.Id;
-        var providerIds = new EmbyProviderIds(
+        var embyProviderIds = new EmbyProviderIds(
             item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
             item.GetProviderId("Imdb"));
-        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId) && string.IsNullOrWhiteSpace(TvdbId))
+        var providerIds = _reportedProviderIds.MergeFallback(embyProviderIds);
+        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             TvdbId = providerIds.TvdbId!;
         }
 
-        if (!string.IsNullOrWhiteSpace(providerIds.ImdbId) && string.IsNullOrWhiteSpace(ImdbId))
+        if (!string.IsNullOrWhiteSpace(providerIds.ImdbId))
         {
             ImdbId = providerIds.ImdbId!;
         }
 
-        SetStatus(HasProviderIds ? "Bereit" : "IDs fehlen", $"Emby-Item gefunden: {item.Name}");
+        SetStatus(
+            HasProviderIds ? "Bereit" : "IDs fehlen",
+            BuildProviderMismatchNote(
+                nfoTvdbId: null,
+                embyTvdbId: embyProviderIds.TvdbId)
+            ?? $"Emby-Item gefunden: {item.Name}");
     }
 
     public void SetStatus(string statusText, string note)
@@ -244,6 +257,31 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             => "IMDB-ID muss im Format tt1234567 angegeben werden.",
         _ => string.Empty
     };
+
+    private string? BuildProviderMismatchNote(string? nfoTvdbId, string? embyTvdbId)
+    {
+        if (string.IsNullOrWhiteSpace(_reportedProviderIds.TvdbId))
+        {
+            return null;
+        }
+
+        var mismatches = new List<string>();
+        if (!string.IsNullOrWhiteSpace(nfoTvdbId)
+            && !string.Equals(nfoTvdbId, _reportedProviderIds.TvdbId, StringComparison.OrdinalIgnoreCase))
+        {
+            mismatches.Add($"NFO: {nfoTvdbId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(embyTvdbId)
+            && !string.Equals(embyTvdbId, _reportedProviderIds.TvdbId, StringComparison.OrdinalIgnoreCase))
+        {
+            mismatches.Add($"Emby: {embyTvdbId}");
+        }
+
+        return mismatches.Count == 0
+            ? null
+            : $"JSON-Report liefert TVDB-ID {_reportedProviderIds.TvdbId}; {string.Join(", ", mismatches)}. Beim Sync wird die Report-ID in die NFO geschrieben.";
+    }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
