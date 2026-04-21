@@ -119,7 +119,7 @@ Nach jedem Batch-Lauf:
 4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
 5. Fehlende oder falsche TVDB-IDs bei Bedarf je Zeile über den `TVDB`-Button korrigieren.
 6. Fehlende oder falsche IMDB-IDs bei Bedarf je Zeile über den `IMDb`-Button ergänzen oder korrigieren.
-7. `NFO-Sync`, um geänderte TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
+7. `Änderungen in Emby schreiben`, um geänderte TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
 Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs.
 

@@ -154,9 +154,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ? "Noch kein Metadatenreport geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {IncompleteIdCount} ohne vollständige TVDB-/IMDB-ID.";
 
-    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem eigentlichen NFO-Sync noch geprüft oder korrigiert werden.";
+    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem abschließenden Schreibschritt noch geprüft oder korrigiert werden.";
 
-    public string RunSyncTooltip => "Schreibt die zuletzt automatisch geprüften TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
+    public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Einträge einen gezielten Metadatenrefresh an.";
 
     private async Task SelectReportAsync()
     {
@@ -335,7 +335,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         AppendLog(
             $"TVDB manuell gesetzt: {SelectedItem.MediaFileName} -> "
             + $"S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
-        StatusText = "TVDB-Zuordnung aktualisiert. Vor dem NFO-Sync bitte bei Bedarf nochmals prüfen.";
+        StatusText = "TVDB-Zuordnung aktualisiert. Vor dem abschließenden Schreibschritt bitte bei Bedarf nochmals prüfen.";
         RefreshSummaryAndCommands();
     }
 
@@ -344,7 +344,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         var selectedItems = Items.Where(item => item.IsSelected).ToList();
         if (selectedItems.Count == 0)
         {
-            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den NFO-Sync ausgewählt.");
+            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den abschließenden Schreibschritt ausgewählt.");
             return;
         }
 
@@ -406,7 +406,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = 100;
-            StatusText = $"NFO-Sync abgeschlossen: {updatedCount} aktualisiert, {skippedCount} übersprungen.";
+            StatusText = $"Änderungen geschrieben: {updatedCount} aktualisiert, {skippedCount} übersprungen.";
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
         });
@@ -808,7 +808,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         SelectedItem.ApplyImdbSelection(dialog.SelectedImdbId);
         AppendLog($"IMDb manuell gesetzt: {SelectedItem.MediaFileName} -> {dialog.SelectedImdbId}");
-        StatusText = "IMDb-Zuordnung aktualisiert. Vor dem NFO-Sync bitte bei Bedarf nochmals prüfen.";
+        StatusText = "IMDb-Zuordnung aktualisiert. Vor dem abschließenden Schreibschritt bitte bei Bedarf nochmals prüfen.";
         RefreshSummaryAndCommands();
     }
 

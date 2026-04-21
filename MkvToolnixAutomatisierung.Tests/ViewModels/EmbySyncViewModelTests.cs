@@ -96,10 +96,12 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncTooltip_ExplainsPureNfoSync()
+    public void RunSyncTooltip_ExplainsFinalWriteStep()
     {
         var vm = CreateViewModel();
 
+        Assert.Contains("Letzter Schritt", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("aktuell ausgewählten", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ohne zusätzlichen Bibliotheksscan", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NFO-Dateien", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
     }

@@ -199,7 +199,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             {
                 "Batch-Mux" => "Batch-Mux: Quellordner wählen, scannen, offene Pflichtchecks klären, dann Batch starten.",
                 "Einsortieren" => "Einsortieren: MediathekView-Ordner scannen, Zielordner prüfen und lose Dateien gesammelt einsortieren.",
-                "Emby-Abgleich" => "Emby-Abgleich: Reports wählen, automatische NFO-/Emby-Prüfung abwarten, Emby bei Bedarf scannen, TVDB je Zeile korrigieren und erst danach NFO-IDs zurückschreiben.",
+                "Emby-Abgleich" => "Emby-Abgleich: Reports wählen, automatische NFO-/Emby-Prüfung abwarten, Emby bei Bedarf scannen, TVDB je Zeile korrigieren und erst danach die Änderungen nach Emby schreiben.",
                 _ => "Einzel-Mux: Hauptvideo wählen, Erkennung prüfen, bei Bedarf TVDB öffnen, Vorschau erzeugen, dann muxen."
             };
 

@@ -124,22 +124,16 @@
                   Grid.ColumnSpan="2"
                   Margin="0,2,0,2">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Button Grid.Column="0"
-                        Margin="0,0,12,8"
+                        Margin="0,0,0,8"
                         Padding="10,6"
                         Command="{Binding RunScanCommand}"
                         Content="2. Emby scannen"
                         ToolTip="{Binding RunScanTooltip, Mode=OneWay}" />
-                <Button Grid.Column="1"
-                        Margin="0,0,0,8"
-                        Padding="10,6"
-                        Command="{Binding RunSyncCommand}"
-                        ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                        Content="3. NFO-Sync" />
             </Grid>
         </Grid>
 
@@ -289,6 +283,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="180" />
             </Grid.ColumnDefinitions>
 
@@ -307,7 +302,14 @@
                     Command="{Binding DeselectAllCommand}"
                     IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                     Content="Auswahl leeren" />
-            <ProgressBar Grid.Column="3"
+            <Button Grid.Column="3"
+                    Margin="20,0,12,0"
+                    Padding="12,6"
+                    MinWidth="210"
+                    Command="{Binding RunSyncCommand}"
+                    ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
+                    Content="3. Änderungen in Emby schreiben" />
+            <ProgressBar Grid.Column="4"
                          Height="18"
                          Minimum="0"
                          Maximum="100"
