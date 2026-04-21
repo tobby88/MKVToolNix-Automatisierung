@@ -164,18 +164,6 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void WorkflowInfoText_ExplainsThreeStepFlow()
-    {
-        var vm = CreateViewModel();
-
-        Assert.Contains("Reports wählen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("Emby scannen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("NFO/Emby prüfen", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("TVDB- und IMDB-Felder", vm.WorkflowInfoText, StringComparison.Ordinal);
-        Assert.Contains("NFO-Sync", vm.WorkflowInfoText, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void SelectReportCommand_LoadsMultipleStructuredReports()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));

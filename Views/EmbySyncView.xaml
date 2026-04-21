@@ -74,7 +74,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -204,18 +203,7 @@
             </Grid>
         </Grid>
 
-        <Border Grid.Row="2"
-                Margin="0,0,0,10"
-                Padding="10,8"
-                Background="#F4F7FB"
-                BorderBrush="#BCD0E5"
-                BorderThickness="1"
-                CornerRadius="6">
-            <TextBlock TextWrapping="Wrap"
-                       Text="{Binding WorkflowInfoText, Mode=OneWay}" />
-        </Border>
-
-        <GroupBox Grid.Row="3" Header="Neue MKV-Dateien">
+        <GroupBox Grid.Row="2" Header="Neue MKV-Dateien">
             <DataGrid ItemsSource="{Binding Items}"
                       AutoGenerateColumns="False"
                       CanUserResizeColumns="True"
@@ -308,7 +296,7 @@
             </DataGrid>
         </GroupBox>
 
-        <Expander Grid.Row="4"
+        <Expander Grid.Row="3"
                   Margin="0,10,0,0"
                   Header="Protokoll"
                   IsExpanded="False"
@@ -330,7 +318,7 @@
             </Border>
         </Expander>
 
-        <Grid Grid.Row="5" Margin="0,10,0,0">
+        <Grid Grid.Row="4" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

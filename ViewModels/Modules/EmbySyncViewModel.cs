@@ -202,16 +202,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged
 
     public string RunSyncTooltip => "Schreibt die aktuell sichtbaren TVDB-/IMDB-IDs ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Items einen gezielten Metadatenrefresh an.";
 
-    /// <summary>
-    /// Kurzer Ablaufhinweis für den manuellen Emby-Schritt.
-    /// </summary>
-    public string WorkflowInfoText =>
-        "1. Reports wählen importiert die JSON-Metadatenreports neu erzeugter MKV-Dateien direkt. "
-        + "2. Emby scannen startet bei Bedarf den passenden Serienbibliotheksscan und lädt neue Emby-Treffer nach. "
-        + "3. NFO/Emby prüfen liest lokale NFO-Dateien und optional bereits sichtbare Emby-Provider-IDs ein. "
-        + "4. TVDB- und IMDB-Felder in der Tabelle sind direkt editierbar; die TVDB-Suche öffnest du je Zeile über den TVDB-Button. "
-        + "5. NFO-Sync schreibt erst danach die aktuell sichtbaren IDs in die NFO-Dateien zurück. Einträge ohne Episoden-NFO (z. B. trailers oder backdrops) werden dabei nur als Emby-Treffer geführt.";
-
     private async Task SelectReportAsync()
     {
         var selectedPaths = _dialogService.SelectFiles(
