@@ -6,6 +6,7 @@
         Height="620"
         MinWidth="760"
         MinHeight="520"
+        Activated="Window_OnActivated"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -88,6 +89,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="150" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0"
@@ -97,15 +99,22 @@
                                Text="IMDb-ID / URL" />
                     <TextBox Grid.Row="0"
                              Grid.Column="1"
-                             Margin="0,4,0,4"
+                             Margin="0,4,12,4"
                              Text="{Binding ImdbInput, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Akzeptiert sowohl eine IMDb-ID wie tt1234567 als auch eine komplette IMDb-URL." />
+                    <Button Grid.Row="0"
+                            Grid.Column="2"
+                            Margin="0,4,0,4"
+                            Padding="10,6"
+                            Click="ImportClipboardButton_Click"
+                            Content="Zwischenablage übernehmen" />
 
                     <TextBlock Grid.Row="1"
                                Grid.Column="1"
+                               Grid.ColumnSpan="2"
                                Margin="0,4,0,0"
                                Foreground="#4B5563"
-                               Text="Nach der Browser-Suche die gewünschte IMDb-ID oder die komplette IMDb-URL hier einfügen und übernehmen."
+                               Text="IMDb-Link oder IMDb-ID im Browser kopieren. Beim Zurückkehren übernimmt der Dialog die Zwischenablage automatisch; alternativ kann sie hier manuell eingelesen werden."
                                TextWrapping="Wrap" />
                 </Grid>
             </GroupBox>

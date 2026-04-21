@@ -62,4 +62,27 @@ public sealed class ImdbLookupWindowViewModelTests
         Assert.Null(imdbId);
         Assert.Contains("IMDb-ID", validationMessage, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void TryImportClipboardText_AcceptsFullImdbUrlAndNormalizesToId()
+    {
+        var vm = new ImdbLookupWindowViewModel(null, null);
+
+        var success = vm.TryImportClipboardText("https://www.imdb.com/title/tt0826760/?ref_=ttep_ep1");
+
+        Assert.True(success);
+        Assert.Equal("tt0826760", vm.ImdbInput);
+        Assert.Contains("Zwischenablage", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TryImportClipboardText_IgnoresAlreadyImportedId()
+    {
+        var vm = new ImdbLookupWindowViewModel(null, "tt0826760");
+
+        var success = vm.TryImportClipboardText("https://www.imdb.com/title/tt0826760/?ref_=ttep_ep1");
+
+        Assert.False(success);
+        Assert.Equal("tt0826760", vm.ImdbInput);
+    }
 }

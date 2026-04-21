@@ -162,6 +162,27 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         return false;
     }
 
+    /// <summary>
+    /// Übernimmt eine IMDb-ID oder IMDb-URL aus der Zwischenablage und normalisiert sie sofort.
+    /// </summary>
+    public bool TryImportClipboardText(string? clipboardText)
+    {
+        if (!TryNormalizeImdbId(clipboardText, out var imdbId))
+        {
+            return false;
+        }
+
+        if (TryNormalizeImdbId(ImdbInput, out var currentImdbId)
+            && string.Equals(currentImdbId, imdbId, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        ImdbInput = imdbId!;
+        StatusText = $"IMDb-ID aus Zwischenablage erkannt: {imdbId}";
+        return true;
+    }
+
     private void RebuildSearchOptions()
     {
         var items = BuildSearchOptions(_guess, SearchText, ImdbInput);

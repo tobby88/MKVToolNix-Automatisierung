@@ -154,6 +154,33 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ? "Noch kein Metadatenreport geladen."
         : $"{ItemCount} Datei(en), {SelectedCount} ausgewählt, {IncompleteIdCount} ohne vollständige TVDB-/IMDB-ID.";
 
+    /// <summary>
+    /// Kompakte Zusammenfassung der aktuell geladenen Reportauswahl für die Kopfzeile.
+    /// </summary>
+    public string ReportSelectionSummaryText => _reportPaths.Count switch
+    {
+        0 => "Noch kein Metadatenreport gewählt.",
+        1 => Path.GetFileName(_reportPaths[0]),
+        _ => $"{_reportPaths.Count} Metadatenreports ausgewählt"
+    };
+
+    /// <summary>
+    /// Zweite, bewusst kurze Zeile unterhalb der Reportzusammenfassung.
+    /// </summary>
+    public string ReportSelectionDetailText => _reportPaths.Count switch
+    {
+        0 => "Wählt einen oder mehrere .metadata.json-Reports. Die lokale Prüfung startet danach automatisch.",
+        1 => _reportPaths[0],
+        _ => BuildReportSelectionDetailText()
+    };
+
+    /// <summary>
+    /// Zeigt bei Bedarf die vollständige aktuelle Reportliste im Tooltip an.
+    /// </summary>
+    public string ReportSelectionTooltip => _reportPaths.Count == 0
+        ? ReportSelectionDetailText
+        : string.Join(Environment.NewLine, _reportPaths);
+
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem abschließenden Schreibschritt noch geprüft oder korrigiert werden.";
 
     public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Einträge einen gezielten Metadatenrefresh an.";
@@ -766,6 +793,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             1 => _reportPaths[0],
             _ => string.Join(Environment.NewLine, _reportPaths)
         };
+        OnPropertyChanged(nameof(ReportSelectionSummaryText));
+        OnPropertyChanged(nameof(ReportSelectionDetailText));
+        OnPropertyChanged(nameof(ReportSelectionTooltip));
     }
 
     private bool TryGetSelectedMetadataGuess(out EpisodeMetadataGuess? guess, out string reason)
@@ -815,5 +845,19 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private string BuildReportSelectionDetailText()
+    {
+        var reportNames = _reportPaths
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Take(3)
+            .ToList();
+        var remainingCount = _reportPaths.Count - reportNames.Count;
+        var visiblePart = string.Join(" | ", reportNames);
+        return remainingCount > 0
+            ? $"{visiblePart} | +{remainingCount} weitere"
+            : visiblePart;
     }
 }
