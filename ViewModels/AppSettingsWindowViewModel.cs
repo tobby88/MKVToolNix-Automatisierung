@@ -28,6 +28,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private int _embyScanWaitTimeoutSeconds;
     private string _statusText = "Bereit";
     private bool _isBusy;
+    private ResolvedToolPath? _resolvedFfprobePath;
+    private ResolvedMkvToolNixPaths? _resolvedMkvToolNixPaths;
 
     public AppSettingsWindowViewModel(
         AppSettingsModuleServices services,
@@ -55,6 +57,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         _embyApiKey = embySettings.ApiKey;
         _embyScanWaitTimeoutSeconds = embySettings.ScanWaitTimeoutSeconds;
         SelectedPage = initialPage;
+        RefreshToolResolutionState();
         RefreshDerivedState();
     }
 
@@ -98,6 +101,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
             }
 
             _ffprobePath = normalized;
+            RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsFfprobeAvailable));
             OnPropertyChanged(nameof(FfprobeStatusText));
@@ -117,6 +121,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
             _autoManageFfprobe = value;
             _managedFfprobeSettings.AutoManageEnabled = value;
+            RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsFfprobeAvailable));
             OnPropertyChanged(nameof(FfprobeStatusText));
@@ -136,6 +141,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
             }
 
             _mkvToolNixDirectoryPath = normalized;
+            RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsMkvToolNixAvailable));
             OnPropertyChanged(nameof(MkvToolNixStatusText));
@@ -155,6 +161,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
             _autoManageMkvToolNix = value;
             _managedMkvToolNixSettings.AutoManageEnabled = value;
+            RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsMkvToolNixAvailable));
             OnPropertyChanged(nameof(MkvToolNixStatusText));
@@ -267,76 +274,34 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         ? $"Serienbibliothek erreichbar:{Environment.NewLine}{ArchiveRootDirectory}"
         : $"Serienbibliothek aktuell nicht erreichbar:{Environment.NewLine}{ArchiveRootDirectory}";
 
-    public bool IsFfprobeAvailable => File.Exists(ResolveEffectiveFfprobePath() ?? string.Empty);
+    public bool IsFfprobeAvailable => _resolvedFfprobePath is not null;
 
-    public string FfprobeStatusText => ResolveActiveFfprobeSource() switch
+    public string FfprobeStatusText => _resolvedFfprobePath?.Source switch
     {
-        ToolPathSource.ManualOverride when IsFfprobeAvailable => "ffprobe bereit (Override)",
-        ToolPathSource.Managed when IsFfprobeAvailable => "ffprobe bereit (automatisch)",
+        ToolPathResolutionSource.ManualOverride => "ffprobe bereit (Override)",
+        ToolPathResolutionSource.ManagedSettings or ToolPathResolutionSource.PortableToolsFallback
+            => AutoManageFfprobe ? "ffprobe bereit (automatisch)" : "ffprobe bereit (verwaltet)",
+        ToolPathResolutionSource.SystemPath => "ffprobe bereit (PATH)",
+        ToolPathResolutionSource.DownloadsFallback => "ffprobe bereit (Fallback)",
         _ when AutoManageFfprobe => "ffprobe wird automatisch verwaltet",
         _ => "ffprobe fehlt"
     };
 
-    public string FfprobeStatusTooltip
+    public string FfprobeStatusTooltip => BuildFfprobeTooltip();
+
+    public bool IsMkvToolNixAvailable => _resolvedMkvToolNixPaths is not null;
+
+    public string MkvToolNixStatusText => _resolvedMkvToolNixPaths?.Source switch
     {
-        get
-        {
-            var activePath = ResolveEffectiveFfprobePath();
-            if (!string.IsNullOrWhiteSpace(activePath) && File.Exists(activePath))
-            {
-                return ResolveActiveFfprobeSource() == ToolPathSource.Managed
-                    ? BuildManagedToolTooltip("ffprobe", _managedFfprobeSettings, activePath)
-                    : $"Manueller Override aktiv:{Environment.NewLine}{activePath}";
-            }
-
-            if (AutoManageFfprobe)
-            {
-                return BuildManagedPendingTooltip("ffprobe", _managedFfprobeSettings, FfprobePath);
-            }
-
-            return string.IsNullOrWhiteSpace(FfprobePath)
-                ? "Optional. Bleibt Auto-Verwaltung deaktiviert und das Feld leer, nutzt die App nur noch Windows-PATH oder Legacy-Fallbacks."
-                : $"Der manuelle ffprobe-Override ist aktuell nicht verwendbar:{Environment.NewLine}{FfprobePath}";
-        }
-    }
-
-    public bool IsMkvToolNixAvailable => File.Exists(GetEffectiveMkvMergePath() ?? string.Empty) && File.Exists(GetEffectiveMkvPropEditPath() ?? string.Empty);
-
-    public string MkvToolNixStatusText => ResolveActiveMkvToolNixSource() switch
-    {
-        ToolPathSource.ManualOverride when IsMkvToolNixAvailable => "MKVToolNix bereit (Override)",
-        ToolPathSource.Managed when IsMkvToolNixAvailable => "MKVToolNix bereit (automatisch)",
+        ToolPathResolutionSource.ManualOverride => "MKVToolNix bereit (Override)",
+        ToolPathResolutionSource.ManagedSettings or ToolPathResolutionSource.PortableToolsFallback
+            => AutoManageMkvToolNix ? "MKVToolNix bereit (automatisch)" : "MKVToolNix bereit (verwaltet)",
+        ToolPathResolutionSource.DownloadsFallback => "MKVToolNix bereit (Fallback)",
         _ when AutoManageMkvToolNix => "MKVToolNix wird automatisch verwaltet",
         _ => "MKVToolNix unvollständig"
     };
 
-    public string MkvToolNixStatusTooltip
-    {
-        get
-        {
-            var mkvMergePath = GetEffectiveMkvMergePath();
-            var mkvPropEditPath = GetEffectiveMkvPropEditPath();
-            if (!string.IsNullOrWhiteSpace(mkvMergePath)
-                && !string.IsNullOrWhiteSpace(mkvPropEditPath)
-                && File.Exists(mkvMergePath)
-                && File.Exists(mkvPropEditPath))
-            {
-                return ResolveActiveMkvToolNixSource() == ToolPathSource.Managed
-                    ? BuildManagedToolTooltip("MKVToolNix", _managedMkvToolNixSettings, Path.GetDirectoryName(mkvMergePath) ?? mkvMergePath)
-                        + $"{Environment.NewLine}{Environment.NewLine}mkvmerge.exe:{Environment.NewLine}{mkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvpropedit.exe:{Environment.NewLine}{mkvPropEditPath}"
-                    : $"Manueller Override aktiv:{Environment.NewLine}{Path.GetDirectoryName(mkvMergePath) ?? mkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvmerge.exe:{Environment.NewLine}{mkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvpropedit.exe:{Environment.NewLine}{mkvPropEditPath}";
-            }
-
-            if (AutoManageMkvToolNix)
-            {
-                return BuildManagedPendingTooltip("MKVToolNix", _managedMkvToolNixSettings, MkvToolNixDirectoryPath);
-            }
-
-            return string.IsNullOrWhiteSpace(MkvToolNixDirectoryPath)
-                ? "Auto-Verwaltung deaktiviert. Optional kann hier ein manueller Override gesetzt werden."
-                : $"Aus dem manuellen Override fehlen mkvmerge.exe und/oder mkvpropedit.exe:{Environment.NewLine}{MkvToolNixDirectoryPath}";
-        }
-    }
+    public string MkvToolNixStatusTooltip => BuildMkvToolNixTooltip();
 
     public string SettingsFilePath => PortableAppStorage.SettingsFilePath;
 
@@ -429,6 +394,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     private void RefreshDerivedState()
     {
+        RefreshToolResolutionState();
         OnPropertyChanged(nameof(IsArchiveAvailable));
         OnPropertyChanged(nameof(ArchiveStatusText));
         OnPropertyChanged(nameof(ArchiveStatusTooltip));
@@ -451,112 +417,151 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         }.Clone();
     }
 
-    private string? GetEffectiveMkvMergePath()
+    /// <summary>
+    /// Baut einen flüchtigen Settings-Schnappschuss aus dem aktuellen Dialogzustand.
+    /// </summary>
+    /// <remarks>
+    /// Die Settings-UI arbeitet bewusst mit noch nicht gespeicherten Werten. Für Status und Tooltips
+    /// wird daher dieselbe Resolver-Logik wie im Produktivcode auf diesen flüchtigen Zustand angewendet.
+    /// </remarks>
+    private AppToolPathSettings BuildCurrentToolSettings()
     {
-        var manualPath = GetManualMkvMergePath();
-        if (File.Exists(manualPath))
+        return new AppToolPathSettings
         {
-            return manualPath;
+            FfprobePath = FfprobePath,
+            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
+            ManagedFfprobe = _managedFfprobeSettings.Clone(),
+            ManagedMkvToolNix = _managedMkvToolNixSettings.Clone()
+        };
+    }
+
+    private void RefreshToolResolutionState()
+    {
+        var currentSettings = BuildCurrentToolSettings();
+        _resolvedFfprobePath = ManagedToolResolution.TryResolveFfprobe(currentSettings);
+        _resolvedMkvToolNixPaths = ManagedToolResolution.TryResolveMkvToolNix(currentSettings);
+    }
+
+    private string BuildFfprobeTooltip()
+    {
+        if (_resolvedFfprobePath is not null)
+        {
+            return _resolvedFfprobePath.Source switch
+            {
+                ToolPathResolutionSource.ManagedSettings or ToolPathResolutionSource.PortableToolsFallback
+                    => BuildManagedToolTooltip("ffprobe", _managedFfprobeSettings, _resolvedFfprobePath.Path, AutoManageFfprobe),
+                ToolPathResolutionSource.ManualOverride
+                    => BuildOverrideTooltip("Manueller Override aktiv", _resolvedFfprobePath.Path, AutoManageFfprobe),
+                ToolPathResolutionSource.SystemPath
+                    => BuildExternalSourceTooltip("ffprobe wird aus dem Windows-PATH verwendet", _resolvedFfprobePath.Path, AutoManageFfprobe),
+                ToolPathResolutionSource.DownloadsFallback
+                    => BuildExternalSourceTooltip("ffprobe wurde aus einem Download-Ordner erkannt", _resolvedFfprobePath.Path, AutoManageFfprobe),
+                _ => BuildExternalSourceTooltip("ffprobe wurde erkannt", _resolvedFfprobePath.Path, AutoManageFfprobe)
+            };
+        }
+
+        if (AutoManageFfprobe)
+        {
+            return BuildManagedPendingTooltip("ffprobe", _managedFfprobeSettings, FfprobePath);
+        }
+
+        return string.IsNullOrWhiteSpace(FfprobePath)
+            ? "Optional. Bleibt Auto-Verwaltung deaktiviert und das Feld leer, nutzt die App nur noch Windows-PATH oder Fallback-Suchen."
+            : $"Der manuelle ffprobe-Override ist aktuell nicht verwendbar:{Environment.NewLine}{FfprobePath}";
+    }
+
+    private string BuildMkvToolNixTooltip()
+    {
+        if (_resolvedMkvToolNixPaths is not null)
+        {
+            var installationPath = Path.GetDirectoryName(_resolvedMkvToolNixPaths.MkvMergePath) ?? _resolvedMkvToolNixPaths.MkvMergePath;
+            var detail = $"{installationPath}{Environment.NewLine}{Environment.NewLine}mkvmerge.exe:{Environment.NewLine}{_resolvedMkvToolNixPaths.MkvMergePath}{Environment.NewLine}{Environment.NewLine}mkvpropedit.exe:{Environment.NewLine}{_resolvedMkvToolNixPaths.MkvPropEditPath}";
+
+            return _resolvedMkvToolNixPaths.Source switch
+            {
+                ToolPathResolutionSource.ManagedSettings or ToolPathResolutionSource.PortableToolsFallback
+                    => BuildManagedToolTooltip("MKVToolNix", _managedMkvToolNixSettings, detail, AutoManageMkvToolNix),
+                ToolPathResolutionSource.ManualOverride
+                    => BuildOverrideTooltip("Manueller Override aktiv", detail, AutoManageMkvToolNix),
+                ToolPathResolutionSource.DownloadsFallback
+                    => BuildExternalSourceTooltip("MKVToolNix wurde aus einem Download-Ordner erkannt", detail, AutoManageMkvToolNix),
+                _ => BuildExternalSourceTooltip("MKVToolNix wurde erkannt", detail, AutoManageMkvToolNix)
+            };
         }
 
         if (AutoManageMkvToolNix)
         {
-            var managedPath = Path.Combine(_managedMkvToolNixSettings.InstalledPath, "mkvmerge.exe");
-            if (File.Exists(managedPath))
-            {
-                return managedPath;
-            }
+            return BuildManagedPendingTooltip("MKVToolNix", _managedMkvToolNixSettings, MkvToolNixDirectoryPath);
         }
 
-        return null;
+        return string.IsNullOrWhiteSpace(MkvToolNixDirectoryPath)
+            ? "Auto-Verwaltung deaktiviert. Optional kann hier ein manueller Override gesetzt werden."
+            : $"Aus dem manuellen Override fehlen mkvmerge.exe und/oder mkvpropedit.exe:{Environment.NewLine}{MkvToolNixDirectoryPath}";
     }
 
-    private string? GetEffectiveMkvPropEditPath()
+    private static string BuildManagedToolTooltip(
+        string toolName,
+        ManagedToolSettings settings,
+        string installedPath,
+        bool autoManageEnabled)
     {
-        var manualPath = GetManualMkvPropEditPath();
-        if (File.Exists(manualPath))
+        var lines = new List<string>
         {
-            return manualPath;
-        }
+            string.IsNullOrWhiteSpace(settings.InstalledVersion)
+                ? $"Verwaltetes {toolName}:{Environment.NewLine}{installedPath}"
+                : $"Verwaltetes {toolName} ({settings.InstalledVersion}):{Environment.NewLine}{installedPath}"
+        };
 
-        if (AutoManageMkvToolNix)
+        lines.Add(string.Empty);
+        lines.Add(autoManageEnabled
+            ? "Automatische Updates sind aktiv."
+            : "Automatische Updates sind deaktiviert; die vorhandene verwaltete Installation bleibt nutzbar.");
+
+        if (settings.LastCheckedUtc is not null)
         {
-            var managedPath = Path.Combine(_managedMkvToolNixSettings.InstalledPath, "mkvpropedit.exe");
-            if (File.Exists(managedPath))
-            {
-                return managedPath;
-            }
+            lines.Add(string.Empty);
+            lines.Add($"Zuletzt erfolgreich geprüft:{Environment.NewLine}{settings.LastCheckedUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}");
         }
 
-        return null;
-    }
-
-    private string? ResolveEffectiveFfprobePath()
-    {
-        if (File.Exists(FfprobePath))
+        if (settings.LastFailedCheckUtc is not null)
         {
-            return FfprobePath;
+            lines.Add(string.Empty);
+            lines.Add($"Zuletzt fehlgeschlagen:{Environment.NewLine}{settings.LastFailedCheckUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}");
         }
 
-        if (AutoManageFfprobe && File.Exists(_managedFfprobeSettings.InstalledPath))
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildOverrideTooltip(string headline, string path, bool autoManageEnabled)
+    {
+        var lines = new List<string>
         {
-            return _managedFfprobeSettings.InstalledPath;
-        }
+            $"{headline}:{Environment.NewLine}{path}"
+        };
 
-        return null;
-    }
-
-    private ToolPathSource ResolveActiveFfprobeSource()
-    {
-        if (File.Exists(FfprobePath))
+        if (autoManageEnabled)
         {
-            return ToolPathSource.ManualOverride;
+            lines.Add(string.Empty);
+            lines.Add("Die automatische Verwaltung bleibt gespeichert, wird aber durch den Override derzeit übersteuert.");
         }
 
-        return AutoManageFfprobe && File.Exists(_managedFfprobeSettings.InstalledPath)
-            ? ToolPathSource.Managed
-            : ToolPathSource.None;
+        return string.Join(Environment.NewLine, lines);
     }
 
-    private ToolPathSource ResolveActiveMkvToolNixSource()
+    private static string BuildExternalSourceTooltip(string headline, string path, bool autoManageEnabled)
     {
-        var manualMergePath = GetManualMkvMergePath();
-        var manualPropEditPath = GetManualMkvPropEditPath();
-        if (File.Exists(manualMergePath) && File.Exists(manualPropEditPath))
+        var lines = new List<string>
         {
-            return ToolPathSource.ManualOverride;
+            $"{headline}:{Environment.NewLine}{path}"
+        };
+
+        if (autoManageEnabled)
+        {
+            lines.Add(string.Empty);
+            lines.Add("Solange diese externe Quelle verfügbar ist, wird kein zusätzlicher Download erzwungen.");
         }
 
-        return AutoManageMkvToolNix
-               && File.Exists(Path.Combine(_managedMkvToolNixSettings.InstalledPath, "mkvmerge.exe"))
-               && File.Exists(Path.Combine(_managedMkvToolNixSettings.InstalledPath, "mkvpropedit.exe"))
-            ? ToolPathSource.Managed
-            : ToolPathSource.None;
-    }
-
-    private string GetManualMkvMergePath()
-    {
-        return MkvToolNixDirectoryPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? MkvToolNixDirectoryPath
-            : Path.Combine(MkvToolNixDirectoryPath, "mkvmerge.exe");
-    }
-
-    private string GetManualMkvPropEditPath()
-    {
-        var baseDirectory = MkvToolNixDirectoryPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-            ? Path.GetDirectoryName(MkvToolNixDirectoryPath) ?? string.Empty
-            : MkvToolNixDirectoryPath;
-        return Path.Combine(baseDirectory, "mkvpropedit.exe");
-    }
-
-    private static string BuildManagedToolTooltip(string toolName, ManagedToolSettings settings, string installedPath)
-    {
-        return string.IsNullOrWhiteSpace(settings.InstalledVersion)
-            ? $"Automatisch verwaltetes {toolName}:{Environment.NewLine}{installedPath}"
-            : $"Automatisch verwaltetes {toolName} ({settings.InstalledVersion}):{Environment.NewLine}{installedPath}"
-              + (settings.LastCheckedUtc is null
-                  ? string.Empty
-                  : $"{Environment.NewLine}{Environment.NewLine}Zuletzt geprüft:{Environment.NewLine}{settings.LastCheckedUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}");
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static string BuildManagedPendingTooltip(string toolName, ManagedToolSettings settings, string manualOverridePath)
@@ -569,7 +574,21 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(settings.InstalledPath))
         {
             lines.Add(string.Empty);
-            lines.Add($"Zuletzt bekannte verwaltete Version:{Environment.NewLine}{settings.InstalledPath}");
+            lines.Add(string.IsNullOrWhiteSpace(settings.InstalledVersion)
+                ? $"Zuletzt bekannte verwaltete Installation:{Environment.NewLine}{settings.InstalledPath}"
+                : $"Zuletzt bekannte verwaltete Installation ({settings.InstalledVersion}):{Environment.NewLine}{settings.InstalledPath}");
+        }
+
+        if (settings.LastCheckedUtc is not null)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"Zuletzt erfolgreich geprüft:{Environment.NewLine}{settings.LastCheckedUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}");
+        }
+
+        if (settings.LastFailedCheckUtc is not null)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"Zuletzt fehlgeschlagen:{Environment.NewLine}{settings.LastFailedCheckUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}");
         }
 
         if (!string.IsNullOrWhiteSpace(manualOverridePath))
@@ -617,12 +636,5 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-
-    private enum ToolPathSource
-    {
-        None,
-        Managed,
-        ManualOverride
     }
 }

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.ComponentModel;
 using MkvToolnixAutomatisierung.ViewModels;
 
 namespace MkvToolnixAutomatisierung.Windows;
@@ -18,11 +19,22 @@ public partial class AppSettingsWindow : Window
         DataContext = _viewModel;
         SettingsTabControl.SelectedIndex = (int)_viewModel.SelectedPage;
         Closed += AppSettingsWindow_Closed;
+        Closing += AppSettingsWindow_Closing;
     }
 
     private void AppSettingsWindow_Closed(object? sender, EventArgs e)
     {
         _viewModel.CloseRequested -= ViewModelOnCloseRequested;
+    }
+
+    private void AppSettingsWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_viewModel.IsInteractive)
+        {
+            return;
+        }
+
+        e.Cancel = true;
     }
 
     private void ViewModelOnCloseRequested(object? sender, bool accepted)

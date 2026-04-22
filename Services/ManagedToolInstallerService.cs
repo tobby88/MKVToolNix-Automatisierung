@@ -8,6 +8,15 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal sealed class ManagedToolInstallerService
 {
+    private static readonly TimeSpan SuccessfulMetadataRefreshInterval = TimeSpan.FromHours(24);
+    private static readonly TimeSpan FailedMetadataRefreshBackoffInterval = TimeSpan.FromHours(2);
+    private const double MetadataLookupProgressPercent = 8d;
+    private const double DownloadStartProgressPercent = 15d;
+    private const double DownloadEndProgressPercent = 70d;
+    private const double ChecksumVerificationProgressPercent = 78d;
+    private const double ExtractionStartProgressPercent = 82d;
+    private const double ExtractionEndProgressPercent = 96d;
+    private const double FinishedProgressPercent = 100d;
     private readonly AppToolPathStore _toolPathStore;
     private readonly IReadOnlyDictionary<ManagedToolKind, IManagedToolPackageSource> _packageSources;
     private readonly IManagedToolArchiveExtractor _archiveExtractor;
@@ -35,29 +44,42 @@ internal sealed class ManagedToolInstallerService
         IProgress<ManagedToolStartupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        PortableAppStorage.EnsureToolsDirectoryForSave();
-        Report(progress, "Werkzeuge werden vorbereitet...", "Prüfe automatische Werkzeugverwaltung.");
+        Report(progress, "Werkzeuge werden vorbereitet...", "Prüfe automatische Werkzeugverwaltung.", 0d, false);
 
         var settings = _toolPathStore.Load();
         var warnings = new List<string>();
         var hasChanges = false;
+        var mkvProgress = new ToolStartupProgressReporter(progress, 0d, 50d);
+        var ffprobeProgress = new ToolStartupProgressReporter(progress, 50d, 100d);
 
         hasChanges |= await EnsureManagedToolAsync(
+            settings,
             settings.ManagedMkvToolNix,
             ManagedToolKind.MkvToolNix,
             warnings,
-            progress,
+            mkvProgress,
             cancellationToken);
         hasChanges |= await EnsureManagedToolAsync(
+            settings,
             settings.ManagedFfprobe,
             ManagedToolKind.Ffprobe,
             warnings,
-            progress,
+            ffprobeProgress,
             cancellationToken);
 
         if (hasChanges)
         {
-            _toolPathStore.Save(settings);
+            try
+            {
+                _toolPathStore.Save(settings);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add(
+                    "Die aktualisierten Werkzeugzustände konnten nicht dauerhaft gespeichert werden."
+                    + Environment.NewLine
+                    + ex.Message);
+            }
         }
 
         Report(progress, "Werkzeuge bereit", warnings.Count == 0
@@ -67,64 +89,94 @@ internal sealed class ManagedToolInstallerService
     }
 
     private async Task<bool> EnsureManagedToolAsync(
+        AppToolPathSettings toolPathSettings,
         ManagedToolSettings toolSettings,
         ManagedToolKind toolKind,
         List<string> warnings,
-        IProgress<ManagedToolStartupProgress>? progress,
+        ToolStartupProgressReporter? progress,
         CancellationToken cancellationToken)
     {
+        var resolvedSource = ResolveCurrentSource(toolPathSettings, toolKind);
+        if (resolvedSource is ToolPathResolutionSource.ManualOverride)
+        {
+            progress?.Report(
+                $"{GetToolDisplayName(toolKind)} wird übersprungen",
+                BuildExternalSourceSkipMessage(toolKind, resolvedSource),
+                FinishedProgressPercent,
+                false);
+            return false;
+        }
+
         if (!toolSettings.AutoManageEnabled)
         {
-            Report(progress, $"{GetToolDisplayName(toolKind)} wird übersprungen", "Automatische Verwaltung ist deaktiviert.", 100d, false);
+            progress?.Report(
+                $"{GetToolDisplayName(toolKind)} wird übersprungen",
+                resolvedSource is ToolPathResolutionSource.ManagedSettings or ToolPathResolutionSource.PortableToolsFallback
+                    ? "Automatische Updates sind deaktiviert; die vorhandene verwaltete Installation bleibt in Verwendung."
+                    : "Automatische Verwaltung ist deaktiviert.",
+                FinishedProgressPercent,
+                false);
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (ShouldSkipOnlineCheck(toolSettings, resolvedSource, now))
+        {
+            progress?.Report(
+                $"{GetToolDisplayName(toolKind)} bleibt unverändert",
+                BuildDeferredOnlineCheckMessage(toolKind, toolSettings, resolvedSource, now),
+                FinishedProgressPercent,
+                false);
             return false;
         }
 
         try
         {
-            Report(progress, $"{GetToolDisplayName(toolKind)} wird geprüft...", "Suche nach aktueller Version.");
+            progress?.Report(
+                $"{GetToolDisplayName(toolKind)} wird geprüft...",
+                "Suche nach aktueller Version.",
+                MetadataLookupProgressPercent,
+                false);
             var latestPackage = await _packageSources[toolKind].GetLatestPackageAsync(cancellationToken);
-            var now = DateTimeOffset.UtcNow;
             var hasValidInstalledVersion = HasValidManagedInstallation(toolKind, toolSettings.InstalledPath);
             if (hasValidInstalledVersion
                 && string.Equals(toolSettings.InstalledVersion, latestPackage.VersionToken, StringComparison.OrdinalIgnoreCase))
             {
-                Report(progress,
+                toolSettings.LastCheckedUtc = now;
+                toolSettings.LastFailedCheckUtc = null;
+                progress?.Report(
                     $"{GetToolDisplayName(toolKind)} ist aktuell",
                     $"Version {latestPackage.DisplayVersion} ist bereits installiert.",
-                    100d,
+                    FinishedProgressPercent,
                     false);
-                if (toolSettings.LastCheckedUtc != now)
-                {
-                    toolSettings.LastCheckedUtc = now;
-                    return true;
-                }
-
-                return false;
+                return true;
             }
 
             var installedPath = await DownloadAndInstallAsync(latestPackage, progress, cancellationToken);
             toolSettings.InstalledPath = installedPath;
             toolSettings.InstalledVersion = latestPackage.VersionToken;
             toolSettings.LastCheckedUtc = now;
+            toolSettings.LastFailedCheckUtc = null;
             CleanupOlderManagedVersions(toolKind, latestPackage.VersionToken);
-            Report(progress,
+            progress?.Report(
                 $"{GetToolDisplayName(toolKind)} wurde aktualisiert",
                 $"Installiert: {latestPackage.DisplayVersion}",
-                100d,
+                FinishedProgressPercent,
                 false);
             return true;
         }
         catch (Exception ex)
         {
-            if (!HasValidManagedInstallation(toolKind, toolSettings.InstalledPath))
+            toolSettings.LastFailedCheckUtc = now;
+            if (!IsToolCurrentlyUsable(toolPathSettings, toolKind))
             {
                 warnings.Add(BuildWarningMessage(toolKind, ex));
             }
 
-            Report(progress,
+            progress?.Report(
                 $"{GetToolDisplayName(toolKind)} konnte nicht vorbereitet werden",
                 ex.Message,
-                100d,
+                FinishedProgressPercent,
                 false);
             return false;
         }
@@ -132,33 +184,34 @@ internal sealed class ManagedToolInstallerService
 
     private async Task<string> DownloadAndInstallAsync(
         ManagedToolPackage package,
-        IProgress<ManagedToolStartupProgress>? progress,
+        ToolStartupProgressReporter? progress,
         CancellationToken cancellationToken)
     {
         var toolRootDirectory = GetToolRootDirectory(package.Kind);
-        Directory.CreateDirectory(toolRootDirectory);
-
         var versionDirectory = Path.Combine(toolRootDirectory, SanitizePathSegment(package.VersionToken));
-        if (Directory.Exists(versionDirectory))
-        {
-            Directory.Delete(versionDirectory, recursive: true);
-        }
-
         var stagingDirectory = Path.Combine(toolRootDirectory, $".staging-{Guid.NewGuid():N}");
         var archivePath = Path.Combine(toolRootDirectory, $".download-{Guid.NewGuid():N}-{package.ArchiveFileName}");
 
         try
         {
+            PortableAppStorage.EnsureToolsDirectoryForSave();
+            Directory.CreateDirectory(toolRootDirectory);
+            ValidatePackageIntegrityMetadata(package);
+            if (Directory.Exists(versionDirectory))
+            {
+                Directory.Delete(versionDirectory, recursive: true);
+            }
+
             await DownloadArchiveAsync(package, archivePath, progress, cancellationToken);
-            Report(progress,
+            progress?.Report(
                 $"{GetToolDisplayName(package.Kind)} wird entpackt...",
                 $"{package.DisplayVersion} – Vorbereitung läuft...",
-                0d,
+                ExtractionStartProgressPercent,
                 false);
             await Task.Run(() => _archiveExtractor.ExtractArchive(
                 archivePath,
                 stagingDirectory,
-                new ExtractionProgressAdapter(package.Kind, progress)), cancellationToken);
+                progress?.CreateExtractionProgressAdapter(package.Kind)), cancellationToken);
 
             Directory.Move(stagingDirectory, versionDirectory);
             return ResolveInstalledPath(package.Kind, versionDirectory);
@@ -173,18 +226,20 @@ internal sealed class ManagedToolInstallerService
     private async Task DownloadArchiveAsync(
         ManagedToolPackage package,
         string archivePath,
-        IProgress<ManagedToolStartupProgress>? progress,
+        ToolStartupProgressReporter? progress,
         CancellationToken cancellationToken)
     {
+        ValidatePackageIntegrityMetadata(package);
+
         using var response = await _httpClient.GetAsync(package.DownloadUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var contentLength = response.Content.Headers.ContentLength;
-        Report(progress,
+        progress?.Report(
             $"{GetToolDisplayName(package.Kind)} wird heruntergeladen...",
             package.DisplayVersion,
-            progressPercent: contentLength.HasValue && contentLength.Value > 0 ? 0d : null,
-            isIndeterminate: !contentLength.HasValue || contentLength.Value <= 0);
+            DownloadStartProgressPercent,
+            !contentLength.HasValue || contentLength.Value <= 0);
 
         await using (var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken))
         await using (var fileStream = File.Create(archivePath))
@@ -206,29 +261,29 @@ internal sealed class ManagedToolInstallerService
                 if (contentLength.HasValue && contentLength.Value > 0)
                 {
                     var percent = Math.Clamp((double)totalRead / contentLength.Value * 100d, 0d, 100d);
-                    Report(progress,
+                    var stagePercent = DownloadStartProgressPercent
+                                       + percent / 100d * (DownloadEndProgressPercent - DownloadStartProgressPercent);
+                    progress?.Report(
                         $"{GetToolDisplayName(package.Kind)} wird heruntergeladen...",
                         $"{FormatFileSize(totalRead)} / {FormatFileSize(contentLength.Value)}",
-                        percent,
+                        stagePercent,
                         false);
                 }
                 else
                 {
-                    Report(progress,
+                    progress?.Report(
                         $"{GetToolDisplayName(package.Kind)} wird heruntergeladen...",
-                        $"{FormatFileSize(totalRead)} übertragen");
+                        $"{FormatFileSize(totalRead)} übertragen",
+                        DownloadStartProgressPercent);
                 }
             }
         }
 
-        if (string.IsNullOrWhiteSpace(package.ExpectedSha256))
-        {
-            return;
-        }
-
-        Report(progress,
+        progress?.Report(
             $"{GetToolDisplayName(package.Kind)} wird überprüft...",
-            "Prüfsumme wird berechnet.");
+            "Prüfsumme wird berechnet.",
+            ChecksumVerificationProgressPercent,
+            false);
         var actualHash = await ComputeSha256Async(archivePath, cancellationToken);
         if (!string.Equals(actualHash, package.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
         {
@@ -258,6 +313,95 @@ internal sealed class ManagedToolInstallerService
             ManagedToolKind.Ffprobe => File.Exists(installedPath),
             _ => false
         };
+    }
+
+    private static bool IsToolCurrentlyUsable(AppToolPathSettings settings, ManagedToolKind toolKind)
+    {
+        return toolKind switch
+        {
+            ManagedToolKind.MkvToolNix => ManagedToolResolution.TryResolveMkvToolNix(settings) is not null,
+            ManagedToolKind.Ffprobe => ManagedToolResolution.TryResolveFfprobe(settings) is not null,
+            _ => false
+        };
+    }
+
+    private static ToolPathResolutionSource ResolveCurrentSource(AppToolPathSettings settings, ManagedToolKind toolKind)
+    {
+        return toolKind switch
+        {
+            ManagedToolKind.MkvToolNix => ManagedToolResolution.TryResolveMkvToolNix(settings)?.Source ?? ToolPathResolutionSource.None,
+            ManagedToolKind.Ffprobe => ManagedToolResolution.TryResolveFfprobe(settings)?.Source ?? ToolPathResolutionSource.None,
+            _ => ToolPathResolutionSource.None
+        };
+    }
+
+    private static bool ShouldSkipOnlineCheck(
+        ManagedToolSettings toolSettings,
+        ToolPathResolutionSource resolvedSource,
+        DateTimeOffset now)
+    {
+        if (resolvedSource is not ToolPathResolutionSource.ManagedSettings
+            and not ToolPathResolutionSource.PortableToolsFallback)
+        {
+            return false;
+        }
+
+        if (toolSettings.LastCheckedUtc is not null
+            && now - toolSettings.LastCheckedUtc.Value < SuccessfulMetadataRefreshInterval)
+        {
+            return true;
+        }
+
+        return toolSettings.LastFailedCheckUtc is not null
+               && now - toolSettings.LastFailedCheckUtc.Value < FailedMetadataRefreshBackoffInterval;
+    }
+
+    private static string BuildDeferredOnlineCheckMessage(
+        ManagedToolKind toolKind,
+        ManagedToolSettings toolSettings,
+        ToolPathResolutionSource resolvedSource,
+        DateTimeOffset now)
+    {
+        if (toolSettings.LastCheckedUtc is not null
+            && now - toolSettings.LastCheckedUtc.Value < SuccessfulMetadataRefreshInterval)
+        {
+            return $"{GetToolDisplayName(toolKind)} wurde zuletzt erfolgreich geprüft am {toolSettings.LastCheckedUtc.Value.ToLocalTime():dd.MM.yyyy HH:mm:ss}.";
+        }
+
+        if (toolSettings.LastFailedCheckUtc is not null)
+        {
+            return $"{GetToolDisplayName(toolKind)} bleibt vorerst auf der vorhandenen Installation, weil der letzte Online-Check fehlgeschlagen ist.";
+        }
+
+        return resolvedSource == ToolPathResolutionSource.PortableToolsFallback
+            ? "Eine bereits vorhandene portable Installation wird weiterverwendet."
+            : "Die vorhandene Installation wird weiterverwendet.";
+    }
+
+    private static string BuildExternalSourceSkipMessage(ManagedToolKind toolKind, ToolPathResolutionSource resolvedSource)
+    {
+        return resolvedSource switch
+        {
+            ToolPathResolutionSource.ManualOverride => "Ein manueller Override hat Vorrang vor der automatischen Verwaltung.",
+            ToolPathResolutionSource.SystemPath => $"{GetToolDisplayName(toolKind)} wird bereits über den System-PATH gefunden.",
+            ToolPathResolutionSource.DownloadsFallback => $"{GetToolDisplayName(toolKind)} wird bereits aus einem vorhandenen Download-Ordner erkannt.",
+            _ => $"{GetToolDisplayName(toolKind)} wird bereits aus einer höher priorisierten Quelle verwendet."
+        };
+    }
+
+    private static void ValidatePackageIntegrityMetadata(ManagedToolPackage package)
+    {
+        if (string.IsNullOrWhiteSpace(package.ExpectedSha256))
+        {
+            throw new InvalidOperationException(
+                $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil keine SHA-256-Prüfsumme verfügbar ist.");
+        }
+
+        if (!ManagedToolParsing.IsValidSha256(package.ExpectedSha256))
+        {
+            throw new InvalidOperationException(
+                $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil die gelieferte SHA-256-Prüfsumme ungültig ist.");
+        }
     }
 
     private static string ResolveInstalledPath(ManagedToolKind toolKind, string extractedDirectory)
@@ -423,14 +567,65 @@ internal sealed class ManagedToolInstallerService
         return $"{value:0.##} {units[unitIndex]}";
     }
 
+    /// <summary>
+    /// Übersetzt werkzeugspezifische Fortschritte in einen monotonen Gesamtfortschritt des Startfensters.
+    /// </summary>
+    /// <remarks>
+    /// Netzwerkdownload, Prüfsummenprüfung und Extraktion melden jeweils eigene Teilfortschritte.
+    /// Dieser Adapter sorgt dafür, dass der Gesamtbalken im vorgeschalteten Startfenster trotz
+    /// wechselnder Teilphasen niemals rückwärts springt.
+    /// </remarks>
+    private sealed class ToolStartupProgressReporter(
+        IProgress<ManagedToolStartupProgress>? startupProgress,
+        double phaseStartPercent,
+        double phaseEndPercent)
+    {
+        private readonly double _phaseStartPercent = phaseStartPercent;
+        private readonly double _phaseRange = Math.Max(0d, phaseEndPercent - phaseStartPercent);
+        private double _lastMappedProgressPercent = phaseStartPercent;
+
+        public void Report(
+            string statusText,
+            string? detailText = null,
+            double? toolProgressPercent = null,
+            bool isIndeterminate = true)
+        {
+            if (startupProgress is null)
+            {
+                return;
+            }
+
+            double? mappedPercent = toolProgressPercent is null
+                ? null
+                : Math.Clamp(
+                    _phaseStartPercent + toolProgressPercent.Value / 100d * _phaseRange,
+                    _phaseStartPercent,
+                    _phaseStartPercent + _phaseRange);
+            if (mappedPercent is not null)
+            {
+                _lastMappedProgressPercent = Math.Max(_lastMappedProgressPercent, mappedPercent.Value);
+                mappedPercent = _lastMappedProgressPercent;
+            }
+
+            startupProgress.Report(new ManagedToolStartupProgress(statusText, detailText, mappedPercent, isIndeterminate));
+        }
+
+        public IProgress<ManagedToolExtractionProgress> CreateExtractionProgressAdapter(ManagedToolKind toolKind)
+        {
+            return new ExtractionProgressAdapter(toolKind, this);
+        }
+    }
+
     private sealed class ExtractionProgressAdapter(
         ManagedToolKind toolKind,
-        IProgress<ManagedToolStartupProgress>? startupProgress) : IProgress<ManagedToolExtractionProgress>
+        ToolStartupProgressReporter toolProgress) : IProgress<ManagedToolExtractionProgress>
     {
         public void Report(ManagedToolExtractionProgress value)
         {
             var total = Math.Max(1, value.TotalEntryCount);
             var percent = Math.Clamp((double)value.ExtractedEntryCount / total * 100d, 0d, 100d);
+            var stagePercent = ExtractionStartProgressPercent
+                               + percent / 100d * (ExtractionEndProgressPercent - ExtractionStartProgressPercent);
             var currentEntry = string.IsNullOrWhiteSpace(value.CurrentEntryPath)
                 ? null
                 : Path.GetFileName(value.CurrentEntryPath);
@@ -438,11 +633,10 @@ internal sealed class ManagedToolInstallerService
                 ? $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien"
                 : $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien – {currentEntry}";
 
-            ManagedToolInstallerService.Report(
-                startupProgress,
+            toolProgress.Report(
                 $"{GetToolDisplayName(toolKind)} wird entpackt...",
                 detail,
-                percent,
+                stagePercent,
                 false);
         }
     }

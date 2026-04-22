@@ -9,8 +9,7 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
-        Background="#F3F4F6"
-        Icon="/Assets/AppIcon.ico">
+        Background="#F3F4F6">
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

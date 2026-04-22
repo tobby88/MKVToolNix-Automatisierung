@@ -5,9 +5,6 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed class MkvToolNixLocator : IMkvToolNixLocator
 {
-    private const string DownloadsFolderName = "Downloads";
-    private const string DirectoryPrefix = "mkvtoolnix-64-bit-";
-    private const string RelativeToolDirectory = "mkvtoolnix";
     private readonly AppToolPathStore _toolPathStore;
 
     /// <summary>
@@ -47,80 +44,15 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
 
     private string FindToolPath(string executableName)
     {
-        var settings = _toolPathStore.Load();
-        var configuredPath = settings.MkvToolNixDirectoryPath;
-        if (!string.IsNullOrWhiteSpace(configuredPath))
+        var resolvedPaths = ManagedToolResolution.TryResolveMkvToolNix(_toolPathStore.Load());
+        if (resolvedPaths is null)
         {
-            foreach (var configuredExecutable in EnumerateConfiguredExecutableCandidates(configuredPath, executableName))
-            {
-                if (File.Exists(configuredExecutable))
-                {
-                    return configuredExecutable;
-                }
-            }
+            throw new FileNotFoundException(
+                $"Es wurde keine verwendbare MKVToolNix-Installation für {executableName} gefunden.");
         }
 
-        var managedPath = settings.ManagedMkvToolNix.InstalledPath;
-        if (!string.IsNullOrWhiteSpace(managedPath))
-        {
-            foreach (var managedExecutable in EnumerateConfiguredExecutableCandidates(managedPath, executableName))
-            {
-                if (File.Exists(managedExecutable))
-                {
-                    return managedExecutable;
-                }
-            }
-        }
-
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var downloadsDirectory = Path.Combine(userProfile, DownloadsFolderName);
-
-        if (!Directory.Exists(downloadsDirectory))
-        {
-            throw new DirectoryNotFoundException($"Download-Ordner nicht gefunden: {downloadsDirectory}");
-        }
-
-        var candidate = Directory
-            .GetDirectories(downloadsDirectory, $"{DirectoryPrefix}*")
-            .Select(path => new DirectoryInfo(path))
-            .OrderByDescending(directory => directory.LastWriteTimeUtc)
-            .Select(directory => Path.Combine(directory.FullName, RelativeToolDirectory, executableName))
-            .FirstOrDefault(File.Exists);
-
-        if (candidate is null)
-        {
-            throw new FileNotFoundException($"Es wurde keine {executableName} in einem mkvtoolnix-Download-Ordner gefunden.");
-        }
-
-        return candidate;
-    }
-
-    private static IEnumerable<string> EnumerateConfiguredExecutableCandidates(string configuredPath, string executableName)
-    {
-        if (configuredPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-        {
-            if (string.Equals(Path.GetFileName(configuredPath), executableName, StringComparison.OrdinalIgnoreCase))
-            {
-                yield return configuredPath;
-                yield break;
-            }
-
-            if (string.Equals(executableName, "mkvmerge.exe", StringComparison.OrdinalIgnoreCase))
-            {
-                // Bestehende Konfigurationen und Test-Setups dürfen weiterhin direkt auf eine
-                // mkvmerge-kompatible Executable zeigen, auch wenn sie nicht exakt so heißt.
-                yield return configuredPath;
-            }
-
-            var configuredDirectory = Path.GetDirectoryName(configuredPath);
-            if (!string.IsNullOrWhiteSpace(configuredDirectory))
-            {
-                yield return Path.Combine(configuredDirectory, executableName);
-            }
-
-            yield break;
-        }
-
-        yield return Path.Combine(configuredPath, executableName);
+        return string.Equals(executableName, "mkvmerge.exe", StringComparison.OrdinalIgnoreCase)
+            ? resolvedPaths.MkvMergePath
+            : resolvedPaths.MkvPropEditPath;
     }
 }

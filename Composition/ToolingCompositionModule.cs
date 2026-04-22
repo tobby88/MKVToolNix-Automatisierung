@@ -19,6 +19,8 @@ internal static class ToolingCompositionModule
         services.AddSingleton<HttpClient>(_ =>
         {
             var client = new HttpClient();
+            // Der Start darf bei langsamen oder blockierten Upstream-Diensten nicht minutenlang hängen bleiben.
+            client.Timeout = TimeSpan.FromSeconds(15);
             client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MkvToolnixAutomatisierung", "1.2.0"));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             return client;

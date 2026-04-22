@@ -45,7 +45,8 @@ internal sealed class AppCompositionRoot
         {
             var managedToolStartupResult = await serviceProvider
                 .GetRequiredService<ManagedToolInstallerService>()
-                .EnsureManagedToolsAsync(progress, cancellationToken);
+                .EnsureManagedToolsAsync(progress, cancellationToken)
+                .ConfigureAwait(false);
 
             return CreateComposition(serviceProvider, managedToolStartupResult);
         }

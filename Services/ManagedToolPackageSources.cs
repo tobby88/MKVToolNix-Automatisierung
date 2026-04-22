@@ -11,11 +11,11 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
 {
     private static readonly Uri DownloadsPageUri = new("https://mkvtoolnix.download/downloads.html");
-    private static readonly Regex PortableRowRegex = new(
-        @"<tr>\s*<td>\s*Portable\s*\(64-bit\)\s*</td>\s*<td><a\s+href=""(?<url>[^""]*mkvtoolnix-64-bit-(?<version>\d+(?:\.\d+)+)\.7z)""[^>]*>.*?</a></td>\s*<td>.*?data-checksum=""(?<sha256>[a-fA-F0-9]{64})""",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex DownloadRegex = new(
         @"(?<url>(?:https://mkvtoolnix\.download/)?windows/releases/[^""'\s>]+/mkvtoolnix-64-bit-(?<version>\d+(?:\.\d+)+)\.7z)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex InlineChecksumRegex = new(
+        @"data-checksum=""(?<sha256>[a-fA-F0-9]{64})""",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly HttpClient _httpClient;
 
@@ -57,26 +57,19 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(downloadsHtml);
 
-        var inlineCandidates = PortableRowRegex.Matches(downloadsHtml)
-            .Select(match => new
+        var candidates = DownloadRegex.Matches(downloadsHtml)
+            .Select(match =>
             {
-                Url = match.Groups["url"].Value,
-                Version = match.Groups["version"].Value,
-                Sha256 = match.Groups["sha256"].Value
+                var url = match.Groups["url"].Value;
+                return new
+                {
+                    Url = url,
+                    Version = match.Groups["version"].Value,
+                    Sha256 = TryReadInlineChecksum(downloadsHtml, match.Index)
+                };
             })
             .DistinctBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var candidates = inlineCandidates.Count > 0
-            ? inlineCandidates
-            : DownloadRegex.Matches(downloadsHtml)
-                .Select(match => new
-                {
-                    Url = match.Groups["url"].Value,
-                    Version = match.Groups["version"].Value,
-                    Sha256 = string.Empty
-                })
-                .DistinctBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
-                .ToList();
 
         if (candidates.Count == 0)
         {
@@ -99,6 +92,30 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
             downloadUri,
             archiveFileName,
             checksum);
+    }
+
+    private static string? TryReadInlineChecksum(string downloadsHtml, int matchIndex)
+    {
+        if (matchIndex < 0 || matchIndex >= downloadsHtml.Length)
+        {
+            return null;
+        }
+
+        var rowEnd = downloadsHtml.IndexOf("</tr>", matchIndex, StringComparison.OrdinalIgnoreCase);
+        var listEnd = downloadsHtml.IndexOf("</li>", matchIndex, StringComparison.OrdinalIgnoreCase);
+        var blockEndCandidates = new[] { rowEnd, listEnd }
+            .Where(index => index >= matchIndex)
+            .OrderBy(index => index)
+            .ToArray();
+        var scanLength = blockEndCandidates.Length > 0
+            ? Math.Max(0, blockEndCandidates[0] - matchIndex)
+            : Math.Min(768, downloadsHtml.Length - matchIndex);
+        var snippet = downloadsHtml.Substring(matchIndex, scanLength);
+        var checksumMatch = InlineChecksumRegex.Match(snippet);
+
+        return checksumMatch.Success
+            ? checksumMatch.Groups["sha256"].Value
+            : null;
     }
 }
 
@@ -309,10 +326,26 @@ internal static class ManagedToolParsing
                 continue;
             }
 
-            return line[..firstSeparatorIndex].Trim();
+            var candidate = line[..firstSeparatorIndex].Trim();
+            return IsValidSha256(candidate)
+                ? candidate
+                : null;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Prüft, ob ein Text eine formal gültige hexadezimale SHA-256-Prüfsumme darstellt.
+    /// </summary>
+    internal static bool IsValidSha256(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length != 64)
+        {
+            return false;
+        }
+
+        return value.All(Uri.IsHexDigit);
     }
 
     /// <summary>

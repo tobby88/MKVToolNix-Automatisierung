@@ -3,6 +3,8 @@ using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
+using System.Threading;
+using System.Windows.Threading;
 
 namespace MkvToolnixAutomatisierung;
 
@@ -19,6 +21,12 @@ internal sealed class AppBootstrapper : IDisposable
     /// <returns>Fertig initialisiertes Hauptfenster der Anwendung.</returns>
     public MainWindow CreateMainWindow()
     {
+        if (SynchronizationContext.Current is DispatcherSynchronizationContext
+            || System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
+        {
+            throw new InvalidOperationException("CreateMainWindow() darf nicht auf dem UI-Thread verwendet werden. Verwende stattdessen CreateMainWindowAsync().");
+        }
+
         return CreateMainWindowAsync().GetAwaiter().GetResult();
     }
 

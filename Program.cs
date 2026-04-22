@@ -25,9 +25,24 @@ internal static class Program
             var startupViewModel = new StartupProgressWindowViewModel();
             var startupWindow = new StartupProgressWindow(startupViewModel);
             var startupProgress = new Progress<ManagedToolStartupProgress>(startupViewModel.Report);
+            using var startupCancellation = new CancellationTokenSource();
             var startupHandled = false;
+            var startupCompleted = false;
 
-            async void StartAsync()
+            startupWindow.StartupCancellationRequested += (_, _) =>
+            {
+                if (startupCompleted || startupCancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                startupViewModel.Report(new ManagedToolStartupProgress(
+                    "Start wird abgebrochen...",
+                    "Laufende Vorgänge werden beendet."));
+                startupCancellation.Cancel();
+            };
+
+            async Task StartAsync()
             {
                 if (startupHandled)
                 {
@@ -38,16 +53,24 @@ internal static class Program
 
                 try
                 {
-                    var window = await bootstrapper.CreateMainWindowAsync(startupProgress);
+                    var window = await bootstrapper.CreateMainWindowAsync(startupProgress, startupCancellation.Token);
+                    startupCompleted = true;
                     app.MainWindow = window;
                     app.ShutdownMode = ShutdownMode.OnMainWindowClose;
                     window.Show();
-                    startupWindow.Close();
+                    startupWindow.CloseFromProgram();
                     bootstrapper.ShowStartupWarnings();
+                }
+                catch (OperationCanceledException) when (startupCancellation.IsCancellationRequested)
+                {
+                    startupCompleted = true;
+                    startupWindow.CloseFromProgram();
+                    app.Shutdown();
                 }
                 catch (Exception ex)
                 {
-                    startupWindow.Close();
+                    startupCompleted = true;
+                    startupWindow.CloseFromProgram();
                     MessageBox.Show(
                         $"Die Anwendung konnte nicht gestartet werden.\n\n{ex.Message}",
                         "Startfehler",
@@ -57,7 +80,7 @@ internal static class Program
                 }
             }
 
-            startupWindow.ContentRendered += (_, _) => StartAsync();
+            startupWindow.ContentRendered += (_, _) => _ = StartAsync();
             app.MainWindow = startupWindow;
             startupWindow.Show();
             app.Run();

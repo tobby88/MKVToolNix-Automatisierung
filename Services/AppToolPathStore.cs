@@ -116,6 +116,15 @@ public sealed class ManagedToolSettings
     public DateTimeOffset? LastCheckedUtc { get; set; }
 
     /// <summary>
+    /// Zeitpunkt des letzten fehlgeschlagenen Online-Prüfversuchs.
+    /// </summary>
+    /// <remarks>
+    /// Dieser Wert dient ausschließlich dazu, wiederholte Start-Blockaden bei temporären
+    /// Netzwerkfehlern, Rate-Limits oder Offline-Situationen kurzzeitig zu dämpfen.
+    /// </remarks>
+    public DateTimeOffset? LastFailedCheckUtc { get; set; }
+
+    /// <summary>
     /// Erzeugt eine tiefe Kopie des gespeicherten Toolzustands.
     /// </summary>
     /// <returns>Geklontes Toolobjekt.</returns>
@@ -126,7 +135,8 @@ public sealed class ManagedToolSettings
             AutoManageEnabled = AutoManageEnabled,
             InstalledPath = InstalledPath,
             InstalledVersion = InstalledVersion,
-            LastCheckedUtc = LastCheckedUtc
+            LastCheckedUtc = LastCheckedUtc,
+            LastFailedCheckUtc = LastFailedCheckUtc
         };
     }
 }
