@@ -13,7 +13,8 @@ internal interface IManagedToolArchiveExtractor
     /// </summary>
     /// <param name="archivePath">Pfad zum zuvor heruntergeladenen Archiv.</param>
     /// <param name="destinationDirectory">Leeres oder neu anzulegendes Zielverzeichnis.</param>
-    void ExtractArchive(string archivePath, string destinationDirectory);
+    /// <param name="progress">Optionaler Fortschrittskanal für die Dateieinträge des Archivs.</param>
+    void ExtractArchive(string archivePath, string destinationDirectory, IProgress<ManagedToolExtractionProgress>? progress = null);
 }
 
 /// <summary>
@@ -22,7 +23,7 @@ internal interface IManagedToolArchiveExtractor
 internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
     /// <inheritdoc />
-    public void ExtractArchive(string archivePath, string destinationDirectory)
+    public void ExtractArchive(string archivePath, string destinationDirectory, IProgress<ManagedToolExtractionProgress>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -30,14 +31,26 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         Directory.CreateDirectory(destinationDirectory);
 
         using var archive = ArchiveFactory.Open(archivePath);
-        foreach (var entry in archive.Entries.Where(entry => !entry.IsDirectory))
+        var entries = archive.Entries
+            .Where(entry => !entry.IsDirectory)
+            .ToList();
+        var totalEntryCount = entries.Count;
+        progress?.Report(new ManagedToolExtractionProgress(0, totalEntryCount));
+
+        var extractedEntryCount = 0;
+        foreach (var entry in entries)
         {
             entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
             {
                 ExtractFullPath = true,
                 Overwrite = true
             });
+
+            extractedEntryCount++;
+            progress?.Report(new ManagedToolExtractionProgress(
+                extractedEntryCount,
+                totalEntryCount,
+                entry.Key));
         }
     }
 }
-

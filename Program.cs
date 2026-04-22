@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels;
 using MkvToolnixAutomatisierung.Windows;
 
@@ -23,6 +24,7 @@ internal static class Program
             using var bootstrapper = new AppBootstrapper();
             var startupViewModel = new StartupProgressWindowViewModel();
             var startupWindow = new StartupProgressWindow(startupViewModel);
+            var startupProgress = new Progress<ManagedToolStartupProgress>(startupViewModel.Report);
             var startupHandled = false;
 
             async void StartAsync()
@@ -36,7 +38,7 @@ internal static class Program
 
                 try
                 {
-                    var window = await bootstrapper.CreateMainWindowAsync(startupViewModel);
+                    var window = await bootstrapper.CreateMainWindowAsync(startupProgress);
                     app.MainWindow = window;
                     app.ShutdownMode = ShutdownMode.OnMainWindowClose;
                     window.Show();

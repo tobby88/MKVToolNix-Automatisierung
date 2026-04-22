@@ -66,6 +66,17 @@ internal sealed record ManagedToolStartupProgress(
     bool IsIndeterminate = true);
 
 /// <summary>
+/// Fortschritt einer laufenden Archiv-Extraktion.
+/// </summary>
+/// <param name="ExtractedEntryCount">Bereits vollständig extrahierte Datei-Einträge.</param>
+/// <param name="TotalEntryCount">Gesamtanzahl der zu extrahierenden Datei-Einträge.</param>
+/// <param name="CurrentEntryPath">Optionaler Name oder Pfad des gerade bearbeiteten Eintrags.</param>
+internal sealed record ManagedToolExtractionProgress(
+    int ExtractedEntryCount,
+    int TotalEntryCount,
+    string? CurrentEntryPath = null);
+
+/// <summary>
 /// Liefert die aktuelle Download-Metadaten eines automatisch verwalteten Werkzeugs.
 /// </summary>
 internal interface IManagedToolPackageSource

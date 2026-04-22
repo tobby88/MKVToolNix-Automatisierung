@@ -152,8 +152,13 @@ internal sealed class ManagedToolInstallerService
             await DownloadArchiveAsync(package, archivePath, progress, cancellationToken);
             Report(progress,
                 $"{GetToolDisplayName(package.Kind)} wird entpackt...",
-                package.DisplayVersion);
-            _archiveExtractor.ExtractArchive(archivePath, stagingDirectory);
+                $"{package.DisplayVersion} – Vorbereitung läuft...",
+                0d,
+                false);
+            await Task.Run(() => _archiveExtractor.ExtractArchive(
+                archivePath,
+                stagingDirectory,
+                new ExtractionProgressAdapter(package.Kind, progress)), cancellationToken);
 
             Directory.Move(stagingDirectory, versionDirectory);
             return ResolveInstalledPath(package.Kind, versionDirectory);
@@ -221,6 +226,9 @@ internal sealed class ManagedToolInstallerService
             return;
         }
 
+        Report(progress,
+            $"{GetToolDisplayName(package.Kind)} wird überprüft...",
+            "Prüfsumme wird berechnet.");
         var actualHash = await ComputeSha256Async(archivePath, cancellationToken);
         if (!string.Equals(actualHash, package.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
         {
@@ -413,5 +421,29 @@ internal sealed class ManagedToolInstallerService
         }
 
         return $"{value:0.##} {units[unitIndex]}";
+    }
+
+    private sealed class ExtractionProgressAdapter(
+        ManagedToolKind toolKind,
+        IProgress<ManagedToolStartupProgress>? startupProgress) : IProgress<ManagedToolExtractionProgress>
+    {
+        public void Report(ManagedToolExtractionProgress value)
+        {
+            var total = Math.Max(1, value.TotalEntryCount);
+            var percent = Math.Clamp((double)value.ExtractedEntryCount / total * 100d, 0d, 100d);
+            var currentEntry = string.IsNullOrWhiteSpace(value.CurrentEntryPath)
+                ? null
+                : Path.GetFileName(value.CurrentEntryPath);
+            var detail = currentEntry is null
+                ? $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien"
+                : $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien – {currentEntry}";
+
+            ManagedToolInstallerService.Report(
+                startupProgress,
+                $"{GetToolDisplayName(toolKind)} wird entpackt...",
+                detail,
+                percent,
+                false);
+        }
     }
 }
