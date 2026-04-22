@@ -145,6 +145,12 @@ internal sealed class BatchExecutionRunner
                         warningCount++;
                         item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
                     }
+                    if (doneMoveResult.WasCanceled)
+                    {
+                        appendLog(
+                            $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
+                        throw new OperationCanceledException(cancellationToken);
+                    }
 
                     continue;
                 }
@@ -180,6 +186,12 @@ internal sealed class BatchExecutionRunner
                         warningCount++;
                         item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
                     }
+                    if (doneMoveResult.WasCanceled)
+                    {
+                        appendLog(
+                            $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
+                        throw new OperationCanceledException(cancellationToken);
+                    }
                 }
                 else if ((result.ExitCode == 0 && result.HasWarning)
                     || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
@@ -205,6 +217,12 @@ internal sealed class BatchExecutionRunner
                     if (doneMoveResult.FailedFiles.Count > 0)
                     {
                         item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (Quellen nicht vollständig verschoben)");
+                    }
+                    if (doneMoveResult.WasCanceled)
+                    {
+                        appendLog(
+                            $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
+                        throw new OperationCanceledException(cancellationToken);
                     }
                 }
                 else
@@ -256,7 +274,7 @@ internal sealed class BatchExecutionRunner
         var cleanupFiles = BuildDoneCleanupFileList(workItem);
         if (cleanupFiles.Count == 0)
         {
-            return new BatchDoneMoveResult([], []);
+            return new BatchDoneMoveResult([], [], [], WasCanceled: false);
         }
 
         var moveResult = await _cleanupService.MoveFilesToDirectoryAsync(
@@ -275,10 +293,18 @@ internal sealed class BatchExecutionRunner
         {
             appendLog("  NICHT VERSCHOBEN: " + string.Join(", ", moveResult.FailedFiles.Select(Path.GetFileName)));
         }
+        if (moveResult.PendingFiles.Count > 0)
+        {
+            appendLog("  NOCH OFFEN: " + string.Join(", ", moveResult.PendingFiles.Select(Path.GetFileName)));
+        }
 
         _cleanupService.DeleteEmptyParentDirectories(cleanupFiles, Path.GetDirectoryName(doneDirectory));
 
-        return new BatchDoneMoveResult(moveResult.MovedFiles, moveResult.FailedFiles);
+        return new BatchDoneMoveResult(
+            moveResult.MovedFiles,
+            moveResult.FailedFiles,
+            moveResult.PendingFiles,
+            moveResult.WasCanceled);
     }
 
     private static IReadOnlyList<string> BuildDoneCleanupFileList(BatchExecutionWorkItem workItem)
@@ -382,4 +408,6 @@ internal sealed record BatchExecutionOutcome(
 /// </summary>
 internal sealed record BatchDoneMoveResult(
     IReadOnlyList<string> MovedFiles,
-    IReadOnlyList<string> FailedFiles);
+    IReadOnlyList<string> FailedFiles,
+    IReadOnlyList<string> PendingFiles,
+    bool WasCanceled);

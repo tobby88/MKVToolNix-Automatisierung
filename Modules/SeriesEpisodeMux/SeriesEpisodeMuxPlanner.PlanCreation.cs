@@ -527,7 +527,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         if (!request.HasPrimaryVideoSource)
         {
-            return ([], []);
+            return (
+                request.DetectionNotes?
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                ?? [],
+                []);
         }
 
         var plannedVideoPaths = request.PlannedVideoPaths?

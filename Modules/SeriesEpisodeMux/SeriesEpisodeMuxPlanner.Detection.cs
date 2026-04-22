@@ -247,14 +247,29 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 throw new InvalidOperationException(noVideoCandidatesMessage + details);
             }
 
+            // Zusatzmaterial-only-Fälle dürfen Untertitel begleitender defekter MP4-Varianten
+            // nicht verlieren. Auch wenn die MP4 selbst fachlich ausgesiebt wird, bleiben ihre
+            // Untertitel und TXT-Begleiter für spätere Reuse-/Cleanup-Entscheidungen relevant.
+            var defectiveSeedCompanionCleanupPaths = CollectCompanionCleanupPathsFromSeeds(
+                defectiveSeedHealth.Select(entry => entry.Seed).ToList(),
+                companionFilesByBaseName);
             return new EpisodeDetectionContext(
                 directory,
                 selectedIdentity,
                 [],
                 null,
                 [],
-                CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName),
-                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName),
+                CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName)
+                    .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
+                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName)
+                    .Concat(defectiveSeedCompanionCleanupPaths)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
                 audioDescriptionCandidates,
                 sourceHealthNotes);
         }
@@ -337,17 +352,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
         // echte AD-Pfade dürfen in den AD-Slot wandern; reine Untertitelquellen bleiben
         // ausschließlich in SubtitlePaths, damit der spätere Plan sie nicht als Audiospur
         // an mkvmerge weitergibt.
-        var effectiveAudioDescriptionPath = selectedAudioDescription?.FilePath;
-        if (string.IsNullOrWhiteSpace(effectiveAudioDescriptionPath)
-            && EpisodeFileNameHelper.LooksLikeAudioDescription(detectionSeedPath))
-        {
-            effectiveAudioDescriptionPath = detectionSeedPath;
-        }
-
         return new AutoDetectedEpisodeFiles(
             MainVideoPath: detectionSeedPath,
             AdditionalVideoPaths: [],
-            AudioDescriptionPath: effectiveAudioDescriptionPath,
+            AudioDescriptionPath: selectedAudioDescription?.FilePath,
             SubtitlePaths: subtitlePaths,
             AttachmentPaths: [],
             RelatedFilePaths: relatedFilePaths,
@@ -365,6 +373,31 @@ public sealed partial class SeriesEpisodeMuxPlanner
             ManualCheckFilePaths: manualCheckFilePaths,
             Notes: notes,
             HasPrimaryVideoSource: false);
+    }
+
+    /// <summary>
+    /// Sammelt Begleitdateien defekter Seeds, ohne die defekte Mediendatei selbst als Cleanup-
+    /// oder Reuse-Kandidat zurückzugeben.
+    /// </summary>
+    /// <param name="seeds">Defekte oder ausgesiebte Seeds derselben Episode.</param>
+    /// <param name="companionFilesByBaseName">Ordnerweiter Lookup für exakte Begleitdateien.</param>
+    /// <returns>Vorhandene Untertitel- und TXT-Begleiter der Seeds.</returns>
+    private static IReadOnlyList<string> CollectCompanionCleanupPathsFromSeeds(
+        IReadOnlyList<CandidateSeed> seeds,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> companionFilesByBaseName)
+    {
+        return seeds
+            .SelectMany(seed =>
+            {
+                var companionCleanupPaths = FindExactCompanionCleanupFiles(seed.FilePath, companionFilesByBaseName);
+                return string.IsNullOrWhiteSpace(seed.AttachmentPath)
+                    ? companionCleanupPaths
+                    : companionCleanupPaths.Concat([seed.AttachmentPath!]);
+            })
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static IReadOnlyList<string> CollectRelatedEpisodeFilePaths(

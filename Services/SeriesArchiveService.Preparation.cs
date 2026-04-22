@@ -128,11 +128,15 @@ public sealed partial class SeriesArchiveService
         foreach (var videoPath in plannedVideoPaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var metadata = await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken);
+            var metadata = ApplySourceLanguageHints(
+                await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken),
+                videoPath);
+            var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, videoPath, cancellationToken);
             plannedVideos.Add(new PreparedVideoSource(
                 videoPath,
-                ApplySourceLanguageHints(metadata, videoPath),
-                new FileInfo(videoPath).Length));
+                metadata,
+                new FileInfo(videoPath).Length,
+                ResolvePlannedNormalAudioLanguages(metadata, container)));
         }
 
         return plannedVideos;
@@ -374,7 +378,17 @@ public sealed partial class SeriesArchiveService
             plannedVideos,
             existingArchive.AudioTracks);
         var manualAttachmentPaths = request.ManualAttachmentPaths ?? [];
-        var needsAudioDescription = !string.IsNullOrWhiteSpace(request.AudioDescriptionPath) && existingAudioDescription is null;
+        var requestedAudioDescriptionPath = string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
+            ? null
+            : request.AudioDescriptionPath;
+        // Eine explizit ausgewählte AD-Datei ist immer eine Inhaltsänderung, auch wenn das Archiv
+        // bereits eine eingebettete AD-Spur enthält. Sonst würde die neue Auswahl stillschweigend
+        // verworfen und der Benutzer bekäme fälschlich einen Skip- oder Reuse-Plan.
+        var replacementAudioDescriptionPath = string.Equals(requestedAudioDescriptionPath, outputPath, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : requestedAudioDescriptionPath;
+        var retainedAudioDescriptionPath = existingAudioDescription is null ? null : outputPath;
+        var needsAudioDescription = !string.IsNullOrWhiteSpace(replacementAudioDescriptionPath);
         // Bereits vorhandene eingebettete Archiv-Untertitel sind für sich genommen kein Änderungsgrund.
         // Ein echter Zusatzbedarf liegt nur vor, wenn neue externe Untertitel dazukommen.
         var needsSubtitleSupplement = subtitlePlan.ExternalPlans.Count > 0;
@@ -444,8 +458,8 @@ public sealed partial class SeriesArchiveService
                 AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
                 AttachmentSourceAttachmentIds: attachmentReusePlan.AttachmentSourceAttachmentIds,
                 AdditionalVideoPaths: [],
-                AudioDescriptionFilePath: existingAudioDescription is null ? null : outputPath,
-                AudioDescriptionTrackId: existingAudioDescription?.TrackId,
+                AudioDescriptionFilePath: retainedAudioDescriptionPath,
+                AudioDescriptionTrackId: replacementAudioDescriptionPath is null ? existingAudioDescription?.TrackId : null,
                 SubtitleFiles: subtitlePlan.FinalPlans,
                 AttachmentFilePaths: [],
                 FallbackToRequestAttachments: false,
@@ -487,10 +501,8 @@ public sealed partial class SeriesArchiveService
             AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,
             AttachmentSourceAttachmentIds: attachmentReusePlan.AttachmentSourceAttachmentIds,
             AdditionalVideoPaths: freshVideoPaths,
-            AudioDescriptionFilePath: existingAudioDescription is null
-                ? request.AudioDescriptionPath
-                : outputPath,
-            AudioDescriptionTrackId: existingAudioDescription?.TrackId,
+            AudioDescriptionFilePath: replacementAudioDescriptionPath ?? retainedAudioDescriptionPath,
+            AudioDescriptionTrackId: replacementAudioDescriptionPath is null ? existingAudioDescription?.TrackId : null,
             SubtitleFiles: subtitlePlan.FinalPlans,
             // Manuell gewählte TXT-Anhänge dürfen auch beim Beibehalten der Archiv-Hauptquelle nicht verschwinden.
             AttachmentFilePaths: attachmentFilePaths,
@@ -647,11 +659,43 @@ public sealed partial class SeriesArchiveService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var freshAudioLanguages = plannedVideos
             .Where(video => selectedFreshVideoPaths.Contains(video.FilePath))
-            .Select(video => MediaLanguageHelper.NormalizeMuxLanguageCode(video.Metadata.AudioLanguage))
+            .SelectMany(video => video.NormalAudioLanguages)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return retainedNormalAudioTracks
             .Where(track => !freshAudioLanguages.Contains(MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Leitet die fachlich relevanten Normalsprachen frischer Quellen so ab, wie sie später auch
+    /// im eigentlichen Mux-Plan übernommen würden.
+    /// </summary>
+    /// <remarks>
+    /// Für die üblichen Einspur-Dateien übernimmt diese Liste bewusst die bereits mit Dateinamen-
+    /// und TXT-Hinweisen korrigierte Sprache aus <paramref name="metadata"/>. Bei echten
+    /// Mehrspur-Quellen werden dagegen alle normalen Container-Audiospuren betrachtet, damit der
+    /// Archivvergleich keine veralteten Dubletten in Sekundärsprachen stehen lässt.
+    /// </remarks>
+    /// <param name="metadata">Bereits fachlich normalisierte Primärmetadaten der Quelle.</param>
+    /// <param name="container">Vollständige Container-Metadaten derselben Quelle.</param>
+    /// <returns>Alle Sprachcodes, die normale frische Audiospuren fachlich belegen.</returns>
+    private static IReadOnlyList<string> ResolvePlannedNormalAudioLanguages(
+        MediaTrackMetadata metadata,
+        ContainerMetadata container)
+    {
+        var preferredNormalAudioTracks = AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks);
+        if (preferredNormalAudioTracks.Count <= 1)
+        {
+            return
+            [
+                MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.AudioLanguage)
+            ];
+        }
+
+        return preferredNormalAudioTracks
+            .Select(track => MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
 
@@ -771,7 +815,8 @@ public sealed partial class SeriesArchiveService
     private sealed record PreparedVideoSource(
         string FilePath,
         MediaTrackMetadata Metadata,
-        long FileSizeBytes);
+        long FileSizeBytes,
+        IReadOnlyList<string> NormalAudioLanguages);
 
     private sealed record FinalVideoSelectionPlan(
         IReadOnlyList<VideoTrackSelection> VideoSelections,

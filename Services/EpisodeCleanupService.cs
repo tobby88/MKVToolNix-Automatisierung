@@ -1,4 +1,4 @@
-using Microsoft.VisualBasic.FileIO;
+using System.Runtime.InteropServices;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -45,6 +45,32 @@ internal interface IEpisodeCleanupService
 /// </summary>
 internal sealed class EpisodeCleanupService : IEpisodeCleanupService
 {
+    private readonly Action<string, string> _moveFile;
+    private readonly Action<string> _recycleFile;
+
+    /// <summary>
+    /// Initialisiert die Standardimplementierung mit echten Dateisystemoperationen.
+    /// </summary>
+    public EpisodeCleanupService()
+        : this(
+            static (sourceFilePath, destinationPath) => File.Move(sourceFilePath, destinationPath),
+            RecycleFileWithoutUi)
+    {
+    }
+
+    /// <summary>
+    /// Testbarer Einstieg mit austauschbaren Dateioperationen.
+    /// </summary>
+    /// <param name="moveFile">Konkrete Verschiebeoperation.</param>
+    /// <param name="recycleFile">Konkrete Papierkorboperation.</param>
+    internal EpisodeCleanupService(
+        Action<string, string> moveFile,
+        Action<string> recycleFile)
+    {
+        _moveFile = moveFile;
+        _recycleFile = recycleFile;
+    }
+
     public async Task<FileMoveResult> MoveFilesToDirectoryAsync(
         IReadOnlyList<string> sourceFilePaths,
         string targetDirectory,
@@ -58,21 +84,24 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
 
             var movedFiles = new List<string>();
             var failedFiles = new List<string>();
-            var files = sourceFilePaths
-                .Where(File.Exists)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var pendingFiles = new List<string>();
+            var files = GetDistinctExistingFilePaths(sourceFilePaths);
 
             for (var index = 0; index < files.Count; index++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    pendingFiles.AddRange(files.Skip(index));
+                    break;
+                }
+
                 var sourceFilePath = files[index];
                 onProgress?.Invoke(index + 1, files.Count, sourceFilePath);
 
                 try
                 {
                     var destinationPath = BuildUniqueTargetPath(targetDirectory, Path.GetFileName(sourceFilePath));
-                    File.Move(sourceFilePath, destinationPath);
+                    _moveFile(sourceFilePath, destinationPath);
                     movedFiles.Add(destinationPath);
                 }
                 catch
@@ -81,7 +110,11 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
                 }
             }
 
-            return new FileMoveResult(movedFiles, failedFiles);
+            return new FileMoveResult(
+                movedFiles,
+                failedFiles,
+                pendingFiles,
+                WasCanceled: pendingFiles.Count > 0);
         }, cancellationToken);
     }
 
@@ -95,23 +128,23 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
             cancellationToken.ThrowIfCancellationRequested();
             var recycledFiles = new List<string>();
             var failedFiles = new List<string>();
-            var files = filePaths
-                .Where(File.Exists)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var pendingFiles = new List<string>();
+            var files = GetDistinctExistingFilePaths(filePaths);
 
             for (var index = 0; index < files.Count; index++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    pendingFiles.AddRange(files.Skip(index));
+                    break;
+                }
+
                 var filePath = files[index];
                 onProgress?.Invoke(index + 1, files.Count, filePath);
 
                 try
                 {
-                    FileSystem.DeleteFile(
-                        filePath,
-                        UIOption.OnlyErrorDialogs,
-                        RecycleOption.SendToRecycleBin);
+                    _recycleFile(filePath);
                     recycledFiles.Add(filePath);
                 }
                 catch
@@ -120,7 +153,11 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
                 }
             }
 
-            return new FileRecycleResult(recycledFiles, failedFiles);
+            return new FileRecycleResult(
+                recycledFiles,
+                failedFiles,
+                pendingFiles,
+                WasCanceled: pendingFiles.Count > 0);
         }, cancellationToken);
     }
 
@@ -226,18 +263,117 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
             suffix++;
         }
     }
+
+    /// <summary>
+    /// Verdichtet eine Quellliste auf vorhandene, eindeutige Pfade in stabiler Reihenfolge.
+    /// </summary>
+    private static List<string> GetDistinctExistingFilePaths(IReadOnlyList<string> filePaths)
+    {
+        return filePaths
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Verschiebt eine Datei ohne modale Shell-Dialoge in den Papierkorb.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(string, Microsoft.VisualBasic.FileIO.UIOption, Microsoft.VisualBasic.FileIO.RecycleOption)"/>
+    /// würde bei Fehlern modale Dialoge anzeigen und Batch-/Workerthreads blockieren. Für das
+    /// projektinterne Cleanup ist stattdessen ein stiller Shell-Aufruf robuster.
+    /// </remarks>
+    /// <param name="filePath">Zu recyclelnde Datei.</param>
+    private static void RecycleFileWithoutUi(string filePath)
+    {
+        var operation = new ShellFileOperation
+        {
+            OperationType = ShellFileOperationType.Delete,
+            From = filePath + '\0' + '\0',
+            Flags = ShellFileOperationFlags.AllowUndo
+                | ShellFileOperationFlags.NoConfirmation
+                | ShellFileOperationFlags.NoErrorUi
+                | ShellFileOperationFlags.Silent
+        };
+
+        var result = SHFileOperation(ref operation);
+        if (result != 0 || operation.AnyOperationsAborted)
+        {
+            throw new IOException($"Datei konnte nicht in den Papierkorb verschoben werden: {filePath}");
+        }
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SHFileOperation(ref ShellFileOperation fileOperation);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ShellFileOperation
+    {
+        public IntPtr WindowHandle;
+        public ShellFileOperationType OperationType;
+
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string From;
+
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string? To;
+
+        public ShellFileOperationFlags Flags;
+
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool AnyOperationsAborted;
+
+        public IntPtr NameMappings;
+
+        [MarshalAs(UnmanagedType.LPWStr)]
+        public string? ProgressTitle;
+    }
+
+    private enum ShellFileOperationType : uint
+    {
+        Delete = 3
+    }
+
+    [Flags]
+    private enum ShellFileOperationFlags : ushort
+    {
+        Silent = 0x0004,
+        NoConfirmation = 0x0010,
+        AllowUndo = 0x0040,
+        NoErrorUi = 0x0400
+    }
 }
 
 /// <summary>
-/// Rückgabe eines Verschiebevorgangs inklusive Dateien, die nicht bewegt werden konnten.
+/// Rückgabe eines Verschiebevorgangs inklusive Fehlkandidaten und ggf. unbearbeiteter Restdateien.
 /// </summary>
 internal sealed record FileMoveResult(
     IReadOnlyList<string> MovedFiles,
-    IReadOnlyList<string> FailedFiles);
+    IReadOnlyList<string> FailedFiles,
+    IReadOnlyList<string> PendingFiles,
+    bool WasCanceled)
+{
+    public FileMoveResult(
+        IReadOnlyList<string> movedFiles,
+        IReadOnlyList<string> failedFiles)
+        : this(movedFiles, failedFiles, [], WasCanceled: false)
+    {
+    }
+}
 
 /// <summary>
-/// Rückgabe eines Papierkorb-Laufs inklusive Fehlkandidaten.
+/// Rückgabe eines Papierkorb-Laufs inklusive Fehlkandidaten und ggf. unbearbeiteter Restdateien.
 /// </summary>
 internal sealed record FileRecycleResult(
     IReadOnlyList<string> RecycledFiles,
-    IReadOnlyList<string> FailedFiles);
+    IReadOnlyList<string> FailedFiles,
+    IReadOnlyList<string> PendingFiles,
+    bool WasCanceled)
+{
+    public FileRecycleResult(
+        IReadOnlyList<string> recycledFiles,
+        IReadOnlyList<string> failedFiles)
+        : this(recycledFiles, failedFiles, [], WasCanceled: false)
+    {
+    }
+}

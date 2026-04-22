@@ -16,6 +16,7 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _pathSync = new();
     private readonly IFfprobeLocator _locator;
+    private readonly Func<string, string, TimeSpan, CancellationToken, Task<TimeSpan?>> _durationReaderAsync;
     private string? _ffprobePath;
     private DateTime _nextLookupAfterUtc = DateTime.MinValue;
 
@@ -24,8 +25,21 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
     /// </summary>
     /// <param name="locator">Liefert bei Bedarf den aktuell nutzbaren Pfad zur <c>ffprobe.exe</c>.</param>
     public FfprobeDurationProbe(IFfprobeLocator locator)
+        : this(locator, ReadDurationCoreAsync)
+    {
+    }
+
+    /// <summary>
+    /// Testbarer Einstieg mit austauschbarer Kernprobe-Implementierung.
+    /// </summary>
+    /// <param name="locator">Liefert bei Bedarf den aktuell nutzbaren Pfad zur <c>ffprobe.exe</c>.</param>
+    /// <param name="durationReaderAsync">Asynchrone Kernfunktion zum eigentlichen Laufzeitlesen.</param>
+    internal FfprobeDurationProbe(
+        IFfprobeLocator locator,
+        Func<string, string, TimeSpan, CancellationToken, Task<TimeSpan?>> durationReaderAsync)
     {
         _locator = locator;
+        _durationReaderAsync = durationReaderAsync;
     }
 
     /// <summary>
@@ -53,8 +67,11 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = ReadDurationCore(filePath, ffprobePath, ProcessTimeout, CancellationToken.None);
-        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        var duration = _durationReaderAsync(filePath, ffprobePath, ProcessTimeout, CancellationToken.None)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
+        StoreSuccessfulDurationOrClearCache(filePath, snapshot.Value, duration);
         return duration;
     }
 
@@ -83,8 +100,8 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = await ReadDurationCoreAsync(filePath, ffprobePath, timeout, cancellationToken);
-        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        var duration = await _durationReaderAsync(filePath, ffprobePath, timeout, cancellationToken);
+        StoreSuccessfulDurationOrClearCache(filePath, snapshot.Value, duration);
         return duration;
     }
 
@@ -121,15 +138,6 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
                 : SuccessfulLookupRefreshInterval);
             return _ffprobePath;
         }
-    }
-
-    private static TimeSpan? ReadDurationCore(
-        string filePath,
-        string ffprobePath,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
-    {
-        return ReadDurationCoreAsync(filePath, ffprobePath, timeout, cancellationToken).GetAwaiter().GetResult();
     }
 
     private static async Task<TimeSpan?> ReadDurationCoreAsync(
@@ -205,10 +213,39 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
 
             return seconds > 0 ? TimeSpan.FromSeconds(seconds) : null;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Behält nur erfolgreiche Laufzeitlese-Ergebnisse im Cache.
+    /// </summary>
+    /// <remarks>
+    /// Fehlversuche und Timeouts können transient sein. Ein gecachtes <see langword="null"/>
+    /// würde denselben unveränderten Pfad sonst bis zur nächsten Dateizeitänderung als
+    /// scheinbar dauerhaft "unlesbar" festschreiben.
+    /// </remarks>
+    /// <param name="filePath">Datei, deren Cache-Eintrag aktualisiert werden soll.</param>
+    /// <param name="snapshot">Aktueller Dateistand, für den das Ergebnis gilt.</param>
+    /// <param name="duration">Ermittelte Laufzeit oder <see langword="null"/> bei Fehlschlag.</param>
+    private void StoreSuccessfulDurationOrClearCache(
+        string filePath,
+        FileStateSnapshot snapshot,
+        TimeSpan? duration)
+    {
+        if (duration is null)
+        {
+            _cache.TryRemove(filePath, out _);
+            return;
+        }
+
+        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot, duration);
     }
 
     private static void KillProcessTree(Process process)

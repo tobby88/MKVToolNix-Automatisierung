@@ -85,7 +85,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var mediaMetadata = _probeService.ReadPrimaryVideoMetadata(mkvMergePath, seed.FilePath);
+        // Der vorbereitete Ordnerkontext baut Kandidaten zwar weiterhin synchron auf, die teure
+        // mkvmerge-Probe selbst muss aber cancellation-faehig bleiben. Sonst liefert der STA-Task
+        // dem Aufrufer bereits "abgebrochen", waehrend die vorherige Identify-Arbeit unsichtbar
+        // weiterlaeuft und den Candidate-Cache erst spaeter mit veralteten Daten fuellt.
+        var mediaMetadata = _probeService
+            .ReadPrimaryVideoMetadataAsync(mkvMergePath, seed.FilePath, cancellationToken)
+            .ConfigureAwait(false)
+            .GetAwaiter()
+            .GetResult();
         cancellationToken.ThrowIfCancellationRequested();
         var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration);
         cancellationToken.ThrowIfCancellationRequested();

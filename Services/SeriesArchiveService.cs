@@ -14,6 +14,7 @@ public sealed partial class SeriesArchiveService
 
     private readonly MkvMergeProbeService _probeService;
     private readonly AppArchiveSettingsStore _archiveSettingsStore;
+    private bool _hasValidArchiveRootConfiguration;
 
     /// <summary>
     /// Initialisiert den Archivdienst für Pfadvorschläge und bestehende Ziel-MKV-Integration.
@@ -24,7 +25,9 @@ public sealed partial class SeriesArchiveService
     {
         _probeService = probeService;
         _archiveSettingsStore = archiveSettingsStore;
-        ArchiveRootDirectory = NormalizeArchiveRootDirectory(_archiveSettingsStore.Load().DefaultSeriesArchiveRootPath);
+        var archiveRootState = ResolveLoadedArchiveRootDirectory(_archiveSettingsStore.Load().DefaultSeriesArchiveRootPath);
+        ArchiveRootDirectory = archiveRootState.Path;
+        _hasValidArchiveRootConfiguration = archiveRootState.IsValid;
     }
 
     /// <summary>
@@ -63,6 +66,7 @@ public sealed partial class SeriesArchiveService
     /// <returns>Vollstaendiger Pfad innerhalb der konfigurierten Serienbibliothek.</returns>
     public string BuildArchiveOutputPath(string seriesName, string seasonNumber, string episodeNumber, string title)
     {
+        EnsureArchiveRootConfigurationIsValid();
         var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(seasonNumber);
         var seasonFolderName = normalizedSeasonNumber == "00"
             ? "Specials"
@@ -85,7 +89,8 @@ public sealed partial class SeriesArchiveService
     /// <returns><see langword="true"/>, wenn der Pfad innerhalb der Archivwurzel liegt.</returns>
     public bool IsArchivePath(string outputFilePath)
     {
-        return PathComparisonHelper.IsPathWithinRoot(outputFilePath, ArchiveRootDirectory);
+        return _hasValidArchiveRootConfiguration
+            && PathComparisonHelper.IsPathWithinRoot(outputFilePath, ArchiveRootDirectory);
     }
 
     /// <summary>
@@ -100,6 +105,7 @@ public sealed partial class SeriesArchiveService
             DefaultSeriesArchiveRootPath = normalizedPath
         });
         ArchiveRootDirectory = normalizedPath;
+        _hasValidArchiveRootConfiguration = true;
     }
 
     /// <summary>
@@ -108,7 +114,7 @@ public sealed partial class SeriesArchiveService
     /// <returns><see langword="true"/>, wenn das Zielverzeichnis existiert.</returns>
     public bool IsArchiveAvailable()
     {
-        return Directory.Exists(ArchiveRootDirectory);
+        return _hasValidArchiveRootConfiguration && Directory.Exists(ArchiveRootDirectory);
     }
 
     /// <summary>
@@ -117,12 +123,16 @@ public sealed partial class SeriesArchiveService
     /// <returns>Mehrzeilige Warnmeldung mit dem konfigurierten Bibliothekspfad.</returns>
     public string BuildArchiveUnavailableWarningMessage()
     {
-        return "Die konfigurierte Serienbibliothek ist aktuell nicht erreichbar:"
+        return (_hasValidArchiveRootConfiguration
+                ? "Die konfigurierte Serienbibliothek ist aktuell nicht erreichbar:"
+                : "Die konfigurierte Serienbibliothek ist ungültig:")
             + Environment.NewLine
             + ArchiveRootDirectory
             + Environment.NewLine
             + Environment.NewLine
-            + "Automatische Ausgabepfade verwenden deshalb vorerst den jeweiligen Quellordner.";
+            + (_hasValidArchiveRootConfiguration
+                ? "Automatische Ausgabepfade verwenden deshalb vorerst den jeweiligen Quellordner."
+                : "Bitte den Archivpfad in den Einstellungen korrigieren. Automatische Ausgabepfade verwenden deshalb vorerst den jeweiligen Quellordner.");
     }
 
     private static string EpisodeMetadataPath(string fallbackDirectory, string seriesName, string seasonNumber, string episodeNumber, string title)
@@ -137,17 +147,61 @@ public sealed partial class SeriesArchiveService
             return DefaultArchiveRootDirectory;
         }
 
+        if (TryNormalizeArchiveRootDirectory(archiveRootDirectory, out var normalizedPath))
+        {
+            return normalizedPath;
+        }
+
+        throw new ArgumentException("Der konfigurierte Archivwurzelpfad ist ungültig.", nameof(archiveRootDirectory));
+    }
+
+    /// <summary>
+    /// Lädt einen bereits gespeicherten Archivpfad robust, ohne bei Altlasten aus der Konfiguration
+    /// den kompletten App-Start zu blockieren.
+    /// </summary>
+    private static (string Path, bool IsValid) ResolveLoadedArchiveRootDirectory(string? archiveRootDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(archiveRootDirectory))
+        {
+            return (DefaultArchiveRootDirectory, true);
+        }
+
+        return TryNormalizeArchiveRootDirectory(archiveRootDirectory, out var normalizedPath)
+            ? (normalizedPath, true)
+            : (archiveRootDirectory.Trim(), false);
+    }
+
+    /// <summary>
+    /// Versucht, einen expliziten Archivwurzelpfad in eine vergleichbare Vollform zu überführen.
+    /// </summary>
+    private static bool TryNormalizeArchiveRootDirectory(string archiveRootDirectory, out string normalizedPath)
+    {
         try
         {
             var fullPath = Path.GetFullPath(archiveRootDirectory.Trim());
             var rootPath = Path.GetPathRoot(fullPath);
-            return string.Equals(fullPath, rootPath, StringComparison.OrdinalIgnoreCase)
+            normalizedPath = string.Equals(fullPath, rootPath, StringComparison.OrdinalIgnoreCase)
                 ? fullPath
                 : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return true;
         }
         catch
         {
-            return DefaultArchiveRootDirectory;
+            normalizedPath = string.Empty;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Verhindert, dass eine bereits als ungültig erkannte Archivkonfiguration stillschweigend
+    /// für neue Bibliothekspfade verwendet wird.
+    /// </summary>
+    private void EnsureArchiveRootConfigurationIsValid()
+    {
+        if (!_hasValidArchiveRootConfiguration)
+        {
+            throw new InvalidOperationException(
+                $"Der konfigurierte Archivwurzelpfad ist ungültig und muss zuerst korrigiert werden: {ArchiveRootDirectory}");
         }
     }
 
