@@ -99,6 +99,142 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Contains("4.9.0", viewModel.StatusText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TestEmbyConnectionAsync_ResetsBusyStateAndFailureStatusOnError()
+    {
+        var viewModel = CreateViewModel(new ThrowingEmbyClient());
+        viewModel.EmbyApiKey = "emby-key";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.TestEmbyConnectionAsync());
+
+        Assert.True(viewModel.IsInteractive);
+        Assert.Equal("Emby-Verbindung fehlgeschlagen", viewModel.StatusText);
+    }
+
+    [Fact]
+    public void ToolStatus_ShowsManagedInstallationEvenWhenAutoManageIsDisabled()
+    {
+        var mkvToolNixDirectory = CreateDirectory("managed-mkvtoolnix");
+        _ = CreateFile(Path.Combine("managed-mkvtoolnix", "mkvmerge.exe"));
+        _ = CreateFile(Path.Combine("managed-mkvtoolnix", "mkvpropedit.exe"));
+        var ffprobePath = CreateFile(Path.Combine("managed-ffprobe", "ffprobe.exe"));
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings
+            {
+                ManagedMkvToolNix = new ManagedToolSettings
+                {
+                    AutoManageEnabled = false,
+                    InstalledPath = mkvToolNixDirectory,
+                    InstalledVersion = "98.0"
+                },
+                ManagedFfprobe = new ManagedToolSettings
+                {
+                    AutoManageEnabled = false,
+                    InstalledPath = ffprobePath,
+                    InstalledVersion = "2026-04-18T13-04-00Z"
+                }
+            }
+        });
+
+        var viewModel = CreateViewModel(settingsStore: settingsStore);
+
+        Assert.True(viewModel.IsMkvToolNixAvailable);
+        Assert.True(viewModel.IsFfprobeAvailable);
+        Assert.Equal("MKVToolNix bereit (verwaltet)", viewModel.MkvToolNixStatusText);
+        Assert.Equal("ffprobe bereit (verwaltet)", viewModel.FfprobeStatusText);
+        Assert.Contains("Automatische Updates sind deaktiviert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+        Assert.Contains("Automatische Updates sind deaktiviert", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ToolStatus_ShowsSystemPathFallbackForFfprobe()
+    {
+        var pathDirectory = CreateDirectory("path-tools");
+        var ffprobePath = CreateFile(Path.Combine("path-tools", "ffprobe.exe"));
+        var originalPath = Environment.GetEnvironmentVariable("PATH");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("PATH", $"{pathDirectory}{Path.PathSeparator}{originalPath}");
+            var viewModel = CreateViewModel();
+
+            Assert.True(viewModel.IsFfprobeAvailable);
+            Assert.Equal("ffprobe bereit (PATH)", viewModel.FfprobeStatusText);
+            Assert.Contains(ffprobePath, viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", originalPath);
+        }
+    }
+
+    [Fact]
+    public void ToolStatus_ShowsDownloadsFallbackForMkvToolNix()
+    {
+        var downloadsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Downloads");
+        var fallbackRoot = Path.Combine(downloadsDirectory, $"mkvtoolnix-64-bit-999.0-codex-{Guid.NewGuid():N}");
+        var toolDirectory = Path.Combine(fallbackRoot, "mkvtoolnix");
+
+        try
+        {
+            Directory.CreateDirectory(toolDirectory);
+            var mkvMergePath = Path.Combine(toolDirectory, "mkvmerge.exe");
+            var mkvPropEditPath = Path.Combine(toolDirectory, "mkvpropedit.exe");
+            File.WriteAllText(mkvMergePath, "tool");
+            File.WriteAllText(mkvPropEditPath, "tool");
+            Directory.SetLastWriteTimeUtc(fallbackRoot, DateTime.UtcNow.AddMinutes(5));
+
+            var viewModel = CreateViewModel();
+
+            Assert.True(viewModel.IsMkvToolNixAvailable);
+            Assert.Equal("MKVToolNix bereit (Fallback)", viewModel.MkvToolNixStatusText);
+            Assert.Contains(mkvMergePath, viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+            Assert.Contains(mkvPropEditPath, viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(fallbackRoot))
+            {
+                Directory.Delete(fallbackRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void ToolStatus_PrefersManualOverrideEvenWhenAutoManageRemainsEnabled()
+    {
+        var manualMkvToolNixDirectory = CreateDirectory("manual-mkvtoolnix");
+        _ = CreateFile(Path.Combine("manual-mkvtoolnix", "mkvmerge.exe"));
+        _ = CreateFile(Path.Combine("manual-mkvtoolnix", "mkvpropedit.exe"));
+        var managedMkvToolNixDirectory = CreateDirectory("managed-mkvtoolnix");
+        _ = CreateFile(Path.Combine("managed-mkvtoolnix", "mkvmerge.exe"));
+        _ = CreateFile(Path.Combine("managed-mkvtoolnix", "mkvpropedit.exe"));
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings
+            {
+                MkvToolNixDirectoryPath = manualMkvToolNixDirectory,
+                ManagedMkvToolNix = new ManagedToolSettings
+                {
+                    AutoManageEnabled = true,
+                    InstalledPath = managedMkvToolNixDirectory,
+                    InstalledVersion = "98.0"
+                }
+            }
+        });
+
+        var viewModel = CreateViewModel(settingsStore: settingsStore);
+
+        Assert.True(viewModel.IsMkvToolNixAvailable);
+        Assert.Equal("MKVToolNix bereit (Override)", viewModel.MkvToolNixStatusText);
+        Assert.Contains("übersteuert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -176,6 +312,31 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
         public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class ThrowingEmbyClient : IEmbyClient
+    {
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("boom");
+
+        public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
 
         public void Dispose()
         {

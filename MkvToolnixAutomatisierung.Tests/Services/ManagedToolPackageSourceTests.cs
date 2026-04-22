@@ -52,6 +52,27 @@ public sealed class ManagedToolPackageSourceTests
     }
 
     [Fact]
+    public void ParseLatestPackageFromDownloadsPage_ReadsInlineChecksumFromRelaxedMarkup()
+    {
+        const string downloadsHtml = """
+            <html><body>
+            <section class="download-card">
+              <div class="label"><strong>Portable</strong> (64-bit)</div>
+              <div class="actions">
+                <a class="download-link" href="windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z">download</a>
+                <span class="checksum" data-checksum="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"></span>
+              </div>
+            </section>
+            </body></html>
+            """;
+
+        var package = MkvToolNixPackageSource.ParseLatestPackageFromDownloadsPage(downloadsHtml);
+
+        Assert.Equal("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", package.ExpectedSha256);
+        Assert.Equal("98.0", package.VersionToken);
+    }
+
+    [Fact]
     public void ParseLatestPackageFromReleaseJson_PrefersDigestForFfprobe()
     {
         const string releaseJson = """
@@ -108,5 +129,21 @@ public sealed class ManagedToolPackageSourceTests
         var package = FfprobePackageSource.ParseLatestPackageFromReleaseJson(releaseJson, checksumText);
 
         Assert.Equal("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", package.ExpectedSha256);
+    }
+
+    [Fact]
+    public void TryReadSha256FromChecksumText_IgnoresInvalidHashTokens()
+    {
+        const string checksumText = """
+            xyz *ffmpeg-master-latest-win64-gpl-shared.zip
+            """;
+
+        var checksum = ManagedToolParsing.TryReadSha256FromChecksumText(
+            checksumText,
+            "ffmpeg-master-latest-win64-gpl-shared.zip");
+
+        Assert.Null(checksum);
+        Assert.True(ManagedToolParsing.IsValidSha256(new string('a', 64)));
+        Assert.False(ManagedToolParsing.IsValidSha256("xyz"));
     }
 }

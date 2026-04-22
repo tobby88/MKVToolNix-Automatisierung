@@ -68,6 +68,77 @@ public sealed class ToolLocatorTests : IDisposable
         Assert.Equal(Path.Combine(managedDirectory, "mkvpropedit.exe"), locator.FindMkvPropEditPath());
     }
 
+    [Fact]
+    public void FfprobeLocator_UsesPortableToolsFallbackWhenManagedPathIsMissingFromSettings()
+    {
+        var versionDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "2026-04-18T13-04-00Z", "ffmpeg");
+        Directory.CreateDirectory(versionDirectory);
+        var ffprobePath = Path.Combine(versionDirectory, "ffprobe.exe");
+        File.WriteAllText(ffprobePath, "tool");
+
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings()
+        });
+
+        var locator = new FfprobeLocator(new AppToolPathStore(settingsStore));
+
+        Assert.Equal(ffprobePath, locator.TryFindFfprobePath());
+    }
+
+    [Fact]
+    public void MkvToolNixLocator_UsesPortableToolsFallbackWhenManagedPathIsMissingFromSettings()
+    {
+        var toolDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "mkvtoolnix", "98.0", "mkvtoolnix");
+        Directory.CreateDirectory(toolDirectory);
+        var mkvMergePath = Path.Combine(toolDirectory, "mkvmerge.exe");
+        var mkvPropEditPath = Path.Combine(toolDirectory, "mkvpropedit.exe");
+        File.WriteAllText(mkvMergePath, "tool");
+        File.WriteAllText(mkvPropEditPath, "tool");
+
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings()
+        });
+
+        var locator = new MkvToolNixLocator(new AppToolPathStore(settingsStore));
+
+        Assert.Equal(mkvMergePath, locator.FindMkvMergePath());
+        Assert.Equal(mkvPropEditPath, locator.FindMkvPropEditPath());
+    }
+
+    [Fact]
+    public void MkvToolNixLocator_DoesNotAcceptArbitraryExecutableOverride()
+    {
+        var manualDirectory = CreateDirectory("broken-mkvtoolnix");
+        var arbitraryExecutable = CreateFile(Path.Combine("broken-mkvtoolnix", "notepad.exe"));
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings
+            {
+                MkvToolNixDirectoryPath = arbitraryExecutable
+            }
+        });
+
+        var locator = new MkvToolNixLocator(new AppToolPathStore(settingsStore));
+
+        try
+        {
+            var resolvedPath = locator.FindMkvMergePath();
+            Assert.NotEqual(arbitraryExecutable, resolvedPath);
+            Assert.EndsWith("mkvmerge.exe", resolvedPath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FileNotFoundException exception)
+        {
+            Assert.Contains("mkvmerge.exe", exception.Message, StringComparison.Ordinal);
+        }
+
+        Assert.True(Directory.Exists(manualDirectory));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -91,4 +162,3 @@ public sealed class ToolLocatorTests : IDisposable
         return path;
     }
 }
-
