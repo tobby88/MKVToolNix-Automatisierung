@@ -412,7 +412,6 @@ internal sealed partial class BatchMuxViewModel
         }
 
         _selectedPlanSummaryRefresh.Schedule(RefreshSelectedItemPlanSummaryAsync);
-        SelectedItemPlanSummaryRefreshTask = _selectedPlanSummaryRefresh.CurrentTask;
     }
 
     private async Task RefreshSelectedItemPlanSummaryAsync(int version, CancellationToken cancellationToken)
@@ -476,7 +475,6 @@ internal sealed partial class BatchMuxViewModel
     private void CancelSelectedItemPlanSummaryRefresh(bool invalidateInFlightRefreshes = false)
     {
         _selectedPlanSummaryRefresh.Cancel(invalidateInFlightRefreshes);
-        SelectedItemPlanSummaryRefreshTask = null;
     }
 
 }

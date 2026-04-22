@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels;
@@ -140,6 +141,38 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(1, archiveAwareModule.ArchiveChangedCallCount);
     }
 
+    [Fact]
+    public void OpenSettingsCommand_WhenCalledOffApplicationDispatcher_OmitsOwnerAndDoesNotThrow()
+    {
+        var settingsDialog = new StubSettingsDialog(() => { });
+        var viewModel = new MainWindowViewModel(
+            [new ModuleNavigationItem("Einzelepisode", "Erkennen", new object())],
+            ViewModelTestContext.CreateMainWindowServices(
+                CreateToolPathStore(),
+                ffprobeLocator: new StubFfprobeLocator(null),
+                mkvToolNixLocator: new StubMkvToolNixLocator(new FileNotFoundException("Probe fehlgeschlagen.")),
+                settingsDialog: settingsDialog));
+        Exception? commandFailure = null;
+        var worker = new Thread(() =>
+        {
+            try
+            {
+                viewModel.OpenSettingsCommand.Execute(null);
+            }
+            catch (Exception ex)
+            {
+                commandFailure = ex;
+            }
+        });
+
+        worker.Start();
+        worker.Join();
+
+        Assert.Null(commandFailure);
+        Assert.Null(settingsDialog.LastOwner);
+        Assert.Equal(AppSettingsPage.Archive, settingsDialog.LastInitialPage);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -251,9 +284,11 @@ public sealed class MainWindowViewModelTests : IDisposable
     private sealed class StubSettingsDialog(Action onAccept) : IAppSettingsDialogService
     {
         public AppSettingsPage? LastInitialPage { get; private set; }
+        public System.Windows.Window? LastOwner { get; private set; }
 
         public bool ShowDialog(System.Windows.Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive)
         {
+            LastOwner = owner;
             LastInitialPage = initialPage;
             onAccept();
             return true;

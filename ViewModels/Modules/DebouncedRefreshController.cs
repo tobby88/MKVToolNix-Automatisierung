@@ -19,7 +19,8 @@ internal sealed class DebouncedRefreshController : IDisposable
     }
 
     /// <summary>
-    /// Zuletzt geplante Refresh-Task, sofern aktuell eine Planung aktiv ist.
+    /// Zuletzt geplante Refresh-Task, sofern aktuell noch eine Planung oder Ausführung aktiv ist.
+    /// Bereits abgeschlossene Refreshes werden vor Abschluss der Task wieder ausgetragen.
     /// </summary>
     public Task? CurrentTask { get; private set; }
 
@@ -36,7 +37,9 @@ internal sealed class DebouncedRefreshController : IDisposable
         var version = Interlocked.Increment(ref _version);
         var cancellationSource = new CancellationTokenSource();
         _currentRefreshCts = cancellationSource;
-        CurrentTask = RunRefreshAsync(refreshAsync, version, cancellationSource.Token);
+        var completionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CurrentTask = completionSource.Task;
+        _ = RunRefreshAsync(refreshAsync, version, cancellationSource.Token, completionSource);
     }
 
     /// <summary>
@@ -74,8 +77,11 @@ internal sealed class DebouncedRefreshController : IDisposable
     private async Task RunRefreshAsync(
         Func<int, CancellationToken, Task> refreshAsync,
         int version,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TaskCompletionSource completionSource)
     {
+        Exception? failure = null;
+
         try
         {
             await Task.Delay(_delay, cancellationToken);
@@ -83,6 +89,26 @@ internal sealed class DebouncedRefreshController : IDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+        finally
+        {
+            if (IsCurrent(version))
+            {
+                CurrentTask = null;
+            }
+
+            if (failure is null)
+            {
+                completionSource.TrySetResult();
+            }
+            else
+            {
+                completionSource.TrySetException(failure);
+            }
         }
     }
 

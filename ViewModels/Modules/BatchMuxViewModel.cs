@@ -108,8 +108,9 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     /// <summary>
     /// Hält die aktuell laufende, entkoppelte Aktualisierung der Detail-/Planansicht des ausgewählten Eintrags.
+    /// Nach Abschluss oder Abbruch liefert die Eigenschaft wieder <see langword="null"/>.
     /// </summary>
-    internal Task? SelectedItemPlanSummaryRefreshTask { get; private set; }
+    internal Task? SelectedItemPlanSummaryRefreshTask => _selectedPlanSummaryRefresh.CurrentTask;
 
     /// <summary>
     /// Rohsammlung aller Batch-Zeilen.

@@ -253,7 +253,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         var previousArchiveRoot = ArchiveRootDirectory;
         var accepted = _services.SettingsDialog.ShowDialog(
-            System.Windows.Application.Current?.MainWindow,
+            TryGetSettingsDialogOwner(),
             AppSettingsPage.Archive);
         if (!accepted)
         {
@@ -421,6 +421,24 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         return string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
             ? $"Im Einstellungsdialog kann bei Bedarf ein manueller Override gesetzt werden. {mkvToolNixError?.Message ?? string.Empty}".Trim()
             : $"Der manuelle MKVToolNix-Override ist aktuell nicht verwendbar. {mkvToolNixError?.Message ?? string.Empty}".Trim();
+    }
+
+    /// <summary>
+    /// Liest das aktuelle Hauptfenster nur dann als Dialog-Owner aus, wenn der aufrufende Thread
+    /// direkten Zugriff auf das WPF-Application-Objekt hat. In Unit-Tests oder anderen
+    /// Neben-Threads ist der Owner optional; ein erzwungener Cross-Thread-Zugriff würde dort
+    /// stattdessen eine Ausnahme auslösen.
+    /// </summary>
+    /// <returns>Aktuelles Hauptfenster oder <see langword="null"/>, wenn kein sicherer Zugriff möglich ist.</returns>
+    private static System.Windows.Window? TryGetSettingsDialogOwner()
+    {
+        var application = System.Windows.Application.Current;
+        if (application is null || !application.Dispatcher.CheckAccess())
+        {
+            return null;
+        }
+
+        return application.MainWindow;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
