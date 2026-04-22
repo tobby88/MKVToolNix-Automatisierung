@@ -692,7 +692,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_AdOnlyContinuation_AddsVariantNote_WhenExistingTargetAlreadySkipsMux()
+    public async Task CreatePlanAsync_AdOnlyContinuation_WithExplicitAdSelection_DoesNotSkipAndAddsVariantNote()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-skip-episode-variant");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-skip-episode-variant");
@@ -737,7 +737,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             Title: "Rififi (2) ... es geht weiter (mit Audiodeskription)",
             HasPrimaryVideoSource: false));
 
-        Assert.True(plan.SkipMux);
+        Assert.False(plan.SkipMux);
+        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
         Assert.Contains(plan.Notes, note => note.Contains("Mehrfachfolge", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(plan.Notes, note => note.Contains("S2014E05-E06", StringComparison.OrdinalIgnoreCase));
     }
