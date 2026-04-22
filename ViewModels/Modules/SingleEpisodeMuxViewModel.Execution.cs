@@ -445,6 +445,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
             },
             cancellationToken);
 
+        if (recycleResult.WasCanceled)
+        {
+            _dialogService.ShowWarning(
+                "Warnung",
+                BuildCanceledSourceRecycleWarningMessage(recycleResult));
+            return;
+        }
+
         if (recycleResult.FailedFiles.Count > 0)
         {
             _dialogService.ShowWarning(
@@ -453,6 +461,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
             return;
         }
+    }
+
+    private static string BuildCanceledSourceRecycleWarningMessage(FileRecycleResult recycleResult)
+    {
+        if (recycleResult.PendingFiles.Count == 0)
+        {
+            return "Das Verschieben der Quelldateien in den Papierkorb wurde vorzeitig abgebrochen. Bereits verschobene Dateien bleiben im Papierkorb.";
+        }
+
+        return "Das Verschieben der Quelldateien in den Papierkorb wurde vorzeitig abgebrochen. "
+            + "Bereits verschobene Dateien bleiben im Papierkorb; folgende Dateien verbleiben am Quellort:\n"
+            + string.Join(Environment.NewLine, recycleResult.PendingFiles.Select(Path.GetFileName));
     }
 
     private List<string> BuildCleanupFileList(IEnumerable<string> sourceFilePaths, SeriesEpisodeMuxPlan plan)

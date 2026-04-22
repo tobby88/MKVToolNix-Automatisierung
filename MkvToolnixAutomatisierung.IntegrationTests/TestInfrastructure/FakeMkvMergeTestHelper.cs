@@ -7,7 +7,7 @@ internal static class FakeMkvMergeTestHelper
 {
     public static string ResolveExecutablePath()
     {
-        var outputDirectoryCandidate = Path.Combine(AppContext.BaseDirectory, "FakeMkvMerge.exe");
+        var outputDirectoryCandidate = Path.Combine(AppContext.BaseDirectory, "mkvmerge.exe");
         if (File.Exists(outputDirectoryCandidate))
         {
             return outputDirectoryCandidate;
@@ -25,7 +25,7 @@ internal static class FakeMkvMergeTestHelper
                 "bin",
                 configuration,
                 "net10.0",
-                "FakeMkvMerge.exe")))
+                "mkvmerge.exe")))
             .Where(File.Exists)
             .Select(path => new FileInfo(path))
             .OrderByDescending(file => file.LastWriteTimeUtc)
@@ -36,7 +36,7 @@ internal static class FakeMkvMergeTestHelper
             return candidatePaths[0].FullName;
         }
 
-        throw new FileNotFoundException("FakeMkvMerge.exe wurde nicht gefunden.");
+        throw new FileNotFoundException("mkvmerge.exe des FakeMkvMerge-Helfers wurde nicht gefunden.");
     }
 
     public static void WriteProbeFile(

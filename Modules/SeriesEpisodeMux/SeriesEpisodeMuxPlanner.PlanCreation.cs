@@ -315,15 +315,22 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
-        var currentTitleKey = BuildEpisodeVariantTitleKey(title);
-        if (string.IsNullOrWhiteSpace(currentTitleKey))
+        var outputFileName = Path.GetFileNameWithoutExtension(archiveOutputPath);
+        var currentEpisodeMatch = FindEpisodePattern(outputFileName);
+        if (currentEpisodeMatch is null)
         {
             return null;
         }
 
-        var outputFileName = Path.GetFileNameWithoutExtension(archiveOutputPath);
-        var currentEpisodeMatch = FindEpisodePattern(outputFileName);
-        if (currentEpisodeMatch is null)
+        var currentTitleKeys = new[]
+            {
+                BuildEpisodeVariantTitleKey(title),
+                BuildEpisodeVariantTitleKey(ExtractArchiveEpisodeTitle(outputFileName, currentEpisodeMatch))
+            }
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (currentTitleKeys.Count == 0)
         {
             return null;
         }
@@ -353,7 +360,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 entry.FileName,
                 TitleKey = BuildEpisodeVariantTitleKey(ExtractArchiveEpisodeTitle(entry.FileName, entry.Match!))
             })
-            .Where(entry => string.Equals(entry.TitleKey, currentTitleKey, StringComparison.OrdinalIgnoreCase))
+            .Where(entry => currentTitleKeys.Contains(entry.TitleKey, StringComparer.OrdinalIgnoreCase))
             .Select(entry => new
             {
                 Season = EpisodeFileNameHelper.NormalizeSeasonNumber(entry.Match.Groups["season"].Value),

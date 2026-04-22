@@ -217,6 +217,13 @@ internal sealed partial class BatchMuxViewModel
                 },
                 cancellationToken);
 
+            if (recycleResult.WasCanceled)
+            {
+                _dialogService.ShowWarning(
+                    "Warnung",
+                    BuildCanceledDoneRecycleWarningMessage(recycleResult));
+            }
+
             if (recycleResult.FailedFiles.Count > 0)
             {
                 _dialogService.ShowWarning(
@@ -234,6 +241,18 @@ internal sealed partial class BatchMuxViewModel
         {
             _dialogService.OpenPathWithDefaultApp(doneDirectory);
         }
+    }
+
+    private static string BuildCanceledDoneRecycleWarningMessage(FileRecycleResult recycleResult)
+    {
+        if (recycleResult.PendingFiles.Count == 0)
+        {
+            return "Das Verschieben des Done-Ordners in den Papierkorb wurde vorzeitig abgebrochen. Bereits verschobene Dateien bleiben im Papierkorb.";
+        }
+
+        return "Das Verschieben des Done-Ordners in den Papierkorb wurde vorzeitig abgebrochen. "
+            + "Bereits verschobene Dateien bleiben im Papierkorb; folgende Dateien verbleiben im Done-Ordner:\n"
+            + string.Join(Environment.NewLine, recycleResult.PendingFiles.Select(Path.GetFileName));
     }
 
     private void ShowBatchRunArtifactInfo(BatchRunLogSaveResult logSaveResult)
