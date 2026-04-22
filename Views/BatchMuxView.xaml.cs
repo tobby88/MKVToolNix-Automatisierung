@@ -67,8 +67,8 @@ public partial class BatchMuxView : UserControl
     /// </summary>
     private void EpisodeItemsGrid_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is DataGrid
-            && DataGridSelectionInput.IsSelectionColumnSource(e.OriginalSource as DependencyObject))
+        if (sender is DataGrid dataGrid
+            && DataGridSelectionInput.IsSelectionColumnSource(dataGrid, e.OriginalSource as DependencyObject))
         {
             e.Handled = true;
             return;

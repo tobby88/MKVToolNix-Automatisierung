@@ -68,8 +68,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
         ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory), unexpectedCommandErrorHandler);
-        SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, () => !_isBusy && _episodeCollection.HasUnselectedVisibleItems);
-        DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, () => !_isBusy && _episodeCollection.HasSelectedVisibleItems);
+        SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, CanSelectAllEpisodes);
+        DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, CanDeselectAllEpisodes);
         ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => !_isBusy && SelectedEpisodeItem is not null);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
         OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0, unexpectedCommandErrorHandler);
@@ -283,6 +283,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
                 {
                     RefreshAutomaticOutputPath(item, refreshOutputTargetCollisions: false);
                 }
+                else
+                {
+                    item.RefreshOutputPathArchiveContext(_services.OutputPaths.IsArchivePath(item.OutputPath));
+                }
 
                 item.RefreshArchivePresence();
             }
@@ -350,6 +354,29 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         DeselectAllEpisodesCommand.RaiseCanExecuteChanged();
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         RunBatchCommand.RaiseCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Aktiviert die Sammelaktion auch dann, wenn unter einem Filter nur noch ausgeblendete
+    /// Batch-Einträge ausgewählt werden könnten und deshalb erst der "auch versteckte Elemente"
+    ///-Dialog den restlichen Aktionspfad freischaltet.
+    /// </summary>
+    private bool CanSelectAllEpisodes()
+    {
+        return !_isBusy
+            && (_episodeCollection.HasUnselectedVisibleItems
+                || (SelectedFilterMode.Key != BatchEpisodeFilterMode.All && _episodeCollection.HasUnselectedItems));
+    }
+
+    /// <summary>
+    /// Aktiviert die Sammelaktion spiegelbildlich auch bei ausschließlich versteckt ausgewählten
+    /// Einträgen, damit der Benutzer die globale Aktion unter aktivem Filter weiterhin erreicht.
+    /// </summary>
+    private bool CanDeselectAllEpisodes()
+    {
+        return !_isBusy
+            && (_episodeCollection.HasSelectedVisibleItems
+                || (SelectedFilterMode.Key != BatchEpisodeFilterMode.All && _episodeCollection.HasSelectedItems));
     }
 
     /// <summary>
@@ -460,6 +487,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     internal void UnfreezeSelectedItemPlanSummaryAfterExecution()
     {
         _isSelectedItemPlanSummaryFrozen = false;
+        if (SelectedEpisodeItem is not null)
+        {
+            ScheduleSelectedItemPlanSummaryRefresh();
+        }
     }
 
     /// <summary>

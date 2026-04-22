@@ -129,71 +129,83 @@ internal sealed partial class BatchMuxViewModel
         IReadOnlyList<BatchEpisodeItemViewModel> readyItems,
         CancellationToken cancellationToken = default)
     {
-        var pendingSourceItems = readyItems
-            .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
-            .ToList();
-
-        var pendingMetadataItems = readyItems
-            .Where(item => item.RequiresMetadataReview && !item.IsMetadataReviewApproved)
-            .ToList();
-
-        if (pendingSourceItems.Count == 0
-            && pendingMetadataItems.Count == 0
-            && !readyItems.Any(item => item.HasPendingPlanReview))
-        {
-            SetStatus("Keine offenen Pflichtprüfungen", ProgressValue);
-            return true;
-        }
-
         SetStatus("Pflichtprüfungen werden vorbereitet...", 0);
-
-        foreach (var item in pendingSourceItems)
+        var processedAnyChecks = false;
+        while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            SelectedEpisodeItem = item;
-            var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
-            if (!approved)
+            var pendingSourceItems = readyItems
+                .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
+                .ToList();
+            if (pendingSourceItems.Count > 0)
             {
-                return false;
-            }
-        }
-
-        foreach (var item in pendingMetadataItems)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            SelectedEpisodeItem = item;
-            var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true);
-            if (!approved)
-            {
-                return false;
-            }
-        }
-
-        var pendingPlanReviewItems = readyItems
-            .Where(item => item.HasPendingPlanReview)
-            .ToList();
-        if (pendingPlanReviewItems.Count > 0)
-        {
-            foreach (var item in pendingPlanReviewItems)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                SelectedEpisodeItem = item;
-                if (!_dialogService.ConfirmPlanReview(item.Title, item.PrimaryActionablePlanNote))
+                processedAnyChecks = true;
+                foreach (var item in pendingSourceItems)
                 {
-                    SetStatus("Hinweisprüfung abgebrochen", ProgressValue);
-                    return false;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    SelectedEpisodeItem = item;
+                    var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
+                    if (!approved)
+                    {
+                        return false;
+                    }
                 }
 
-                item.ApprovePlanReview();
-                item.RefreshArchivePresence();
+                continue;
             }
 
-            RefreshOverview();
-            RefreshCommands();
-            SetStatus("Fachliche Hinweise freigegeben", ProgressValue);
-        }
+            var pendingMetadataItems = readyItems
+                .Where(item => item.RequiresMetadataReview && !item.IsMetadataReviewApproved)
+                .ToList();
+            if (pendingMetadataItems.Count > 0)
+            {
+                processedAnyChecks = true;
+                foreach (var item in pendingMetadataItems)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    SelectedEpisodeItem = item;
+                    var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true);
+                    if (!approved)
+                    {
+                        return false;
+                    }
+                }
 
-        return true;
+                continue;
+            }
+
+            var pendingPlanReviewItems = readyItems
+                .Where(item => item.HasPendingPlanReview)
+                .ToList();
+            if (pendingPlanReviewItems.Count > 0)
+            {
+                processedAnyChecks = true;
+                foreach (var item in pendingPlanReviewItems)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    SelectedEpisodeItem = item;
+                    if (!_dialogService.ConfirmPlanReview(item.Title, item.PrimaryActionablePlanNote))
+                    {
+                        SetStatus("Hinweisprüfung abgebrochen", ProgressValue);
+                        return false;
+                    }
+
+                    item.ApprovePlanReview();
+                    item.RefreshArchivePresence();
+                }
+
+                RefreshOverview();
+                RefreshCommands();
+                SetStatus("Fachliche Hinweise freigegeben", ProgressValue);
+                continue;
+            }
+
+            if (!processedAnyChecks)
+            {
+                SetStatus("Keine offenen Pflichtprüfungen", ProgressValue);
+            }
+
+            return true;
+        }
     }
 
     /// <summary>

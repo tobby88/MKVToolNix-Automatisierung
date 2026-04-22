@@ -447,6 +447,25 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task ReviewPendingSourcesCommand_SourceReviewIntroducesMetadataReview_ProcessesMetadataInSameRun()
+    {
+        var workflow = new SourceChangingEpisodeReviewWorkflow();
+        var viewModel = CreateBatchViewModel(workflow);
+        var item = CreateManualCheckItem();
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.ReviewPendingSourcesCommand.Execute(null);
+        await workflow.WaitForMetadataReviewAsync();
+
+        Assert.Equal(1, workflow.ManualSourceReviewCallCount);
+        Assert.Equal(1, workflow.MetadataReviewCallCount);
+        Assert.False(item.RequiresManualCheck);
+        Assert.False(item.RequiresMetadataReview);
+        Assert.True(item.IsMetadataReviewApproved);
+    }
+
+    [Fact]
     public void SelectAllEpisodesCommand_WithActiveFilter_AsksWhetherHiddenItemsShouldBeIncluded()
     {
         var dialogService = new FakeDialogService
@@ -498,6 +517,56 @@ public sealed class BatchMetadataReviewTests
         Assert.True(pendingItem.IsSelected);
         Assert.False(hiddenReadyItem.IsSelected);
         Assert.Contains("Gefilterte Episoden", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SelectAllEpisodesCommand_WithActiveFilter_RemainsReachable_WhenOnlyHiddenItemsAreUnselected()
+    {
+        var dialogService = new FakeDialogService
+        {
+            ConfirmApplyBatchSelectionToAllItemsResult = true
+        };
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var visiblePendingItem = CreatePendingReviewItem();
+        visiblePendingItem.IsSelected = true;
+        var hiddenReadyItem = CreateReadyItem(@"C:\Temp\ready-hidden.mp4", @"C:\Temp\ready-hidden.mkv");
+        hiddenReadyItem.IsSelected = false;
+
+        viewModel.EpisodeItems.Add(visiblePendingItem);
+        viewModel.EpisodeItems.Add(hiddenReadyItem);
+        viewModel.SelectedFilterMode = viewModel.FilterModes.Single(mode => mode.Key == BatchEpisodeFilterMode.PendingChecks);
+
+        Assert.True(viewModel.SelectAllEpisodesCommand.CanExecute(null));
+
+        viewModel.SelectAllEpisodesCommand.Execute(null);
+
+        Assert.Equal(1, dialogService.ConfirmApplyBatchSelectionToAllItemsCallCount);
+        Assert.True(hiddenReadyItem.IsSelected);
+    }
+
+    [Fact]
+    public void DeselectAllEpisodesCommand_WithActiveFilter_RemainsReachable_WhenOnlyHiddenItemsAreSelected()
+    {
+        var dialogService = new FakeDialogService
+        {
+            ConfirmApplyBatchSelectionToAllItemsResult = true
+        };
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var visiblePendingItem = CreatePendingReviewItem();
+        visiblePendingItem.IsSelected = false;
+        var hiddenReadyItem = CreateReadyItem(@"C:\Temp\selected-hidden.mp4", @"C:\Temp\selected-hidden.mkv");
+        hiddenReadyItem.IsSelected = true;
+
+        viewModel.EpisodeItems.Add(visiblePendingItem);
+        viewModel.EpisodeItems.Add(hiddenReadyItem);
+        viewModel.SelectedFilterMode = viewModel.FilterModes.Single(mode => mode.Key == BatchEpisodeFilterMode.PendingChecks);
+
+        Assert.True(viewModel.DeselectAllEpisodesCommand.CanExecute(null));
+
+        viewModel.DeselectAllEpisodesCommand.Execute(null);
+
+        Assert.Equal(1, dialogService.ConfirmApplyBatchSelectionToAllItemsCallCount);
+        Assert.False(hiddenReadyItem.IsSelected);
     }
 
     [Fact]
@@ -611,6 +680,86 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStartsCoveringIt()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
+        var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
+        var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
+        Directory.CreateDirectory(oldArchiveRoot);
+        Directory.CreateDirectory(newArchiveRoot);
+        try
+        {
+            var outputPath = Path.Combine(newArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            File.WriteAllText(outputPath, "existing");
+
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
+            var item = CreateReadyItem(@"C:\Temp\manual-archive.mp4", outputPath);
+            item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: false);
+            item.RefreshArchivePresence();
+            viewModel.EpisodeItems.Add(item);
+
+            Assert.False(item.HasArchiveComparisonTarget);
+            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+
+            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
+
+            viewModel.HandleArchiveConfigurationChanged();
+
+            Assert.True(item.HasArchiveComparisonTarget);
+            Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStopsCoveringIt()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
+        var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
+        var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
+        Directory.CreateDirectory(oldArchiveRoot);
+        Directory.CreateDirectory(newArchiveRoot);
+        try
+        {
+            var outputPath = Path.Combine(oldArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            File.WriteAllText(outputPath, "existing");
+
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
+            var item = CreateReadyItem(@"C:\Temp\manual-unarchive.mp4", outputPath);
+            item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: true);
+            item.RefreshArchivePresence();
+            viewModel.EpisodeItems.Add(item);
+
+            Assert.True(item.HasArchiveComparisonTarget);
+            Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
+
+            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
+
+            viewModel.HandleArchiveConfigurationChanged();
+
+            Assert.False(item.HasArchiveComparisonTarget);
+            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task FreezeSelectedItemPlanSummaryForExecution_CancelsPendingSelectionRefresh()
     {
         var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
@@ -644,6 +793,28 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal("Stabile Batch-Details", item.PlanSummaryText);
         Assert.Equal("Stabil", item.UsageSummary?.ArchiveAction);
         Assert.Equal("Bleibt waehrend des Batch-Laufs sichtbar", item.UsageSummary?.ArchiveDetails);
+    }
+
+    [Fact]
+    public async Task UnfreezeSelectedItemPlanSummaryAfterExecution_ReschedulesRefreshForSelectedItem()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var item = CreateReadyItem(@"C:\Temp\episode-refresh.mp4", @"C:\Temp\episode-refresh.mkv");
+        viewModel.SelectedEpisodeItem = item;
+
+        var pendingRefresh = viewModel.SelectedItemPlanSummaryRefreshTask;
+        viewModel.FreezeSelectedItemPlanSummaryForExecution();
+        if (pendingRefresh is not null)
+        {
+            await pendingRefresh;
+        }
+
+        viewModel.UnfreezeSelectedItemPlanSummaryAfterExecution();
+
+        var resumedRefresh = viewModel.SelectedItemPlanSummaryRefreshTask;
+        Assert.NotNull(resumedRefresh);
+        await resumedRefresh!;
+        Assert.Null(viewModel.SelectedItemPlanSummaryRefreshTask);
     }
 
     [Fact]
@@ -724,6 +895,53 @@ public sealed class BatchMetadataReviewTests
                 QueryWasAttempted: true,
                 QuerySucceeded: false),
             outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+    }
+
+    private static BatchEpisodeItemViewModel CreateManualCheckItem()
+    {
+        return BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\manual-check.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"C:\Temp\manual-check.mp4",
+                RequiresManualCheck = true,
+                ManualCheckFilePaths = [@"C:\Temp\manual-check.mp4"]
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\manual-check.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+    }
+
+    private static BatchEpisodeItemViewModel CreateReadyItem(string requestedMainVideoPath, string outputPath)
+    {
+        return BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: requestedMainVideoPath,
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = requestedMainVideoPath,
+                SuggestedOutputFilePath = outputPath
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"),
+                StatusText: "TVDB-Zuordnung automatisch bestätigt.",
+                ConfidenceScore: 100,
+                RequiresReview: false,
+                QueryWasAttempted: true,
+                QuerySucceeded: true),
+            outputPath: outputPath,
             statusKind: BatchEpisodeStatusKind.Ready,
             isSelected: true);
     }
@@ -837,6 +1055,81 @@ public sealed class BatchMetadataReviewTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             await _metadataReviewCompletion.Task.WaitAsync(timeout.Token);
         }
+    }
+
+    private sealed class SourceChangingEpisodeReviewWorkflow : IEpisodeReviewWorkflow
+    {
+        private readonly TaskCompletionSource _metadataReviewCompletion = new();
+
+        public int ManualSourceReviewCallCount { get; private set; }
+
+        public int MetadataReviewCallCount { get; private set; }
+
+        public Task<bool> ReviewManualSourceAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string openFailedStatusText,
+            string approvedStatusText,
+            string alternativeStatusText,
+            Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync)
+        {
+            ManualSourceReviewCallCount++;
+            var batchItem = Assert.IsType<BatchEpisodeItemViewModel>(item);
+            batchItem.ApplyDetection(
+                requestedMainVideoPath: batchItem.RequestedMainVideoPath,
+                localGuess: CreateLocalGuess(),
+                detected: CreateDetectedEpisode() with
+                {
+                    MainVideoPath = batchItem.RequestedMainVideoPath,
+                    RequiresManualCheck = false,
+                    ManualCheckFilePaths = []
+                },
+                metadataResolution: new EpisodeMetadataResolutionResult(
+                    CreateLocalGuess(),
+                    Selection: null,
+                    StatusText: "TVDB-Prüfung erforderlich.",
+                    ConfidenceScore: 25,
+                    RequiresReview: true,
+                    QueryWasAttempted: true,
+                    QuerySucceeded: false),
+                outputPath: batchItem.OutputPath,
+                statusKind: BatchEpisodeStatusKind.Ready,
+                isArchiveTargetPath: false);
+            return Task.FromResult(true);
+        }
+
+        public Task<EpisodeMetadataReviewOutcome> ReviewMetadataAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string localApprovedStatusText,
+            string tvdbApprovedStatusText,
+            Action onEpisodeChanged)
+        {
+            MetadataReviewCallCount++;
+            item.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02"));
+            onEpisodeChanged();
+            item.ApproveMetadataReview("TVDB manuell bestätigt.");
+            _metadataReviewCompletion.TrySetResult();
+            return Task.FromResult(EpisodeMetadataReviewOutcome.AppliedTvdbSelection);
+        }
+
+        public async Task WaitForMetadataReviewAsync()
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _metadataReviewCompletion.Task.WaitAsync(timeout.Token);
+        }
+    }
+
+    private static BatchModuleServices GetBatchServices(BatchMuxViewModel viewModel)
+    {
+        var field = typeof(BatchMuxViewModel).GetField("_services", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        return Assert.IsType<BatchModuleServices>(field?.GetValue(viewModel));
     }
 
     private sealed class FakeDialogService : IUserDialogService

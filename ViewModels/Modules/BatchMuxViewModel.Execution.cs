@@ -30,11 +30,11 @@ internal sealed partial class BatchMuxViewModel
 
         var cancellationToken = CancellationToken.None;
         Action<string>? appendBatchRunLog = null;
+        var planSummaryFrozenForExecution = false;
         try
         {
             SetBusy(true);
             cancellationToken = BeginBatchOperation(BatchOperationKind.Execution);
-            FreezeSelectedItemPlanSummaryForExecution();
             // Persistierte Batch-Logs sollen genau diesen Lauf enthalten, ohne ältere Scan-Einträge mitzuschleppen.
             var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
             void AppendBatchRunLogCore(string line)
@@ -82,6 +82,8 @@ internal sealed partial class BatchMuxViewModel
                 return;
             }
 
+            FreezeSelectedItemPlanSummaryForExecution();
+            planSummaryFrozenForExecution = true;
             await _executionRunner.PrepareWorkingCopiesAsync(
                 copyPreparation,
                 progressTracker,
@@ -148,7 +150,11 @@ internal sealed partial class BatchMuxViewModel
         }
         finally
         {
-            UnfreezeSelectedItemPlanSummaryAfterExecution();
+            if (planSummaryFrozenForExecution)
+            {
+                UnfreezeSelectedItemPlanSummaryAfterExecution();
+            }
+
             CompleteBatchOperation(BatchOperationKind.Execution);
             SetBusy(false);
         }

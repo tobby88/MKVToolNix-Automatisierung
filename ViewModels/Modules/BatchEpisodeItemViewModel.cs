@@ -406,6 +406,24 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
     }
 
+    /// <summary>
+    /// Bewertet den aktuellen Zielpfad erneut gegen die aktive Archivkonfiguration, ohne den
+    /// manuellen/automatischen Ursprung des Pfades oder den Pfad selbst zu verändern.
+    /// </summary>
+    /// <param name="isArchiveTargetPath">
+    /// Neuer Archivkontext des bereits gesetzten <see cref="EpisodeEditModel.OutputPath"/>.
+    /// </param>
+    internal void RefreshOutputPathArchiveContext(bool isArchiveTargetPath)
+    {
+        if (_isArchiveTargetPath == isArchiveTargetPath)
+        {
+            return;
+        }
+
+        _isArchiveTargetPath = isArchiveTargetPath;
+        MarkComparisonInputsChanged();
+    }
+
     public override void ApproveCurrentReviewTarget()
     {
         base.ApproveCurrentReviewTarget();

@@ -183,6 +183,8 @@
                           AutoGenerateColumns="False"
                           IsReadOnly="True"
                           IsEnabled="{Binding IsInteractive, Mode=OneWay}"
+                          CanUserSortColumns="False"
+                          CanUserReorderColumns="False"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
                           HeadersVisibility="Column"

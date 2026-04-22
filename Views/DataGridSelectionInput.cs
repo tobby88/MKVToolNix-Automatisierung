@@ -14,13 +14,19 @@ internal static class DataGridSelectionInput
     /// <summary>
     /// Prüft, ob ein Ereignis aus der fachlichen Auswahlspalte stammt.
     /// </summary>
+    /// <param name="dataGrid">Das betroffene DataGrid mit seiner deklarativen Spaltenreihenfolge.</param>
     /// <param name="source">Ursprüngliches WPF-Quellelement des Ereignisses.</param>
-    /// <param name="toggleColumnDisplayIndex">DisplayIndex der Auswahlspalte.</param>
+    /// <param name="toggleColumnIndex">Deklarativer Spaltenindex der Auswahlspalte.</param>
     /// <returns><see langword="true"/>, wenn das Ereignis innerhalb der Auswahlspalte ausgelöst wurde.</returns>
-    public static bool IsSelectionColumnSource(DependencyObject? source, int toggleColumnDisplayIndex = 0)
+    public static bool IsSelectionColumnSource(DataGrid dataGrid, DependencyObject? source, int toggleColumnIndex = 0)
     {
+        ArgumentNullException.ThrowIfNull(dataGrid);
+
         var cell = FindVisualParent<DataGridCell>(source);
-        return cell?.Column is not null && cell.Column.DisplayIndex == toggleColumnDisplayIndex;
+        var selectionColumn = ResolveSelectionColumn(dataGrid, toggleColumnIndex);
+        return cell?.Column is not null
+            && selectionColumn is not null
+            && ReferenceEquals(cell.Column, selectionColumn);
     }
 
     /// <summary>
@@ -74,12 +80,12 @@ internal static class DataGridSelectionInput
         ArgumentNullException.ThrowIfNull(e);
         ArgumentNullException.ThrowIfNull(toggleCommand);
 
-        if (e.Handled || e.ChangedButton != MouseButton.Left)
+        if (e.Handled || e.ChangedButton != MouseButton.Left || e.ClickCount > 1)
         {
             return false;
         }
 
-        if (!IsSelectionColumnSource(e.OriginalSource as DependencyObject, toggleColumnDisplayIndex))
+        if (!IsSelectionColumnSource(dataGrid, e.OriginalSource as DependencyObject, toggleColumnDisplayIndex))
         {
             return false;
         }
@@ -120,6 +126,18 @@ internal static class DataGridSelectionInput
         var item = row?.Item ?? dataGrid.SelectedItem ?? dataGrid.CurrentCell.Item;
         var column = cell?.Column ?? dataGrid.CurrentCell.Column;
         return new DataGridSelectionTarget(item, column);
+    }
+
+    /// <summary>
+    /// Liefert die fachliche Auswahlspalte anhand ihrer deklarativen Position im Grid.
+    /// Diese Zuordnung bleibt auch dann stabil, wenn WPF die sichtbaren DisplayIndices der
+    /// Spalten zur Laufzeit verändert.
+    /// </summary>
+    private static DataGridColumn? ResolveSelectionColumn(DataGrid dataGrid, int toggleColumnIndex)
+    {
+        return toggleColumnIndex >= 0 && toggleColumnIndex < dataGrid.Columns.Count
+            ? dataGrid.Columns[toggleColumnIndex]
+            : null;
     }
 
     /// <summary>

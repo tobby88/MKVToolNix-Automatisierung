@@ -134,6 +134,16 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
     public int PendingCheckCount => _items.Count(item => item.IsSelected && item.HasPendingChecks);
 
+    /// <summary>
+    /// Gibt an, ob es unabhängig vom aktiven Filter noch nicht ausgewählte Batch-Einträge gibt.
+    /// </summary>
+    public bool HasUnselectedItems => _items.Any(item => !item.IsSelected);
+
+    /// <summary>
+    /// Gibt an, ob es unabhängig vom aktiven Filter aktuell ausgewählte Batch-Einträge gibt.
+    /// </summary>
+    public bool HasSelectedItems => _items.Any(item => item.IsSelected);
+
     public bool HasUnselectedVisibleItems => VisibleItems.Any(item => !item.IsSelected);
 
     public bool HasSelectedVisibleItems => VisibleItems.Any(item => item.IsSelected);
