@@ -11,8 +11,11 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
 {
     private static readonly Uri DownloadsPageUri = new("https://mkvtoolnix.download/downloads.html");
+    private static readonly Regex PortableRowRegex = new(
+        @"<tr>\s*<td>\s*Portable\s*\(64-bit\)\s*</td>\s*<td><a\s+href=""(?<url>[^""]*mkvtoolnix-64-bit-(?<version>\d+(?:\.\d+)+)\.7z)""[^>]*>.*?</a></td>\s*<td>.*?data-checksum=""(?<sha256>[a-fA-F0-9]{64})""",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex DownloadRegex = new(
-        @"(?<url>https://mkvtoolnix\.download/windows/releases/[^""'\s>]+/mkvtoolnix-64-bit-(?<version>\d+(?:\.\d+)+)\.7z)",
+        @"(?<url>(?:https://mkvtoolnix\.download/)?windows/releases/[^""'\s>]+/mkvtoolnix-64-bit-(?<version>\d+(?:\.\d+)+)\.7z)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly HttpClient _httpClient;
 
@@ -32,6 +35,10 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
         var downloadsHtml = await downloadsResponse.Content.ReadAsStringAsync(cancellationToken);
 
         var package = ParseLatestPackageFromDownloadsPage(downloadsHtml);
+        if (!string.IsNullOrWhiteSpace(package.ExpectedSha256))
+        {
+            return package;
+        }
 
         using var checksumResponse = await _httpClient.GetAsync(new Uri(package.DownloadUri, "sha256sums.txt"), cancellationToken);
         checksumResponse.EnsureSuccessStatusCode();
@@ -50,14 +57,26 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(downloadsHtml);
 
-        var candidates = DownloadRegex.Matches(downloadsHtml)
+        var inlineCandidates = PortableRowRegex.Matches(downloadsHtml)
             .Select(match => new
             {
                 Url = match.Groups["url"].Value,
-                Version = match.Groups["version"].Value
+                Version = match.Groups["version"].Value,
+                Sha256 = match.Groups["sha256"].Value
             })
             .DistinctBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        var candidates = inlineCandidates.Count > 0
+            ? inlineCandidates
+            : DownloadRegex.Matches(downloadsHtml)
+                .Select(match => new
+                {
+                    Url = match.Groups["url"].Value,
+                    Version = match.Groups["version"].Value,
+                    Sha256 = string.Empty
+                })
+                .DistinctBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
         if (candidates.Count == 0)
         {
@@ -67,9 +86,11 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
         var selected = candidates
             .OrderByDescending(candidate => ManagedToolParsing.ParseVersionParts(candidate.Version), ManagedToolParsing.VersionPartsComparer)
             .First();
-        var downloadUri = new Uri(selected.Url, UriKind.Absolute);
+        var downloadUri = new Uri(DownloadsPageUri, selected.Url);
         var archiveFileName = Path.GetFileName(downloadUri.LocalPath);
-        var checksum = ManagedToolParsing.TryReadSha256FromChecksumText(checksumText, archiveFileName);
+        var checksum = !string.IsNullOrWhiteSpace(selected.Sha256)
+            ? selected.Sha256
+            : ManagedToolParsing.TryReadSha256FromChecksumText(checksumText, archiveFileName);
 
         return new ManagedToolPackage(
             ManagedToolKind.MkvToolNix,

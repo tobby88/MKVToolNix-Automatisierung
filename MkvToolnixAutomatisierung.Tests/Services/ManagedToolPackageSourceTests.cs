@@ -10,22 +10,44 @@ public sealed class ManagedToolPackageSourceTests
     {
         const string downloadsHtml = """
             <html><body>
-            <a href="https://mkvtoolnix.download/windows/releases/97.0/mkvtoolnix-64-bit-97.0.7z">old</a>
-            <a href="https://mkvtoolnix.download/windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z">new</a>
+            <tr>
+              <td>Portable (64-bit)</td>
+              <td><a href="windows/releases/97.0/mkvtoolnix-64-bit-97.0.7z">old</a></td>
+              <td><img data-checksum="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"></td>
+            </tr>
+            <tr>
+              <td>Portable (64-bit)</td>
+              <td><a href="windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z">new</a></td>
+              <td><img data-checksum="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"></td>
+            </tr>
             </body></html>
             """;
-        const string checksumText = """
-            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  mkvtoolnix-64-bit-97.0.7z
-            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  mkvtoolnix-64-bit-98.0.7z
-            """;
 
-        var package = MkvToolNixPackageSource.ParseLatestPackageFromDownloadsPage(downloadsHtml, checksumText);
+        var package = MkvToolNixPackageSource.ParseLatestPackageFromDownloadsPage(downloadsHtml);
 
         Assert.Equal(ManagedToolKind.MkvToolNix, package.Kind);
         Assert.Equal("98.0", package.VersionToken);
         Assert.Equal("98.0", package.DisplayVersion);
         Assert.Equal("mkvtoolnix-64-bit-98.0.7z", package.ArchiveFileName);
         Assert.Equal("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", package.ExpectedSha256);
+        Assert.Equal("https://mkvtoolnix.download/windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z", package.DownloadUri.ToString());
+    }
+
+    [Fact]
+    public void ParseLatestPackageFromDownloadsPage_FallsBackToChecksumListing_WhenInlineChecksumIsMissing()
+    {
+        const string downloadsHtml = """
+            <html><body>
+            <a href="windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z">new</a>
+            </body></html>
+            """;
+        const string checksumText = """
+            cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc  mkvtoolnix-64-bit-98.0.7z
+            """;
+
+        var package = MkvToolNixPackageSource.ParseLatestPackageFromDownloadsPage(downloadsHtml, checksumText);
+
+        Assert.Equal("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", package.ExpectedSha256);
         Assert.Equal("https://mkvtoolnix.download/windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z", package.DownloadUri.ToString());
     }
 
@@ -88,4 +110,3 @@ public sealed class ManagedToolPackageSourceTests
         Assert.Equal("dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", package.ExpectedSha256);
     }
 }
-
