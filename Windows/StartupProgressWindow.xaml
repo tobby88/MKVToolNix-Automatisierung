@@ -26,13 +26,13 @@
         <TextBlock Grid.Row="1"
                    Margin="0,12,0,0"
                    FontWeight="SemiBold"
-                   Text="{Binding StatusText}" />
+                   Text="{Binding StatusText, Mode=OneWay}" />
 
         <TextBlock Grid.Row="2"
                    Margin="0,6,0,0"
                    Foreground="#44515D"
                    TextWrapping="Wrap"
-                   Text="{Binding DetailText}" />
+                   Text="{Binding DetailText, Mode=OneWay}" />
 
         <Grid Grid.Row="3" Margin="0,18,0,0">
             <Grid.ColumnDefinitions>
@@ -44,14 +44,14 @@
                          Height="18"
                          Minimum="0"
                          Maximum="100"
-                         Value="{Binding ProgressPercent}"
-                         IsIndeterminate="{Binding IsIndeterminate}" />
+                         Value="{Binding ProgressPercent, Mode=OneWay}"
+                         IsIndeterminate="{Binding IsIndeterminate, Mode=OneWay}" />
 
             <TextBlock Grid.Column="1"
                        Margin="12,0,0,0"
                        VerticalAlignment="Center"
                        Foreground="#44515D"
-                       Text="{Binding ProgressText}" />
+                       Text="{Binding ProgressText, Mode=OneWay}" />
         </Grid>
     </Grid>
 </Window>
