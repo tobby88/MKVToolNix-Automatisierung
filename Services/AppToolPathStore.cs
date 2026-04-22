@@ -55,12 +55,22 @@ public sealed class AppToolPathStore
 public sealed class AppToolPathSettings
 {
     /// <summary>
-    /// Optionaler Pfad zur ffprobe-Executable.
+    /// Persistenter Zustand der automatisch verwalteten MKVToolNix-Installation.
+    /// </summary>
+    public ManagedToolSettings ManagedMkvToolNix { get; set; } = new();
+
+    /// <summary>
+    /// Persistenter Zustand der automatisch verwalteten ffprobe-Installation.
+    /// </summary>
+    public ManagedToolSettings ManagedFfprobe { get; set; } = new();
+
+    /// <summary>
+    /// Optionaler manueller Override-Pfad zur ffprobe-Executable.
     /// </summary>
     public string FfprobePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Pfad zu einer MKVToolNix-Executable oder zu ihrem Installationsordner.
+    /// Optionaler manueller Override-Pfad zu einer MKVToolNix-Executable oder zu ihrem Installationsordner.
     /// </summary>
     public string MkvToolNixDirectoryPath { get; set; } = string.Empty;
 
@@ -72,8 +82,51 @@ public sealed class AppToolPathSettings
     {
         return new AppToolPathSettings
         {
+            ManagedMkvToolNix = ManagedMkvToolNix.Clone(),
+            ManagedFfprobe = ManagedFfprobe.Clone(),
             FfprobePath = FfprobePath,
             MkvToolNixDirectoryPath = MkvToolNixDirectoryPath
+        };
+    }
+}
+
+/// <summary>
+/// Beschreibt den persistierten Zustand eines automatisch verwalteten Werkzeugs.
+/// </summary>
+public sealed class ManagedToolSettings
+{
+    /// <summary>
+    /// Gibt an, ob die Anwendung dieses Werkzeug selbst herunterladen und aktualisieren soll.
+    /// </summary>
+    public bool AutoManageEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Installationspfad der aktuell verwalteten Version.
+    /// </summary>
+    public string InstalledPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Vergleichbarer Versions- oder Revisionsschlüssel der aktuell verwalteten Version.
+    /// </summary>
+    public string InstalledVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Zeitpunkt der letzten erfolgreichen Online-Prüfung auf eine neue Version.
+    /// </summary>
+    public DateTimeOffset? LastCheckedUtc { get; set; }
+
+    /// <summary>
+    /// Erzeugt eine tiefe Kopie des gespeicherten Toolzustands.
+    /// </summary>
+    /// <returns>Geklontes Toolobjekt.</returns>
+    public ManagedToolSettings Clone()
+    {
+        return new ManagedToolSettings
+        {
+            AutoManageEnabled = AutoManageEnabled,
+            InstalledPath = InstalledPath,
+            InstalledVersion = InstalledVersion,
+            LastCheckedUtc = LastCheckedUtc
         };
     }
 }

@@ -42,10 +42,17 @@ internal sealed class AppCompositionRoot
 
         try
         {
+            var managedToolStartupResult = serviceProvider
+                .GetRequiredService<ManagedToolInstallerService>()
+                .EnsureManagedToolsAsync()
+                .GetAwaiter()
+                .GetResult();
+
             return new AppComposition(
                 serviceProvider,
                 serviceProvider.GetRequiredService<IUserDialogService>(),
                 serviceProvider.GetRequiredService<AppSettingsLoadResult>(),
+                managedToolStartupResult,
                 serviceProvider.GetRequiredService<MainWindowViewModel>());
         }
         catch
@@ -69,16 +76,19 @@ internal sealed class AppComposition : IDisposable
     /// <param name="serviceProvider">Gebauter Root-Provider, dessen Singleton-Lebensdauer an die App gebunden bleibt.</param>
     /// <param name="dialogService">Globaler Dialogdienst für Startwarnungen und spätere UI-Interaktion.</param>
     /// <param name="settingsLoadResult">Diagnoseobjekt des initialen Settings-Ladevorgangs.</param>
+    /// <param name="managedToolStartupResult">Ergebnis der automatischen Toolversorgung vor dem ersten UI-Frame.</param>
     /// <param name="mainWindowViewModel">Vollständig verdrahtetes Shell-ViewModel des Hauptfensters.</param>
     public AppComposition(
         ServiceProvider serviceProvider,
         IUserDialogService dialogService,
         AppSettingsLoadResult settingsLoadResult,
+        ManagedToolStartupResult managedToolStartupResult,
         MainWindowViewModel mainWindowViewModel)
     {
         _serviceProvider = serviceProvider;
         DialogService = dialogService;
         SettingsLoadResult = settingsLoadResult;
+        ManagedToolStartupResult = managedToolStartupResult;
         MainWindowViewModel = mainWindowViewModel;
     }
 
@@ -91,6 +101,11 @@ internal sealed class AppComposition : IDisposable
     /// Ergebnis des initialen Ladens der portablen Einstellungen inklusive möglicher Warnmeldung für den Startdialog.
     /// </summary>
     public AppSettingsLoadResult SettingsLoadResult { get; }
+
+    /// <summary>
+    /// Ergebnis der automatischen Toolprüfung und gegebenenfalls erfolgten Toolaktualisierung beim Start.
+    /// </summary>
+    public ManagedToolStartupResult ManagedToolStartupResult { get; }
 
     /// <summary>
     /// Zentrales Shell-ViewModel, das Modulnavigation und globale Tool-/Archivkonfiguration steuert.

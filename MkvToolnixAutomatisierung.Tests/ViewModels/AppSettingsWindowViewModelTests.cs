@@ -31,11 +31,32 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         _ = CreateFile(Path.Combine("mkvtoolnix", "mkvmerge.exe"));
         _ = CreateFile(Path.Combine("mkvtoolnix", "mkvpropedit.exe"));
         var ffprobePath = CreateFile(Path.Combine("ffmpeg", "ffprobe.exe"));
-        var viewModel = CreateViewModel();
+        var settingsStore = new AppSettingsStore();
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings
+            {
+                ManagedMkvToolNix = new ManagedToolSettings
+                {
+                    AutoManageEnabled = true,
+                    InstalledPath = @"C:\managed\mkvtoolnix",
+                    InstalledVersion = "98.0"
+                },
+                ManagedFfprobe = new ManagedToolSettings
+                {
+                    AutoManageEnabled = true,
+                    InstalledPath = @"C:\managed\ffprobe.exe",
+                    InstalledVersion = "2026-04-18T13-04-00Z"
+                }
+            }
+        });
+        var viewModel = CreateViewModel(settingsStore: settingsStore);
 
         viewModel.ArchiveRootDirectory = $"  {archiveRoot}  ";
         viewModel.MkvToolNixDirectoryPath = $"  {mkvToolNixDirectory}  ";
         viewModel.FfprobePath = $"  {ffprobePath}  ";
+        viewModel.AutoManageMkvToolNix = false;
+        viewModel.AutoManageFfprobe = false;
         viewModel.TvdbApiKey = "  tvdb-key  ";
         viewModel.TvdbPin = "  1234  ";
         viewModel.EmbyServerUrl = "  http://emby-test:8096  ";
@@ -48,6 +69,12 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal(archiveRoot, savedSettings.Archive?.DefaultSeriesArchiveRootPath);
         Assert.Equal(mkvToolNixDirectory, savedSettings.ToolPaths?.MkvToolNixDirectoryPath);
         Assert.Equal(ffprobePath, savedSettings.ToolPaths?.FfprobePath);
+        Assert.False(savedSettings.ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
+        Assert.False(savedSettings.ToolPaths?.ManagedFfprobe.AutoManageEnabled);
+        Assert.Equal(@"C:\managed\mkvtoolnix", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledPath);
+        Assert.Equal("98.0", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledVersion);
+        Assert.Equal(@"C:\managed\ffprobe.exe", savedSettings.ToolPaths?.ManagedFfprobe.InstalledPath);
+        Assert.Equal("2026-04-18T13-04-00Z", savedSettings.ToolPaths?.ManagedFfprobe.InstalledVersion);
         Assert.Equal("tvdb-key", savedSettings.Metadata?.TvdbApiKey);
         Assert.Equal("1234", savedSettings.Metadata?.TvdbPin);
         Assert.Equal("http://emby-test:8096", savedSettings.Emby?.ServerUrl);
@@ -80,9 +107,9 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         }
     }
 
-    private AppSettingsWindowViewModel CreateViewModel(IEmbyClient? embyClient = null)
+    private AppSettingsWindowViewModel CreateViewModel(IEmbyClient? embyClient = null, AppSettingsStore? settingsStore = null)
     {
-        var settingsStore = new AppSettingsStore();
+        settingsStore ??= new AppSettingsStore();
         var services = new AppSettingsModuleServices(
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),
             new AppToolPathStore(settingsStore),

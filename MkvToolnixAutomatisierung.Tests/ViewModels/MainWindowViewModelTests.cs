@@ -48,12 +48,12 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(configuredFfprobePath, viewModel.FfprobePath);
         Assert.Equal(Path.Combine(configuredMkvToolDirectory, "mkvmerge.exe"), viewModel.MkvMergePath);
         Assert.Contains(configuredFfprobePath, viewModel.MediaProbeStatusTooltip, StringComparison.Ordinal);
-        Assert.Contains("Der gespeicherte Pfad bleibt erhalten", viewModel.MediaProbeStatusTooltip, StringComparison.Ordinal);
+        Assert.Contains("Der manuelle ffprobe-Override ist aktuell nicht verwendbar", viewModel.MediaProbeStatusTooltip, StringComparison.Ordinal);
         Assert.Contains("Probe fehlgeschlagen.", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Constructor_PersistsResolvedToolPaths_WhenLocatorsFindWorkingExecutables()
+    public void Constructor_DoesNotOverwriteStoredOverrides_WhenLocatorsFindWorkingExecutables()
     {
         var ffprobePath = CreateFile(Path.Combine("ffmpeg", "ffprobe.exe"));
         var mkvMergePath = CreateFile(Path.Combine("mkvtoolnix", "mkvmerge.exe"));
@@ -76,8 +76,8 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.True(viewModel.IsMkvToolNixAvailable);
         Assert.Equal(ffprobePath, viewModel.FfprobePath);
         Assert.Equal(mkvMergePath, viewModel.MkvMergePath);
-        Assert.Equal(ffprobePath, savedSettings.FfprobePath);
-        Assert.Equal(Path.GetDirectoryName(mkvMergePath), savedSettings.MkvToolNixDirectoryPath);
+        Assert.Equal(Path.Combine(_tempDirectory, "stale", "ffprobe.exe"), savedSettings.FfprobePath);
+        Assert.Equal(Path.Combine(_tempDirectory, "stale-mkvtoolnix"), savedSettings.MkvToolNixDirectoryPath);
     }
 
     [Fact]

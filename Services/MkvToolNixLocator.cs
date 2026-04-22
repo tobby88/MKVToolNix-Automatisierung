@@ -47,7 +47,8 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
 
     private string FindToolPath(string executableName)
     {
-        var configuredPath = _toolPathStore.Load().MkvToolNixDirectoryPath;
+        var settings = _toolPathStore.Load();
+        var configuredPath = settings.MkvToolNixDirectoryPath;
         if (!string.IsNullOrWhiteSpace(configuredPath))
         {
             foreach (var configuredExecutable in EnumerateConfiguredExecutableCandidates(configuredPath, executableName))
@@ -55,6 +56,18 @@ public sealed class MkvToolNixLocator : IMkvToolNixLocator
                 if (File.Exists(configuredExecutable))
                 {
                     return configuredExecutable;
+                }
+            }
+        }
+
+        var managedPath = settings.ManagedMkvToolNix.InstalledPath;
+        if (!string.IsNullOrWhiteSpace(managedPath))
+        {
+            foreach (var managedExecutable in EnumerateConfiguredExecutableCandidates(managedPath, executableName))
+            {
+                if (File.Exists(managedExecutable))
+                {
+                    return managedExecutable;
                 }
             }
         }

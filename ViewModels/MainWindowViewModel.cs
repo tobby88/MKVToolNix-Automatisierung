@@ -280,9 +280,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             : NormalizeConfiguredExecutablePath(settings.FfprobePath, "ffprobe.exe");
         FfprobePath = resolvedFfprobePath;
         IsFfprobeAvailable = !string.IsNullOrWhiteSpace(detectedFfprobePath) && File.Exists(detectedFfprobePath);
-        SetFfprobeStatusDetail(string.IsNullOrWhiteSpace(settings.FfprobePath)
-            ? "Im Einstellungsdialog kann bei Bedarf ein expliziter ffprobe-Pfad hinterlegt werden."
-            : "Der gespeicherte Pfad bleibt erhalten. Im Einstellungsdialog kann ffprobe neu gesetzt werden.");
+        SetFfprobeStatusDetail(BuildFfprobeStatusDetail(settings, detectedFfprobePath));
 
         string? detectedMkvMergePath = null;
         string? detectedMkvPropEditPath = null;
@@ -310,32 +308,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             && !string.IsNullOrWhiteSpace(detectedMkvPropEditPath)
             && File.Exists(detectedMkvMergePath)
             && File.Exists(detectedMkvPropEditPath);
-        SetMkvToolNixStatusDetail(string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
-            ? "Im Einstellungsdialog kann bei Bedarf ein MKVToolNix-Ordner gesetzt werden."
-            : $"Der gespeicherte Pfad bleibt erhalten. {mkvToolNixError?.Message ?? "Im Einstellungsdialog kann der Pfad angepasst werden."}");
-
-        var normalizedFfprobePath = detectedFfprobePath;
-        var normalizedMkvToolPath = string.IsNullOrWhiteSpace(detectedMkvMergePath)
-            ? null
-            : Path.GetDirectoryName(detectedMkvMergePath) ?? detectedMkvMergePath;
-
-        if ((!string.IsNullOrWhiteSpace(normalizedFfprobePath)
-                && !string.Equals(settings.FfprobePath, normalizedFfprobePath, StringComparison.OrdinalIgnoreCase))
-            || (!string.IsNullOrWhiteSpace(normalizedMkvToolPath)
-                && !string.Equals(settings.MkvToolNixDirectoryPath, normalizedMkvToolPath, StringComparison.OrdinalIgnoreCase)))
-        {
-            if (!string.IsNullOrWhiteSpace(normalizedFfprobePath))
-            {
-                settings.FfprobePath = normalizedFfprobePath;
-            }
-
-            if (!string.IsNullOrWhiteSpace(normalizedMkvToolPath))
-            {
-                settings.MkvToolNixDirectoryPath = normalizedMkvToolPath;
-            }
-
-            _services.ToolPaths.Save(settings);
-        }
+        SetMkvToolNixStatusDetail(BuildMkvToolNixStatusDetail(settings, detectedMkvMergePath, mkvToolNixError));
     }
 
     private void RefreshArchiveStatus()
@@ -398,6 +371,56 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         return configuredPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             ? configuredPath
             : Path.Combine(configuredPath, executableName);
+    }
+
+    private static string BuildFfprobeStatusDetail(AppToolPathSettings settings, string? detectedFfprobePath)
+    {
+        if (!string.IsNullOrWhiteSpace(detectedFfprobePath))
+        {
+            if (string.Equals(settings.FfprobePath, detectedFfprobePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Aktiv über manuellen Override aus dem Einstellungsdialog.";
+            }
+
+            if (string.Equals(settings.ManagedFfprobe.InstalledPath, detectedFfprobePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrWhiteSpace(settings.ManagedFfprobe.InstalledVersion)
+                    ? "Automatisch verwaltete ffprobe aktiv."
+                    : $"Automatisch verwaltete ffprobe aktiv ({settings.ManagedFfprobe.InstalledVersion}).";
+            }
+
+            return "Aktiv über Windows-PATH oder den bisherigen Legacy-Fallback.";
+        }
+
+        return string.IsNullOrWhiteSpace(settings.FfprobePath)
+            ? "Im Einstellungsdialog kann bei Bedarf ein manueller ffprobe-Override gesetzt werden."
+            : "Der manuelle ffprobe-Override ist aktuell nicht verwendbar.";
+    }
+
+    private static string BuildMkvToolNixStatusDetail(AppToolPathSettings settings, string? detectedMkvMergePath, Exception? mkvToolNixError)
+    {
+        if (!string.IsNullOrWhiteSpace(detectedMkvMergePath))
+        {
+            var resolvedDirectory = Path.GetDirectoryName(detectedMkvMergePath) ?? detectedMkvMergePath;
+            if (string.Equals(settings.MkvToolNixDirectoryPath, resolvedDirectory, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(settings.MkvToolNixDirectoryPath, detectedMkvMergePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Aktiv über manuellen Override aus dem Einstellungsdialog.";
+            }
+
+            if (string.Equals(settings.ManagedMkvToolNix.InstalledPath, resolvedDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrWhiteSpace(settings.ManagedMkvToolNix.InstalledVersion)
+                    ? "Automatisch verwaltetes MKVToolNix aktiv."
+                    : $"Automatisch verwaltetes MKVToolNix aktiv ({settings.ManagedMkvToolNix.InstalledVersion}).";
+            }
+
+            return "Aktiv über bisherigen Legacy-Fallback.";
+        }
+
+        return string.IsNullOrWhiteSpace(settings.MkvToolNixDirectoryPath)
+            ? $"Im Einstellungsdialog kann bei Bedarf ein manueller Override gesetzt werden. {mkvToolNixError?.Message ?? string.Empty}".Trim()
+            : $"Der manuelle MKVToolNix-Override ist aktuell nicht verwendbar. {mkvToolNixError?.Message ?? string.Empty}".Trim();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

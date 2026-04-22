@@ -9,6 +9,7 @@ internal static class PortableAppStorage
 {
     private const string DataDirectoryName = "Data";
     private const string LogsDirectoryName = "Logs";
+    private const string ToolsDirectoryName = "Tools";
     private const string SettingsFileName = "settings.json";
     private const string ReadmeFileName = "README.md";
     private const string EmbeddedReadmeResourceName = "README.md";
@@ -18,6 +19,8 @@ internal static class PortableAppStorage
     public static string DataDirectory => Path.Combine(AppDirectory, DataDirectoryName);
 
     public static string LogsDirectory => Path.Combine(AppDirectory, LogsDirectoryName);
+
+    public static string ToolsDirectory => Path.Combine(AppDirectory, ToolsDirectoryName);
 
     public static string ReadmeFilePath => Path.Combine(AppDirectory, ReadmeFileName);
 
@@ -35,6 +38,7 @@ internal static class PortableAppStorage
         }
 
         EnsureOptionalDirectoryExists(LogsDirectory);
+        EnsureOptionalDirectoryExists(ToolsDirectory);
         EnsureBundledReadmeFileExists(warnings);
         VerifyDataDirectoryWritable(warnings);
 
@@ -51,6 +55,11 @@ internal static class PortableAppStorage
     public static void EnsureLogsDirectoryForSave()
     {
         Directory.CreateDirectory(LogsDirectory);
+    }
+
+    public static void EnsureToolsDirectoryForSave()
+    {
+        Directory.CreateDirectory(ToolsDirectory);
     }
 
     private static bool EnsureDataDirectoryExists(List<string> warnings)

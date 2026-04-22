@@ -26,6 +26,11 @@ internal sealed class AppBootstrapper : IDisposable
             _composition.DialogService.ShowWarning("Portable Daten", _composition.SettingsLoadResult.WarningMessage!);
         }
 
+        if (_composition.ManagedToolStartupResult.HasWarning)
+        {
+            _composition.DialogService.ShowWarning("Werkzeuge", _composition.ManagedToolStartupResult.WarningMessage!);
+        }
+
         return new MainWindow(_composition.MainWindowViewModel);
     }
 

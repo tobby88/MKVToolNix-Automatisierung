@@ -20,6 +20,7 @@ public sealed class PortableStorageFixture : IDisposable
     {
         DeleteDirectoryIfExists(PortableAppStorage.DataDirectory);
         DeleteDirectoryIfExists(PortableAppStorage.LogsDirectory);
+        DeleteDirectoryIfExists(PortableAppStorage.ToolsDirectory);
     }
 
     public void Dispose()

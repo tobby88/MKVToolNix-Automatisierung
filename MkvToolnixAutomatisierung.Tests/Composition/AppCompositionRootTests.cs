@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -43,6 +44,8 @@ public sealed class AppCompositionRootTests
     [Fact]
     public void Create_ReturnsDisposableAppComposition()
     {
+        SaveToolAutoManagementSettings(autoManageEnabled: false);
+
         using var composition = new AppCompositionRoot().Create();
 
         Assert.NotNull(composition.DialogService);
@@ -53,10 +56,17 @@ public sealed class AppCompositionRootTests
     [Fact]
     public void CreateComposition_DisposesProvider_WhenStartupResolutionFails()
     {
+        var settingsStore = new AppSettingsStore();
+        SaveToolAutoManagementSettings(settingsStore, autoManageEnabled: false);
+
         var services = new ServiceCollection();
         DisposableProbe? probe = null;
         services.AddSingleton<IUserDialogService, StubUserDialogService>();
         services.AddSingleton(new AppSettingsLoadResult(new CombinedAppSettings(), AppSettingsLoadStatus.LoadedDefaultsNoFile));
+        services.AddSingleton(new AppToolPathStore(settingsStore));
+        services.AddSingleton<HttpClient>();
+        services.AddSingleton<IManagedToolArchiveExtractor, StubManagedToolArchiveExtractor>();
+        services.AddSingleton<ManagedToolInstallerService>();
         services.AddSingleton(_ =>
         {
             probe = new DisposableProbe();
@@ -81,6 +91,29 @@ public sealed class AppCompositionRootTests
         Assert.True(probe!.IsDisposed);
     }
 
+    private static void SaveToolAutoManagementSettings(bool autoManageEnabled)
+    {
+        SaveToolAutoManagementSettings(new AppSettingsStore(), autoManageEnabled);
+    }
+
+    private static void SaveToolAutoManagementSettings(AppSettingsStore settingsStore, bool autoManageEnabled)
+    {
+        settingsStore.Save(new CombinedAppSettings
+        {
+            ToolPaths = new AppToolPathSettings
+            {
+                ManagedMkvToolNix = new ManagedToolSettings
+                {
+                    AutoManageEnabled = autoManageEnabled
+                },
+                ManagedFfprobe = new ManagedToolSettings
+                {
+                    AutoManageEnabled = autoManageEnabled
+                }
+            }
+        });
+    }
+
     private sealed class DisposableProbe : IDisposable
     {
         public bool IsDisposed { get; private set; }
@@ -88,6 +121,14 @@ public sealed class AppCompositionRootTests
         public void Dispose()
         {
             IsDisposed = true;
+        }
+    }
+
+    private sealed class StubManagedToolArchiveExtractor : IManagedToolArchiveExtractor
+    {
+        public void ExtractArchive(string archivePath, string destinationDirectory)
+        {
+            throw new NotSupportedException();
         }
     }
 

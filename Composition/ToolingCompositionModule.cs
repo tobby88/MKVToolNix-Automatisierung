@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Services;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace MkvToolnixAutomatisierung.Composition;
 
@@ -14,6 +16,17 @@ internal static class ToolingCompositionModule
     /// <param name="services">DI-Sammlung für Locator- und Probe-Registrierungen.</param>
     public static void Register(IServiceCollection services)
     {
+        services.AddSingleton<HttpClient>(_ =>
+        {
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MkvToolnixAutomatisierung", "1.2.0"));
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return client;
+        });
+        services.AddSingleton<IManagedToolArchiveExtractor, ManagedToolArchiveExtractor>();
+        services.AddSingleton<IManagedToolPackageSource, MkvToolNixPackageSource>();
+        services.AddSingleton<IManagedToolPackageSource, FfprobePackageSource>();
+        services.AddSingleton<ManagedToolInstallerService>();
         services.AddSingleton<MkvToolNixLocator>(provider => new MkvToolNixLocator(provider.GetRequiredService<AppToolPathStore>()));
         services.AddSingleton<IMkvToolNixLocator>(provider => provider.GetRequiredService<MkvToolNixLocator>());
         services.AddSingleton<FfprobeLocator>(provider => new FfprobeLocator(provider.GetRequiredService<AppToolPathStore>()));

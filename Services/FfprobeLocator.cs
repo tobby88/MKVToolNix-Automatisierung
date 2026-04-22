@@ -29,10 +29,17 @@ public sealed class FfprobeLocator : IFfprobeLocator
     /// <inheritdoc />
     public string? TryFindFfprobePath()
     {
-        var configuredPath = _toolPathStore.Load().FfprobePath;
+        var settings = _toolPathStore.Load();
+        var configuredPath = settings.FfprobePath;
         if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
         {
             return configuredPath;
+        }
+
+        var managedPath = settings.ManagedFfprobe.InstalledPath;
+        if (!string.IsNullOrWhiteSpace(managedPath) && File.Exists(managedPath))
+        {
+            return managedPath;
         }
 
         var fromPath = TryFindInPath();

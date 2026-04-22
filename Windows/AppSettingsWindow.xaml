@@ -58,50 +58,97 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="180" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="150" />
-                    </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="MKVToolNix-Ordner" />
-                    <TextBox Grid.Row="0"
-                             Grid.Column="1"
-                             Margin="0,4,12,4"
-                             Text="{Binding MkvToolNixDirectoryPath, UpdateSourceTrigger=PropertyChanged}" />
-                    <Button Grid.Row="0"
-                            Grid.Column="2"
-                            Margin="0,2,0,2"
-                            Padding="10,6"
-                            Click="SelectMkvToolNixButton_Click"
-                            Content="Ordner wählen" />
+                    <GroupBox Grid.Row="0" Header="MKVToolNix">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="1"
-                               Foreground="#4D5B68"
-                               Text="{Binding MkvToolNixStatusText}"
-                               ToolTip="{Binding MkvToolNixStatusTooltip}" />
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="0"
+                                      Grid.ColumnSpan="3"
+                                      Margin="0,0,0,8"
+                                      Content="Automatisch verwalten"
+                                      IsChecked="{Binding AutoManageMkvToolNix}" />
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,14,12,8" VerticalAlignment="Center" Text="ffprobe.exe" />
-                    <TextBox Grid.Row="2"
-                             Grid.Column="1"
-                             Margin="0,10,12,4"
-                             Text="{Binding FfprobePath, UpdateSourceTrigger=PropertyChanged}" />
-                    <Button Grid.Row="2"
-                            Grid.Column="2"
-                            Margin="0,8,0,2"
-                            Padding="10,6"
-                            Click="SelectFfprobeButton_Click"
-                            Content="Datei wählen" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Margin="0,2,12,8"
+                                       VerticalAlignment="Center"
+                                       Text="Manueller Override" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Margin="0,0,12,6"
+                                     Text="{Binding MkvToolNixDirectoryPath, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="2"
+                                    Margin="0,0,0,4"
+                                    Padding="10,6"
+                                    Click="SelectMkvToolNixButton_Click"
+                                    Content="Ordner wählen" />
 
-                    <TextBlock Grid.Row="3"
-                               Grid.Column="1"
-                               Foreground="#4D5B68"
-                               Text="{Binding FfprobeStatusText}"
-                               ToolTip="{Binding FfprobeStatusTooltip}" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Foreground="#4D5B68"
+                                       Text="{Binding MkvToolNixStatusText}"
+                                       ToolTip="{Binding MkvToolNixStatusTooltip}" />
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="3" Header="ffprobe">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="0"
+                                      Grid.ColumnSpan="3"
+                                      Margin="0,0,0,8"
+                                      Content="Automatisch verwalten"
+                                      IsChecked="{Binding AutoManageFfprobe}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Margin="0,2,12,8"
+                                       VerticalAlignment="Center"
+                                       Text="Manueller Override" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Margin="0,0,12,6"
+                                     Text="{Binding FfprobePath, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="2"
+                                    Margin="0,0,0,4"
+                                    Padding="10,6"
+                                    Click="SelectFfprobeButton_Click"
+                                    Content="Datei wählen" />
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Foreground="#4D5B68"
+                                       Text="{Binding FfprobeStatusText}"
+                                       ToolTip="{Binding FfprobeStatusTooltip}" />
+                        </Grid>
+                    </GroupBox>
                 </Grid>
             </TabItem>
 
