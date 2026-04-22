@@ -11,6 +11,7 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
 {
     private string _targetFolderName;
     private DownloadSortItemState _state;
+    private readonly string _persistentNote;
     private string _note;
     private bool _isSelected;
 
@@ -19,11 +20,13 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
         DisplayName = candidate.DisplayName;
         FilePaths = candidate.FilePaths;
         DefectiveFilePaths = candidate.DefectiveFilePaths ?? [];
+        ContainsDefectiveFiles = candidate.ContainsDefectiveFiles || DefectiveFilePaths.Count > 0;
         InitialTargetFolderName = candidate.SuggestedFolderName;
         _targetFolderName = candidate.SuggestedFolderName;
         _state = candidate.State;
+        _persistentNote = candidate.PersistentNote;
         _note = candidate.Note;
-        _isSelected = candidate.IsInitiallySelected;
+        _isSelected = candidate.IsInitiallySelected && DownloadSortItemStates.IsSortable(candidate.State);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -39,23 +42,36 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public IReadOnlyList<string> DefectiveFilePaths { get; }
 
     /// <summary>
+    /// Kennzeichnet Pakete, bei denen mindestens eine Datei separat in den Defekt-Ordner geht,
+    /// auch wenn weitere Begleiter regulär einsortiert werden können.
+    /// </summary>
+    public bool ContainsDefectiveFiles { get; }
+
+    /// <summary>
     /// Ursprünglich automatisch erkannter Zielordner; bleibt stabil, damit ein manuell
     /// korrigierter Zielordner gezielt auf weitere Einträge derselben Erkennungsgruppe
     /// übertragen werden kann.
     /// </summary>
     public string InitialTargetFolderName { get; }
 
+    /// <summary>
+    /// Gibt an, ob der Eintrag aktuell als echte Auswahleingabe für den Sortierlauf dienen darf.
+    /// Nicht einsortierbare Zustände werden automatisch abgewählt.
+    /// </summary>
+    public bool CanSelect => DownloadSortItemStates.IsSortable(State);
+
     public bool IsSelected
     {
         get => _isSelected;
         set
         {
-            if (_isSelected == value)
+            var normalizedValue = value && !CanSelect ? false : value;
+            if (_isSelected == normalizedValue)
             {
                 return;
             }
 
-            _isSelected = value;
+            _isSelected = normalizedValue;
             OnPropertyChanged();
         }
     }
@@ -89,21 +105,38 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
             }
 
             _state = value;
+            if (_isSelected && !CanSelect)
+            {
+                _isSelected = false;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+
             OnPropertyChanged();
+            OnPropertyChanged(nameof(CanSelect));
             OnPropertyChanged(nameof(StatusText));
             OnPropertyChanged(nameof(StatusBadgeBackground));
             OnPropertyChanged(nameof(StatusBadgeBorderBrush));
         }
     }
 
-    public string StatusText => State switch
+    public string StatusText
     {
-        DownloadSortItemState.Ready => "Bereit",
-        DownloadSortItemState.ReadyWithReplacement => "Ersetzen",
-        DownloadSortItemState.Conflict => "Konflikt",
-        DownloadSortItemState.Defective => "Defekt",
-        _ => "Pruefen"
-    };
+        get
+        {
+            var baseText = State switch
+            {
+                DownloadSortItemState.Ready => "Bereit",
+                DownloadSortItemState.ReadyWithReplacement => "Ersetzen",
+                DownloadSortItemState.Conflict => "Konflikt",
+                DownloadSortItemState.Defective => "Defekt",
+                _ => "Pruefen"
+            };
+
+            return ContainsDefectiveFiles && State != DownloadSortItemState.Defective
+                ? baseText + " + Defekt"
+                : baseText;
+        }
+    }
 
     public string StatusBadgeBackground => State switch
     {
@@ -141,7 +174,18 @@ internal sealed class DownloadSortItemViewModel : INotifyPropertyChanged
     public void ApplyEvaluation(DownloadSortTargetEvaluation evaluation)
     {
         State = evaluation.State;
-        Note = evaluation.Note;
+        Note = MergeNotes(_persistentNote, evaluation.Note);
+    }
+
+    private static string MergeNotes(string left, string right)
+    {
+        return string.IsNullOrWhiteSpace(left)
+            ? right
+            : string.IsNullOrWhiteSpace(right)
+                ? left
+                : left == right
+                    ? left
+                    : $"{left} {right}";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -40,7 +40,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, unexpectedCommandErrorHandler);
         SelectAllSortableCommand = new RelayCommand(SelectAllSortable, () => !_isBusy && Items.Any(item => DownloadSortItemStates.IsSortable(item.State) && !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
-        ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
+        ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, CanToggleSelectedItemSelection);
         ApplyTargetFolderToMatchingItemsCommand = new RelayCommand(ApplySelectedTargetFolderToMatchingItems, CanApplySelectedTargetFolderToMatchingItems);
         RunSortCommand = new AsyncRelayCommand(RunSortAsync, CanRunSort, unexpectedCommandErrorHandler);
     }
@@ -165,7 +165,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public int ConflictCount => Items.Count(item => item.State == DownloadSortItemState.Conflict);
 
-    public int DefectiveCount => Items.Count(item => item.State == DownloadSortItemState.Defective);
+    public int DefectiveCount => Items.Count(item => item.ContainsDefectiveFiles);
 
     public int RenameCount => _currentFolderRenames.Count;
 
@@ -392,15 +392,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         if (e.PropertyName is nameof(DownloadSortItemViewModel.TargetFolderName))
         {
             EnsureTargetFolderOption(item.TargetFolderName);
-            if (item.State != DownloadSortItemState.Defective)
-            {
-                var evaluation = _services.DownloadSort.EvaluateTarget(
-                    SourceDirectory,
-                    item.FilePaths,
-                    item.TargetFolderName,
-                    _currentFolderRenames);
-                item.ApplyEvaluation(evaluation);
-            }
+            ReevaluateItem(item);
         }
 
         if (e.PropertyName is nameof(DownloadSortItemViewModel.TargetFolderName)
@@ -420,7 +412,17 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             && selectedItem is not null
             && !string.IsNullOrWhiteSpace(selectedItem.InitialTargetFolderName)
             && !string.IsNullOrWhiteSpace(selectedItem.TargetFolderName)
+            && !DownloadSortService.IsReservedTargetFolderName(selectedItem.TargetFolderName)
             && Items.Any(item => ShouldApplyTargetFolderFromSelectedItem(selectedItem, item));
+    }
+
+    /// <summary>
+    /// Die fachliche Zeilen-Auswahl darf nur für tatsächlich ausführbare Einträge umgeschaltet
+    /// werden. Prüf- und Konfliktzeilen bleiben dadurch sichtbar, aber nicht irreführend auswählbar.
+    /// </summary>
+    private bool CanToggleSelectedItemSelection()
+    {
+        return !_isBusy && SelectedItem?.CanSelect == true;
     }
 
     private static bool ShouldApplyTargetFolderFromSelectedItem(
@@ -451,7 +453,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// </summary>
     private bool CanRunSort()
     {
-        return !_isBusy && Items.Any(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State));
+        return !_isBusy
+            && Directory.Exists(SourceDirectory)
+            && Items.Any(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State));
     }
 
     /// <summary>
@@ -507,7 +511,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
                          .Where(folderName => !string.IsNullOrWhiteSpace(folderName))
                          .Cast<string>())
             {
-                options.Add(folderName);
+                AddTargetFolderOption(options, folderName);
             }
         }
 
@@ -535,6 +539,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private void EnsureTargetFolderOption(string? folderName)
     {
         if (string.IsNullOrWhiteSpace(folderName)
+            || DownloadSortService.IsReservedTargetFolderName(folderName)
             || _targetFolderOptions.Contains(folderName, StringComparer.OrdinalIgnoreCase))
         {
             return;
@@ -548,9 +553,36 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// </summary>
     private static void AddTargetFolderOption(ISet<string> options, string? folderName)
     {
-        if (!string.IsNullOrWhiteSpace(folderName))
+        if (!string.IsNullOrWhiteSpace(folderName)
+            && !DownloadSortService.IsReservedTargetFolderName(folderName))
         {
             options.Add(folderName);
+        }
+    }
+
+    /// <summary>
+    /// Aktualisiert die Zustandseinstufung einer Zeile nach manuellen Zielordner-Änderungen.
+    /// Änderungen im Dateisystem seit dem letzten Scan werden dabei defensiv als veralteter
+    /// Scan-Zustand behandelt, statt die GUI mit einer Ausnahme scheitern zu lassen.
+    /// </summary>
+    private void ReevaluateItem(DownloadSortItemViewModel item)
+    {
+        try
+        {
+            var evaluation = _services.DownloadSort.EvaluateTarget(
+                SourceDirectory,
+                item.FilePaths,
+                item.TargetFolderName,
+                _currentFolderRenames,
+                item.DefectiveFilePaths);
+            item.ApplyEvaluation(evaluation);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            item.ApplyEvaluation(new DownloadSortTargetEvaluation(
+                DownloadSortItemState.NeedsReview,
+                "Datei- oder Ordnerzustand hat sich seit dem Scan geaendert. Bitte neu scannen."));
+            StatusText = "Scan-Ergebnis veraltet. Bitte neu scannen.";
         }
     }
 

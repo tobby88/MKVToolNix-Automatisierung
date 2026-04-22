@@ -139,30 +139,74 @@ internal sealed class DownloadSortService
     /// <param name="filePaths">Dateien des Kandidaten.</param>
     /// <param name="targetFolderName">Aktuell gewaehlter Zielordnername.</param>
     /// <param name="folderRenames">Beim Scan ermittelte sichere Ordnerumbenennungen.</param>
+    /// <param name="defectiveFilePaths">Optional bereits als defekt markierte Dateien, die bei der Bewertung nicht als regulärer Inhalt zählen sollen.</param>
     /// <returns>Aktueller Status mit Konflikt- oder Hinweistext.</returns>
     public DownloadSortTargetEvaluation EvaluateTarget(
         string rootDirectory,
         IReadOnlyList<string> filePaths,
         string? targetFolderName,
-        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames,
+        IReadOnlyList<string>? defectiveFilePaths = null)
     {
         EnsureDirectoryExists(rootDirectory);
         ArgumentNullException.ThrowIfNull(filePaths);
         ArgumentNullException.ThrowIfNull(folderRenames);
 
-        if (filePaths.Count == 0)
+        var defectiveFilePathSet = CreateDefectiveFilePathSet(defectiveFilePaths);
+        var regularFilePaths = filePaths
+            .Where(path => !defectiveFilePathSet.Contains(path))
+            .ToList();
+        if (regularFilePaths.Count == 0)
         {
-            return new DownloadSortTargetEvaluation(
-                DownloadSortItemState.NeedsReview,
-                "Zu diesem Eintrag wurden keine Dateien gefunden.");
+            return defectiveFilePathSet.Count == 0
+                ? new DownloadSortTargetEvaluation(
+                    DownloadSortItemState.NeedsReview,
+                    "Zu diesem Eintrag wurden keine Dateien gefunden.")
+                : new DownloadSortTargetEvaluation(
+                    DownloadSortItemState.Defective,
+                    string.Empty);
         }
 
+        return EvaluateRegularTarget(rootDirectory, regularFilePaths, targetFolderName, folderRenames);
+    }
+
+    /// <summary>
+    /// Kennzeichnet Zielordnernamen, die ausschließlich für interne Sonderpfade des
+    /// Einsortierers reserviert sind und deshalb nicht als normaler Serienordner dienen dürfen.
+    /// </summary>
+    /// <param name="targetFolderName">Zu prüfender Zielordnername.</param>
+    /// <returns><see langword="true"/>, wenn der Name für normale Einsortierziele gesperrt ist.</returns>
+    internal static bool IsReservedTargetFolderName(string? targetFolderName)
+    {
+        return string.Equals(
+            NormalizeTargetFolderName(targetFolderName),
+            DefectiveFolderName,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Bewertet ausschließlich die regulär einsortierbaren Dateien eines Pakets gegen den aktuell
+    /// gewählten Zielordner. Defekt-Dateien werden davor bereits abgezogen.
+    /// </summary>
+    private static DownloadSortTargetEvaluation EvaluateRegularTarget(
+        string rootDirectory,
+        IReadOnlyList<string> filePaths,
+        string? targetFolderName,
+        IReadOnlyList<DownloadSortFolderRenamePlan> folderRenames)
+    {
         var normalizedFolderName = NormalizeTargetFolderName(targetFolderName);
         if (string.IsNullOrWhiteSpace(normalizedFolderName))
         {
             return new DownloadSortTargetEvaluation(
                 DownloadSortItemState.NeedsReview,
                 "Kein Zielordner erkannt. Bitte pruefen.");
+        }
+
+        if (IsReservedTargetFolderName(normalizedFolderName))
+        {
+            return new DownloadSortTargetEvaluation(
+                DownloadSortItemState.NeedsReview,
+                $"Der Ordner '{DefectiveFolderName}' ist fuer defekte Dateien reserviert. Bitte einen normalen Serienordner waehlen.");
         }
 
         var renamePlan = folderRenames.FirstOrDefault(plan =>
@@ -269,9 +313,7 @@ internal sealed class DownloadSortService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var defectiveFilePathSet = (request.DefectiveFilePaths ?? [])
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var defectiveFilePathSet = CreateDefectiveFilePathSet(request.DefectiveFilePaths);
             var regularFilePaths = request.FilePaths
                 .Where(path => !defectiveFilePathSet.Contains(path))
                 .ToList();
@@ -280,6 +322,13 @@ internal sealed class DownloadSortService
             {
                 skippedGroupCount++;
                 logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> kein gueltiger Zielordner.");
+                continue;
+            }
+
+            if (regularFilePaths.Count > 0 && IsReservedTargetFolderName(targetFolderName))
+            {
+                skippedGroupCount++;
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Ordner '{DefectiveFolderName}' ist fuer defekte Dateien reserviert.");
                 continue;
             }
 
@@ -486,11 +535,21 @@ internal sealed class DownloadSortService
             ? null
             : BuildCandidate(rootDirectory, group.DisplayName, remainingFilePaths, folderRenames);
         var targetFolderName = seriesCandidate?.SuggestedFolderName ?? DefectiveFolderName;
+        var orderedDefectiveFilePaths = defectiveFilePaths
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var evaluation = EvaluateTarget(
+            rootDirectory,
+            group.FilePaths,
+            targetFolderName,
+            folderRenames,
+            orderedDefectiveFilePaths);
         var note = BuildDefectiveCandidateNote(
             defectiveVideoCandidates.Select(candidate => candidate.Health.Reason).ToList(),
             remainingFilePaths,
             targetFolderName,
             defectiveFilePaths);
+        var persistentNote = MergeNotes(seriesCandidate?.PersistentNote ?? string.Empty, note);
 
         return
         [
@@ -499,9 +558,12 @@ internal sealed class DownloadSortService
                 group.FilePaths,
                 seriesCandidate?.DetectedSeriesName,
                 targetFolderName,
-                DownloadSortItemState.Defective,
-                MergeNotes(seriesCandidate?.Note ?? string.Empty, note),
-                DefectiveFilePaths: defectiveFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList())
+                evaluation.State,
+                MergeNotes(persistentNote, evaluation.Note),
+                IsInitiallySelected: DownloadSortItemStates.IsSortable(evaluation.State),
+                DefectiveFilePaths: orderedDefectiveFilePaths,
+                PersistentNote: persistentNote,
+                ContainsDefectiveFiles: true)
         ];
     }
 
@@ -521,7 +583,9 @@ internal sealed class DownloadSortService
             proposal.DetectedSeriesName,
             proposal.SuggestedFolderName,
             evaluation.State,
-            note);
+            note,
+            IsInitiallySelected: DownloadSortItemStates.IsSortable(evaluation.State),
+            PersistentNote: proposal.Note);
     }
 
     private static bool ShouldRouteOnlyTxtCompanionToDefective(
@@ -976,6 +1040,17 @@ internal sealed class DownloadSortService
         return EpisodeFileNameHelper.SanitizePathSegment(targetFolderName.Trim());
     }
 
+    /// <summary>
+    /// Normalisiert die optionale Defekt-Teilmengenliste in ein case-insensitives Lookup, damit
+    /// Bewertung und Ausführung reguläre und defekte Dateien konsistent voneinander trennen.
+    /// </summary>
+    private static HashSet<string> CreateDefectiveFilePathSet(IReadOnlyList<string>? defectiveFilePaths)
+    {
+        return (defectiveFilePaths ?? [])
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     private static DownloadSortReplacementDecision EvaluateExistingTargetFiles(
         IReadOnlyList<string> filePaths,
         string targetDirectory)
@@ -1203,7 +1278,9 @@ internal sealed record DownloadSortCandidate(
     DownloadSortItemState State,
     string Note,
     bool IsInitiallySelected = true,
-    IReadOnlyList<string>? DefectiveFilePaths = null);
+    IReadOnlyList<string>? DefectiveFilePaths = null,
+    string PersistentNote = "",
+    bool ContainsDefectiveFiles = false);
 
 /// <summary>
 /// Sichere Vorab-Umbenennung eines bestehenden Serienordners auf einen kanonischen Namen.
