@@ -81,7 +81,7 @@ internal sealed class EmbyMetadataSyncService
             return rootMatch;
         }
 
-        return FindSuffixMatchedLibrary(libraries, archiveRootPath);
+        return FindComparableAlignedLibrary(libraries, archiveRootPath);
     }
 
     /// <summary>
@@ -305,12 +305,6 @@ internal sealed class EmbyMetadataSyncService
             return null;
         }
 
-        var relativePath = PathComparisonHelper.TryGetRelativePathWithinRoot(mediaFilePath, archiveRootPath);
-        if (string.IsNullOrWhiteSpace(relativePath))
-        {
-            return null;
-        }
-
         var effectiveLibraryMatch = libraryMatch
             ?? await FindSeriesLibraryAsync(settings, archiveRootPath, cancellationToken);
         if (effectiveLibraryMatch is null)
@@ -318,47 +312,124 @@ internal sealed class EmbyMetadataSyncService
             return null;
         }
 
-        return CombineLibraryLocationWithRelativePath(effectiveLibraryMatch.MatchedLocation, relativePath);
-    }
-
-    private static EmbyLibraryMatch? FindSuffixMatchedLibrary(
-        IReadOnlyList<EmbyLibraryFolder> libraries,
-        string archiveRootPath)
-    {
-        // Für typische Heimserver-Setups unterscheiden sich lokale Windows- und Emby-Linuxpfade
-        // oft nur im Präfix (z. B. Z:\Videos\Serien vs. /mnt/raid/Videos/Serien). In diesem Fall
-        // ist die gemeinsame Pfadendung die robusteste, noch konservative Fallback-Heuristik.
-        var archiveSegments = GetComparablePathSegments(archiveRootPath);
-        if (archiveSegments.Count == 0)
+        var relativePath = PathComparisonHelper.TryGetRelativePathWithinRoot(mediaFilePath, archiveRootPath);
+        if (string.IsNullOrWhiteSpace(relativePath))
         {
             return null;
         }
 
-        var minimumScore = Math.Min(2, archiveSegments.Count);
+        var translatedRelativePath = TryTranslateRelativePathWithinAlignedRoots(
+            archiveRootPath,
+            effectiveLibraryMatch.MatchedLocation,
+            relativePath);
+        if (translatedRelativePath is null)
+        {
+            return null;
+        }
+
+        return CombineLibraryLocationWithRelativePath(effectiveLibraryMatch.MatchedLocation, translatedRelativePath);
+    }
+
+    /// <summary>
+    /// Sucht eine cross-platform plausible Zuordnung zwischen lokaler Archivwurzel und Emby-Library.
+    /// </summary>
+    /// <remarks>
+    /// Windows- und Linux-Setups unterscheiden sich oft nur durch Präfixe oder dadurch, dass eine Seite
+    /// einen Eltern- oder Kindordner des eigentlichen Medienroots konfiguriert hat. Die Ausrichtung sucht
+    /// deshalb eine gemeinsame Segmentfolge, erlaubt aber bewusst nur Parent/Child-Beziehungen und keine
+    /// bloßen Geschwisterpfade. Bei mehreren gleich guten Treffern wird konservativ <see langword="null"/>
+    /// zurückgegeben, damit kein falscher Library-Scan angestoßen wird.
+    /// </remarks>
+    private static EmbyLibraryMatch? FindComparableAlignedLibrary(
+        IReadOnlyList<EmbyLibraryFolder> libraries,
+        string archiveRootPath)
+    {
         var candidates = libraries
             .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
             .Select(match => new
             {
                 Match = match,
-                Score = CountCommonTrailingSegments(archiveSegments, GetComparablePathSegments(match.MatchedLocation))
+                Alignment = TryAlignComparableRoots(archiveRootPath, match.MatchedLocation)
             })
-            .Where(candidate => candidate.Score >= minimumScore)
+            .Where(candidate => candidate.Alignment is not null)
+            .Select(candidate => new
+            {
+                candidate.Match,
+                Alignment = candidate.Alignment!,
+                candidate.Alignment!.CommonSegmentCount,
+                TrailingSegments = candidate.Alignment.LeftTrailingSegments.Count + candidate.Alignment.RightTrailingSegments.Count,
+                IgnoredPrefixSegments = candidate.Alignment.LeftIgnoredPrefixCount + candidate.Alignment.RightIgnoredPrefixCount
+            })
+            .OrderByDescending(candidate => candidate.CommonSegmentCount)
+            .ThenBy(candidate => candidate.TrailingSegments)
+            .ThenBy(candidate => candidate.IgnoredPrefixSegments)
             .ToList();
         if (candidates.Count == 0)
         {
             return null;
         }
 
-        var highestScore = candidates.Max(candidate => candidate.Score);
-        var bestCandidates = candidates
-            .Where(candidate => candidate.Score == highestScore)
-            .Select(candidate => candidate.Match)
-            .Distinct()
+        var bestCandidate = candidates[0];
+        var isAmbiguous = candidates
+            .Skip(1)
+            .Any(candidate =>
+                candidate.CommonSegmentCount == bestCandidate.CommonSegmentCount
+                && candidate.TrailingSegments == bestCandidate.TrailingSegments
+                && candidate.IgnoredPrefixSegments == bestCandidate.IgnoredPrefixSegments);
+
+        return isAmbiguous ? null : bestCandidate.Match;
+    }
+
+    /// <summary>
+    /// Übersetzt einen bereits lokal berechneten Relativpfad von der Archivwurzel auf den gematchten Emby-Library-Root.
+    /// </summary>
+    /// <remarks>
+    /// Wenn Emby eine Eltern-Library des konfigurierten lokalen Roots nutzt, müssen die zusätzlichen lokalen
+    /// Segmente vor den eigentlichen Datei-Relativpfad gesetzt werden. Nutzt Emby dagegen eine Kind-Library,
+    /// muss dieser Unterordner aus dem lokalen Relativpfad entfernt werden, weil er im Remote-Root bereits
+    /// enthalten ist. Geschwisterpfade werden hier absichtlich nicht "geraten".
+    /// </remarks>
+    private static string? TryTranslateRelativePathWithinAlignedRoots(
+        string archiveRootPath,
+        string matchedLibraryLocation,
+        string localRelativePath)
+    {
+        var alignment = TryAlignComparableRoots(archiveRootPath, matchedLibraryLocation);
+        if (alignment is null)
+        {
+            return null;
+        }
+
+        var relativeSegments = localRelativePath
+            .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
 
-        return bestCandidates.Count == 1
-            ? bestCandidates[0]
-            : null;
+        if (alignment.RightTrailingSegments.Count > 0)
+        {
+            if (relativeSegments.Count < alignment.RightTrailingSegments.Count)
+            {
+                return null;
+            }
+
+            for (var index = 0; index < alignment.RightTrailingSegments.Count; index++)
+            {
+                if (!string.Equals(relativeSegments[index], alignment.RightTrailingSegments[index], StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+            }
+
+            relativeSegments = relativeSegments
+                .Skip(alignment.RightTrailingSegments.Count)
+                .ToList();
+        }
+
+        if (alignment.LeftTrailingSegments.Count > 0)
+        {
+            relativeSegments.InsertRange(0, alignment.LeftTrailingSegments);
+        }
+
+        return string.Join(Path.DirectorySeparatorChar, relativeSegments);
     }
 
     private static string CombineLibraryLocationWithRelativePath(string libraryLocation, string relativePath)
@@ -375,18 +446,89 @@ internal sealed class EmbyMetadataSyncService
             : trimmedLibraryLocation + preferredSeparator + string.Join(preferredSeparator, relativeSegments);
     }
 
-    private static int CountCommonTrailingSegments(IReadOnlyList<string> leftSegments, IReadOnlyList<string> rightSegments)
+    /// <summary>
+    /// Baut eine conservative Parent/Child-Ausrichtung zwischen zwei plattformübergreifend vergleichbaren Roots.
+    /// </summary>
+    private static ComparableRootAlignment? TryAlignComparableRoots(string leftPath, string rightPath)
+    {
+        var leftSegments = GetComparablePathSegments(leftPath);
+        var rightSegments = GetComparablePathSegments(rightPath);
+        var minimumCommonSegments = Math.Min(2, Math.Min(leftSegments.Count, rightSegments.Count));
+        if (minimumCommonSegments == 0)
+        {
+            return null;
+        }
+
+        ComparableRootAlignment? bestAlignment = null;
+        var bestScore = int.MinValue;
+        var hasAmbiguousBest = false;
+
+        for (var leftStart = 0; leftStart < leftSegments.Count; leftStart++)
+        {
+            for (var rightStart = 0; rightStart < rightSegments.Count; rightStart++)
+            {
+                var commonSegmentCount = CountCommonForwardSegments(leftSegments, leftStart, rightSegments, rightStart);
+                if (commonSegmentCount < minimumCommonSegments)
+                {
+                    continue;
+                }
+
+                var leftTrailingCount = leftSegments.Count - (leftStart + commonSegmentCount);
+                var rightTrailingCount = rightSegments.Count - (rightStart + commonSegmentCount);
+                if (leftTrailingCount > 0 && rightTrailingCount > 0)
+                {
+                    continue;
+                }
+
+                var reachesLeftEnd = leftStart + commonSegmentCount == leftSegments.Count;
+                var reachesRightEnd = rightStart + commonSegmentCount == rightSegments.Count;
+                if (!reachesLeftEnd && !reachesRightEnd)
+                {
+                    continue;
+                }
+
+                var alignment = new ComparableRootAlignment(
+                    commonSegmentCount,
+                    leftSegments
+                        .Skip(leftStart + commonSegmentCount)
+                        .ToArray(),
+                    rightSegments
+                        .Skip(rightStart + commonSegmentCount)
+                        .ToArray(),
+                    leftStart,
+                    rightStart);
+                var score = commonSegmentCount * 100
+                            - (alignment.LeftTrailingSegments.Count + alignment.RightTrailingSegments.Count) * 10
+                            - (alignment.LeftIgnoredPrefixCount + alignment.RightIgnoredPrefixCount);
+
+                if (score > bestScore)
+                {
+                    bestAlignment = alignment;
+                    bestScore = score;
+                    hasAmbiguousBest = false;
+                }
+                else if (score == bestScore && bestAlignment is not null)
+                {
+                    hasAmbiguousBest = true;
+                }
+            }
+        }
+
+        return hasAmbiguousBest ? null : bestAlignment;
+    }
+
+    private static int CountCommonForwardSegments(
+        IReadOnlyList<string> leftSegments,
+        int leftStart,
+        IReadOnlyList<string> rightSegments,
+        int rightStart)
     {
         var count = 0;
-        var leftIndex = leftSegments.Count - 1;
-        var rightIndex = rightSegments.Count - 1;
-        while (leftIndex >= 0
-               && rightIndex >= 0
-               && string.Equals(leftSegments[leftIndex], rightSegments[rightIndex], StringComparison.OrdinalIgnoreCase))
+        while (leftStart + count < leftSegments.Count
+               && rightStart + count < rightSegments.Count
+               && string.Equals(leftSegments[leftStart + count], rightSegments[rightStart + count], StringComparison.OrdinalIgnoreCase))
         {
             count++;
-            leftIndex--;
-            rightIndex--;
         }
 
         return count;
@@ -461,3 +603,13 @@ internal sealed record EmbyFileAnalysis(
                 item.GetProviderId("Imdb"));
     }
 }
+
+/// <summary>
+/// Beschreibt die plattformübergreifende Ausrichtung zweier logisch zusammengehöriger Root-Pfade.
+/// </summary>
+internal sealed record ComparableRootAlignment(
+    int CommonSegmentCount,
+    IReadOnlyList<string> LeftTrailingSegments,
+    IReadOnlyList<string> RightTrailingSegments,
+    int LeftIgnoredPrefixCount,
+    int RightIgnoredPrefixCount);

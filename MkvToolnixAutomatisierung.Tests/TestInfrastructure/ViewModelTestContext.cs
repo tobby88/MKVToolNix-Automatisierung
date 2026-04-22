@@ -10,14 +10,34 @@ namespace MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 /// </summary>
 internal static class ViewModelTestContext
 {
+    private static readonly object ApplicationCreationSync = new();
+
     /// <summary>
     /// Stellt sicher, dass fuer WPF-nahe ViewModels eine Application verfuegbar ist.
     /// </summary>
     public static void EnsureApplication()
     {
-        if (Application.Current is null)
+        if (Application.Current is not null)
         {
-            _ = new Application();
+            return;
+        }
+
+        // Mehrere Testklassen koennen parallel anlaufen. Ohne Synchronisation
+        // wuerden zwei Threads gleichzeitig Application.Current == null sehen
+        // und anschliessend konkurrierend eine zweite WPF-Application erzeugen.
+        lock (ApplicationCreationSync)
+        {
+            if (Application.Current is null)
+            {
+                _ = new Application
+                {
+                    ShutdownMode = ShutdownMode.OnExplicitShutdown
+                };
+            }
+            else
+            {
+                Application.Current.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            }
         }
     }
 

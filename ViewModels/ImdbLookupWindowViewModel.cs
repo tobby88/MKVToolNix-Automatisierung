@@ -12,7 +12,8 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// </summary>
 internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 {
-    private static readonly Regex ImdbIdPattern = new(@"tt\d{7,10}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex BareImdbIdPattern = new(@"^tt\d{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ImdbTitlePathPattern = new(@"^/title/(?<id>tt\d{7,10})(?:[/?#]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly EpisodeMetadataGuess? _guess;
     private string _searchText;
     private string _imdbInput;
@@ -321,15 +322,43 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             return false;
         }
 
-        var match = ImdbIdPattern.Match(normalized);
-        if (!match.Success)
+        if (BareImdbIdPattern.IsMatch(normalized))
         {
-            imdbId = null;
+            imdbId = normalized.ToLowerInvariant();
+            return true;
+        }
+
+        if (TryExtractImdbIdFromUrl(normalized, out imdbId))
+        {
+            return true;
+        }
+
+        imdbId = null;
+        return false;
+    }
+
+    private static bool TryExtractImdbIdFromUrl(string input, out string? imdbId)
+    {
+        imdbId = null;
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri) || !IsSupportedImdbHost(uri.Host))
+        {
             return false;
         }
 
-        imdbId = match.Value.ToLowerInvariant();
+        var match = ImdbTitlePathPattern.Match(uri.AbsolutePath);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        imdbId = match.Groups["id"].Value.ToLowerInvariant();
         return true;
+    }
+
+    private static bool IsSupportedImdbHost(string host)
+    {
+        return string.Equals(host, "imdb.com", StringComparison.OrdinalIgnoreCase)
+               || host.EndsWith(".imdb.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

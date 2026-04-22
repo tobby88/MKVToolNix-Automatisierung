@@ -64,6 +64,48 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public void TryBuildImdbId_RejectsEmbeddedSubstringThatIsNotStandaloneIdOrImdbUrl()
+    {
+        var vm = new ImdbLookupWindowViewModel(null, null)
+        {
+            ImdbInput = "nottt1234567bad"
+        };
+
+        var success = vm.TryBuildImdbId(out var imdbId, out _);
+
+        Assert.False(success);
+        Assert.Null(imdbId);
+    }
+
+    [Fact]
+    public void TryBuildImdbId_RejectsTooLongBareId()
+    {
+        var vm = new ImdbLookupWindowViewModel(null, null)
+        {
+            ImdbInput = "tt12345678901"
+        };
+
+        var success = vm.TryBuildImdbId(out var imdbId, out _);
+
+        Assert.False(success);
+        Assert.Null(imdbId);
+    }
+
+    [Fact]
+    public void TryBuildImdbId_RejectsForeignUrlWithEmbeddedImdbId()
+    {
+        var vm = new ImdbLookupWindowViewModel(null, null)
+        {
+            ImdbInput = "https://example.com/title/tt7654321/"
+        };
+
+        var success = vm.TryBuildImdbId(out var imdbId, out _);
+
+        Assert.False(success);
+        Assert.Null(imdbId);
+    }
+
+    [Fact]
     public void TryImportClipboardText_AcceptsFullImdbUrlAndNormalizesToId()
     {
         var vm = new ImdbLookupWindowViewModel(null, null);

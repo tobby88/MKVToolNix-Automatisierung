@@ -184,6 +184,82 @@ public sealed class EmbyMetadataSyncServiceTests
     }
 
     [Fact]
+    public async Task FindSeriesLibraryAsync_MatchesLinuxParentLibrary_WhenArchiveRootIsNestedBelowIt()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    ["/mnt/raid/Videos/Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Kids");
+
+        Assert.NotNull(result);
+        Assert.Equal("library-1", result.Library.Id);
+        Assert.Equal("/mnt/raid/Videos/Serien", result.MatchedLocation);
+    }
+
+    [Fact]
+    public async Task FindSeriesLibraryAsync_MatchesLinuxChildLibrary_WhenArchiveRootIsBroaderThanIt()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Kids",
+                    ["/mnt/raid/Videos/Serien/Kids"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien");
+
+        Assert.NotNull(result);
+        Assert.Equal("library-1", result.Library.Id);
+        Assert.Equal("/mnt/raid/Videos/Serien/Kids", result.MatchedLocation);
+    }
+
+    [Fact]
+    public async Task FindSeriesLibraryAsync_DoesNotMatchSiblingLibrary_WhenOnlyParentSegmentsOverlap()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Movies",
+                    ["/mnt/raid/Videos/Serien/Movies"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Kids");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public async Task FindItemByPathAsync_UsesTranslatedLibraryPath_WhenEmbyStoresLinuxPaths()
     {
         var expectedLookupPath = "/mnt/raid/Videos/Serien/Serie/Season 01/Serie - S01E01 - Pilot.mkv";
@@ -218,6 +294,78 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Equal("emby-1", item!.Id);
         Assert.Contains(expectedLookupPath, client.FindRequests);
         Assert.DoesNotContain(@"Z:\Videos\Serien\Serie\Season 01\Serie - S01E01 - Pilot.mkv", client.FindRequests);
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_UsesParentLibraryTranslation_WhenArchiveRootIsNested()
+    {
+        var expectedLookupPath = "/mnt/raid/Videos/Serien/Kids/Serie/Season 01/Serie - S01E01 - Pilot.mkv";
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Serien",
+                    ["/mnt/raid/Videos/Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ],
+            ItemByPath = new Dictionary<string, EmbyItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                [expectedLookupPath] = new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    expectedLookupPath,
+                    new Dictionary<string, string>())
+            }
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var item = await service.FindItemByPathAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Kids\Serie\Season 01\Serie - S01E01 - Pilot.mkv",
+            @"Z:\Videos\Serien\Kids");
+
+        Assert.NotNull(item);
+        Assert.Equal("emby-1", item!.Id);
+        Assert.Contains(expectedLookupPath, client.FindRequests);
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_UsesChildLibraryTranslation_WhenArchiveRootIsBroader()
+    {
+        var expectedLookupPath = "/mnt/raid/Videos/Serien/Kids/Serie/Season 01/Serie - S01E01 - Pilot.mkv";
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-1",
+                    "Kids",
+                    ["/mnt/raid/Videos/Serien/Kids"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ],
+            ItemByPath = new Dictionary<string, EmbyItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                [expectedLookupPath] = new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    expectedLookupPath,
+                    new Dictionary<string, string>())
+            }
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var item = await service.FindItemByPathAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Kids\Serie\Season 01\Serie - S01E01 - Pilot.mkv",
+            @"Z:\Videos\Serien");
+
+        Assert.NotNull(item);
+        Assert.Equal("emby-1", item!.Id);
+        Assert.Contains(expectedLookupPath, client.FindRequests);
     }
 
     private sealed class ThrowingEmbyClient : IEmbyClient

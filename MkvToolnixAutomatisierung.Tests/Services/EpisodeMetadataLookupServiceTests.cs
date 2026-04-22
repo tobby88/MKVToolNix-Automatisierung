@@ -47,6 +47,27 @@ public sealed class EpisodeMetadataLookupServiceTests
     }
 
     [Fact]
+    public async Task SearchSeriesAsync_UsesTrimmedStoredCredentials()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            TvdbApiKey = "  key  ",
+            TvdbPin = "  pin  "
+        });
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var results = await service.SearchSeriesAsync("Beispielserie");
+
+        Assert.Single(results);
+        Assert.Equal("key", client.LastApiKey);
+        Assert.Equal("pin", client.LastPin);
+    }
+
+    [Fact]
     public async Task LoadEpisodesAsync_CachesEpisodesPerSeries()
     {
         var store = new FakeMetadataStore(new AppMetadataSettings());
@@ -363,6 +384,10 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public int LoadEpisodesCallCount { get; private set; }
 
+        public string? LastApiKey { get; private set; }
+
+        public string? LastPin { get; private set; }
+
         public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
@@ -370,6 +395,8 @@ public sealed class EpisodeMetadataLookupServiceTests
             CancellationToken cancellationToken = default)
         {
             SearchSeriesCallCount++;
+            LastApiKey = apiKey;
+            LastPin = pin;
 
             if (SearchSeriesAsyncOverride is not null)
             {
@@ -393,6 +420,8 @@ public sealed class EpisodeMetadataLookupServiceTests
             CancellationToken cancellationToken = default)
         {
             LoadEpisodesCallCount++;
+            LastApiKey = apiKey;
+            LastPin = pin;
 
             if (GetSeriesEpisodesAsyncOverride is not null)
             {

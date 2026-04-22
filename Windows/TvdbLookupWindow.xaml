@@ -150,12 +150,31 @@
                         IsEnabled="{Binding IsInteractive}"
                         Click="KeepLocalButton_Click"
                         Content="Lokale Erkennung behalten" />
-                <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
+                <Button Width="120"
+                        Margin="0,0,12,0"
+                        Padding="10,6"
+                        IsEnabled="{Binding IsInteractive}"
+                        Click="CancelButton_Click"
+                        Content="Abbrechen" />
                 <Button Width="140"
                         Padding="10,6"
-                        IsEnabled="{Binding CanApply}"
                         Click="ApplyButton_Click"
-                        Content="Übernehmen" />
+                        Content="Übernehmen">
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Setter Property="IsEnabled" Value="False" />
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsInteractive}" Value="True" />
+                                        <Condition Binding="{Binding CanApply}" Value="True" />
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="IsEnabled" Value="True" />
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
             </StackPanel>
         </DockPanel>
     </Grid>

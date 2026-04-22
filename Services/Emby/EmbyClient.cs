@@ -145,7 +145,8 @@ internal sealed class EmbyClient : IEmbyClient
             return null;
         }
 
-        EmbyItem? fallbackItem = null;
+        EmbyItem? singleCandidate = null;
+        var candidateCount = 0;
         foreach (var itemElement in itemsElement.EnumerateArray())
         {
             var item = ParseItem(itemElement);
@@ -154,14 +155,17 @@ internal sealed class EmbyClient : IEmbyClient
                 continue;
             }
 
-            fallbackItem ??= item;
+            candidateCount++;
+            singleCandidate = item;
             if (string.Equals(item.Path, mediaFilePath, StringComparison.OrdinalIgnoreCase))
             {
                 return item;
             }
         }
 
-        return fallbackItem;
+        // Wenn Emby mehrere Treffer zum Path-Filter liefert, waere ein beliebiger "erster" Fallback
+        // fachlich gefaehrlich: Danach wuerden Provider-IDs und Refreshs am falschen Item landen.
+        return candidateCount == 1 ? singleCandidate : null;
     }
 
     /// <inheritdoc />

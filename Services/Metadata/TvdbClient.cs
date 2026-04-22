@@ -148,17 +148,33 @@ internal sealed class TvdbClient : ITvdbClient
         CancellationToken cancellationToken = default)
     {
         var useLanguage = !string.IsNullOrWhiteSpace(language);
-        var results = await FetchSeriesEpisodesInternalAsync(
+        var localizedResults = await FetchSeriesEpisodesInternalAsync(
             apiKey, pin, seriesId, useLanguage ? language!.Trim() : null, cancellationToken);
-
-        // Fallback: Sprach-Endpunkt lieferte keine Titel → sprachneutralen Endpunkt versuchen.
-        if (results.Count == 0 && useLanguage)
+        if (!useLanguage)
         {
-            results = await FetchSeriesEpisodesInternalAsync(
-                apiKey, pin, seriesId, language: null, cancellationToken);
+            return localizedResults;
         }
 
-        return results;
+        // Der sprachspezifische Endpunkt kann einzelne Episoden ohne Uebersetzung auslassen oder ohne
+        // Titel liefern. Deshalb wird der sprachneutrale Endpunkt immer als Vollstaendigkeits-Fallback
+        // nachgeladen und pro Episode nur dort herangezogen, wo die lokalisierte Antwort Luecken hat.
+        var neutralResults = await FetchSeriesEpisodesInternalAsync(
+            apiKey,
+            pin,
+            seriesId,
+            language: null,
+            cancellationToken);
+        if (localizedResults.Count == 0)
+        {
+            return neutralResults;
+        }
+
+        if (neutralResults.Count == 0)
+        {
+            return localizedResults;
+        }
+
+        return MergeEpisodeRecords(localizedResults, neutralResults);
     }
 
     private async Task<List<TvdbEpisodeRecord>> FetchSeriesEpisodesInternalAsync(
@@ -410,6 +426,41 @@ internal sealed class TvdbClient : ITvdbClient
         }
 
         return null;
+    }
+
+    private static IReadOnlyList<TvdbEpisodeRecord> MergeEpisodeRecords(
+        IReadOnlyList<TvdbEpisodeRecord> localizedResults,
+        IReadOnlyList<TvdbEpisodeRecord> neutralResults)
+    {
+        var localizedById = localizedResults
+            .GroupBy(episode => episode.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+        var mergedEpisodes = new List<TvdbEpisodeRecord>(neutralResults.Count + localizedResults.Count);
+        var seenIds = new HashSet<int>();
+
+        foreach (var neutralEpisode in neutralResults)
+        {
+            seenIds.Add(neutralEpisode.Id);
+            if (localizedById.TryGetValue(neutralEpisode.Id, out var localizedEpisode))
+            {
+                mergedEpisodes.Add(new TvdbEpisodeRecord(
+                    neutralEpisode.Id,
+                    string.IsNullOrWhiteSpace(localizedEpisode.Name) ? neutralEpisode.Name : localizedEpisode.Name,
+                    localizedEpisode.SeasonNumber ?? neutralEpisode.SeasonNumber,
+                    localizedEpisode.EpisodeNumber ?? neutralEpisode.EpisodeNumber,
+                    string.IsNullOrWhiteSpace(localizedEpisode.Aired) ? neutralEpisode.Aired : localizedEpisode.Aired));
+                continue;
+            }
+
+            mergedEpisodes.Add(neutralEpisode);
+        }
+
+        foreach (var localizedEpisode in localizedResults.Where(episode => !seenIds.Contains(episode.Id)))
+        {
+            mergedEpisodes.Add(localizedEpisode);
+        }
+
+        return mergedEpisodes;
     }
 
     private static Uri BuildRequestUri(string relativePath)

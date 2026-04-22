@@ -183,7 +183,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem abschließenden Schreibschritt noch geprüft oder korrigiert werden.";
 
-    public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien und stößt danach nur für tatsächlich geänderte Emby-Einträge einen gezielten Metadatenrefresh an.";
+    public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien. Wenn Emby-Zugangsdaten vorhanden sind und das Emby-Item bereits bekannt ist, wird danach nur für tatsächlich geänderte Einträge ein gezielter Metadatenrefresh angestoßen.";
 
     private async Task SelectReportAsync()
     {
@@ -208,9 +208,17 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         }
 
         var importEntries = _reportPaths
-            .SelectMany(_services.Sync.LoadNewOutputReport)
+            .Select(reportPath => new
+            {
+                ReportPath = reportPath,
+                LastWriteTimeUtc = File.GetLastWriteTimeUtc(reportPath),
+                Entries = _services.Sync.LoadNewOutputReport(reportPath)
+            })
+            .OrderBy(report => report.LastWriteTimeUtc)
+            .ThenBy(report => report.ReportPath, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(report => report.Entries)
             .GroupBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
+            .Select(group => group.Aggregate(MergeImportEntries))
             .OrderBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
             .ToList();
         ReplaceItems(importEntries);
@@ -378,8 +386,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         await RunBusyAsync(async () =>
         {
             var settings = LoadConfiguredSettings();
+            var canRefreshEmby = HasEmbyApiSettings();
             var updatedCount = 0;
             var skippedCount = 0;
+            var refreshFailureCount = 0;
 
             for (var index = 0; index < selectedItems.Count; index++)
             {
@@ -396,6 +406,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 if (!item.ProviderIds.HasAny)
                 {
                     item.SetStatus("Übersprungen", "Keine TVDB- oder IMDB-ID vorhanden. Bitte IDs manuell ergänzen oder Emby-Metadaten prüfen.");
+                    skippedCount++;
+                    continue;
+                }
+
+                if (!item.HasValidProviderIds)
+                {
+                    item.MarkInvalidProviderIds();
                     skippedCount++;
                     continue;
                 }
@@ -421,19 +438,39 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     continue;
                 }
 
-                var refreshTriggered = false;
-                if (!string.IsNullOrWhiteSpace(item.EmbyItemId))
+                updatedCount++;
+
+                if (!canRefreshEmby)
                 {
-                    await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
-                    refreshTriggered = true;
+                    item.MarkUpdated(
+                        metadataRefreshTriggered: false,
+                        noRefreshReason: string.IsNullOrWhiteSpace(item.EmbyItemId)
+                            ? "Emby-Item noch nicht gefunden."
+                            : "Emby-Refresh nicht ausgeführt, weil keine Emby-API-Zugangsdaten konfiguriert sind.");
+                    continue;
                 }
 
-                item.MarkUpdated(refreshTriggered);
-                updatedCount++;
+                if (string.IsNullOrWhiteSpace(item.EmbyItemId))
+                {
+                    item.MarkUpdated(metadataRefreshTriggered: false);
+                    continue;
+                }
+
+                try
+                {
+                    await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
+                    item.MarkUpdated(metadataRefreshTriggered: true);
+                }
+                catch (Exception ex)
+                {
+                    refreshFailureCount++;
+                    item.MarkRefreshFailed(ex.Message);
+                    AppendLog($"Emby-Refresh fehlgeschlagen: {item.MediaFileName} -> {ex.Message}");
+                }
             }
 
             ProgressValue = 100;
-            StatusText = $"Änderungen geschrieben: {updatedCount} aktualisiert, {skippedCount} übersprungen.";
+            StatusText = BuildRunSyncSummary(updatedCount, skippedCount, refreshFailureCount, canRefreshEmby);
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
         });
@@ -613,7 +650,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private bool CanRunSync()
     {
-        return !_isBusy && HasEmbyApiSettings() && Items.Any(item => item.IsSelected);
+        return !_isBusy && Items.Any(item => item.IsSelected);
     }
 
     private void SetBusy(bool isBusy)
@@ -783,10 +820,15 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private void SetReportPaths(IEnumerable<string> reportPaths)
     {
         _reportPaths.Clear();
-        _reportPaths.AddRange(reportPaths
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase));
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reportPath in reportPaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            if (seenPaths.Add(reportPath))
+            {
+                _reportPaths.Add(reportPath);
+            }
+        }
+
         ReportPath = _reportPaths.Count switch
         {
             0 => string.Empty,
@@ -845,6 +887,51 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    /// <summary>
+    /// Führt Dubletten aus mehreren Reports zu einem stabilen Zielzustand zusammen.
+    /// </summary>
+    /// <remarks>
+    /// Die Reports werden vorab chronologisch aufsteigend geladen. Beim Zusammenführen hat daher der
+    /// zeitlich spätere Report Vorrang, fehlende Provider-IDs werden aber weiterhin aus älteren Reports
+    /// übernommen. So gewinnt ein neuerer, vollständigerer Import, ohne ergänzende ältere Daten zu verlieren.
+    /// </remarks>
+    private static EmbyImportEntry MergeImportEntries(EmbyImportEntry earlierEntry, EmbyImportEntry laterEntry)
+    {
+        return new EmbyImportEntry(
+            laterEntry.MediaFilePath,
+            new EmbyProviderIds(
+                PickPreferredProviderId(earlierEntry.ProviderIds.TvdbId, laterEntry.ProviderIds.TvdbId),
+                PickPreferredProviderId(earlierEntry.ProviderIds.ImdbId, laterEntry.ProviderIds.ImdbId)));
+    }
+
+    private static string? PickPreferredProviderId(string? earlierValue, string? laterValue)
+    {
+        return string.IsNullOrWhiteSpace(laterValue) ? earlierValue : laterValue;
+    }
+
+    private static string BuildRunSyncSummary(
+        int updatedCount,
+        int skippedCount,
+        int refreshFailureCount,
+        bool canRefreshEmby)
+    {
+        var parts = new List<string>
+        {
+            $"Änderungen geschrieben: {updatedCount} aktualisiert, {skippedCount} übersprungen."
+        };
+        if (refreshFailureCount > 0)
+        {
+            parts.Add($"{refreshFailureCount} Emby-Refresh-Fehler.");
+        }
+
+        if (!canRefreshEmby)
+        {
+            parts.Add("Emby-Refresh wurde wegen fehlender API-Zugangsdaten nicht ausgeführt.");
+        }
+
+        return string.Join(" ", parts);
     }
 
     private string BuildReportSelectionDetailText()

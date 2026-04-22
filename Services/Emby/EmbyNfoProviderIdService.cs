@@ -133,12 +133,14 @@ internal sealed class EmbyNfoProviderIdService
 
     private static bool SetUniqueId(XElement root, string type, string value, bool isDefault)
     {
-        var uniqueId = root
+        var matchingUniqueIds = root
             .Elements("uniqueid")
-            .FirstOrDefault(element => string.Equals(
+            .Where(element => string.Equals(
                 (string?)element.Attribute("type"),
                 type,
-                StringComparison.OrdinalIgnoreCase));
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var uniqueId = matchingUniqueIds.FirstOrDefault();
 
         var changed = false;
         if (uniqueId is null)
@@ -150,16 +152,26 @@ internal sealed class EmbyNfoProviderIdService
             root.Add(uniqueId);
             changed = true;
         }
-        else if (!string.Equals(uniqueId.Value.Trim(), value, StringComparison.Ordinal))
+        else
         {
-            uniqueId.Value = value;
-            changed = true;
+            foreach (var duplicateUniqueId in matchingUniqueIds.Skip(1).ToList())
+            {
+                duplicateUniqueId.Remove();
+                changed = true;
+            }
+
+            if (!string.Equals(uniqueId.Value.Trim(), value, StringComparison.Ordinal))
+            {
+                uniqueId.Value = value;
+                changed = true;
+            }
         }
 
-        if (isDefault
-            && !string.Equals((string?)uniqueId.Attribute("default"), "true", StringComparison.OrdinalIgnoreCase))
+        var expectedDefaultValue = isDefault ? "true" : null;
+        var currentDefaultValue = (string?)uniqueId.Attribute("default");
+        if (!string.Equals(currentDefaultValue, expectedDefaultValue, StringComparison.OrdinalIgnoreCase))
         {
-            uniqueId.SetAttributeValue("default", "true");
+            uniqueId.SetAttributeValue("default", expectedDefaultValue);
             changed = true;
         }
 
@@ -168,16 +180,24 @@ internal sealed class EmbyNfoProviderIdService
 
     private static bool SetLegacyProviderElement(XElement root, string elementName, string value)
     {
-        var element = root.Element(elementName);
+        var matchingElements = root.Elements(elementName).ToList();
+        var element = matchingElements.FirstOrDefault();
         if (element is null)
         {
             root.Add(new XElement(elementName, value));
             return true;
         }
 
+        var changed = false;
+        foreach (var duplicateElement in matchingElements.Skip(1).ToList())
+        {
+            duplicateElement.Remove();
+            changed = true;
+        }
+
         if (string.Equals(element.Value.Trim(), value, StringComparison.Ordinal))
         {
-            return false;
+            return changed;
         }
 
         element.Value = value;

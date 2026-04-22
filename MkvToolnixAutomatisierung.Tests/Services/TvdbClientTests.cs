@@ -184,6 +184,49 @@ public sealed class TvdbClientTests
     }
 
     [Fact]
+    public async Task GetSeriesEpisodesAsync_MergesNeutralFallbackEpisodes_WhenLocalizedResponseIsIncomplete()
+    {
+        var requests = new List<string>();
+
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request =>
+            {
+                requests.Add(request.RequestUri!.PathAndQuery);
+
+                return request.RequestUri!.PathAndQuery switch
+                {
+                    "/v4/login" => JsonResponse("""{"data":{"token":"token-123"}}"""),
+                    "/v4/series/42/episodes/default/deu?page=0" => JsonResponse(
+                        """{"data":{"episodes":[{"id":100,"name":"Pilot (DE)","seasonNumber":1,"number":1,"aired":"2024-01-01"}]},"links":{"next":null}}"""),
+                    "/v4/series/42/episodes/default?page=0" => JsonResponse(
+                        """{"data":{"episodes":[{"id":100,"name":"Pilot","seasonNumber":1,"number":1,"aired":"2024-01-01"},{"id":101,"name":"Finale","seasonNumber":1,"number":2,"aired":"2024-01-08"}]},"links":{"next":null}}"""),
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                };
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var episodes = await client.GetSeriesEpisodesAsync("key", pin: null, 42, language: "deu");
+
+        Assert.Collection(
+            episodes,
+            episode =>
+            {
+                Assert.Equal(100, episode.Id);
+                Assert.Equal("Pilot (DE)", episode.Name);
+            },
+            episode =>
+            {
+                Assert.Equal(101, episode.Id);
+                Assert.Equal("Finale", episode.Name);
+            });
+        Assert.Equal(
+            ["/v4/login", "/v4/series/42/episodes/default/deu?page=0", "/v4/series/42/episodes/default?page=0"],
+            requests);
+    }
+
+    [Fact]
     public void Dispose_DoesNotDispose_InjectedHttpClient()
     {
         var handler = new StubHttpMessageHandler();

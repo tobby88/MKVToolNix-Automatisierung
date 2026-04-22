@@ -64,6 +64,36 @@ public sealed class EmbyClientTests
     }
 
     [Fact]
+    public async Task FindItemByPathAsync_ReturnsNull_WhenMultipleNonExactMatchesAreReturned()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "Id": "item-1",
+                      "Name": "Pilot",
+                      "Path": "Z:\\Videos\\Serien\\Staffel 1\\Pilot.mkv"
+                    },
+                    {
+                      "Id": "item-2",
+                      "Name": "Pilot",
+                      "Path": "Z:\\Videos\\Serien\\Staffel 2\\Pilot.mkv"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var item = await client.FindItemByPathAsync(CreateSettings(), @"Z:\Videos\Serien\Pilot.mkv");
+
+        Assert.Null(item);
+    }
+
+    [Fact]
     public async Task GetLibrariesAsync_ParsesLocationsAndRefreshStatus()
     {
         using var httpClient = new HttpClient(new StubHttpMessageHandler

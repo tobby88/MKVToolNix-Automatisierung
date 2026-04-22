@@ -194,6 +194,7 @@
                       CanUserAddRows="False"
                       CanUserDeleteRows="False"
                       HorizontalScrollBarVisibility="Auto"
+                      IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                       IsReadOnly="False"
                       ColumnWidth="*"
                       PreviewKeyDown="EmbyItemsGrid_OnPreviewKeyDown"

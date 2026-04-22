@@ -96,6 +96,37 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void ApplyAnalysis_ReportsImdbMismatchAlongsideTvdbMismatch()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("100", "tt1234567"));
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", "tt7654321"),
+            EmbyItem: new EmbyItem(
+                "emby-1",
+                "Pilot",
+                vm.MediaFilePath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Tvdb"] = "300",
+                    ["Imdb"] = "tt1111111"
+                }),
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("IMDb tt1234567 vorgesehen", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("NFO: tt7654321", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("Emby: tt1111111", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ApplyAnalysis_WithOnlyTvdbId_StaysInWarningStateUntilImdbExists()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("200", null));
@@ -236,6 +267,19 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("Bereit", vm.StatusText);
         Assert.Equal("Ready", vm.StatusTone);
         Assert.Contains("IMDb manuell gesetzt", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InvalidImdbId_DoesNotCountAsCompleteProviderIds()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null))
+        {
+            ImdbId = "ttbad"
+        };
+
+        Assert.False(vm.HasValidProviderIds);
+        Assert.False(vm.HasCompleteProviderIds);
+        Assert.Equal("IMDB-ID muss im Format tt1234567 bis tt1234567890 angegeben werden.", vm[nameof(EmbySyncItemViewModel.ImdbId)]);
     }
 
     [Theory]

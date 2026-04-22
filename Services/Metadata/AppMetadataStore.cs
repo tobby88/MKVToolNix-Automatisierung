@@ -100,8 +100,8 @@ public sealed class AppMetadataSettings
     {
         return new AppMetadataSettings
         {
-            TvdbApiKey = TvdbApiKey,
-            TvdbPin = TvdbPin,
+            TvdbApiKey = TvdbApiKey?.Trim() ?? string.Empty,
+            TvdbPin = TvdbPin?.Trim() ?? string.Empty,
             SeriesMappings = SeriesMappings.Select(mapping => mapping.Clone()).ToList()
         };
     }
@@ -141,10 +141,10 @@ public sealed class SeriesMetadataMapping
     {
         return new SeriesMetadataMapping
         {
-            LocalSeriesName = LocalSeriesName,
+            LocalSeriesName = LocalSeriesName?.Trim() ?? string.Empty,
             TvdbSeriesId = TvdbSeriesId,
-            TvdbSeriesName = TvdbSeriesName,
-            OriginalLanguage = OriginalLanguage
+            TvdbSeriesName = TvdbSeriesName?.Trim() ?? string.Empty,
+            OriginalLanguage = string.IsNullOrWhiteSpace(OriginalLanguage) ? null : OriginalLanguage.Trim()
         };
     }
 }

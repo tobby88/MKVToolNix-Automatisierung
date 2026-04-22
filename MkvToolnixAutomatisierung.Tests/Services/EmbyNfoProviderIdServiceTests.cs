@@ -97,6 +97,51 @@ public sealed class EmbyNfoProviderIdServiceTests
         }
     }
 
+    [Fact]
+    public void UpdateProviderIds_RemovesDuplicateProviderElements_AndKeepsSingleCanonicalEntry()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <uniqueid type="tvdb" default="true">111</uniqueid>
+                  <uniqueid type="tvdb">222</uniqueid>
+                  <uniqueid type="imdb" default="true">tt0000001</uniqueid>
+                  <tvdbid>111</tvdbid>
+                  <tvdbid>222</tvdbid>
+                  <imdbid>tt0000001</imdbid>
+                  <imdbid>tt0000002</imdbid>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().UpdateProviderIds(
+                mediaPath,
+                new EmbyProviderIds("12345", "tt9876543"));
+
+            Assert.True(result.Success);
+            Assert.True(result.NfoChanged);
+
+            var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
+            var uniqueIds = updatedDocument.Root!.Elements("uniqueid").ToList();
+            Assert.Single(uniqueIds, element => (string?)element.Attribute("type") == "tvdb");
+            Assert.Single(uniqueIds, element => (string?)element.Attribute("type") == "imdb");
+            Assert.Equal("true", uniqueIds.Single(element => (string?)element.Attribute("type") == "tvdb").Attribute("default")?.Value);
+            Assert.Null(uniqueIds.Single(element => (string?)element.Attribute("type") == "imdb").Attribute("default"));
+            Assert.Single(updatedDocument.Root.Elements("tvdbid"));
+            Assert.Single(updatedDocument.Root.Elements("imdbid"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-tests", Guid.NewGuid().ToString("N"));

@@ -4,22 +4,46 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
+[Collection("PortableStorage")]
 public sealed class EmbySyncViewModelTests
 {
-    private static EmbySyncViewModel CreateViewModel(IUserDialogService? dialogService = null)
+    private readonly PortableStorageFixture _storageFixture;
+
+    public EmbySyncViewModelTests(PortableStorageFixture storageFixture)
+    {
+        _storageFixture = storageFixture;
+        _storageFixture.Reset();
+    }
+
+    private static EmbySyncViewModel CreateViewModel(
+        IUserDialogService? dialogService = null,
+        IEmbyClient? embyClient = null,
+        AppEmbySettings? configuredEmbySettings = null)
     {
         var settingsStore = new AppSettingsStore();
-        var embySettings = new AppEmbySettingsStore(settingsStore);
+        settingsStore.Save(new CombinedAppSettings
+        {
+            Archive = new AppArchiveSettings(),
+            Metadata = new AppMetadataSettings(),
+            Emby = configuredEmbySettings?.Clone() ?? new AppEmbySettings
+            {
+                ServerUrl = AppEmbySettings.DefaultServerUrl,
+                ApiKey = string.Empty,
+                ScanWaitTimeoutSeconds = 60
+            }
+        });
+        var embySettingsStore = new AppEmbySettingsStore(settingsStore);
         var archiveSettings = new AppArchiveSettingsStore(settingsStore);
         var metadataStore = new AppMetadataStore(settingsStore);
         var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient());
-        var syncService = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
-        var services = new EmbyModuleServices(embySettings, archiveSettings, syncService, episodeMetadata, new NullSettingsDialogService());
+        var syncService = new EmbyMetadataSyncService(embyClient ?? new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+        var services = new EmbyModuleServices(embySettingsStore, archiveSettings, syncService, episodeMetadata, new NullSettingsDialogService());
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
     }
 
@@ -160,6 +184,169 @@ public sealed class EmbySyncViewModelTests
         }
     }
 
+    [Fact]
+    public void SelectReportCommand_MergesDuplicateEntriesAcrossReports_ByRecencyAndComplementsMissingIds()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            File.WriteAllText(mediaPath, string.Empty);
+
+            var olderReportPath = WriteMetadataReport(
+                tempDirectory,
+                "older.metadata.json",
+                mediaPath,
+                "101");
+            var newerReportPath = WriteMetadataReport(
+                tempDirectory,
+                "newer.metadata.json",
+                mediaPath,
+                "202",
+                imdbId: "tt1234567");
+            File.SetLastWriteTimeUtc(olderReportPath, new DateTime(2026, 4, 20, 10, 0, 0, DateTimeKind.Utc));
+            File.SetLastWriteTimeUtc(newerReportPath, new DateTime(2026, 4, 20, 11, 0, 0, DateTimeKind.Utc));
+
+            var dialogService = new SelectingDialogService([olderReportPath, newerReportPath]);
+            var vm = CreateViewModel(dialogService);
+
+            vm.SelectReportCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 1 && vm.StatusText.Contains("Prüfung abgeschlossen", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+            var item = Assert.Single(vm.Items);
+            Assert.Equal("202", item.TvdbId);
+            Assert.Equal("tt1234567", item.ImdbId);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RunSyncCommand_WithoutEmbyCredentials_UpdatesLocalNfoAndSkipsRefresh()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+
+            var vm = CreateViewModel();
+            var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "tt1234567"));
+            item.ApplyEmbyItem(new EmbyItem(
+                "emby-1",
+                "Pilot",
+                mediaPath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)));
+            vm.Items.Add(item);
+            vm.SelectedItem = item;
+
+            Assert.True(vm.RunSyncCommand.CanExecute(null));
+
+            vm.RunSyncCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Aktualisiert", TimeSpan.FromSeconds(2)));
+            Assert.Contains("keine Emby-API-Zugangsdaten", item.Note, StringComparison.Ordinal);
+            Assert.Contains("Emby-Refresh wurde wegen fehlender API-Zugangsdaten", vm.StatusText, StringComparison.Ordinal);
+            var updatedText = File.ReadAllText(nfoPath);
+            Assert.Contains("<tvdbid>12345</tvdbid>", updatedText);
+            Assert.Contains("<imdbid>tt1234567</imdbid>", updatedText);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RunSyncCommand_SkipsInvalidProviderIds_BeforeWritingNfo()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            const string originalNfo = "<episodedetails><title>Pilot</title></episodedetails>";
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, originalNfo);
+
+            var vm = CreateViewModel();
+            var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "ttbad"));
+            vm.Items.Add(item);
+
+            vm.RunSyncCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "IDs prüfen", TimeSpan.FromSeconds(2)));
+            Assert.Equal(originalNfo, File.ReadAllText(nfoPath));
+            Assert.Contains("IMDB-ID muss im Format", item.Note, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void RunSyncCommand_ContinuesAfterRefreshFailure_AndMarksAffectedRow()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+
+            var embyClient = new RefreshFailingEmbyClient();
+            var vm = CreateViewModel(
+                embyClient: embyClient,
+                configuredEmbySettings: new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+            var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "tt1234567"));
+            item.ApplyEmbyItem(new EmbyItem(
+                "emby-1",
+                "Pilot",
+                mediaPath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)));
+            vm.Items.Add(item);
+
+            vm.RunSyncCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Refresh prüfen", TimeSpan.FromSeconds(2)));
+            Assert.Equal(1, embyClient.RefreshCallCount);
+            Assert.Contains("fehlgeschlagen", item.Note, StringComparison.Ordinal);
+            Assert.Contains("Emby-Refresh-Fehler", vm.StatusText, StringComparison.Ordinal);
+            Assert.Contains("<tvdbid>12345</tvdbid>", File.ReadAllText(nfoPath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
@@ -239,7 +426,12 @@ public sealed class EmbySyncViewModelTests
         public override string[]? SelectFiles(string title, string filter, string initialDirectory) => selectedFiles.ToArray();
     }
 
-    private static string WriteMetadataReport(string directory, string fileName, string outputPath, string tvdbEpisodeId)
+    private static string WriteMetadataReport(
+        string directory,
+        string fileName,
+        string outputPath,
+        string tvdbEpisodeId,
+        string? imdbId = null)
     {
         var reportPath = Path.Combine(directory, fileName);
         File.WriteAllText(
@@ -257,11 +449,42 @@ public sealed class EmbySyncViewModelTests
                         TvdbEpisodeId = tvdbEpisodeId,
                         ProviderIds = new BatchOutputProviderIds
                         {
-                            Tvdb = tvdbEpisodeId
+                            Tvdb = tvdbEpisodeId,
+                            Imdb = imdbId
                         }
                     }
                 ]
             }));
         return reportPath;
+    }
+
+    private sealed class RefreshFailingEmbyClient : IEmbyClient
+    {
+        public int RefreshCallCount { get; private set; }
+
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+        {
+            RefreshCallCount++;
+            throw new InvalidOperationException("Refresh kaputt");
+        }
+
+        public void Dispose()
+        {
+        }
     }
 }
