@@ -100,6 +100,45 @@ public sealed class ManagedToolInstallerServiceTests
         Assert.NotNull(savedSettings.ManagedFfprobe.LastCheckedUtc);
     }
 
+    [Fact]
+    public async Task EnsureManagedToolsAsync_ReportsDownloadProgress()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        toolPathStore.Save(settings);
+
+        var archiveBytes = new byte[256 * 1024];
+        Random.Shared.NextBytes(archiveBytes);
+        var archiveHash = Convert.ToHexString(SHA256.HashData(archiveBytes));
+        var progressEvents = new List<ManagedToolStartupProgress>();
+        var downloadUri = new Uri("https://example.invalid/ffprobe.zip");
+        var handler = new FakeHttpMessageHandler((downloadUri, archiveBytes));
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22T10-00-00Z",
+                "Latest Auto-Build",
+                downloadUri,
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                archiveHash))],
+            new StubArchiveExtractor(destinationDirectory =>
+            {
+                var toolDirectory = Path.Combine(destinationDirectory, "ffprobe");
+                Directory.CreateDirectory(toolDirectory);
+                File.WriteAllText(Path.Combine(toolDirectory, "ffprobe.exe"), "tool");
+            }),
+            new HttpClient(handler));
+
+        await service.EnsureManagedToolsAsync(new CollectingProgress(progressEvents));
+
+        Assert.Contains(progressEvents, entry => entry.StatusText.Contains("ffprobe wird heruntergeladen", StringComparison.Ordinal));
+        Assert.Contains(progressEvents, entry => !entry.IsIndeterminate && entry.ProgressPercent > 0d);
+        Assert.Contains(progressEvents, entry => entry.StatusText.Contains("Werkzeuge bereit", StringComparison.Ordinal));
+    }
+
     private sealed class StubPackageSource(ManagedToolPackage package) : IManagedToolPackageSource
     {
         public ManagedToolKind Kind => package.Kind;
@@ -133,13 +172,23 @@ public sealed class ManagedToolInstallerServiceTests
             RequestedUris.Add(request.RequestUri!);
             if (_responses.TryGetValue(request.RequestUri!.ToString(), out var content))
             {
+                var byteContent = new ByteArrayContent(content);
+                byteContent.Headers.ContentLength = content.Length;
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new ByteArrayContent(content)
+                    Content = byteContent
                 });
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class CollectingProgress(List<ManagedToolStartupProgress> events) : IProgress<ManagedToolStartupProgress>
+    {
+        public void Report(ManagedToolStartupProgress value)
+        {
+            events.Add(value);
         }
     }
 }

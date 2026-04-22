@@ -20,6 +20,19 @@ internal sealed class AppCompositionRoot
     /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
     public AppComposition Create()
     {
+        return CreateAsync().GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Erstellt die komplette Objektstruktur der Anwendung asynchron und meldet sichtbaren Startfortschritt.
+    /// </summary>
+    /// <param name="progress">Optionaler Fortschrittskanal für Werkzeugprüfung und Erstversorgung.</param>
+    /// <param name="cancellationToken">Abbruchsignal für Startvorgänge mit Netzwerkzugriff.</param>
+    /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
+    public async Task<AppComposition> CreateAsync(
+        IProgress<ManagedToolStartupProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
         var services = new ServiceCollection();
         AppCompositionModuleCatalog.RegisterAll(services);
         var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -28,31 +41,40 @@ internal sealed class AppCompositionRoot
             ValidateScopes = true
         });
 
-        return CreateComposition(serviceProvider);
+        try
+        {
+            var managedToolStartupResult = await serviceProvider
+                .GetRequiredService<ManagedToolInstallerService>()
+                .EnsureManagedToolsAsync(progress, cancellationToken);
+
+            return CreateComposition(serviceProvider, managedToolStartupResult);
+        }
+        catch
+        {
+            serviceProvider.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
     /// Löst die Startdienste aus einem bereits gebauten Root-Provider auf und kapselt den Fehlerpfad einschließlich Dispose.
     /// </summary>
     /// <param name="serviceProvider">Vollständig gebauter Root-Provider der Anwendung.</param>
+    /// <param name="managedToolStartupResult">Vorher bereits ermitteltes Ergebnis der Werkzeugprüfung.</param>
     /// <returns>Fertig aufgelöste Anwendungs-Komposition.</returns>
-    internal static AppComposition CreateComposition(ServiceProvider serviceProvider)
+    internal static AppComposition CreateComposition(
+        ServiceProvider serviceProvider,
+        ManagedToolStartupResult? managedToolStartupResult = null)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
 
         try
         {
-            var managedToolStartupResult = serviceProvider
-                .GetRequiredService<ManagedToolInstallerService>()
-                .EnsureManagedToolsAsync()
-                .GetAwaiter()
-                .GetResult();
-
             return new AppComposition(
                 serviceProvider,
                 serviceProvider.GetRequiredService<IUserDialogService>(),
                 serviceProvider.GetRequiredService<AppSettingsLoadResult>(),
-                managedToolStartupResult,
+                managedToolStartupResult ?? new ManagedToolStartupResult([]),
                 serviceProvider.GetRequiredService<MainWindowViewModel>());
         }
         catch

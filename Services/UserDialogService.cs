@@ -23,7 +23,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return ShowDialog(dialog) == true ? dialog.FileName : null;
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return ShowDialog(dialog) == true ? dialog.FileName : null;
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
+        return ShowDialog(dialog) == true ? dialog.FileNames : null;
     }
 
     /// <summary>
@@ -73,7 +73,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
+        return ShowDialog(dialog) == true ? dialog.FileNames : null;
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ internal sealed class UserDialogService : IUserDialogService
             FileName = fileName
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return ShowDialog(dialog) == true ? dialog.FileName : null;
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return ShowDialog(dialog) == true ? dialog.FileName : null;
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileName : null;
+        return ShowDialog(dialog) == true ? dialog.FileName : null;
     }
 
     /// <summary>
@@ -158,7 +158,7 @@ internal sealed class UserDialogService : IUserDialogService
             InitialDirectory = initialDirectory
         };
 
-        return dialog.ShowDialog(GetOwner()) == true ? dialog.FileNames : null;
+        return ShowDialog(dialog) == true ? dialog.FileNames : null;
     }
 
     /// <summary>
@@ -202,8 +202,7 @@ internal sealed class UserDialogService : IUserDialogService
     /// </summary>
     public bool ConfirmMuxStart()
     {
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             "Soll der angezeigte MKVToolNix-Aufruf jetzt ausgeführt werden?",
             "Verarbeitung starten",
             MessageBoxButton.YesNo,
@@ -232,8 +231,7 @@ internal sealed class UserDialogService : IUserDialogService
         lines.Add(string.Empty);
         lines.Add("Jetzt komplett starten?");
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             string.Join(Environment.NewLine, lines),
             "Batch starten",
             MessageBoxButton.YesNo,
@@ -260,8 +258,7 @@ internal sealed class UserDialogService : IUserDialogService
             visibleScopeText
         };
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             string.Join(Environment.NewLine, lines),
             "Ausgeblendete Folgen einbeziehen",
             MessageBoxButton.YesNo,
@@ -273,8 +270,7 @@ internal sealed class UserDialogService : IUserDialogService
     /// </summary>
     public bool ConfirmArchiveCopy(MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.FileCopyPlan copyPlan)
     {
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             $"Die vorhandene Zieldatei muss zuerst lokal kopiert werden:\n{copyPlan.SourceFilePath}\n\nArbeitskopie:\n{copyPlan.DestinationFilePath}\n\nDateigröße: {FormatFileSize(copyPlan.FileSizeBytes)}\n\nJetzt kopieren?",
             "Zieldatei kopieren",
             MessageBoxButton.YesNo,
@@ -305,8 +301,7 @@ internal sealed class UserDialogService : IUserDialogService
             lines.AddRange(unusedFiles.Select(path => "- " + Path.GetFileName(path)));
         }
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             string.Join(Environment.NewLine, lines),
             "Quelldateien aufräumen",
             MessageBoxButton.YesNo,
@@ -318,8 +313,7 @@ internal sealed class UserDialogService : IUserDialogService
     /// </summary>
     public bool ConfirmBatchRecycleDoneFiles(int fileCount, string doneDirectory)
     {
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             $"{fileCount} Datei(en) dieses Laufs liegen jetzt in:\n{doneDirectory}\n\nSollen sie jetzt gesammelt in den Papierkorb verschoben werden?",
             "Done-Ordner aufräumen",
             MessageBoxButton.YesNo,
@@ -331,8 +325,7 @@ internal sealed class UserDialogService : IUserDialogService
     /// </summary>
     public bool AskOpenDoneDirectory(string doneDirectory)
     {
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             $"Der Done-Ordner bleibt vorerst erhalten:\n{doneDirectory}\n\nJetzt zur Kontrolle öffnen?",
             "Done-Ordner öffnen",
             MessageBoxButton.YesNo,
@@ -355,8 +348,7 @@ internal sealed class UserDialogService : IUserDialogService
             "Diesen Hinweis als geprüft freigeben?"
         };
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             string.Join(Environment.NewLine, lines),
             "Hinweis prüfen",
             MessageBoxButton.YesNo,
@@ -419,8 +411,7 @@ internal sealed class UserDialogService : IUserDialogService
             ? "Nein = diese Quelle verwerfen und die nächste Alternative prüfen."
             : "Nein = diese Quelle ist nicht in Ordnung.";
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             $"Die Quelle wurde zur Prüfung geöffnet:\n{fileName}\n\nJa = Quelle ist in Ordnung und wird freigegeben.\n{noText}\nAbbrechen = vorerst nichts ändern.",
             "Quelle prüfen",
             MessageBoxButton.YesNoCancel,
@@ -429,23 +420,44 @@ internal sealed class UserDialogService : IUserDialogService
 
     public void ShowInfo(string title, string message)
     {
-        MessageBox.Show(GetOwner(), message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowMessageBox(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     public void ShowWarning(string title, string message)
     {
-        MessageBox.Show(GetOwner(), message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        ShowMessageBox(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     public void ShowError(string message)
     {
-        MessageBox.Show(GetOwner(), message, "Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+        ShowMessageBox(message, "Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private static Window? GetOwner()
     {
         return Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+            ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault()
             ?? Application.Current?.MainWindow;
+    }
+
+    private static bool? ShowDialog(CommonDialog dialog)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+
+        var owner = GetOwner();
+        return owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
+    }
+
+    private static MessageBoxResult ShowMessageBox(
+        string message,
+        string title,
+        MessageBoxButton button,
+        MessageBoxImage image)
+    {
+        var owner = GetOwner();
+        return owner is null
+            ? MessageBox.Show(message, title, button, image)
+            : MessageBox.Show(owner, message, title, button, image);
     }
 
     /// <summary>
@@ -494,8 +506,7 @@ internal sealed class UserDialogService : IUserDialogService
             "Abbrechen: nichts ändern"
         };
 
-        return MessageBox.Show(
-            GetOwner(),
+        return ShowMessageBox(
             string.Join(Environment.NewLine, lines),
             title,
             MessageBoxButton.YesNoCancel,

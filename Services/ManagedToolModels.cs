@@ -53,6 +53,19 @@ internal sealed record ManagedToolStartupResult(IReadOnlyList<string> Warnings)
 }
 
 /// <summary>
+/// Laufender Status der Werkzeugprüfung beim App-Start.
+/// </summary>
+/// <param name="StatusText">Kurzer Hauptstatus für den sichtbaren Startdialog.</param>
+/// <param name="DetailText">Optionaler Detailtext, etwa Werkzeugname oder Bytefortschritt.</param>
+/// <param name="ProgressPercent">Optionaler Prozentwert für determinate Schritte.</param>
+/// <param name="IsIndeterminate">Kennzeichnet Schritte ohne belastbaren Prozentfortschritt.</param>
+internal sealed record ManagedToolStartupProgress(
+    string StatusText,
+    string? DetailText = null,
+    double? ProgressPercent = null,
+    bool IsIndeterminate = true);
+
+/// <summary>
 /// Liefert die aktuelle Download-Metadaten eines automatisch verwalteten Werkzeugs.
 /// </summary>
 internal interface IManagedToolPackageSource
@@ -69,4 +82,3 @@ internal interface IManagedToolPackageSource
     /// <returns>Aufgelöste Paketmetadaten inklusive Download-URL und Prüfsumme.</returns>
     Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default);
 }
-
