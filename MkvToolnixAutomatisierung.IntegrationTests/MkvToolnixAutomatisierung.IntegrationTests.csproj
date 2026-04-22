@@ -41,4 +41,21 @@
       Targets="Build"
       Properties="Configuration=$(Configuration)" />
   </Target>
+
+  <!-- Gezielte Testhost-Haertung fuer die lokale Workspace-Ausfuehrung:
+       Der Microsoft.NET.Test.Sdk-Host verweist in seiner deps.json auf die CodeCoverage-Shim-DLL,
+       kopiert diese in dieser Umgebung aber nicht verlässlich in den Testoutput. Wir spiegeln
+       deshalb nur genau diese DLL in das Ausgabeverzeichnis, statt pauschal alle Lockfile-Assets
+       und damit auch ein unvollstaendiges lokales testhost-Layout zu erzwingen. -->
+  <Target Name="CopyCodeCoverageShim" AfterTargets="Build">
+    <PropertyGroup>
+      <CodeCoverageShimPath>$(NuGetPackageRoot)microsoft.codecoverage\17.12.0\lib\netcoreapp3.1\Microsoft.VisualStudio.CodeCoverage.Shim.dll</CodeCoverageShimPath>
+    </PropertyGroup>
+
+    <Copy
+      SourceFiles="$(CodeCoverageShimPath)"
+      DestinationFolder="$(OutDir)"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(CodeCoverageShimPath)')" />
+  </Target>
 </Project>
