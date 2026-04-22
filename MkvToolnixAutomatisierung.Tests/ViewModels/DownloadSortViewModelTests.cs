@@ -1,3 +1,5 @@
+using System.IO;
+using System.Reflection;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -144,6 +146,173 @@ public sealed class DownloadSortViewModelTests
         vm.Items.Add(CreateNonSortableItem("C.mp4"));
 
         Assert.Equal(3, vm.ItemCount);
+    }
+
+    [Fact]
+    public void ToggleSelectedItemSelectionCommand_CannotExecute_ForNonSortableSelectedItem()
+    {
+        var vm = CreateViewModel();
+        var item = CreateNonSortableItem();
+        vm.Items.Add(item);
+        vm.SelectedItem = item;
+
+        Assert.False(item.IsSelected);
+        Assert.False(vm.ToggleSelectedItemSelectionCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void MixedDefectiveItem_TargetChange_ReevaluatesAndClearsSelection()
+    {
+        var rootDirectory = CreateTemporaryDirectory();
+        try
+        {
+            var videoPath = Path.Combine(rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+            var textPath = Path.Combine(rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+            var subtitlePath = Path.Combine(rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+            CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+            CreateCompanionText(
+                textPath,
+                topic: "Neues aus Büttenwarder",
+                title: "Bildungsschock",
+                sizeText: "100,0 MiB");
+            CreateEmptyFile(subtitlePath);
+
+            var service = new DownloadSortService();
+            var scanResult = service.Scan(rootDirectory);
+            var vm = CreateViewModel();
+            ApplyScanResult(vm, rootDirectory, scanResult);
+            var item = Assert.Single(vm.Items);
+            vm.SelectedItem = item;
+
+            Assert.Equal(DownloadSortItemState.Ready, item.State);
+            Assert.True(item.IsSelected);
+
+            item.TargetFolderName = "defekt";
+
+            Assert.Equal(DownloadSortItemState.NeedsReview, item.State);
+            Assert.False(item.IsSelected);
+            Assert.Equal("Pruefen + Defekt", item.StatusText);
+            Assert.Contains("deutlich kleiner", item.Note, StringComparison.Ordinal);
+            Assert.Contains("reserviert", item.Note, StringComparison.Ordinal);
+            Assert.False(vm.RunSortCommand.CanExecute(null));
+            Assert.DoesNotContain(vm.TargetFolderOptions, option => string.Equals(option, "defekt", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TargetFolderOptions_ExcludeReservedDefectiveFolder()
+    {
+        var rootDirectory = CreateTemporaryDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(rootDirectory, "defekt"));
+            Directory.CreateDirectory(Path.Combine(rootDirectory, "SOKO Leipzig"));
+
+            var vm = CreateViewModel();
+            ApplyScanResult(vm, rootDirectory, new DownloadSortService().Scan(rootDirectory));
+
+            Assert.Contains("SOKO Leipzig", vm.TargetFolderOptions);
+            Assert.DoesNotContain(vm.TargetFolderOptions, option => string.Equals(option, "defekt", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TargetFolderChange_WhenSourceDirectoryDisappears_ShowsNeedsReviewInsteadOfThrowing()
+    {
+        var rootDirectory = CreateTemporaryDirectory();
+        try
+        {
+            var videoPath = Path.Combine(rootDirectory, "Testserie-Pilot-1234.mp4");
+            var textPath = Path.Combine(rootDirectory, "Testserie-Pilot-1234.txt");
+            CreateEmptyFile(videoPath);
+            CreateCompanionText(
+                textPath,
+                topic: "Testserie",
+                title: "Pilot");
+
+            var vm = CreateViewModel();
+            ApplyScanResult(vm, rootDirectory, new DownloadSortService().Scan(rootDirectory));
+            var item = Assert.Single(vm.Items);
+            vm.SelectedItem = item;
+
+            Directory.Delete(rootDirectory, recursive: true);
+
+            item.TargetFolderName = "Andere Serie";
+
+            Assert.Equal(DownloadSortItemState.NeedsReview, item.State);
+            Assert.False(item.IsSelected);
+            Assert.Contains("Bitte neu scannen", item.Note, StringComparison.Ordinal);
+            Assert.Equal("Scan-Ergebnis veraltet. Bitte neu scannen.", vm.StatusText);
+            Assert.False(vm.RunSortCommand.CanExecute(null));
+        }
+        finally
+        {
+            if (Directory.Exists(rootDirectory))
+            {
+                Directory.Delete(rootDirectory, recursive: true);
+            }
+        }
+    }
+
+    private static void ApplyScanResult(DownloadSortViewModel viewModel, string sourceDirectory, DownloadSortScanResult scanResult)
+    {
+        typeof(DownloadSortViewModel)
+            .GetField("_sourceDirectory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(viewModel, sourceDirectory);
+        typeof(DownloadSortViewModel)
+            .GetMethod("ApplyScanResult", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(viewModel, [scanResult]);
+    }
+
+    private static string CreateTemporaryDirectory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-download-sort-vm-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private static void CreateEmptyFile(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "content");
+    }
+
+    private static void CreateFileWithByteLength(string path, int length, byte value = 0)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, Enumerable.Repeat(value, length).ToArray());
+    }
+
+    private static void CreateCompanionText(
+        string path,
+        string topic,
+        string title,
+        string duration = "00:05:00",
+        string? sizeText = null)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var lines = new List<string>
+        {
+            $"Thema:       {topic}",
+            string.Empty,
+            $"Titel:       {title}",
+            string.Empty,
+            $"Dauer:       {duration}"
+        };
+        if (!string.IsNullOrWhiteSpace(sizeText))
+        {
+            lines.Add($"Größe:       {sizeText}");
+        }
+
+        File.WriteAllText(path, string.Join(Environment.NewLine, lines));
     }
 
     private sealed class NullDialogService : IUserDialogService

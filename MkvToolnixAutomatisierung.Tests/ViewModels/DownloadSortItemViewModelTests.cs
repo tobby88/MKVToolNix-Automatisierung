@@ -37,4 +37,49 @@ public sealed class DownloadSortItemViewModelTests
         Assert.False(item.IsSelected);
         Assert.Equal("Bereit", item.StatusText);
     }
+
+    [Fact]
+    public void Constructor_ClearsSelectionForNonSortableItems_EvenWhenCandidateRequestsSelection()
+    {
+        var item = new DownloadSortItemViewModel(new DownloadSortCandidate(
+            "Prueffall",
+            [@"C:\Downloads\Prueffall.txt"],
+            null,
+            string.Empty,
+            DownloadSortItemState.NeedsReview,
+            "Manuelle Prüfung erforderlich.",
+            IsInitiallySelected: true));
+
+        Assert.False(item.IsSelected);
+        Assert.False(item.CanSelect);
+        Assert.Equal("Pruefen", item.StatusText);
+    }
+
+    [Fact]
+    public void ApplyEvaluation_ClearsSelection_AndPreservesPersistentDefectNote()
+    {
+        var item = new DownloadSortItemViewModel(new DownloadSortCandidate(
+            "Neues aus Büttenwarder",
+            [@"C:\Downloads\episode.mp4", @"C:\Downloads\episode.txt"],
+            "Neues aus Büttenwarder",
+            "Neues aus Büttenwarder",
+            DownloadSortItemState.Ready,
+            "MP4 ist deutlich kleiner als die in der TXT erwartete Größe. Begleitdateien bleiben regulär nutzbar.",
+            IsInitiallySelected: true,
+            DefectiveFilePaths: [@"C:\Downloads\episode.mp4"],
+            PersistentNote: "MP4 ist deutlich kleiner als die in der TXT erwartete Größe. Begleitdateien bleiben regulär nutzbar.",
+            ContainsDefectiveFiles: true));
+
+        Assert.True(item.IsSelected);
+        Assert.Equal("Bereit + Defekt", item.StatusText);
+
+        item.ApplyEvaluation(new DownloadSortTargetEvaluation(
+            DownloadSortItemState.NeedsReview,
+            "Kein Zielordner erkannt. Bitte pruefen."));
+
+        Assert.False(item.IsSelected);
+        Assert.Equal("Pruefen + Defekt", item.StatusText);
+        Assert.Contains("deutlich kleiner", item.Note, StringComparison.Ordinal);
+        Assert.Contains("Kein Zielordner erkannt", item.Note, StringComparison.Ordinal);
+    }
 }

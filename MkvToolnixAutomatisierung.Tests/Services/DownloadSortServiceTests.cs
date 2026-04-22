@@ -258,7 +258,7 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
-    public void Scan_KeepsDefectivePackageCombined_WhenUsableCompanionFilesRemain()
+    public void Scan_UsesRegularCompanionState_WhenUsableCompanionFilesRemain()
     {
         var videoPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
         var textPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
@@ -275,14 +275,71 @@ public sealed class DownloadSortServiceTests : IDisposable
 
         var item = Assert.Single(result.Items);
 
-        Assert.Equal(DownloadSortItemState.Defective, item.State);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
         Assert.Equal("Neues aus Büttenwarder", item.SuggestedFolderName);
+        Assert.True(item.ContainsDefectiveFiles);
         Assert.Contains(videoPath, item.FilePaths);
         Assert.Contains(textPath, item.FilePaths);
         Assert.Contains(subtitlePath, item.FilePaths);
         Assert.Equal([videoPath], item.DefectiveFilePaths);
         Assert.Contains("deutlich kleiner", item.Note, StringComparison.Ordinal);
         Assert.Contains("Begleitdateien", item.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scan_UsesNeedsReviewStateForMixedDefectivePackage_WhenNoRegularTargetCanBeDerived()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Filme-1234.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Filme-1234.txt");
+        var subtitlePath = Path.Combine(_rootDirectory, "Filme-1234.srt");
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Filme",
+            title: "Unsortierbarer Rest",
+            sizeText: "100,0 MiB");
+        CreateEmptyFile(subtitlePath);
+
+        var result = _service.Scan(_rootDirectory);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(DownloadSortItemState.NeedsReview, item.State);
+        Assert.True(item.ContainsDefectiveFiles);
+        Assert.Equal(string.Empty, item.SuggestedFolderName);
+        Assert.Equal([videoPath], item.DefectiveFilePaths);
+        Assert.Contains("deutlich kleiner", item.Note, StringComparison.Ordinal);
+        Assert.Contains("Kein Zielordner erkannt", item.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Scan_UsesReplacementStateForMixedDefectivePackage_WhenHealthyCompanionWouldOverwriteTarget()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Neues aus Büttenwarder");
+        Directory.CreateDirectory(targetDirectory);
+
+        var videoPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+        var subtitlePath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024);
+        CreateCompanionText(
+            textPath,
+            topic: "Neues aus Büttenwarder",
+            title: "Bildungsschock",
+            sizeText: "100,0 MiB");
+        CreateEmptyFile(subtitlePath);
+        CreateCompanionText(
+            Path.Combine(targetDirectory, Path.GetFileName(textPath)),
+            topic: "Neues aus Büttenwarder",
+            title: "Bildungsschock");
+
+        var result = _service.Scan(_rootDirectory);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(DownloadSortItemState.ReadyWithReplacement, item.State);
+        Assert.True(item.ContainsDefectiveFiles);
+        Assert.Equal([videoPath], item.DefectiveFilePaths);
+        Assert.Contains("Gleichnamige Zieldatei wird ersetzt.", item.Note, StringComparison.Ordinal);
+        Assert.Contains("deutlich kleiner", item.Note, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -500,6 +557,41 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(textPath));
         Assert.False(File.Exists(Path.Combine(_rootDirectory, "Stralsund", Path.GetFileName(textPath))));
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("UEBERSPRUNGEN:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EvaluateTarget_RejectsReservedDefectiveFolder_ForRegularFiles()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(videoPath);
+
+        var evaluation = _service.EvaluateTarget(
+            _rootDirectory,
+            [videoPath],
+            "defekt",
+            []);
+
+        Assert.Equal(DownloadSortItemState.NeedsReview, evaluation.State);
+        Assert.Contains("reserviert", evaluation.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Apply_SkipsRegularFiles_WhenTargetFolderIsReservedDefekt()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(videoPath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Serie-Folge", [videoPath], "defekt")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(videoPath));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(videoPath))));
+        Assert.Contains(applyResult.LogLines, line => line.Contains("reserviert", StringComparison.Ordinal));
     }
 
     public void Dispose()
