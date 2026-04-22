@@ -162,6 +162,64 @@ public sealed class MkvMergeIdentifyParserTests
     }
 
     [Fact]
+    public void CreatePrimaryVideoMetadata_PrefersFirstNormalAudioTrack_OverVisualImpairedTrack()
+    {
+        using var doc = JsonDocument.Parse("""
+            {
+                "tracks": [
+                    {
+                        "id": 0, "type": "video", "codec": "V_MPEGH/ISO/HEVC",
+                        "properties": { "pixel_dimensions": "1920x1080", "language_ietf": "deu" }
+                    },
+                    {
+                        "id": 1, "type": "audio", "codec": "A_AAC",
+                        "properties": { "language_ietf": "deu", "track_name": "Deutsch (sehbehinderte) - AAC", "flag_visual_impaired": true }
+                    },
+                    {
+                        "id": 2, "type": "audio", "codec": "A_AC3",
+                        "properties": { "language_ietf": "eng", "track_name": "English - AC-3" }
+                    }
+                ]
+            }
+            """);
+
+        var result = MkvMergeIdentifyParser.CreatePrimaryVideoMetadata(doc, "test.mkv");
+
+        Assert.Equal(2, result.AudioTrackId);
+        Assert.Equal("AC-3", result.AudioCodecLabel);
+        Assert.Equal("eng", result.AudioLanguage);
+    }
+
+    [Fact]
+    public void CreatePrimaryVideoMetadata_PrefersFirstNormalAudioTrack_WhenAdIsDetectedOnlyByTrackName()
+    {
+        using var doc = JsonDocument.Parse("""
+            {
+                "tracks": [
+                    {
+                        "id": 0, "type": "video", "codec": "V_MPEG4/ISO/AVC",
+                        "properties": { "pixel_dimensions": "1280x720", "language_ietf": "deu" }
+                    },
+                    {
+                        "id": 1, "type": "audio", "codec": "A_AAC",
+                        "properties": { "language_ietf": "deu", "track_name": "Deutsch Audiodeskription - AAC" }
+                    },
+                    {
+                        "id": 2, "type": "audio", "codec": "A_EAC3",
+                        "properties": { "language_ietf": "deu", "track_name": "Deutsch - E-AC-3" }
+                    }
+                ]
+            }
+            """);
+
+        var result = MkvMergeIdentifyParser.CreatePrimaryVideoMetadata(doc, "test.mkv");
+
+        Assert.Equal(2, result.AudioTrackId);
+        Assert.Equal("E-AC-3", result.AudioCodecLabel);
+        Assert.Equal("deu", result.AudioLanguage);
+    }
+
+    [Fact]
     public void CreateContainerMetadata_ParsesAllTrackTypesAndAttachments()
     {
         using var doc = JsonDocument.Parse("""

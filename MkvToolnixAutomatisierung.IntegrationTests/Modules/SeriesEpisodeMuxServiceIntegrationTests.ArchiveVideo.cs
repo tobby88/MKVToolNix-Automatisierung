@@ -235,11 +235,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         FakeMkvMergeTestHelper.WriteProbeFile(
             freshEnglishVideoPath,
             CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "en"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", language: "de"),
-            CreateAudioTrack(2, "AAC", trackName: "English - AAC", language: "en"));
+            CreateAudioTrack(1, "AAC", trackName: "English - AAC", language: "en"),
+            CreateAudioTrack(2, "E-AC-3", trackName: "Deutsch - E-AC-3", language: "de"));
         FakeMkvMergeTestHelper.WriteProbeFile(
             outputPath,
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateVideoTrack(0, "AVC/H.264", "3840x2160", language: "de"),
             CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", language: "de"),
             CreateAudioTrack(2, "AAC", trackName: "English - AAC", language: "en"));
 
@@ -261,7 +261,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Empty(plan.PrimarySourceAudioTrackIds!);
         Assert.All(plan.AudioSources, source => Assert.Equal(freshEnglishVideoPath, source.FilePath));
         Assert.Equal(
-            ["de", "en"],
+            ["en", "de"],
             plan.AudioSources.Select(source => source.LanguageCode).ToList());
         Assert.Equal(
             [1, 2],

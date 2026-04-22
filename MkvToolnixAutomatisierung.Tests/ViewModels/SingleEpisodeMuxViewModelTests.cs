@@ -165,6 +165,49 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public async Task BuildFreshPlanAsync_SubtitleOnlyWithoutPrimary_DoesNotRequireAudioDescription()
+    {
+        var viewModel = CreateViewModel();
+        var subtitlePath = Path.Combine(Path.GetTempPath(), "single-subtitle-only", "Pilot.ass");
+
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.HasPrimaryVideoSource), false);
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), subtitlePath);
+        viewModel.SetSubtitles([subtitlePath]);
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), Path.Combine(Path.GetTempPath(), "single-subtitle-only", "Pilot.mkv"));
+        viewModel.Title = string.Empty;
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeBuildFreshPlanAsync(viewModel));
+
+        Assert.Equal("Bitte einen Dateititel eingeben.", exception.Message);
+    }
+
+    [Fact]
+    public async Task RefreshPlanSummaryImmediatelyAsync_ClearsStalePlanPresentation_WhenRefreshFails()
+    {
+        var viewModel = CreateViewModel();
+        var outputPath = Path.Combine(Path.GetTempPath(), "single-plan-refresh", "Pilot.mkv");
+
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.HasPrimaryVideoSource), true);
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\episode.mp4");
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), outputPath);
+        viewModel.Title = string.Empty;
+        viewModel.SetPlanSummary("Veraltete Zusammenfassung");
+        viewModel.SetUsageSummary(EpisodeUsageSummary.CreatePending("Alt", "Bleibt fälschlich sichtbar"));
+        viewModel.SetPlanNotes(["Veralteter Prüfhinweis"]);
+        SetNonPublicProperty(viewModel, nameof(SingleEpisodeMuxViewModel.OutputTargetStatusText), "Veralteter Planstatus");
+
+        var updated = await InvokeRefreshPlanSummaryImmediatelyAsync(viewModel);
+
+        Assert.False(updated);
+        Assert.Equal(string.Empty, viewModel.PlanSummaryText);
+        Assert.Null(viewModel.UsageSummary);
+        Assert.False(viewModel.HasNotes);
+        Assert.False(viewModel.HasPendingPlanReview);
+        Assert.Contains("Plan konnte gerade nicht aktualisiert werden", viewModel.PlanRefreshProblemText, StringComparison.Ordinal);
+        Assert.Equal("Die Zieldatei existiert noch nicht.", viewModel.OutputTargetStatusText);
+    }
+
+    [Fact]
     public void PersistSingleEpisodeArtifactsIfNeeded_WritesEinzelLogAndMetadataReport_ForNewOutput()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), "single-artifact-tests", Guid.NewGuid().ToString("N"));
@@ -217,6 +260,35 @@ public sealed class SingleEpisodeMuxViewModelTests
         return new SingleEpisodeMuxViewModel(
             ViewModelTestContext.CreateSingleEpisodeServices(),
             new UserDialogService());
+    }
+
+    private static Task<SeriesEpisodeMuxPlan> InvokeBuildFreshPlanAsync(SingleEpisodeMuxViewModel viewModel)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "BuildFreshPlanAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsType<Task<SeriesEpisodeMuxPlan>>(method!.Invoke(viewModel, [CancellationToken.None]));
+    }
+
+    private static Task<bool> InvokeRefreshPlanSummaryImmediatelyAsync(SingleEpisodeMuxViewModel viewModel)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "RefreshPlanSummaryImmediatelyAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsType<Task<bool>>(method!.Invoke(viewModel, [CancellationToken.None]));
+    }
+
+    private static void SetNonPublicProperty(object target, string propertyName, object? value)
+    {
+        var property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        var setter = property!.GetSetMethod(nonPublic: true);
+        Assert.NotNull(setter);
+        setter!.Invoke(target, [value]);
     }
 
     private sealed class CapturingDialogService : IUserDialogService

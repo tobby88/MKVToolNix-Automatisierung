@@ -189,7 +189,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             CreateAudioTrack(1, "E-AC-3"));
         FakeMkvMergeTestHelper.WriteProbeFile(
             alternateVideoPath,
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"),
             CreateAudioTrack(1, "E-AC-3"));
 
         var service = CreateMuxService(archiveDirectory);

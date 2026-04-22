@@ -8,7 +8,11 @@
     <RootNamespace>FakeMkvMerge</RootNamespace>
   </PropertyGroup>
 
-  <Target Name="CopyFakeMkvExtractExecutable" AfterTargets="Build">
+  <Target Name="CopyFakeMkvToolExecutables" AfterTargets="Build">
+    <Copy
+      SourceFiles="$(TargetDir)FakeMkvMerge.exe"
+      DestinationFiles="$(TargetDir)mkvmerge.exe"
+      SkipUnchangedFiles="true" />
     <Copy
       SourceFiles="$(TargetDir)FakeMkvMerge.exe"
       DestinationFiles="$(TargetDir)mkvextract.exe"
