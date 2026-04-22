@@ -620,6 +620,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 continue;
             }
 
+            if (string.Equals(videoSelection.FilePath, outputFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                // Die bestehende Archiv-MKV darf im Keep-Archive-Primary-Pfad niemals als "frische"
+                // Audioquelle behandelt werden. Ohne diese Guard würden bei leeren Retain-IDs alle
+                // eingebetteten Archiv-Audios erneut eingelesen, obwohl der Archivabgleich sie
+                // gerade bewusst zugunsten der frischen Quelle verworfen hat.
+                continue;
+            }
+
             var freshAudioSources = await BuildFreshNormalAudioSourcesAsync(
                 mkvMergePath,
                 videoSelection.FilePath,

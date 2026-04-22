@@ -243,9 +243,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
         {
             RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
         }
-        else
+        else if (!HasSupplementOnlySource())
         {
-            RequireValue(AudioDescriptionPath, "Bitte eine AD-Datei auswählen.");
+            throw new InvalidOperationException("Bitte eine AD-Datei oder Untertitel auswählen.");
         }
 
         RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
@@ -274,9 +274,40 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         catch (Exception ex)
         {
+            ClearPlanPresentation();
             PlanRefreshProblemText = "Plan konnte gerade nicht aktualisiert werden: " + ex.Message;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Erkennt Zusatzmaterial-only-Fälle des Einzelmodus, in denen bewusst keine frische
+    /// Hauptvideoquelle vorliegt, aber dennoch ein valider Plan gebaut werden kann.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/>, wenn mindestens eine AD- oder Untertitelquelle vorhanden ist;
+    /// andernfalls <see langword="false"/>.
+    /// </returns>
+    private bool HasSupplementOnlySource()
+    {
+        return !string.IsNullOrWhiteSpace(AudioDescriptionPath) || SubtitlePaths.Count > 0;
+    }
+
+    /// <summary>
+    /// Räumt alle planabgeleiteten UI-Zustände, sobald kein belastbarer Plan mehr vorliegt.
+    /// </summary>
+    /// <remarks>
+    /// Fehler beim Hintergrund-Refresh dürfen keine alte Vergleichsansicht oder veraltete
+    /// Archivhinweise sichtbar lassen. Stattdessen fällt die Anzeige auf den rein aus den
+    /// aktuellen Eingaben berechenbaren Zielstatus zurück.
+    /// </remarks>
+    private void ClearPlanPresentation()
+    {
+        _currentPlan = null;
+        PlanSummaryText = string.Empty;
+        SetPlanNotes([]);
+        UsageSummary = null;
+        RefreshOutputTargetStatus();
     }
 
     private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
@@ -420,6 +451,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 "Warnung",
                 "Einige Quelldateien konnten nicht in den Papierkorb verschoben werden:\n"
                 + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
+            return;
         }
     }
 
@@ -447,9 +479,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             || string.IsNullOrWhiteSpace(OutputPath)
             || string.IsNullOrWhiteSpace(Title))
         {
-            PlanSummaryText = string.Empty;
-            SetPlanNotes([]);
-            UsageSummary = null;
+            ClearPlanPresentation();
             PlanRefreshProblemText = string.Empty;
             return;
         }
@@ -477,6 +507,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 return;
             }
 
+            ClearPlanPresentation();
             PlanRefreshProblemText = "Plan konnte gerade nicht aktualisiert werden: " + ex.Message;
         }
     }

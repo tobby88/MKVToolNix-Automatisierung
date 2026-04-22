@@ -13,7 +13,10 @@ internal static class MkvMergeIdentifyParser
         var tracks = GetTracksElement(trackDocument, inputFilePath);
 
         JsonElement? videoTrack = null;
-        JsonElement? audioTrack = null;
+        JsonElement? fallbackAudioTrack = null;
+        JsonElement? preferredAudioTrack = null;
+        JsonElement fallbackAudioProperties = default;
+        JsonElement preferredAudioProperties = default;
 
         foreach (var track in tracks.EnumerateArray())
         {
@@ -25,9 +28,23 @@ internal static class MkvMergeIdentifyParser
             {
                 videoTrack = track;
             }
-            else if (type == "audio" && audioTrack is null)
+            else if (type == "audio")
             {
-                audioTrack = track;
+                var candidateAudioProperties = track.TryGetProperty("properties", out var audioPropertiesElement)
+                    ? audioPropertiesElement
+                    : default;
+
+                if (fallbackAudioTrack is null)
+                {
+                    fallbackAudioTrack = track;
+                    fallbackAudioProperties = candidateAudioProperties;
+                }
+
+                if (preferredAudioTrack is null && !LooksLikeAudioDescriptionTrack(candidateAudioProperties))
+                {
+                    preferredAudioTrack = track;
+                    preferredAudioProperties = candidateAudioProperties;
+                }
             }
         }
 
@@ -36,6 +53,7 @@ internal static class MkvMergeIdentifyParser
             throw new InvalidOperationException("In der Quelldatei wurde keine Videospur gefunden.");
         }
 
+        var audioTrack = preferredAudioTrack ?? fallbackAudioTrack;
         if (audioTrack is null)
         {
             throw new InvalidOperationException("In der Quelldatei wurde keine Tonspur gefunden.");
@@ -45,9 +63,9 @@ internal static class MkvMergeIdentifyParser
             ? videoPropertiesElement
             : default;
 
-        var audioProperties = audioTrack.Value.TryGetProperty("properties", out var audioPropertiesElement)
-            ? audioPropertiesElement
-            : default;
+        var audioProperties = preferredAudioTrack is not null
+            ? preferredAudioProperties
+            : fallbackAudioProperties;
 
         var width = videoProperties.ValueKind != JsonValueKind.Undefined && videoProperties.TryGetProperty("pixel_dimensions", out var pixelDimensionsElement)
             ? ParseWidth(pixelDimensionsElement.GetString())
@@ -222,6 +240,13 @@ internal static class MkvMergeIdentifyParser
         }
 
         return string.Empty;
+    }
+
+    private static bool LooksLikeAudioDescriptionTrack(JsonElement properties)
+    {
+        return AudioTrackClassifier.IsAudioDescriptionTrack(
+            ReadTrackName(properties),
+            ReadBooleanProperty(properties, "flag_visual_impaired"));
     }
 
     private static string NormalizeDisplayText(string value)

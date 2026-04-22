@@ -20,9 +20,24 @@ internal static class AudioTrackClassifier
     {
         ArgumentNullException.ThrowIfNull(track);
 
-        return track.IsVisualImpaired
-            || track.TrackName.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase)
-            || track.TrackName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase);
+        return IsAudioDescriptionTrack(track.TrackName, track.IsVisualImpaired);
+    }
+
+    /// <summary>
+    /// Prüft dieselbe AD-Heuristik ohne Container-Modell und eignet sich damit auch für rohe
+    /// <c>mkvmerge --identify</c>-Antworten oder andere Vorstufen der Trackmodellierung.
+    /// </summary>
+    /// <param name="trackName">Bereits normalisierter oder roher Trackname.</param>
+    /// <param name="isVisualImpaired">Accessibility-Flag der Audiospur.</param>
+    /// <returns>
+    /// <see langword="true"/>, wenn Name oder Accessibility-Flag auf Audiodeskription hindeuten;
+    /// andernfalls <see langword="false"/>.
+    /// </returns>
+    public static bool IsAudioDescriptionTrack(string? trackName, bool isVisualImpaired)
+    {
+        return isVisualImpaired
+            || (trackName?.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase) ?? false)
+            || (trackName?.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase) ?? false);
     }
 
     /// <summary>

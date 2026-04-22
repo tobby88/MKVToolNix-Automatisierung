@@ -10,14 +10,14 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class UserDialogService : IUserDialogService
 {
     /// <summary>
-    /// Öffnet die Auswahl der primären Videodatei im Einzelmodus.
+    /// Öffnet die Auswahl der primären Videodatei oder eines subtitle-only-Einstiegs im Einzelmodus.
     /// </summary>
     public string? SelectMainVideo(string initialDirectory)
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Video-Datei auswählen",
-            Filter = "MP4-Dateien (*.mp4)|*.mp4",
+            Title = "Quellvideo oder Untertitel auswählen",
+            Filter = "Video- und Untertiteldateien (*.mp4;*.srt;*.ass;*.vtt)|*.mp4;*.srt;*.ass;*.vtt|MP4-Dateien (*.mp4)|*.mp4|Untertitel (*.srt;*.ass;*.vtt)|*.srt;*.ass;*.vtt",
             CheckFileExists = true,
             Multiselect = false,
             InitialDirectory = initialDirectory

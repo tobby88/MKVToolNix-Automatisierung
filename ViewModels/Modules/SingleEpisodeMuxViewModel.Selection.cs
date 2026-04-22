@@ -604,8 +604,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void InvalidateCurrentPlan()
     {
-        _currentPlan = null;
         _planCache.Invalidate(this);
+        ClearPlanPresentation();
+        PlanRefreshProblemText = string.Empty;
     }
 
 }

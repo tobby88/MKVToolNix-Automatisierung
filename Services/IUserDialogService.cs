@@ -12,7 +12,7 @@ namespace MkvToolnixAutomatisierung.Services;
 internal interface IUserDialogService
 {
     /// <summary>
-    /// Öffnet die Auswahl einer primären Videoquelle.
+    /// Öffnet die Auswahl einer primären Videoquelle oder eines subtitle-only-Einstiegs.
     /// </summary>
     string? SelectMainVideo(string initialDirectory);
 
