@@ -91,6 +91,64 @@ public sealed class EpisodeCleanupServiceTests : IDisposable
             cancellationToken: cancellationSource.Token));
     }
 
+    [Fact]
+    public async Task MoveFilesToDirectoryAsync_ReturnsPartialResult_WhenCancellationArrivesMidRun()
+    {
+        var service = new EpisodeCleanupService();
+        var firstSource = CreateFile("first.txt", "one");
+        var secondSource = CreateFile("second.txt", "two");
+        var targetDirectory = Path.Combine(_tempDirectory, "done-partial");
+        using var cancellationSource = new CancellationTokenSource();
+
+        var result = await service.MoveFilesToDirectoryAsync(
+            [firstSource, secondSource],
+            targetDirectory,
+            (current, _total, _filePath) =>
+            {
+                if (current == 1)
+                {
+                    cancellationSource.Cancel();
+                }
+            },
+            cancellationSource.Token);
+
+        Assert.True(result.WasCanceled);
+        Assert.Single(result.MovedFiles);
+        Assert.Empty(result.FailedFiles);
+        Assert.Equal([secondSource], result.PendingFiles);
+        Assert.False(File.Exists(firstSource));
+        Assert.True(File.Exists(secondSource));
+    }
+
+    [Fact]
+    public async Task RecycleFilesAsync_ReturnsPartialResult_WhenCancellationArrivesMidRun()
+    {
+        var service = new EpisodeCleanupService(
+            static (sourceFilePath, destinationPath) => File.Move(sourceFilePath, destinationPath),
+            static filePath => File.Delete(filePath));
+        var firstSource = CreateFile("recycle-first.txt", "one");
+        var secondSource = CreateFile("recycle-second.txt", "two");
+        using var cancellationSource = new CancellationTokenSource();
+
+        var result = await service.RecycleFilesAsync(
+            [firstSource, secondSource],
+            (current, _total, _filePath) =>
+            {
+                if (current == 1)
+                {
+                    cancellationSource.Cancel();
+                }
+            },
+            cancellationSource.Token);
+
+        Assert.True(result.WasCanceled);
+        Assert.Equal([firstSource], result.RecycledFiles);
+        Assert.Empty(result.FailedFiles);
+        Assert.Equal([secondSource], result.PendingFiles);
+        Assert.False(File.Exists(firstSource));
+        Assert.True(File.Exists(secondSource));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

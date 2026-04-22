@@ -83,6 +83,42 @@ public sealed class SeriesArchiveServiceTests : IDisposable
         Assert.Contains("Quellordner", message);
     }
 
+    [Fact]
+    public void BuildSuggestedOutputPath_UsesFallback_WhenStoredArchiveRootIsInvalid()
+    {
+        const string invalidArchiveRoot = "C:\\bad\0root";
+        var settingsStore = new AppSettingsStore();
+        var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
+        archiveSettingsStore.Save(new AppArchiveSettings
+        {
+            DefaultSeriesArchiveRootPath = invalidArchiveRoot
+        });
+        var service = new SeriesArchiveService(new MkvMergeProbeService(), archiveSettingsStore);
+
+        var path = service.BuildSuggestedOutputPath(
+            Path.Combine(_tempDirectory, "fallback"),
+            "Beispielserie",
+            "01",
+            "03",
+            "Pilot");
+
+        Assert.Equal(invalidArchiveRoot.Trim(), service.ArchiveRootDirectory);
+        Assert.StartsWith(Path.Combine(_tempDirectory, "fallback"), path, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("Die konfigurierte Serienbibliothek ist ungültig:", service.BuildArchiveUnavailableWarningMessage(), StringComparison.Ordinal);
+        Assert.False(service.IsArchivePath(Path.Combine(SeriesArchiveService.DefaultArchiveRootDirectory, "Beispielserie", "Season 1", "foo.mkv")));
+    }
+
+    [Fact]
+    public void ConfigureArchiveRootDirectory_ThrowsForInvalidExplicitPath()
+    {
+        var service = CreateService();
+        const string invalidArchiveRoot = "C:\\bad\0root";
+
+        var exception = Assert.Throws<ArgumentException>(() => service.ConfigureArchiveRootDirectory(invalidArchiveRoot));
+
+        Assert.Contains("Archivwurzelpfad", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

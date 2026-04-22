@@ -95,6 +95,72 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_AudioDescriptionOnly_DoesNotReuseDefectiveSelectedAdFile()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-defective");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-defective");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4", "tiny");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02) Audiodeskription.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00\r\nGröße: 700,9 MiB");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(audioDescriptionPath);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal(audioDescriptionPath, detected.MainVideoPath);
+        Assert.Null(detected.AudioDescriptionPath);
+        Assert.Contains(detected.Notes, note => note.Contains("Defekte/unvollständige Quelle", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DetectFromSelectedVideoAsync_AudioDescriptionOnly_KeepsSubtitleCompanionsFromDefectiveSiblingVideo()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-defective-sibling-subtitles");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-defective-sibling-subtitles");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4");
+        var defectiveVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4", "tiny");
+        var defectiveSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var defectiveMetadataPath = CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00\r\nGröße: 700,9 MiB");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02) Audiodeskription.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            defectiveVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(audioDescriptionPath);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal(audioDescriptionPath, detected.AudioDescriptionPath);
+        Assert.Equal([defectiveSubtitlePath], detected.SubtitlePaths);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, defectiveSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, defectiveMetadataPath, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(detected.RelatedFilePaths, path => string.Equals(path, defectiveVideoPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_WithExistingArchiveTarget_UsesArchiveAsPrimarySource()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-existing");
@@ -182,10 +248,10 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_AudioDescriptionOnly_WithAlreadyCompleteArchiveTarget_ReturnsSkipPlan()
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WithExistingArchiveAudioDescription_ReplacesItInsteadOfSkipping()
     {
-        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-skip");
-        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-skip");
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-replace");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-replace");
         Directory.CreateDirectory(sourceDirectory);
         Directory.CreateDirectory(archiveDirectory);
 
@@ -218,12 +284,53 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             Title: "Pilot",
             HasPrimaryVideoSource: false));
 
-        Assert.True(plan.SkipMux);
+        Assert.False(plan.SkipMux);
+        Assert.NotNull(plan.WorkingCopy);
         Assert.Equal(outputPath, plan.OutputFilePath);
-        Assert.Contains(
-            "erneutes Muxen ist nicht nötig",
-            plan.SkipReason ?? string.Empty,
-            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(outputPath, plan.VideoSources[0].FilePath);
+        Assert.Equal([1], plan.PrimarySourceAudioTrackIds);
+        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(0, plan.AudioDescriptionTrackId);
+        Assert.Contains(plan.BuildArguments(), argument => string.Equals(argument, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_PreservesDetectionNotesWithoutPrimaryVideo()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-detection-notes");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-detection-notes");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02) Audiodeskription.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Pilot",
+            HasPrimaryVideoSource: false,
+            DetectionNotes: ["Hinweis aus Detection"]));
+
+        Assert.Contains("Hinweis aus Detection", plan.Notes);
     }
 
     [Fact]

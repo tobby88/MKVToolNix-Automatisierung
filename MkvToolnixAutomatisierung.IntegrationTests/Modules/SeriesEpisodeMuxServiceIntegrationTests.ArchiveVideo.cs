@@ -217,6 +217,58 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_DropsArchiveAudioLanguages_ThatFreshMultiAudioSourceAlreadyCovers()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-fresh-multi-audio");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-fresh-multi-audio");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var freshEnglishVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-en.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-en.txt",
+            "Sender: BBC\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            freshEnglishVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "en"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", language: "de"),
+            CreateAudioTrack(2, "AAC", trackName: "English - AAC", language: "en"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", language: "de"),
+            CreateAudioTrack(2, "AAC", trackName: "English - AAC", language: "en"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            freshEnglishVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(
+            [outputPath, freshEnglishVideoPath],
+            plan.VideoSources.Select(source => source.FilePath).ToList());
+        Assert.NotNull(plan.PrimarySourceAudioTrackIds);
+        Assert.Empty(plan.PrimarySourceAudioTrackIds!);
+        Assert.All(plan.AudioSources, source => Assert.Equal(freshEnglishVideoPath, source.FilePath));
+        Assert.Equal(
+            ["de", "en"],
+            plan.AudioSources.Select(source => source.LanguageCode).ToList());
+        Assert.Equal(
+            [1, 2],
+            plan.AudioSources.Select(source => source.TrackId).ToList());
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_ReplacingArchivePrimary_UsageSummary_ShowsRemovedArchiveParts_WithReasons()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-usage-replace");

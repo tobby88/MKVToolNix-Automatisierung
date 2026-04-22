@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using MkvToolnixAutomatisierung.IntegrationTests.TestInfrastructure;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -172,13 +173,22 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Directory.CreateDirectory(archiveDirectory);
 
         var primaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var alternateVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-2.mp4");
         CreateFile(
             sourceDirectory,
             "Beispielserie - Pilot (S01_E02).txt",
             "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02)-2.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
         FakeMkvMergeTestHelper.WriteProbeFileWithDelay(
             primaryVideoPath,
             delayBeforeOutputMilliseconds: 5000,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            alternateVideoPath,
             CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
             CreateAudioTrack(1, "E-AC-3"));
 
@@ -193,13 +203,22 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         FakeMkvMergeTestHelper.WriteProbeFile(
             primaryVideoPath,
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateVideoTrack(0, "AVC/H.264", "3840x2160"),
             CreateAudioTrack(1, "E-AC-3"));
 
-        var detected = await service.DetectFromSelectedVideoAsync(primaryVideoPath, directoryContext);
+        using var rerunTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var rerunStopwatch = Stopwatch.StartNew();
+        var detected = await service.DetectFromSelectedVideoAsync(
+            primaryVideoPath,
+            directoryContext,
+            cancellationToken: rerunTimeout.Token);
+        rerunStopwatch.Stop();
 
         Assert.Equal(primaryVideoPath, detected.MainVideoPath);
-        Assert.Empty(detected.AdditionalVideoPaths);
+        Assert.Equal([alternateVideoPath], detected.AdditionalVideoPaths);
+        Assert.True(
+            rerunStopwatch.Elapsed < TimeSpan.FromSeconds(2),
+            $"Die erneute Detection wartete trotz Abbruch noch {rerunStopwatch.Elapsed.TotalSeconds:F2}s auf die alte Identify-Probe.");
     }
 
     [Fact]

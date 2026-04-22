@@ -362,6 +362,50 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePlansAsync_AbortsBatch_WhenDoneMoveReturnsPartialCancellationState()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "cancelled-done", "Episode.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "already-current");
+        var cleanupSource = CreateFile("partial-cleanup.txt");
+        var movedDoneFile = Path.Combine(_tempDirectory, "done", "partial-cleanup.txt");
+        var pendingFile = CreateFile("pending-cleanup.txt");
+        using var cancellationSource = new CancellationTokenSource();
+        var cleanup = new StubCleanupService
+        {
+            MoveOverride = (_sourceFilePaths, _targetDirectory, cancellationToken) =>
+            {
+                cancellationSource.Cancel();
+                return Task.FromResult(new FileMoveResult([movedDoneFile], [], [pendingFile], WasCanceled: true));
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), new StubMuxWorkflowCoordinator(), cleanup);
+        var item = CreateBatchEpisodeItem(outputPath);
+        var logs = new List<string>();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(
+                item,
+                SeriesEpisodeMuxPlan.CreateSkip(
+                    mkvMergePath: @"C:\Tools\mkvmerge.exe",
+                    outputFilePath: outputPath,
+                    title: "Pilot",
+                    skipReason: "Zieldatei bereits aktuell.",
+                    notes: []),
+                [cleanupSource])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            logs.Add,
+            cancellationSource.Token));
+
+        Assert.Equal(BatchEpisodeStatusKind.Cancelled, item.StatusKind);
+        Assert.Contains(logs, line => line.Contains("NOCH OFFEN", StringComparison.Ordinal));
+        Assert.Contains(logs, line => line.Contains("Done-Verschiebung", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RefreshArchivePresence_PreservesExistingUsageSummary_DuringStatusChanges()
     {
         var outputPath = Path.Combine(_tempDirectory, "existing", "Episode.mkv");
@@ -526,6 +570,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     private sealed class StubCleanupService : IEpisodeCleanupService
     {
         public FileMoveResult MoveResult { get; init; } = new FileMoveResult([], []);
+        public Func<IReadOnlyList<string>, string, CancellationToken, Task<FileMoveResult>>? MoveOverride { get; init; }
 
         public IReadOnlyList<string> LastMoveSourceFiles { get; private set; } = [];
         public string? LastDeleteEmptyParentRoot { get; private set; }
@@ -537,6 +582,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             LastMoveSourceFiles = sourceFilePaths.ToList();
+            if (MoveOverride is not null)
+            {
+                return MoveOverride(sourceFilePaths, targetDirectory, cancellationToken);
+            }
+
             return Task.FromResult(MoveResult);
         }
 
