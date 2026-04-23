@@ -62,6 +62,15 @@ public partial class BatchMuxView : UserControl
     }
 
     /// <summary>
+    /// Verhindert jede ad-hoc-Header-Sortierung des Grids. Die Batch-Liste wird fachlich ausschließlich
+    /// über <see cref="BatchMuxViewModel.SelectedSortMode"/> und die dazugehörige CollectionView gesteuert.
+    /// </summary>
+    private void EpisodeItemsGrid_OnSorting(object sender, DataGridSortingEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    /// <summary>
     /// Doppelklicks auf die Auswahlspalte sollen nur die Auswahl ändern, aber keine weiteren Aktionen
     /// wie Quellenprüfung, TVDB-Dialog oder Detailansicht auslösen.
     /// </summary>

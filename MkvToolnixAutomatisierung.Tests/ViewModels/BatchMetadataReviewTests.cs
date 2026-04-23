@@ -818,6 +818,71 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task RunBatchCommand_UserCancellation_RefreshesSelectedItemPlanSummary_AfterRealCommandFlow()
+    {
+        ViewModelTestContext.EnsureApplication();
+
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-run-cancel-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var sourcePath = Path.Combine(tempDirectory, "Episode.mkv");
+            var outputPath = Path.Combine(tempDirectory, "Ausgabe", "Beispielserie - S01E02 - Pilot.mkv");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            File.WriteAllText(sourcePath, "source");
+
+            var dialogService = new FakeDialogService
+            {
+                ConfirmBatchExecutionResult = true
+            };
+            var blockingMuxWorkflow = new BlockingMuxWorkflowCoordinator();
+            var services = ViewModelTestContext.CreateBatchServices(
+                fileCopy: new NoOpFileCopyService(),
+                cleanup: new NoOpCleanupService(),
+                muxWorkflow: blockingMuxWorkflow);
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService, services);
+            var item = CreateReadyItem(sourcePath, outputPath);
+            var cachedPlan = CreateExecutionPlan(sourcePath, outputPath);
+            var expectedPlanSummary = cachedPlan.BuildCompactSummaryText();
+            var expectedUsageSummary = cachedPlan.BuildUsageSummary();
+
+            viewModel.EpisodeItems.Add(item);
+            await StorePlanAsync(viewModel, item, cachedPlan);
+            viewModel.SelectedEpisodeItem = item;
+
+            var initialRefresh = viewModel.SelectedItemPlanSummaryRefreshTask;
+            if (initialRefresh is not null)
+            {
+                await initialRefresh;
+            }
+
+            item.SetPlanSummary("Veraltete Batch-Details");
+            item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Veraltet", "Bleibt bis zum Abbruch sichtbar"));
+
+            viewModel.RunBatchCommand.Execute(null);
+
+            await blockingMuxWorkflow.WaitForExecutionStartAsync();
+            Assert.Equal("Veraltete Batch-Details", item.PlanSummaryText);
+
+            viewModel.CancelBatchOperationCommand.Execute(null);
+
+            Assert.True(await WaitUntilAsync(() => viewModel.IsInteractive, TimeSpan.FromSeconds(5)));
+            Assert.True(blockingMuxWorkflow.CancellationObserved);
+            Assert.Equal("Batch abgebrochen", viewModel.StatusText);
+            Assert.True(await WaitUntilAsync(() => item.PlanSummaryText == expectedPlanSummary, TimeSpan.FromSeconds(5)));
+            Assert.Equal(expectedPlanSummary, item.PlanSummaryText);
+            Assert.Equal(expectedUsageSummary, item.UsageSummary);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task ReviewSelectedMetadataCommand_MetadataChange_CancelsPendingSelectionRefresh()
     {
         var workflow = new MetadataChangingEpisodeReviewWorkflow();
@@ -872,10 +937,12 @@ public sealed class BatchMetadataReviewTests
 
     private static BatchMuxViewModel CreateBatchViewModel(
         IEpisodeReviewWorkflow reviewWorkflow,
-        FakeDialogService? dialogService = null)
+        FakeDialogService? dialogService = null,
+        BatchModuleServices? services = null)
     {
+        ViewModelTestContext.EnsureApplication();
         return new BatchMuxViewModel(
-            ViewModelTestContext.CreateBatchServices(),
+            services ?? ViewModelTestContext.CreateBatchServices(),
             dialogService ?? new FakeDialogService(),
             reviewWorkflow: reviewWorkflow);
     }
@@ -944,6 +1011,38 @@ public sealed class BatchMetadataReviewTests
             outputPath: outputPath,
             statusKind: BatchEpisodeStatusKind.Ready,
             isSelected: true);
+    }
+
+    private static SeriesEpisodeMuxPlan CreateExecutionPlan(string sourceVideoPath, string outputPath)
+    {
+        return new SeriesEpisodeMuxPlan(
+            mkvMergePath: @"C:\Tools\mkvmerge.exe",
+            outputFilePath: outputPath,
+            title: "Pilot",
+            videoSources:
+            [
+                new VideoSourcePlan(sourceVideoPath, 0, "Deutsch - Video", IsDefaultTrack: true)
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(sourceVideoPath, 1, "Deutsch - Audio", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null,
+            notes: []);
     }
 
     private static EpisodeMetadataGuess CreateLocalGuess()
@@ -1132,6 +1231,32 @@ public sealed class BatchMetadataReviewTests
         return Assert.IsType<BatchModuleServices>(field?.GetValue(viewModel));
     }
 
+    private static async Task StorePlanAsync(
+        BatchMuxViewModel viewModel,
+        BatchEpisodeItemViewModel item,
+        SeriesEpisodeMuxPlan plan)
+    {
+        var field = typeof(BatchMuxViewModel).GetField("_planCache", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var cache = Assert.IsType<EpisodePlanCache>(field?.GetValue(viewModel));
+        await cache.StoreAsync(item, item, plan);
+    }
+
+    private static async Task<bool> WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow <= deadline)
+        {
+            if (predicate())
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return predicate();
+    }
+
     private sealed class FakeDialogService : IUserDialogService
     {
         public int ConfirmPlanReviewCallCount { get; private set; }
@@ -1141,6 +1266,10 @@ public sealed class BatchMetadataReviewTests
         public int ConfirmApplyBatchSelectionToAllItemsCallCount { get; private set; }
 
         public bool ConfirmApplyBatchSelectionToAllItemsResult { get; init; }
+
+        public int ConfirmBatchExecutionCallCount { get; private set; }
+
+        public bool? ConfirmBatchExecutionResult { get; init; }
 
         public string? LastOutputInitialDirectory { get; private set; }
 
@@ -1166,7 +1295,11 @@ public sealed class BatchMetadataReviewTests
         public MessageBoxResult AskSubtitlesChoice() => throw new NotSupportedException();
         public MessageBoxResult AskAttachmentChoice() => throw new NotSupportedException();
         public bool ConfirmMuxStart() => throw new NotSupportedException();
-        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes) => throw new NotSupportedException();
+        public bool ConfirmBatchExecution(int itemCount, int archiveFileCount, long archiveTotalBytes)
+        {
+            ConfirmBatchExecutionCallCount++;
+            return ConfirmBatchExecutionResult ?? throw new NotSupportedException();
+        }
         public bool ConfirmApplyBatchSelectionToAllItems(bool selectItems)
         {
             ConfirmApplyBatchSelectionToAllItemsCallCount++;
@@ -1193,5 +1326,101 @@ public sealed class BatchMetadataReviewTests
         }
 
         public void ShowError(string message) => throw new InvalidOperationException(message);
+    }
+
+    private sealed class NoOpFileCopyService : IFileCopyService
+    {
+        public bool NeedsCopy(FileCopyPlan copyPlan)
+        {
+            return false;
+        }
+
+        public Task CopyAsync(
+            FileCopyPlan copyPlan,
+            Action<long, long>? onProgress = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpCleanupService : IEpisodeCleanupService
+    {
+        public Task<FileMoveResult> MoveFilesToDirectoryAsync(
+            IReadOnlyList<string> sourceFilePaths,
+            string targetDirectory,
+            Action<int, int, string>? onProgress = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new FileMoveResult([], []));
+        }
+
+        public Task<FileRecycleResult> RecycleFilesAsync(
+            IReadOnlyList<string> filePaths,
+            Action<int, int, string>? onProgress = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new FileRecycleResult([], []));
+        }
+
+        public void DeleteTemporaryFile(string? filePath)
+        {
+        }
+
+        public void DeleteDirectoryIfEmpty(string? directoryPath)
+        {
+        }
+
+        public void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)
+        {
+        }
+    }
+
+    private sealed class BlockingMuxWorkflowCoordinator : IMuxWorkflowCoordinator
+    {
+        private readonly TaskCompletionSource _executionStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool CancellationObserved { get; private set; }
+
+        public bool NeedsWorkingCopyPreparation(SeriesEpisodeMuxPlan plan)
+        {
+            return false;
+        }
+
+        public Task PrepareWorkingCopyAsync(
+            SeriesEpisodeMuxPlan plan,
+            Action<WorkingCopyPreparationUpdate>? onUpdate = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public async Task<MuxExecutionResult> ExecuteMuxAsync(
+            SeriesEpisodeMuxPlan plan,
+            Action<string>? onOutput = null,
+            Action<MuxExecutionUpdate>? onUpdate = null,
+            CancellationToken cancellationToken = default,
+            MuxWorkflowTemporaryCleanup temporaryCleanup = MuxWorkflowTemporaryCleanup.DeleteWorkingCopy)
+        {
+            _executionStarted.TrySetResult();
+
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+
+            return new MuxExecutionResult(0, HasWarning: false, LastProgressPercent: 100);
+        }
+
+        public async Task WaitForExecutionStartAsync()
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await _executionStarted.Task.WaitAsync(timeout.Token);
+        }
     }
 }

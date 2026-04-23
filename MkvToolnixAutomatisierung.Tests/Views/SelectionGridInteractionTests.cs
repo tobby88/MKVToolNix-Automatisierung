@@ -371,6 +371,44 @@ public sealed class SelectionGridInteractionTests
     }
 
     [Fact]
+    public async Task BatchMuxView_SortingHandler_PreservesViewModelOwnedSortState()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateBatchViewModel();
+            viewModel.SelectedSortMode = viewModel.SortModes.Single(mode => mode.Key == BatchEpisodeSortMode.StatusFirst);
+
+            var view = new BatchMuxView
+            {
+                DataContext = viewModel
+            };
+            var window = CreateHostWindow(view);
+
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+
+                var grid = Assert.IsType<DataGrid>(FindVisualChild<DataGrid>(view));
+                var titleColumn = grid.Columns.Single(column => string.Equals(column.Header?.ToString(), "Titel", StringComparison.Ordinal));
+                var originalSortMode = viewModel.SelectedSortMode;
+                var originalSortSignature = GetSortDescriptionSignature(viewModel.EpisodeItemsView);
+                var sortingArgs = new DataGridSortingEventArgs(titleColumn);
+
+                InvokeBatchGridSortingHandler(view, grid, sortingArgs);
+
+                Assert.True(sortingArgs.Handled);
+                Assert.Equal(originalSortMode, viewModel.SelectedSortMode);
+                Assert.Equal(originalSortSignature, GetSortDescriptionSignature(viewModel.EpisodeItemsView));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task EmbySelectionGrid_SpaceToggle_UsesSharedKeyboardSelectionHandling()
     {
         await WpfTestHost.RunAsync(async () =>
@@ -640,6 +678,22 @@ public sealed class SelectionGridInteractionTests
         var field = typeof(MouseButtonEventArgs).GetField("_count", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(field);
         field.SetValue(args, clickCount);
+    }
+
+    private static void InvokeBatchGridSortingHandler(BatchMuxView view, DataGrid grid, DataGridSortingEventArgs args)
+    {
+        var method = typeof(BatchMuxView).GetMethod(
+            "EpisodeItemsGrid_OnSorting",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method.Invoke(view, [grid, args]);
+    }
+
+    private static string GetSortDescriptionSignature(ICollectionView view)
+    {
+        return string.Join(
+            "|",
+            view.SortDescriptions.Select(description => $"{description.PropertyName}:{description.Direction}"));
     }
 
     private static T? FindVisualChild<T>(DependencyObject? parent)

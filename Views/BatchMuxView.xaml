@@ -192,6 +192,7 @@
                           MouseDoubleClick="EpisodeItemsGrid_OnMouseDoubleClick"
                           PreviewKeyDown="EpisodeItemsGrid_OnPreviewKeyDown"
                           PreviewMouseLeftButtonDown="EpisodeItemsGrid_OnPreviewMouseLeftButtonDown"
+                          Sorting="EpisodeItemsGrid_OnSorting"
                           SelectionChanged="EpisodeItemsGrid_OnSelectionChanged"
                           MinHeight="130"
                           Margin="8">
