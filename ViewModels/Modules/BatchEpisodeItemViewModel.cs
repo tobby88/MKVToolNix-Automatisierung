@@ -163,6 +163,16 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     /// </summary>
     public int StatusSortKey => (int)StatusKind;
 
+    /// <summary>
+    /// Numerischer Staffel-Sortierschlüssel; unbekannte Werte stehen stabil am Ende.
+    /// </summary>
+    public int SeasonSortKey => ParseEpisodeIndexSortKey(SeasonNumber);
+
+    /// <summary>
+    /// Numerischer Folgen-Sortierschlüssel; Mehrfachfolgen sortieren nach ihrer ersten Folge.
+    /// </summary>
+    public int EpisodeSortKey => ParseEpisodeIndexSortKey(EpisodeNumber);
+
     public string StatusBadgeBackground => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBackground(StatusKind);
 
     public string StatusBadgeBorderBrush => EpisodeUiStyleBuilder.BuildBatchStatusBadgeBorderBrush(StatusKind);
@@ -625,6 +635,34 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         {
             HandleManualMetadataOverride();
         }
+
+        if (propertyName == nameof(SeasonNumber))
+        {
+            OnPropertyChanged(nameof(SeasonSortKey));
+        }
+        else if (propertyName == nameof(EpisodeNumber))
+        {
+            OnPropertyChanged(nameof(EpisodeSortKey));
+        }
+    }
+
+    private static int ParseEpisodeIndexSortKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return int.MaxValue;
+        }
+
+        var normalized = value.Trim();
+        var digitCount = 0;
+        while (digitCount < normalized.Length && char.IsDigit(normalized[digitCount]))
+        {
+            digitCount++;
+        }
+
+        return digitCount > 0 && int.TryParse(normalized[..digitCount], out var number)
+            ? number
+            : int.MaxValue;
     }
 
     /// <summary>

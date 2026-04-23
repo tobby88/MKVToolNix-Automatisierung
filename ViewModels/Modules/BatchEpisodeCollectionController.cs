@@ -25,6 +25,7 @@ internal enum BatchEpisodeFilterMode
 internal enum BatchEpisodeSortMode
 {
     FileName,
+    SeasonEpisode,
     PendingChecksFirst,
     StatusFirst,
     NewFirst
@@ -70,6 +71,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         SortModes =
         [
             new(BatchEpisodeSortMode.FileName, "Dateiname"),
+            new(BatchEpisodeSortMode.SeasonEpisode, "Staffel/Folge"),
             new(BatchEpisodeSortMode.PendingChecksFirst, "Prüfung zuerst"),
             new(BatchEpisodeSortMode.StatusFirst, "Status zuerst"),
             new(BatchEpisodeSortMode.NewFirst, "Neu zuerst")
@@ -326,6 +328,11 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
 
             switch (_selectedSortMode.Key)
             {
+                case BatchEpisodeSortMode.SeasonEpisode:
+                    _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.SeasonSortKey), ListSortDirection.Ascending));
+                    _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.EpisodeSortKey), ListSortDirection.Ascending));
+                    _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
+                    break;
                 case BatchEpisodeSortMode.PendingChecksFirst:
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.HasPendingChecks), ListSortDirection.Descending));
                     _view.SortDescriptions.Add(new SortDescription(nameof(BatchEpisodeItemViewModel.MainVideoFileName), ListSortDirection.Ascending));
@@ -427,8 +434,12 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
                 or nameof(BatchEpisodeItemViewModel.ArchiveState)
                 or nameof(BatchEpisodeItemViewModel.ArchiveStateText)
                 or nameof(BatchEpisodeItemViewModel.ArchiveSortKey) => _selectedFilterMode.Key is BatchEpisodeFilterMode.NewOnly or BatchEpisodeFilterMode.ExistingOnly || _selectedSortMode.Key == BatchEpisodeSortMode.NewFirst,
+            nameof(BatchEpisodeItemViewModel.SeasonNumber)
+                or nameof(BatchEpisodeItemViewModel.EpisodeNumber)
+                or nameof(BatchEpisodeItemViewModel.SeasonSortKey)
+                or nameof(BatchEpisodeItemViewModel.EpisodeSortKey) => _selectedSortMode.Key == BatchEpisodeSortMode.SeasonEpisode,
             nameof(BatchEpisodeItemViewModel.MainVideoPath)
-                or nameof(BatchEpisodeItemViewModel.MainVideoFileName) => _selectedSortMode.Key is BatchEpisodeSortMode.FileName or BatchEpisodeSortMode.PendingChecksFirst or BatchEpisodeSortMode.StatusFirst or BatchEpisodeSortMode.NewFirst,
+                or nameof(BatchEpisodeItemViewModel.MainVideoFileName) => _selectedSortMode.Key is BatchEpisodeSortMode.FileName or BatchEpisodeSortMode.SeasonEpisode or BatchEpisodeSortMode.PendingChecksFirst or BatchEpisodeSortMode.StatusFirst or BatchEpisodeSortMode.NewFirst,
             _ => false
         };
     }

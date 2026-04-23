@@ -79,5 +79,46 @@ public sealed class BatchEpisodeCollectionControllerTests
         Assert.Equal(1, selectedItemPlanInputsChangedCount);
     }
 
+    [Fact]
+    public void SeasonEpisodeSortMode_OrdersByNumericSeasonAndEpisode()
+    {
+        using var controller = new BatchEpisodeCollectionController();
+        var seasonTwo = CreateItem(@"C:\Temp\season-two.mp4", "02", "01");
+        var episodeTen = CreateItem(@"C:\Temp\episode-ten.mp4", "01", "10");
+        var episodeTwo = CreateItem(@"C:\Temp\episode-two.mp4", "01", "02");
+        var unknown = CreateItem(@"C:\Temp\unknown.mp4", "xx", "xx");
+        controller.Reset([seasonTwo, episodeTen, unknown, episodeTwo]);
+
+        controller.SetSortMode(controller.SortModes.Single(mode => mode.Key == BatchEpisodeSortMode.SeasonEpisode));
+
+        Assert.Equal(
+            [episodeTwo, episodeTen, seasonTwo, unknown],
+            controller.View.Cast<BatchEpisodeItemViewModel>().ToList());
+    }
+
+    [Fact]
+    public void SeasonEpisodeSortMode_RefreshesWhenEpisodeNumberChanges()
+    {
+        using var controller = new BatchEpisodeCollectionController();
+        var first = CreateItem(@"C:\Temp\first.mp4", "01", "01");
+        var second = CreateItem(@"C:\Temp\second.mp4", "01", "10");
+        controller.Reset([second, first]);
+        controller.SetSortMode(controller.SortModes.Single(mode => mode.Key == BatchEpisodeSortMode.SeasonEpisode));
+
+        second.EpisodeNumber = "02";
+
+        Assert.Equal(
+            [first, second],
+            controller.View.Cast<BatchEpisodeItemViewModel>().ToList());
+    }
+
+    private static BatchEpisodeItemViewModel CreateItem(string path, string seasonNumber, string episodeNumber)
+    {
+        var item = BatchEpisodeItemViewModel.CreateErrorItem(path, "boom");
+        item.SeasonNumber = seasonNumber;
+        item.EpisodeNumber = episodeNumber;
+        return item;
+    }
+
     private sealed class TestRow;
 }
