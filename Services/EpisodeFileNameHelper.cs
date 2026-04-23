@@ -41,7 +41,7 @@ internal static class EpisodeFileNameHelper
     public static bool LooksLikeAudioDescription(string filePath)
     {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
-        return fileName.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase)
+        return Regex.IsMatch(fileName, @"\bAudiodes(?:krip\w*)?\b", RegexOptions.IgnoreCase)
             || fileName.Contains("hörfassung", StringComparison.OrdinalIgnoreCase)
             || fileName.Contains("hoerfassung", StringComparison.OrdinalIgnoreCase)
             || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);

@@ -339,11 +339,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         name = NormalizeDashCharacters(name);
         name = Regex.Replace(name, @"-\d+$", string.Empty);
         name = Regex.Replace(name, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
-        name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
-        name = Regex.Replace(name, @"\(\s*Audiodeskrip[^)]*$", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\(\s*Audiodes(?:krip\w*)?[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\(\s*Audiodes(?:krip\w*)?[^)]*$", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
-        name = Regex.Replace(name, @"\bAudiodeskrip\w*\b", string.Empty, RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"\bAudiodes(?:krip\w*)?\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAD\b", string.Empty, RegexOptions.IgnoreCase);
         return Regex.Replace(name, @"\s+", " ").Trim();
@@ -368,9 +368,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         // Deshalb läuft die Label-Bereinigung nach dem Entfernen der Codes bewusst erneut.
         normalized = RemoveEditorialLabels(normalized);
         normalized = Regex.Replace(normalized, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(\s*Audiodes(?:krip\w*)?[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(\s*Audiodes(?:krip\w*)?[^)]*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bAudiodes(?:krip\w*)?\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);

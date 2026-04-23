@@ -61,6 +61,15 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void NormalizeEpisodeTitle_RemovesTruncatedAudioDescriptionMarker()
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(
+            "Extra zur Folge 39_ Dreharbeiten mit Jeanette Biedermann (Audiodes");
+
+        Assert.Equal("Extra zur Folge 39_ Dreharbeiten mit Jeanette Biedermann", normalizedTitle);
+    }
+
+    [Fact]
     public void NormalizeEpisodeTitle_RemovesHoerfassungMarker()
     {
         var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle("Findus zieht um (Hörfassung)");

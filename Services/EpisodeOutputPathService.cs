@@ -393,9 +393,10 @@ internal sealed class EpisodeOutputPathService
             string.Empty,
             RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\(\s*Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(\s*Audiodes(?:krip\w*)?[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\bAudiodes(?:krip\w*)?\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bUT\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
