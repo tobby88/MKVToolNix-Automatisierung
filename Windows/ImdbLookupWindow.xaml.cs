@@ -9,19 +9,21 @@ using MkvToolnixAutomatisierung.ViewModels;
 namespace MkvToolnixAutomatisierung.Windows;
 
 /// <summary>
-/// Schlanker Window-Host für den browsergestützten IMDb-Abgleich.
+/// Schlanker Window-Host für den manuellen IMDb-Abgleich.
 /// </summary>
 public partial class ImdbLookupWindow : Window
 {
     private readonly ImdbLookupWindowViewModel _viewModel;
+    private bool _loadedOnce;
 
-    /// <summary>
-    /// Initialisiert den Dialog für die manuelle IMDb-Auswahl.
-    /// </summary>
-    internal ImdbLookupWindow(EpisodeMetadataGuess? guess, string? currentImdbId)
+    internal ImdbLookupWindow(
+        ImdbLookupService lookupService,
+        ImdbLookupMode lookupMode,
+        EpisodeMetadataGuess? guess,
+        string? currentImdbId)
     {
         InitializeComponent();
-        _viewModel = new ImdbLookupWindowViewModel(guess, currentImdbId);
+        _viewModel = new ImdbLookupWindowViewModel(lookupService, lookupMode, guess, currentImdbId);
         DataContext = _viewModel;
     }
 
@@ -29,6 +31,27 @@ public partial class ImdbLookupWindow : Window
     /// Vom Benutzer bestätigte IMDb-ID nach erfolgreichem Dialogabschluss.
     /// </summary>
     public string? SelectedImdbId { get; private set; }
+
+    private async void ImdbLookupWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_loadedOnce)
+        {
+            return;
+        }
+
+        _loadedOnce = true;
+        await RunUiActionAsync(() => _viewModel.InitializeAsync(), "IMDb-Fehler");
+    }
+
+    private async void SearchSeriesButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync(() => _viewModel.SearchSeriesAsync(autoLoadEpisodes: true), "IMDb-Fehler");
+    }
+
+    private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        await RunUiActionAsync(() => _viewModel.HandleSelectedSeriesSelectionChangedAsync(), "IMDb-Fehler");
+    }
 
     private void OpenSearchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -110,9 +133,6 @@ public partial class ImdbLookupWindow : Window
         }
     }
 
-    /// <summary>
-    /// Übernimmt IMDb-Links beim Zurückkehren aus dem Browser möglichst ohne zusätzlichen manuellen Einfügeschritt.
-    /// </summary>
     private void TryImportClipboard(bool showInvalidMessage)
     {
         try
@@ -159,6 +179,18 @@ public partial class ImdbLookupWindow : Window
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
+        }
+    }
+
+    private async Task RunUiActionAsync(Func<Task> action, string errorTitle)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, errorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

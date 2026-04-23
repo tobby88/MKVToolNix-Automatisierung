@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -43,7 +44,13 @@ public sealed class EmbySyncViewModelTests
         var metadataStore = new AppMetadataStore(settingsStore);
         var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient());
         var syncService = new EmbyMetadataSyncService(embyClient ?? new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
-        var services = new EmbyModuleServices(embySettingsStore, archiveSettings, syncService, episodeMetadata, new NullSettingsDialogService());
+        var services = new EmbyModuleServices(
+            embySettingsStore,
+            archiveSettings,
+            syncService,
+            episodeMetadata,
+            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
+            new NullSettingsDialogService());
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
     }
 
@@ -380,6 +387,14 @@ public sealed class EmbySyncViewModelTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
         }
     }
 

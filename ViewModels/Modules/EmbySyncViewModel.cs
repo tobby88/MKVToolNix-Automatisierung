@@ -867,7 +867,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         }
 
         SelectedItem.TryBuildMetadataGuess(out var guess);
-        var dialog = new ImdbLookupWindow(guess, SelectedItem.ImdbId)
+        var lookupMode = _services.EpisodeMetadata.LoadSettings().ImdbLookupMode;
+        var dialog = new ImdbLookupWindow(_services.ImdbLookup, lookupMode, guess, SelectedItem.ImdbId)
         {
             Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
                 ?? Application.Current?.MainWindow

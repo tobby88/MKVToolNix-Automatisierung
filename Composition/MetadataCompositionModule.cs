@@ -16,6 +16,7 @@ internal static class MetadataCompositionModule
     {
         services.AddSingleton<TvdbClient>(_ => new TvdbClient());
         services.AddSingleton<ITvdbClient>(provider => provider.GetRequiredService<TvdbClient>());
+        services.AddSingleton<ImdbLookupService>();
         services.AddSingleton<EpisodeMetadataLookupService>(provider => new EpisodeMetadataLookupService(
             provider.GetRequiredService<IAppMetadataStore>(),
             provider.GetRequiredService<ITvdbClient>()));

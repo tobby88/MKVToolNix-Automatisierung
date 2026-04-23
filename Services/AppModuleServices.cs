@@ -112,12 +112,14 @@ internal sealed record DownloadSortModuleServices(
 /// <param name="ArchiveSettings">Persistenter Store für den Standardpfad der Serienbibliothek.</param>
 /// <param name="Sync">Fachservice für JSON-Metadatenreport-Import, NFO-Provider-IDs und Emby-API-Aktionen.</param>
 /// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Emby-Zeilen.</param>
+/// <param name="ImdbLookup">Optionaler IMDb-Provider über die freie REST-API.</param>
 /// <param name="SettingsDialog">Zentraler Einstellungsdialog für Emby-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
     AppArchiveSettingsStore ArchiveSettings,
     EmbyMetadataSyncService Sync,
     EpisodeMetadataLookupService EpisodeMetadata,
+    ImdbLookupService ImdbLookup,
     IAppSettingsDialogService SettingsDialog);
 
 /// <summary>
@@ -130,6 +132,7 @@ internal sealed record EmbyModuleServices(
 /// <param name="EpisodeMetadata">TVDB-Settings- und Mappingstore samt Lookup-Logik.</param>
 /// <param name="EmbySettings">Persistenter Store für Emby-Serveradresse und API-Key.</param>
 /// <param name="EmbySync">Fachservice für Emby-Verbindungstest und nachgelagerten NFO-/Refresh-Abgleich.</param>
+/// <param name="ImdbLookup">Optionaler IMDb-Provider über die freie REST-API.</param>
 internal sealed record AppSettingsModuleServices(
     SeriesArchiveService Archive,
     AppToolPathStore ToolPaths,
@@ -137,7 +140,8 @@ internal sealed record AppSettingsModuleServices(
     IMkvToolNixLocator MkvToolNixLocator,
     EpisodeMetadataLookupService EpisodeMetadata,
     AppEmbySettingsStore EmbySettings,
-    EmbyMetadataSyncService EmbySync);
+    EmbyMetadataSyncService EmbySync,
+    ImdbLookupService ImdbLookup);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.

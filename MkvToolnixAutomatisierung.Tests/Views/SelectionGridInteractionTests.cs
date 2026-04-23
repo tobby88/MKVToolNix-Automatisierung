@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Collections;
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -746,6 +747,7 @@ public sealed class SelectionGridInteractionTests
             new AppArchiveSettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient ?? new ThrowingEmbyClient(), new EmbyNfoProviderIdService()),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
+            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
             new NullSettingsDialogService());
         return new EmbySyncViewModel(services, new NullDialogService());
     }
@@ -895,6 +897,14 @@ public sealed class SelectionGridInteractionTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
         }
     }
 

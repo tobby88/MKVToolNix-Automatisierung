@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using MkvToolnixAutomatisierung.Services;
@@ -64,7 +65,8 @@ public sealed class AppSettingsWindowTests
             new NullMkvToolNixLocator(),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()));
+            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()),
+            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Emby);
     }
 
@@ -103,6 +105,14 @@ public sealed class AppSettingsWindowTests
 
         public void Dispose()
         {
+        }
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
         }
     }
 

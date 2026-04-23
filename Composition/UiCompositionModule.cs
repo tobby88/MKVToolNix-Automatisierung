@@ -27,7 +27,8 @@ internal static class UiCompositionModule
             provider.GetRequiredService<IMkvToolNixLocator>(),
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
             provider.GetRequiredService<AppEmbySettingsStore>(),
-            provider.GetRequiredService<EmbyMetadataSyncService>()));
+            provider.GetRequiredService<EmbyMetadataSyncService>(),
+            provider.GetRequiredService<ImdbLookupService>()));
         services.AddSingleton<IAppSettingsDialogService>(provider => new AppSettingsDialogService(
             provider.GetRequiredService<AppSettingsModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
@@ -57,6 +58,7 @@ internal static class UiCompositionModule
             provider.GetRequiredService<AppArchiveSettingsStore>(),
             provider.GetRequiredService<EmbyMetadataSyncService>(),
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<ImdbLookupService>(),
             provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),

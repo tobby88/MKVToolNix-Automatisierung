@@ -152,9 +152,12 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="TVDB">
+            <TabItem Header="Metadaten">
                 <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
@@ -174,6 +177,21 @@
                              Grid.Column="1"
                              Margin="0,4,0,4"
                              Text="{Binding TvdbPin, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="IMDb-Zuordnung" />
+                    <ComboBox Grid.Row="3"
+                              Grid.Column="1"
+                              Margin="0,4,0,4"
+                              ItemsSource="{Binding ImdbLookupModeOptions}"
+                              SelectedValuePath="Value"
+                              DisplayMemberPath="DisplayText"
+                              SelectedValue="{Binding SelectedImdbLookupMode, Mode=TwoWay}" />
+
+                    <TextBlock Grid.Row="4"
+                               Grid.Column="1"
+                               Foreground="#4D5B68"
+                               Text="{Binding ImdbLookupModeDescription}"
+                               TextWrapping="Wrap" />
                 </Grid>
             </TabItem>
 

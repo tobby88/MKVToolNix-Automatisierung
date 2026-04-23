@@ -75,6 +75,27 @@ internal sealed class AppMetadataStore : IAppMetadataStore
 /// <summary>
 /// Persistente TVDB-Zugangsdaten plus lokale Zuordnungstabelle zwischen Dateinamen und TVDB-Serien.
 /// </summary>
+public enum ImdbLookupMode
+{
+    /// <summary>
+    /// Nutzt bevorzugt <c>imdbapi.dev</c> und fällt bei Provider-Ausfall auf die Browserhilfe zurück.
+    /// </summary>
+    Auto,
+
+    /// <summary>
+    /// Erzwingt den API-basierten IMDb-Abgleich ohne automatischen Browser-Fallback.
+    /// </summary>
+    ApiOnly,
+
+    /// <summary>
+    /// Nutzt ausschließlich die browsergestützte IMDb-Suche.
+    /// </summary>
+    BrowserOnly
+}
+
+/// <summary>
+/// Persistente TVDB-Zugangsdaten plus lokale Zuordnungstabelle zwischen Dateinamen und TVDB-Serien.
+/// </summary>
 public sealed class AppMetadataSettings
 {
     /// <summary>
@@ -86,6 +107,11 @@ public sealed class AppMetadataSettings
     /// Optionaler TVDB-PIN für persönliche Accounts.
     /// </summary>
     public string TvdbPin { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Bevorzugte Strategie für den IMDb-Abgleich im Emby-Modul.
+    /// </summary>
+    public ImdbLookupMode ImdbLookupMode { get; set; } = ImdbLookupMode.Auto;
 
     /// <summary>
     /// Lokale Zuordnung zwischen Seriennamen aus Dateinamen und TVDB-Serien.
@@ -102,6 +128,7 @@ public sealed class AppMetadataSettings
         {
             TvdbApiKey = TvdbApiKey?.Trim() ?? string.Empty,
             TvdbPin = TvdbPin?.Trim() ?? string.Empty,
+            ImdbLookupMode = ImdbLookupMode,
             SeriesMappings = SeriesMappings.Select(mapping => mapping.Clone()).ToList()
         };
     }

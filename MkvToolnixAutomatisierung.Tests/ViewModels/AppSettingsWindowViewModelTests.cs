@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
@@ -59,6 +60,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.AutoManageFfprobe = false;
         viewModel.TvdbApiKey = "  tvdb-key  ";
         viewModel.TvdbPin = "  1234  ";
+        viewModel.SelectedImdbLookupMode = ImdbLookupMode.BrowserOnly;
         viewModel.EmbyServerUrl = "  http://emby-test:8096  ";
         viewModel.EmbyApiKey = "  emby-key  ";
         viewModel.EmbyScanWaitTimeoutSeconds = 999;
@@ -77,6 +79,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal("2026-04-18T13-04-00Z", savedSettings.ToolPaths?.ManagedFfprobe.InstalledVersion);
         Assert.Equal("tvdb-key", savedSettings.Metadata?.TvdbApiKey);
         Assert.Equal("1234", savedSettings.Metadata?.TvdbPin);
+        Assert.Equal(ImdbLookupMode.BrowserOnly, savedSettings.Metadata?.ImdbLookupMode);
         Assert.Equal("http://emby-test:8096", savedSettings.Emby?.ServerUrl);
         Assert.Equal("emby-key", savedSettings.Emby?.ApiKey);
         Assert.Equal(600, savedSettings.Emby?.ScanWaitTimeoutSeconds);
@@ -315,8 +318,14 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             new StubMkvToolNixLocator(),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()));
+            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()),
+            CreateImdbLookupService());
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Archive);
+    }
+
+    private static ImdbLookupService CreateImdbLookupService()
+    {
+        return new ImdbLookupService(new HttpClient(new StubHttpMessageHandler()));
     }
 
     private string CreateDirectory(string relativePath)
@@ -350,6 +359,14 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         }
 
         public string FindMkvPropEditPath()
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
         }
