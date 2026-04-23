@@ -343,6 +343,34 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal("07", result.Selection.EpisodeNumber);
     }
 
+    [Theory]
+    [InlineData("Extra: Blindenhund")]
+    [InlineData("Extra: Tangostunde für Blinde")]
+    [InlineData("Making-of: Blindentennis")]
+    [InlineData("Extra: Blind mit Kind")]
+    public async Task ResolveAutomaticallyAsync_DoesNotMapSpecialMaterialToNormalBlindEpisode(string localTitle)
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Die Heiland - Wir sind Anwalt", "2018", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(510, "Blind", 5, 10, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Die Heiland - Wir sind Anwalt", localTitle, "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.Null(result.Selection);
+        Assert.Contains("keine Episode sicher zuordenbar", result.StatusText);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

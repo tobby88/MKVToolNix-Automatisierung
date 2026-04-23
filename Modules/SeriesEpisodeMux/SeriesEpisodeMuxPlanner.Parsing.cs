@@ -466,7 +466,18 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static string BuildTitleIdentityKey(string title)
     {
-        return Regex.Replace(NormalizeEpisodeTitle(title), @"\s+", " ").Trim().ToLowerInvariant();
+        return Regex.Replace(NormalizeSpecialMaterialIdentityTitle(NormalizeEpisodeTitle(title)), @"\s+", " ").Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeSpecialMaterialIdentityTitle(string title)
+    {
+        var normalized = NormalizeSeparators(title);
+        normalized = Regex.Replace(
+            normalized,
+            @"^\s*(?:Extra|Bonus|Special|Trailer|Backdrop|Making\s*[- ]?\s*of)\s*[-_:]\s*",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        return normalized.Trim();
     }
 
     private static string NormalizeSender(string? sender)

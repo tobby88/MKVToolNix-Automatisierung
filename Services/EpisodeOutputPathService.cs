@@ -389,7 +389,7 @@ internal sealed class EpisodeOutputPathService
             RegexOptions.IgnoreCase);
         normalized = Regex.Replace(
             normalized,
-            @"^\s*(?:Bonus|Special|Trailer|Backdrop)\s*[-_:]\s*",
+            @"^\s*(?:Bonus|Special|Trailer|Backdrop|Making\s*[- ]?\s*of)\s*[-_:]\s*",
             string.Empty,
             RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*mit\s+Audiodeskrip[^)]*\)", string.Empty, RegexOptions.IgnoreCase);

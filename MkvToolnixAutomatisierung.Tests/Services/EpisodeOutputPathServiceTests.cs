@@ -228,6 +228,34 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_MatchesEquivalentSpecialLabels()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(
+            archiveRoot,
+            "Die Heiland - Wir sind Anwalt",
+            "Specials",
+            "Die Heiland - Wir sind Anwalt - S00E54 - Extra - Auf der Tastatur schreiben.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Die Heiland - Wir sind Anwalt"],
+            "Making-of: Auf der Tastatur schreiben");
+
+        Assert.NotNull(match);
+        Assert.Equal(archiveFilePath, match!.OutputPath);
+        Assert.Equal("00", match.SeasonNumber);
+        Assert.Equal("54", match.EpisodeNumber);
+        Assert.Equal("Extra - Auf der Tastatur schreiben", match.Title);
+    }
+
+    [Fact]
     public void TryResolveExistingSpecialArchiveMatch_ReturnsTitleOnlyTrailerFile()
     {
         var archiveRoot = Path.Combine(_tempDirectory, "archive-root");

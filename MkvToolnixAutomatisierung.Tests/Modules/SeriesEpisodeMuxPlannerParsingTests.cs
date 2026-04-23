@@ -250,6 +250,44 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_MergesSpecialLabels_WhenTitleIsEquivalent()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var normalPath = Path.Combine(tempDirectory, "Die Heiland - Wir sind Anwalt-Making-of_ Auf der Tastatur schreiben-0000000001.mp4");
+            var audioDescriptionPath = Path.Combine(tempDirectory, "Die Heiland - Wir sind Anwalt-Extra_ Auf der Tastatur schreiben (Audiodeskription und UT)-0000000002.mp4");
+            CreateEmptyFile(normalPath);
+            CreateCompanionText(
+                Path.ChangeExtension(normalPath, ".txt"),
+                topic: "Die Heiland - Wir sind Anwalt",
+                title: "Making-of: Auf der Tastatur schreiben",
+                duration: "00:05:47");
+            CreateEmptyFile(audioDescriptionPath);
+            CreateCompanionText(
+                Path.ChangeExtension(audioDescriptionPath, ".txt"),
+                topic: "Die Heiland - Wir sind Anwalt",
+                title: "Extra: Auf der Tastatur schreiben (Audiodeskription und UT)",
+                duration: "00:05:47");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+
+            var mainVideoFile = Assert.Single(context.MainVideoFiles);
+            Assert.Equal(normalPath, mainVideoFile);
+
+            var episodeSeeds = context.GetEpisodeSeeds(context.GetSelectedSeed(normalPath));
+            Assert.Contains(episodeSeeds.NormalVideoSeeds, seed => string.Equals(seed.FilePath, normalPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(episodeSeeds.AudioDescriptionSeeds, seed => string.Equals(seed.FilePath, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_UsesSeriesPrefixFromTitle_WhenTopicIsGenericRubric()
     {
         var planner = CreatePlanner();

@@ -151,6 +151,15 @@ internal static class EpisodeMetadataMatchingHeuristics
             return null;
         }
 
+        var seasonMatched = int.TryParse(guess.SeasonNumber, out var seasonNumber)
+            && bestEpisode.Episode.SeasonNumber == seasonNumber;
+        var episodeMatched = int.TryParse(guess.EpisodeNumber, out var episodeNumber)
+            && bestEpisode.Episode.EpisodeNumber == episodeNumber;
+        if (bestEpisode.TitleSimilarity == 0 && !(seasonMatched && episodeMatched))
+        {
+            return null;
+        }
+
         var combinedScore = bestEpisode.EpisodeScore + Math.Min(seriesScore, 25);
         if (combinedScore < 45)
         {
@@ -172,8 +181,8 @@ internal static class EpisodeMetadataMatchingHeuristics
             bestEpisode.TitleSimilarity,
             exactTitleMatchCount,
             strongTitleMatchCount,
-            SeasonMatched: int.TryParse(guess.SeasonNumber, out var seasonNumber) && bestEpisode.Episode.SeasonNumber == seasonNumber,
-            EpisodeMatched: int.TryParse(guess.EpisodeNumber, out var episodeNumber) && bestEpisode.Episode.EpisodeNumber == episodeNumber);
+            seasonMatched,
+            episodeMatched);
     }
 
     public static bool ShouldRequireReview(ScoredAutomaticMatch match)
@@ -324,8 +333,13 @@ internal static class EpisodeMetadataMatchingHeuristics
             return 30;
         }
 
-        if (normalizedLeft.Contains(normalizedRight, StringComparison.OrdinalIgnoreCase)
-            || normalizedRight.Contains(normalizedLeft, StringComparison.OrdinalIgnoreCase))
+        if (IsSpecialMaterialTitle(left) || IsSpecialMaterialTitle(right))
+        {
+            return 0;
+        }
+
+        if (ContainsTokenPhrase(normalizedLeft, normalizedRight)
+            || ContainsTokenPhrase(normalizedRight, normalizedLeft))
         {
             return 22;
         }
@@ -346,6 +360,56 @@ internal static class EpisodeMetadataMatchingHeuristics
         var intersection = leftTokens.Intersect(rightTokens, StringComparer.OrdinalIgnoreCase).Count();
         var union = leftTokens.Union(rightTokens, StringComparer.OrdinalIgnoreCase).Count();
         return union == 0 ? 0 : (int)Math.Round(intersection * maxScore / (double)union);
+    }
+
+    private static bool IsSpecialMaterialTitle(string title)
+    {
+        var normalized = NormalizeText(title);
+        return normalized.StartsWith("extra ", StringComparison.Ordinal)
+            || normalized.StartsWith("bonus ", StringComparison.Ordinal)
+            || normalized.StartsWith("special ", StringComparison.Ordinal)
+            || normalized.StartsWith("trailer ", StringComparison.Ordinal)
+            || normalized.StartsWith("backdrop ", StringComparison.Ordinal)
+            || normalized.StartsWith("making of ", StringComparison.Ordinal)
+            || normalized.StartsWith("makingof ", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsTokenPhrase(string haystack, string needle)
+    {
+        var haystackTokens = haystack.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var needleTokens = needle.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (haystackTokens.Length == 0 || needleTokens.Length == 0 || needleTokens.Length > haystackTokens.Length)
+        {
+            return false;
+        }
+
+        if (needleTokens.Length == 1 && needleTokens[0].Length < 6)
+        {
+            return false;
+        }
+
+        for (var startIndex = 0; startIndex <= haystackTokens.Length - needleTokens.Length; startIndex++)
+        {
+            var matches = true;
+            for (var needleIndex = 0; needleIndex < needleTokens.Length; needleIndex++)
+            {
+                if (!string.Equals(
+                        haystackTokens[startIndex + needleIndex],
+                        needleTokens[needleIndex],
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string FormatNumber(int? value)
