@@ -51,6 +51,9 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Contains(configuredFfprobePath, viewModel.MediaProbeStatusTooltip, StringComparison.Ordinal);
         Assert.Contains("Der manuelle ffprobe-Override ist aktuell nicht verwendbar", viewModel.MediaProbeStatusTooltip, StringComparison.Ordinal);
         Assert.Contains("Probe fehlgeschlagen.", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+        Assert.Equal("Daten: portable", viewModel.PortableDataStatusText);
+        Assert.Contains("Data", viewModel.PortableDataStatusTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Daten: portable", viewModel.SystemStatusSummary, StringComparison.Ordinal);
     }
 
     [Fact]

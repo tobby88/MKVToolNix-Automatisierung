@@ -181,39 +181,16 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
             + Environment.NewLine
             + "Automatische Ausgabepfade nutzen deshalb vorerst den jeweiligen Quellordner.";
 
-    public string PortableModeText => "Portable: lokale Daten in .\\Data";
+    public string PortableDataStatusText => "Daten: portable";
 
-    public string PortableModeTooltip => $"Portable Modus aktiv:{Environment.NewLine}{PortableAppStorage.DataDirectory}";
+    public string PortableDataStatusTooltip => $"Lokale App-Daten:{Environment.NewLine}{PortableAppStorage.DataDirectory}";
 
     public string SystemStatusSummary => string.Join(
         Environment.NewLine,
         ArchiveStatusText,
         MkvToolNixStatusText,
-        MediaProbeStatusText);
-
-    public string QuickHelpText
-    {
-        get
-        {
-            var moduleHint = SelectedModule.Title switch
-            {
-                "Batch-Mux" => "Batch-Mux: Quellordner wählen, scannen, offene Pflichtchecks klären, dann Batch starten.",
-                "Einsortieren" => "Einsortieren: MediathekView-Ordner scannen, Zielordner prüfen und lose Dateien gesammelt einsortieren.",
-                "Emby-Abgleich" => "Emby-Abgleich: Reports wählen, automatische NFO-/Emby-Prüfung abwarten, Emby bei Bedarf scannen, TVDB je Zeile korrigieren und erst danach die Änderungen nach Emby schreiben.",
-                _ => "Einzel-Mux: Hauptvideo wählen, Erkennung prüfen, bei Bedarf TVDB öffnen, Vorschau erzeugen, dann muxen."
-            };
-
-            return string.Join(
-                Environment.NewLine,
-                "Erststart:",
-                "1. Selten geänderte Pfade und API-Schlüssel über 'Einstellungen' hinterlegen.",
-                "2. Archiv- und Toolstatus darunter kurz prüfen.",
-                "3. TVDB nur einrichten, wenn Metadaten geprüft oder verbessert werden sollen.",
-                string.Empty,
-                "Aktuelles Modul:",
-                moduleHint);
-        }
-    }
+        MediaProbeStatusText,
+        PortableDataStatusText);
 
     public RelayCommand OpenSettingsCommand { get; }
 
@@ -229,7 +206,6 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
             _selectedModule = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(QuickHelpText));
         }
     }
 

@@ -117,6 +117,9 @@
                             <TextBlock Margin="0,4,0,0"
                                        Text="{Binding MediaProbeStatusText}"
                                        ToolTip="{Binding MediaProbeStatusTooltip}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Text="{Binding PortableDataStatusText}"
+                                       ToolTip="{Binding PortableDataStatusTooltip}" />
                         </StackPanel>
                     </Border>
 
@@ -141,37 +144,6 @@
                                    TextWrapping="Wrap"
                                    Text="{Binding ArchiveNoticeText}" />
                     </Border>
-
-                    <Border Margin="0,10,0,0"
-                            Padding="10,8"
-                            Background="#F3F6FA"
-                            BorderBrush="#C7D1DC"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            ToolTip="{Binding PortableModeTooltip}">
-                        <TextBlock FontWeight="SemiBold"
-                                   TextWrapping="Wrap"
-                                   Text="{Binding PortableModeText}" />
-                    </Border>
-
-                    <Expander Margin="0,8,0,0"
-                              IsExpanded="False"
-                              ToolTip="Kurze Hinweise zum Erststart und zum aktuell gewählten Modul.">
-                        <Expander.Header>
-                            <TextBlock FontWeight="SemiBold" Text="Kurzinfo" />
-                        </Expander.Header>
-                        <Border Margin="0,6,0,0"
-                                Padding="8"
-                                Background="#FAFBFC"
-                                BorderBrush="#D8DEE5"
-                                BorderThickness="1"
-                                CornerRadius="6">
-                            <TextBlock FontSize="12"
-                                       Foreground="#44515D"
-                                       TextWrapping="Wrap"
-                                       Text="{Binding QuickHelpText}" />
-                        </Border>
-                    </Expander>
                 </StackPanel>
             </Grid>
         </Border>
