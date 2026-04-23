@@ -288,6 +288,52 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_MergesPunctuationVariants_WhenDurationMatches()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var zdfPath = Path.Combine(tempDirectory, "Filme-Pettersson und Findus_ Kleiner Quälgeist - große Freundschaft-1004535993.mp4");
+            var kikaPath = Path.Combine(tempDirectory, "Pettersson und Findus-Pettersson und Findus - Kleiner Quälgeist, große Freundschaft-1398049887.mp4");
+            var hoerfassungPath = Path.Combine(tempDirectory, "Pettersson und Findus-Pettersson und Findus - Kleiner Quälgeist, große Freundschaft (Hörfassung)-0085124253.mp4");
+            CreateEmptyFile(zdfPath);
+            CreateCompanionText(
+                Path.ChangeExtension(zdfPath, ".txt"),
+                topic: "Filme",
+                title: "Pettersson und Findus: Kleiner Quälgeist - große Freundschaft",
+                duration: "01:21:49");
+            CreateEmptyFile(kikaPath);
+            CreateCompanionText(
+                Path.ChangeExtension(kikaPath, ".txt"),
+                topic: "Pettersson und Findus",
+                title: "Pettersson und Findus - Kleiner Quälgeist, große Freundschaft",
+                duration: "01:21:49");
+            CreateEmptyFile(hoerfassungPath);
+            CreateCompanionText(
+                Path.ChangeExtension(hoerfassungPath, ".txt"),
+                topic: "Pettersson und Findus",
+                title: "Pettersson und Findus - Kleiner Quälgeist, große Freundschaft (Hörfassung)",
+                duration: "01:21:49");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+
+            var mainVideoFile = Assert.Single(context.MainVideoFiles);
+            Assert.Equal(zdfPath, mainVideoFile);
+
+            var episodeSeeds = context.GetEpisodeSeeds(context.GetSelectedSeed(zdfPath));
+            Assert.Contains(episodeSeeds.NormalVideoSeeds, seed => string.Equals(seed.FilePath, zdfPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(episodeSeeds.NormalVideoSeeds, seed => string.Equals(seed.FilePath, kikaPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(episodeSeeds.AudioDescriptionSeeds, seed => string.Equals(seed.FilePath, hoerfassungPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_UsesSeriesPrefixFromTitle_WhenTopicIsGenericRubric()
     {
         var planner = CreatePlanner();

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -246,6 +247,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return true;
         }
 
+        if (!HasKnownEpisodeCode(left.Identity)
+            && !HasKnownEpisodeCode(right.Identity)
+            && HaveSameSeriesAndLooselyEquivalentTitle(left.Identity, right.Identity)
+            && HaveCompatibleDeclaredDurations(left.TextMetadata.Duration, right.TextMetadata.Duration))
+        {
+            return true;
+        }
+
         if (!HaveSameSeriesAndTitle(left.Identity, right.Identity)
             || !HasAmbiguousMediathekEpisodeCodePair(left.Identity, right.Identity))
         {
@@ -277,6 +286,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         return string.Equals(BuildSeriesIdentityKey(left.SeriesName), BuildSeriesIdentityKey(right.SeriesName), StringComparison.Ordinal)
             && string.Equals(BuildTitleIdentityKey(left.Title), BuildTitleIdentityKey(right.Title), StringComparison.Ordinal);
+    }
+
+    private static bool HaveSameSeriesAndLooselyEquivalentTitle(EpisodeIdentity left, EpisodeIdentity right)
+    {
+        return string.Equals(BuildSeriesIdentityKey(left.SeriesName), BuildSeriesIdentityKey(right.SeriesName), StringComparison.Ordinal)
+            && string.Equals(BuildLooseTitleIdentityKey(left.Title), BuildLooseTitleIdentityKey(right.Title), StringComparison.Ordinal);
+    }
+
+    private static string BuildLooseTitleIdentityKey(string title)
+    {
+        var normalized = BuildTitleIdentityKey(title);
+        normalized = Regex.Replace(normalized, @"[\p{P}\p{S}]+", " ");
+        return Regex.Replace(normalized, @"\s+", " ").Trim();
     }
 
     private static bool HasAmbiguousMediathekEpisodeCodePair(EpisodeIdentity left, EpisodeIdentity right)
