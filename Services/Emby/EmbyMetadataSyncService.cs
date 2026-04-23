@@ -205,6 +205,58 @@ internal sealed class EmbyMetadataSyncService
     }
 
     /// <summary>
+    /// Markiert erfolgreich abgearbeitete Reporteinträge und verschiebt vollständig erledigte Reports in einen <c>done</c>-Unterordner.
+    /// </summary>
+    public EmbyReportCompletionResult MarkOutputReportsDone(
+        IReadOnlyList<string> reportPaths,
+        IReadOnlyCollection<string> completedMediaFilePaths)
+    {
+        ArgumentNullException.ThrowIfNull(reportPaths);
+        ArgumentNullException.ThrowIfNull(completedMediaFilePaths);
+        if (reportPaths.Count == 0 || completedMediaFilePaths.Count == 0)
+        {
+            return EmbyReportCompletionResult.Empty;
+        }
+
+        var completedPathSet = completedMediaFilePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (completedPathSet.Count == 0)
+        {
+            return EmbyReportCompletionResult.Empty;
+        }
+
+        var now = DateTimeOffset.Now;
+        var updatedReports = new List<string>();
+        var movedReports = new List<EmbyMovedReport>();
+        var failedReports = new List<string>();
+
+        foreach (var reportPath in reportPaths
+                     .Where(path => !string.IsNullOrWhiteSpace(path))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var completion = MarkSingleOutputReportDone(reportPath, completedPathSet, now);
+                if (completion.MovedReport is not null)
+                {
+                    movedReports.Add(completion.MovedReport);
+                }
+                else if (!string.IsNullOrWhiteSpace(completion.UpdatedReportPath))
+                {
+                    updatedReports.Add(completion.UpdatedReportPath!);
+                }
+            }
+            catch (Exception ex)
+            {
+                failedReports.Add($"{reportPath}: {ex.Message}");
+            }
+        }
+
+        return new EmbyReportCompletionResult(updatedReports, movedReports, failedReports);
+    }
+
+    /// <summary>
     /// Fordert nach NFO-Änderungen einen gezielten Emby-Metadaten-Refresh an.
     /// </summary>
     public Task RefreshItemMetadataAsync(
@@ -231,6 +283,97 @@ internal sealed class EmbyMetadataSyncService
             .Select(group => group.First())
             .OrderBy(item => item.MediaFilePath, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static SingleReportCompletionResult MarkSingleOutputReportDone(
+        string reportPath,
+        IReadOnlySet<string> completedMediaFilePaths,
+        DateTimeOffset completedAt)
+    {
+        if (!File.Exists(reportPath))
+        {
+            return SingleReportCompletionResult.Empty;
+        }
+
+        var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath));
+        if (report is null)
+        {
+            throw new InvalidDataException("Der Metadaten-Report konnte nicht gelesen werden.");
+        }
+
+        var relevantItems = report.Items
+            .Where(item => !string.IsNullOrWhiteSpace(item.OutputPath))
+            .Where(item => string.Equals(Path.GetExtension(item.OutputPath), ".mkv", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (relevantItems.Count == 0)
+        {
+            return SingleReportCompletionResult.Empty;
+        }
+
+        var changed = false;
+        foreach (var item in relevantItems.Where(item => completedMediaFilePaths.Contains(item.OutputPath)))
+        {
+            if (item.EmbySyncDone == true)
+            {
+                continue;
+            }
+
+            item.EmbySyncDone = true;
+            item.EmbySyncDoneAt = completedAt;
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return SingleReportCompletionResult.Empty;
+        }
+
+        var isComplete = relevantItems.All(item => item.EmbySyncDone == true);
+        if (isComplete)
+        {
+            report.EmbySyncCompletedAt = completedAt;
+        }
+
+        File.WriteAllText(reportPath, BatchOutputMetadataReportJson.Serialize(report));
+
+        if (!isComplete || IsAlreadyInDoneDirectory(reportPath))
+        {
+            return new SingleReportCompletionResult(reportPath, MovedReport: null);
+        }
+
+        var targetDirectory = Path.Combine(Path.GetDirectoryName(reportPath)!, "done");
+        Directory.CreateDirectory(targetDirectory);
+        var targetPath = BuildUniqueReportPath(Path.Combine(targetDirectory, Path.GetFileName(reportPath)));
+        File.Move(reportPath, targetPath);
+        return new SingleReportCompletionResult(
+            UpdatedReportPath: null,
+            new EmbyMovedReport(reportPath, targetPath));
+    }
+
+    private static bool IsAlreadyInDoneDirectory(string reportPath)
+    {
+        var directory = Path.GetFileName(Path.GetDirectoryName(reportPath));
+        return string.Equals(directory, "done", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildUniqueReportPath(string targetPath)
+    {
+        if (!File.Exists(targetPath))
+        {
+            return targetPath;
+        }
+
+        var directory = Path.GetDirectoryName(targetPath)!;
+        var fileName = Path.GetFileNameWithoutExtension(targetPath);
+        var extension = Path.GetExtension(targetPath);
+        for (var index = 2; ; index++)
+        {
+            var candidate = Path.Combine(directory, $"{fileName} ({index}){extension}");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 
     private static EmbyProviderIds BuildProviderIds(BatchOutputMetadataEntry item)
@@ -552,6 +695,21 @@ internal sealed class EmbyMetadataSyncService
 }
 
 internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds ProviderIds);
+
+internal sealed record EmbyReportCompletionResult(
+    IReadOnlyList<string> UpdatedReportPaths,
+    IReadOnlyList<EmbyMovedReport> MovedReports,
+    IReadOnlyList<string> FailedReports)
+{
+    public static EmbyReportCompletionResult Empty { get; } = new([], [], []);
+}
+
+internal sealed record EmbyMovedReport(string SourcePath, string TargetPath);
+
+internal sealed record SingleReportCompletionResult(string? UpdatedReportPath, EmbyMovedReport? MovedReport)
+{
+    public static SingleReportCompletionResult Empty { get; } = new(null, null);
+}
 
 /// <summary>
 /// Beschreibt, ob der Emby-Abgleich den bevorzugten Serienbibliotheksscan oder den globalen Fallback nutzen musste.

@@ -38,6 +38,11 @@ public sealed class BatchOutputMetadataReport
     /// Neu erzeugte Ausgabedateien samt optionaler Metadaten für Folgeprozesse.
     /// </summary>
     public List<BatchOutputMetadataEntry> Items { get; init; } = [];
+
+    /// <summary>
+    /// Zeitpunkt, zu dem alle relevanten Einträge im Emby-Abgleich abgeschlossen wurden.
+    /// </summary>
+    public DateTimeOffset? EmbySyncCompletedAt { get; set; }
 }
 
 /// <summary>
@@ -91,6 +96,17 @@ public sealed class BatchOutputMetadataEntry
     /// Zusatzdaten zur ursprünglichen TVDB-Auswahl, falls eine solche Auswahl vorlag.
     /// </summary>
     public BatchOutputTvdbMetadata? Tvdb { get; init; }
+
+    /// <summary>
+    /// Wird vom Emby-Abgleich gesetzt, sobald diese MKV dort erfolgreich abgearbeitet wurde.
+    /// Nullable, damit neue Reports nicht mit lauter <c>false</c>-Feldern aufgebläht werden.
+    /// </summary>
+    public bool? EmbySyncDone { get; set; }
+
+    /// <summary>
+    /// Zeitpunkt der erfolgreichen Emby-Abgleich-Bearbeitung dieser MKV.
+    /// </summary>
+    public DateTimeOffset? EmbySyncDoneAt { get; set; }
 }
 
 /// <summary>

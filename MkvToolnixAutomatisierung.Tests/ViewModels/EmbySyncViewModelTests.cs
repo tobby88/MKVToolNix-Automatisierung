@@ -348,6 +348,53 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void RunSyncCommand_MarksCompletedReportAndMovesItToDoneDirectory()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+            var reportPath = WriteMetadataReport(
+                tempDirectory,
+                "run.metadata.json",
+                mediaPath,
+                "12345",
+                imdbId: "tt1234567");
+            var dialogService = new SelectingDialogService([reportPath]);
+            var vm = CreateViewModel(dialogService);
+
+            vm.SelectReportCommand.Execute(null);
+
+            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 1, TimeSpan.FromSeconds(2)));
+            var item = Assert.Single(vm.Items);
+            item.ApplyImdbSelection("tt1234567");
+
+            vm.RunSyncCommand.Execute(null);
+
+            var doneReportPath = Path.Combine(tempDirectory, "done", "run.metadata.json");
+            Assert.True(SpinWait.SpinUntil(() => File.Exists(doneReportPath), TimeSpan.FromSeconds(2)));
+            Assert.False(File.Exists(reportPath));
+            Assert.Contains(doneReportPath, vm.ReportPath, StringComparison.OrdinalIgnoreCase);
+            var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(doneReportPath))!;
+            var reportItem = Assert.Single(report.Items);
+            Assert.True(reportItem.EmbySyncDone);
+            Assert.NotNull(reportItem.EmbySyncDoneAt);
+            Assert.NotNull(report.EmbySyncCompletedAt);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void RunSyncCommand_SkipsInvalidProviderIds_BeforeWritingNfo()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));

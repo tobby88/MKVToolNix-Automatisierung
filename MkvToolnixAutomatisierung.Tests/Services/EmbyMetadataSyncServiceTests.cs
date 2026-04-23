@@ -88,6 +88,45 @@ public sealed class EmbyMetadataSyncServiceTests
     }
 
     [Fact]
+    public void MarkOutputReportsDone_MarksItemsAndMovesCompletedReportToDoneDirectory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var firstMediaPath = Path.Combine(directory, "Serie - S01E01 - Pilot.mkv");
+            var secondMediaPath = Path.Combine(directory, "Serie - S01E02 - Finale.mkv");
+            var reportPath = Path.Combine(directory, "Neu erzeugte Ausgabedateien.metadata.json");
+            WriteReport(reportPath, firstMediaPath, secondMediaPath);
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+            var partialResult = service.MarkOutputReportsDone([reportPath], [firstMediaPath]);
+
+            Assert.Equal([reportPath], partialResult.UpdatedReportPaths);
+            Assert.Empty(partialResult.MovedReports);
+            var partialReport = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath))!;
+            Assert.True(partialReport.Items[0].EmbySyncDone);
+            Assert.Null(partialReport.Items[1].EmbySyncDone);
+            Assert.Null(partialReport.EmbySyncCompletedAt);
+
+            var completedResult = service.MarkOutputReportsDone([reportPath], [secondMediaPath]);
+
+            var movedReport = Assert.Single(completedResult.MovedReports);
+            Assert.Equal(reportPath, movedReport.SourcePath);
+            Assert.StartsWith(Path.Combine(directory, "done"), movedReport.TargetPath, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(reportPath));
+            Assert.True(File.Exists(movedReport.TargetPath));
+            var completedReport = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(movedReport.TargetPath))!;
+            Assert.All(completedReport.Items, item => Assert.True(item.EmbySyncDone));
+            Assert.NotNull(completedReport.EmbySyncCompletedAt);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task TriggerSeriesLibraryScanAsync_UsesArchiveRootItem_WhenEmbyFindsIt()
     {
         var client = new RecordingEmbyClient
@@ -113,6 +152,30 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Equal(0, client.TriggerLibraryScanCallCount);
         Assert.Equal("library-1", result.Library?.Id);
         Assert.Equal(@"Z:\Videos\Serien", result.MatchedLibraryPath);
+    }
+
+    private static void WriteReport(string reportPath, params string[] mediaPaths)
+    {
+        File.WriteAllText(
+            reportPath,
+            BatchOutputMetadataReportJson.Serialize(new BatchOutputMetadataReport
+            {
+                CreatedAt = DateTimeOffset.Now,
+                SourceDirectory = Path.GetDirectoryName(reportPath)!,
+                OutputDirectory = Path.GetDirectoryName(reportPath)!,
+                Items = mediaPaths
+                    .Select(path => new BatchOutputMetadataEntry
+                    {
+                        OutputPath = path,
+                        TvdbEpisodeId = "100",
+                        ProviderIds = new BatchOutputProviderIds
+                        {
+                            Tvdb = "100",
+                            Imdb = "tt1234567"
+                        }
+                    })
+                    .ToList()
+            }));
     }
 
     [Fact]

@@ -443,6 +443,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             var updatedCount = 0;
             var skippedCount = 0;
             var refreshFailureCount = 0;
+            var completedMediaFilePaths = new List<string>();
 
             for (var index = 0; index < selectedItems.Count; index++)
             {
@@ -453,6 +454,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 if (!item.SupportsProviderIdSync)
                 {
                     item.SetStatus("Ohne NFO-Sync", "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Ein TVDB-/IMDB-Sync ist hier nicht nötig.");
+                    completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
@@ -486,6 +488,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     if (item.HasCompleteProviderIds)
                     {
                         item.SetStatus("NFO aktuell", updateResult.Message);
+                        completedMediaFilePaths.Add(item.MediaFilePath);
                     }
                     else
                     {
@@ -503,12 +506,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                         noRefreshReason: string.IsNullOrWhiteSpace(item.EmbyItemId)
                             ? "Emby-Item noch nicht gefunden."
                             : "Emby-Refresh nicht ausgeführt, weil keine Emby-API-Zugangsdaten konfiguriert sind.");
+                    completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(item.EmbyItemId))
                 {
                     item.MarkUpdated(metadataRefreshTriggered: false);
+                    completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
@@ -516,6 +521,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 {
                     await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
                     item.MarkUpdated(metadataRefreshTriggered: true);
+                    completedMediaFilePaths.Add(item.MediaFilePath);
                 }
                 catch (Exception ex)
                 {
@@ -528,6 +534,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             ProgressValue = 100;
             StatusText = BuildRunSyncSummary(updatedCount, skippedCount, refreshFailureCount, canRefreshEmby);
             AppendLog(StatusText);
+            MarkSelectedReportsDone(completedMediaFilePaths);
             RefreshSummaryAndCommands();
         });
     }
@@ -657,6 +664,53 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         }
 
         item.IsSelected = !item.IsSelected;
+    }
+
+    private void MarkSelectedReportsDone(IReadOnlyList<string> completedMediaFilePaths)
+    {
+        if (completedMediaFilePaths.Count == 0 || _reportPaths.Count == 0)
+        {
+            return;
+        }
+
+        var completion = _services.Sync.MarkOutputReportsDone(_reportPaths, completedMediaFilePaths);
+        if (completion.UpdatedReportPaths.Count > 0)
+        {
+            AppendLog($"Metadatenreport aktualisiert: {completion.UpdatedReportPaths.Count} teilweise erledigt.");
+        }
+
+        if (completion.MovedReports.Count > 0)
+        {
+            foreach (var movedReport in completion.MovedReports)
+            {
+                ReplaceReportPath(movedReport.SourcePath, movedReport.TargetPath);
+                AppendLog($"Metadatenreport erledigt und verschoben: {movedReport.TargetPath}");
+            }
+
+            OnPropertyChanged(nameof(ReportSelectionSummaryText));
+            OnPropertyChanged(nameof(ReportSelectionDetailText));
+            OnPropertyChanged(nameof(ReportSelectionTooltip));
+            ReportPath = _reportPaths.Count switch
+            {
+                0 => string.Empty,
+                1 => _reportPaths[0],
+                _ => string.Join(Environment.NewLine, _reportPaths)
+            };
+        }
+
+        foreach (var failedReport in completion.FailedReports)
+        {
+            AppendLog($"Metadatenreport konnte nicht als erledigt markiert werden: {failedReport}");
+        }
+    }
+
+    private void ReplaceReportPath(string sourcePath, string targetPath)
+    {
+        var index = _reportPaths.FindIndex(path => string.Equals(path, sourcePath, StringComparison.OrdinalIgnoreCase));
+        if (index >= 0)
+        {
+            _reportPaths[index] = targetPath;
+        }
     }
 
     public void HandleGlobalSettingsChanged()
