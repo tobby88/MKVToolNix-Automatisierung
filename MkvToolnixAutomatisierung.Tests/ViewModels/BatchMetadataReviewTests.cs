@@ -492,10 +492,13 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
-    public async Task OpenSelectedSourcesCommand_OpensSelectedMediaFilesWithoutRunningManualReview()
+    public async Task OpenSelectedFileCommands_OpenFilesByCategory()
     {
         var dialogService = new FakeDialogService();
         var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var outputPath = Path.Combine(Path.GetTempPath(), "batch-open-tests", Guid.NewGuid().ToString("N"), "output.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "archive");
         var item = BatchEpisodeItemViewModel.CreateFromDetection(
             requestedMainVideoPath: @"C:\Temp\haupt.mp4",
             CreateLocalGuess(),
@@ -504,7 +507,7 @@ public sealed class BatchMetadataReviewTests
                 MainVideoPath = @"C:\Temp\haupt.mp4",
                 AdditionalVideoPaths = [@"C:\Temp\weitere-spur.mp4"],
                 AudioDescriptionPath = @"C:\Temp\ad.mp4",
-                SubtitlePaths = [@"C:\Temp\untertitel.srt"],
+                SubtitlePaths = [@"C:\Temp\a-untertitel.srt", @"C:\Temp\b-untertitel.ass"],
                 AttachmentPaths = [@"C:\Temp\metadaten.txt"]
             },
             new EpisodeMetadataResolutionResult(
@@ -515,24 +518,29 @@ public sealed class BatchMetadataReviewTests
                 RequiresReview: false,
                 QueryWasAttempted: false,
                 QuerySucceeded: false),
-            outputPath: @"C:\Temp\output.mkv",
+            outputPath: outputPath,
             statusKind: BatchEpisodeStatusKind.Ready,
             isSelected: true);
         viewModel.EpisodeItems.Add(item);
         viewModel.SelectedEpisodeItem = item;
 
         viewModel.OpenSelectedSourcesCommand.Execute(null);
-        await WaitUntilAsync(() => dialogService.OpenedFilePaths.Count >= 3, TimeSpan.FromSeconds(1));
+        await WaitUntilAsync(() => dialogService.OpenedFilePaths.Count >= 2, TimeSpan.FromSeconds(1));
+        viewModel.OpenSelectedAudioDescriptionCommand.Execute(null);
         viewModel.OpenSelectedSubtitlesCommand.Execute(null);
         viewModel.OpenSelectedAttachmentsCommand.Execute(null);
+        Assert.True(viewModel.OpenSelectedOutputCommand.CanExecute(null));
+        viewModel.OpenSelectedOutputCommand.Execute(null);
 
         Assert.Equal(
         [
             @"C:\Temp\haupt.mp4",
             @"C:\Temp\weitere-spur.mp4",
             @"C:\Temp\ad.mp4",
-            @"C:\Temp\untertitel.srt",
-            @"C:\Temp\metadaten.txt"
+            @"C:\Temp\a-untertitel.srt",
+            @"C:\Temp\b-untertitel.ass",
+            @"C:\Temp\metadaten.txt",
+            outputPath
         ],
             dialogService.OpenedFilePaths);
     }

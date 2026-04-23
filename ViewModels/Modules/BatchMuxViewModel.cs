@@ -72,9 +72,11 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, CanDeselectAllEpisodes);
         ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => !_isBusy && SelectedEpisodeItem is not null);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
-        OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0, unexpectedCommandErrorHandler);
+        OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && HasSelectedVideoFiles(), unexpectedCommandErrorHandler);
+        OpenSelectedAudioDescriptionCommand = new RelayCommand(OpenSelectedAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(SelectedEpisodeItem?.AudioDescriptionPath));
         OpenSelectedSubtitlesCommand = new RelayCommand(OpenSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem?.SubtitlePaths.Count > 0);
         OpenSelectedAttachmentsCommand = new RelayCommand(OpenSelectedAttachments, () => !_isBusy && SelectedEpisodeItem?.AttachmentPaths.Count > 0);
+        OpenSelectedOutputCommand = new RelayCommand(OpenSelectedOutput, () => !_isBusy && File.Exists(SelectedEpisodeItem?.OutputPath));
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
         RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => !_isBusy && EpisodeItems.Any(), unexpectedCommandErrorHandler);
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
@@ -97,8 +99,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public RelayCommand ToggleSelectedEpisodeSelectionCommand { get; }
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public AsyncRelayCommand OpenSelectedSourcesCommand { get; }
+    public RelayCommand OpenSelectedAudioDescriptionCommand { get; }
     public RelayCommand OpenSelectedSubtitlesCommand { get; }
     public RelayCommand OpenSelectedAttachmentsCommand { get; }
+    public RelayCommand OpenSelectedOutputCommand { get; }
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
     public AsyncRelayCommand RefreshAllComparisonsCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }
@@ -222,7 +226,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     public string ReviewPendingSourcesTooltip => "Öffnet nacheinander alle noch offenen Quellen-, TVDB- und Hinweisprüfungen der ausgewählten Episoden.";
 
-    public string OpenSelectedSourcesTooltip => "Öffnet Haupt-, Zusatzvideo- und AD-Dateien des markierten Eintrags mit der Standardanwendung.";
+    public string OpenSelectedSourcesTooltip => "Öffnet die aktiven Videoquellen des markierten Eintrags mit der Standardanwendung.";
 
     public string ReviewSelectedMetadataTooltip => "Öffnet den TVDB-Dialog für den aktuell ausgewählten Batch-Eintrag.";
 
@@ -334,8 +338,10 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ToggleSelectedEpisodeSelectionCommand.RaiseCanExecuteChanged();
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
+        OpenSelectedAudioDescriptionCommand.RaiseCanExecuteChanged();
         OpenSelectedSubtitlesCommand.RaiseCanExecuteChanged();
         OpenSelectedAttachmentsCommand.RaiseCanExecuteChanged();
+        OpenSelectedOutputCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RefreshAllComparisonsCommand.RaiseCanExecuteChanged();
         RedetectSelectedEpisodeCommand.RaiseCanExecuteChanged();

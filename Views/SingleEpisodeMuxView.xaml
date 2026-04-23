@@ -437,7 +437,10 @@
                     <TextBox Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
                              Text="{Binding OutputPath, Mode=OneWay}" />
                 </Border>
-                <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe ändern" />
+                <StackPanel Grid.Row="3" Grid.Column="2" Orientation="Horizontal">
+                    <Button Width="112" Margin="0,2,6,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe ändern" />
+                    <Button Width="72" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenOutputCommand}" Content="Öffnen" />
+                </StackPanel>
 
                 <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Video-Sprache" />
                 <ComboBox Grid.Row="4"

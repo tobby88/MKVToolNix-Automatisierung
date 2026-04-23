@@ -81,6 +81,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
         OpenInspectableFiles(AttachmentPaths, "Anhänge geöffnet", "Anhänge konnten nicht geöffnet werden");
     }
 
+    private void OpenOutput()
+    {
+        OpenInspectableFiles([OutputPath], "Zieldatei geöffnet", "Zieldatei konnte nicht geöffnet werden");
+    }
+
     private void OpenInspectableFiles(
         IEnumerable<string> filePaths,
         string successStatusText,

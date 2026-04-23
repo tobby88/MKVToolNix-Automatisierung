@@ -484,7 +484,7 @@
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Medien &#246;ffnen" />
+                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Videos &#246;ffnen" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
                                     <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
@@ -502,7 +502,10 @@
                                                      Text="{Binding SelectedEpisodeItem.VideoAndAudioDescriptionDisplayText, Mode=OneWay}" />
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="2" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD korrigieren" />
+                                    <StackPanel Grid.Row="2" Grid.Column="2" Orientation="Horizontal">
+                                        <Button Width="96" Margin="0,2,6,2" Padding="10,6" Command="{Binding EditSelectedAudioDescriptionCommand}" Content="AD ändern" />
+                                        <Button Width="68" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedAudioDescriptionCommand}" Content="Öffnen" />
+                                    </StackPanel>
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Untertitel" />
                                     <Border Grid.Row="3" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
@@ -582,12 +585,20 @@
                                         <TextBox Style="{StaticResource DisplaySurfacePathTextBoxStyle}"
                                                  Text="{Binding SelectedEpisodeItem.OutputPath, Mode=OneWay}" />
                                     </Border>
-                                    <Button Grid.Row="1"
-                                            Grid.Column="2"
-                                            Margin="0,2,0,2"
-                                            Padding="10,6"
-                                            Command="{Binding EditSelectedOutputCommand}"
-                                            Content="Ausgabe &#228;ndern" />
+                                    <StackPanel Grid.Row="1"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal">
+                                        <Button Width="96"
+                                                Margin="0,2,6,2"
+                                                Padding="10,6"
+                                                Command="{Binding EditSelectedOutputCommand}"
+                                                Content="Ausgabe" />
+                                        <Button Width="68"
+                                                Margin="0,2,0,2"
+                                                Padding="10,6"
+                                                Command="{Binding OpenSelectedOutputCommand}"
+                                                Content="Öffnen" />
+                                    </StackPanel>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Video-Sprache" />
                                     <ComboBox Grid.Row="2"

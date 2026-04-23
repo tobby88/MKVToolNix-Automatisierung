@@ -61,6 +61,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         OpenAudioDescriptionCommand = new RelayCommand(OpenAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(AudioDescriptionPath));
         OpenSubtitlesCommand = new RelayCommand(OpenSubtitles, () => !_isBusy && SubtitlePaths.Count > 0);
         OpenAttachmentsCommand = new RelayCommand(OpenAttachments, () => !_isBusy && AttachmentPaths.Count > 0);
+        OpenOutputCommand = new RelayCommand(OpenOutput, () => !_isBusy && File.Exists(OutputPath));
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
         OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
@@ -79,6 +80,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public RelayCommand OpenAudioDescriptionCommand { get; }
     public RelayCommand OpenSubtitlesCommand { get; }
     public RelayCommand OpenAttachmentsCommand { get; }
+    public RelayCommand OpenOutputCommand { get; }
     public RelayCommand SelectOutputCommand { get; }
     public AsyncRelayCommand RescanCommand { get; }
     public AsyncRelayCommand OpenTvdbLookupCommand { get; }
@@ -258,6 +260,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         OpenAudioDescriptionCommand.RaiseCanExecuteChanged();
         OpenSubtitlesCommand.RaiseCanExecuteChanged();
         OpenAttachmentsCommand.RaiseCanExecuteChanged();
+        OpenOutputCommand.RaiseCanExecuteChanged();
         SelectOutputCommand.RaiseCanExecuteChanged();
         RescanCommand.RaiseCanExecuteChanged();
         OpenTvdbLookupCommand.RaiseCanExecuteChanged();
@@ -370,6 +373,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
                 break;
             case nameof(OutputPath):
             case nameof(ArchiveState):
+                OpenOutputCommand.RaiseCanExecuteChanged();
                 base.OnPropertyChanged(nameof(OutputTargetBadgeState));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeText));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeBackground));

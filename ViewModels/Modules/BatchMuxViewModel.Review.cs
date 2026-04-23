@@ -125,6 +125,7 @@ internal sealed partial class BatchMuxViewModel
             item.SetOutputPathWithContext(path, _services.OutputPaths.IsArchivePath(path));
             RefreshOutputTargetCollisions(EpisodeItems);
             SetStatus("Ausgabedatei aktualisiert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
@@ -154,10 +155,24 @@ internal sealed partial class BatchMuxViewModel
         }
 
         OpenInspectableFiles(
-            item.SourceFilePaths,
-            "Quelldateien geöffnet",
-            "Quelldateien konnten nicht geöffnet werden");
+            EnumerateVideoFiles(item),
+            "Videoquellen geöffnet",
+            "Videoquellen konnten nicht geöffnet werden");
         await Task.CompletedTask;
+    }
+
+    private void OpenSelectedAudioDescription()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenInspectableFiles(
+            [item.AudioDescriptionPath],
+            "AD-Quelle geöffnet",
+            "AD-Quelle konnte nicht geöffnet werden");
     }
 
     private void OpenSelectedSubtitles()
@@ -188,6 +203,20 @@ internal sealed partial class BatchMuxViewModel
             "Anhänge konnten nicht geöffnet werden");
     }
 
+    private void OpenSelectedOutput()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenInspectableFiles(
+            [item.OutputPath],
+            "Zieldatei geöffnet",
+            "Zieldatei konnte nicht geöffnet werden");
+    }
+
     private void OpenInspectableFiles(
         IEnumerable<string> filePaths,
         string successStatusText,
@@ -195,6 +224,23 @@ internal sealed partial class BatchMuxViewModel
     {
         var opened = _dialogService.TryOpenFilesWithDefaultApp(filePaths);
         SetStatus(opened ? successStatusText : failedStatusText, ProgressValue);
+    }
+
+    private bool HasSelectedVideoFiles()
+    {
+        return SelectedEpisodeItem is not null
+            && EnumerateVideoFiles(SelectedEpisodeItem).Any(path => !string.IsNullOrWhiteSpace(path));
+    }
+
+    private static IEnumerable<string> EnumerateVideoFiles(BatchEpisodeItemViewModel item)
+    {
+        var paths = item.HasPrimaryVideoSource
+            ? new[] { item.MainVideoPath }.Concat(item.AdditionalVideoPaths)
+            : item.AdditionalVideoPaths;
+
+        return paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task ReviewSelectedMetadataAsync()

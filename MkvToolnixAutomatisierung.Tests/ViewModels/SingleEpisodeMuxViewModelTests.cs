@@ -194,16 +194,22 @@ public sealed class SingleEpisodeMuxViewModelTests
         var viewModel = new SingleEpisodeMuxViewModel(
             ViewModelTestContext.CreateSingleEpisodeServices(),
             dialogService);
+        var outputPath = Path.Combine(Path.GetTempPath(), "single-open-tests", Guid.NewGuid().ToString("N"), "output.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "archive");
 
         SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\haupt.mp4");
         viewModel.SetAudioDescription(@"C:\Temp\ad.mp4");
         viewModel.SetSubtitles([@"C:\Temp\untertitel.srt", @"C:\Temp\untertitel.ass"]);
         viewModel.SetAttachments([@"C:\Temp\metadaten.txt"]);
+        viewModel.SetOutputPath(outputPath);
 
         viewModel.OpenMainVideoCommand.Execute(null);
         viewModel.OpenAudioDescriptionCommand.Execute(null);
         viewModel.OpenSubtitlesCommand.Execute(null);
         viewModel.OpenAttachmentsCommand.Execute(null);
+        Assert.True(viewModel.OpenOutputCommand.CanExecute(null));
+        viewModel.OpenOutputCommand.Execute(null);
 
         Assert.Equal(
         [
@@ -211,7 +217,8 @@ public sealed class SingleEpisodeMuxViewModelTests
             @"C:\Temp\ad.mp4",
             @"C:\Temp\untertitel.ass",
             @"C:\Temp\untertitel.srt",
-            @"C:\Temp\metadaten.txt"
+            @"C:\Temp\metadaten.txt",
+            outputPath
         ],
             dialogService.OpenedFilePaths);
     }
