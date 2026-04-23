@@ -160,6 +160,11 @@ internal static class EpisodeMetadataMatchingHeuristics
             return null;
         }
 
+        if (bestEpisode.TitleSimilarity < 22 && !(seasonMatched && episodeMatched))
+        {
+            return null;
+        }
+
         var combinedScore = bestEpisode.EpisodeScore + Math.Min(seriesScore, 25);
         if (combinedScore < 45)
         {

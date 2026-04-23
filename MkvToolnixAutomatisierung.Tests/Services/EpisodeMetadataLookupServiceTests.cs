@@ -371,6 +371,30 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Contains("keine Episode sicher zuordenbar", result.StatusText);
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_DoesNotMapWeakTitleMatchByEpisodeNumberOnly()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "XY gelöst", "2022", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(202, "Tödliche Freiheit", 2, 2, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("XY gelöst", "Tödliche Nachtschicht", "05", "02"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.Null(result.Selection);
+        Assert.Contains("keine Episode sicher zuordenbar", result.StatusText);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)
