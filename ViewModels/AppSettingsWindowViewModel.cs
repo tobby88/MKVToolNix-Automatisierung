@@ -616,9 +616,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
             }
         }
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Downloads");
+        return PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory()
+               ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
     private void SetBusy(bool isBusy, string statusText)

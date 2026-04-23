@@ -461,9 +461,6 @@ internal static class ManagedToolResolution
 
     private static string? GetDownloadsDirectory()
     {
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return string.IsNullOrWhiteSpace(userProfile)
-            ? null
-            : Path.Combine(userProfile, DownloadsFolderName);
+        return PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory();
     }
 }

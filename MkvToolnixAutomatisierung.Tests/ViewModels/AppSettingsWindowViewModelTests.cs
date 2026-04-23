@@ -173,14 +173,17 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     [Fact]
     public void ToolStatus_ShowsDownloadsFallbackForMkvToolNix()
     {
-        var downloadsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Downloads");
+        var userProfileDirectory = CreateDirectory("sandbox-profile");
+        var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
         var fallbackRoot = Path.Combine(downloadsDirectory, $"mkvtoolnix-64-bit-999.0-codex-{Guid.NewGuid():N}");
         var toolDirectory = Path.Combine(fallbackRoot, "mkvtoolnix");
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
 
         try
         {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
             Directory.CreateDirectory(toolDirectory);
             var mkvMergePath = Path.Combine(toolDirectory, "mkvmerge.exe");
             var mkvPropEditPath = Path.Combine(toolDirectory, "mkvpropedit.exe");
@@ -197,6 +200,8 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         }
         finally
         {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
             if (Directory.Exists(fallbackRoot))
             {
                 Directory.Delete(fallbackRoot, recursive: true);
