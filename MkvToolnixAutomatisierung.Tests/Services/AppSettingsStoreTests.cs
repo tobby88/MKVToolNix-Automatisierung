@@ -114,4 +114,109 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(@"Y:\Archiv", reloaded.Archive!.DefaultSeriesArchiveRootPath);
         Assert.Equal("emby-updated", reloaded.Emby!.ApiKey);
     }
+
+    [Fact]
+    public void Load_ClearsLegacyDownloadOverridesWhenAutoManageIsEnabled()
+    {
+        var userProfileDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-store-legacy", Guid.NewGuid().ToString("N"));
+        var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
+        var mkvToolNixDirectory = Path.Combine(downloadsDirectory, "mkvtoolnix-64-bit-999.0", "mkvtoolnix");
+        var ffprobePath = Path.Combine(downloadsDirectory, "ffmpeg", "bin", "ffprobe.exe");
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+
+            Directory.CreateDirectory(mkvToolNixDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(ffprobePath)!);
+
+            AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+            {
+                ToolPaths = new AppToolPathSettings
+                {
+                    MkvToolNixDirectoryPath = mkvToolNixDirectory,
+                    FfprobePath = ffprobePath,
+                    ManagedMkvToolNix = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    },
+                    ManagedFfprobe = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    }
+                }
+            });
+
+            var loadedSettings = new AppSettingsStore().Load();
+            var persistedSettings = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics().Settings;
+
+            Assert.Equal(string.Empty, loadedSettings.ToolPaths!.MkvToolNixDirectoryPath);
+            Assert.Equal(string.Empty, loadedSettings.ToolPaths.FfprobePath);
+            Assert.Equal(string.Empty, persistedSettings.ToolPaths!.MkvToolNixDirectoryPath);
+            Assert.Equal(string.Empty, persistedSettings.ToolPaths.FfprobePath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
+            if (Directory.Exists(userProfileDirectory))
+            {
+                Directory.Delete(userProfileDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Load_PreservesManualOverridesOutsideDownloadsWhenAutoManageIsEnabled()
+    {
+        var userProfileDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-store-manual", Guid.NewGuid().ToString("N"));
+        var manualToolDirectory = Path.Combine(userProfileDirectory, "Tools");
+        var mkvToolNixDirectory = Path.Combine(manualToolDirectory, "mkvtoolnix");
+        var ffprobePath = Path.Combine(manualToolDirectory, "ffprobe.exe");
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+
+            Directory.CreateDirectory(mkvToolNixDirectory);
+            Directory.CreateDirectory(Path.GetDirectoryName(ffprobePath)!);
+
+            AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+            {
+                ToolPaths = new AppToolPathSettings
+                {
+                    MkvToolNixDirectoryPath = mkvToolNixDirectory,
+                    FfprobePath = ffprobePath,
+                    ManagedMkvToolNix = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    },
+                    ManagedFfprobe = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    }
+                }
+            });
+
+            var loadedSettings = new AppSettingsStore().Load();
+
+            Assert.Equal(mkvToolNixDirectory, loadedSettings.ToolPaths!.MkvToolNixDirectoryPath);
+            Assert.Equal(ffprobePath, loadedSettings.ToolPaths.FfprobePath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
+            if (Directory.Exists(userProfileDirectory))
+            {
+                Directory.Delete(userProfileDirectory, recursive: true);
+            }
+        }
+    }
 }

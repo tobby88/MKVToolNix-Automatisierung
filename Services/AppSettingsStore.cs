@@ -50,7 +50,9 @@ public sealed class AppSettingsStore
 
         lock (_sync)
         {
-            SaveCore(Normalize(settings.Clone()));
+            var normalizedSettings = settings.Clone();
+            Normalize(normalizedSettings);
+            SaveCore(normalizedSettings);
         }
     }
 
@@ -67,7 +69,8 @@ public sealed class AppSettingsStore
             EnsureLoaded();
             var updatedSettings = _cachedSettings!.Clone();
             updateAction(updatedSettings);
-            SaveCore(Normalize(updatedSettings));
+            Normalize(updatedSettings);
+            SaveCore(updatedSettings);
         }
     }
 
@@ -79,9 +82,26 @@ public sealed class AppSettingsStore
         }
 
         var loadResult = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
-        _cachedSettings = Normalize(loadResult.Settings).Clone();
+        var normalizedSettings = loadResult.Settings.Clone();
+        var hasLegacyToolPathCleanup = Normalize(normalizedSettings);
+        var warningMessage = loadResult.WarningMessage;
+        if (hasLegacyToolPathCleanup && ShouldPersistNormalizedSettings(loadResult.Status))
+        {
+            try
+            {
+                AppSettingsFileLocator.SaveCombinedSettings(normalizedSettings.Clone());
+            }
+            catch (Exception exception)
+            {
+                warningMessage = CombineWarningMessages(
+                    warningMessage,
+                    $"Bereinigte Legacy-Werkzeugpfade konnten nicht gespeichert werden: {exception.Message}");
+            }
+        }
+
+        _cachedSettings = normalizedSettings.Clone();
         _cachedStatus = loadResult.Status;
-        _cachedWarningMessage = loadResult.WarningMessage;
+        _cachedWarningMessage = warningMessage;
         _isLoaded = true;
     }
 
@@ -94,12 +114,54 @@ public sealed class AppSettingsStore
         _isLoaded = true;
     }
 
-    private static CombinedAppSettings Normalize(CombinedAppSettings settings)
+    private static bool Normalize(CombinedAppSettings settings)
     {
-        settings.Metadata ??= new AppMetadataSettings();
-        settings.ToolPaths ??= new AppToolPathSettings();
-        settings.Archive ??= new AppArchiveSettings();
-        settings.Emby ??= new AppEmbySettings();
-        return settings;
+        var changed = false;
+
+        if (settings.Metadata is null)
+        {
+            settings.Metadata = new AppMetadataSettings();
+            changed = true;
+        }
+
+        if (settings.ToolPaths is null)
+        {
+            settings.ToolPaths = new AppToolPathSettings();
+            changed = true;
+        }
+
+        if (settings.Archive is null)
+        {
+            settings.Archive = new AppArchiveSettings();
+            changed = true;
+        }
+
+        if (settings.Emby is null)
+        {
+            settings.Emby = new AppEmbySettings();
+            changed = true;
+        }
+
+        changed |= ManagedToolResolution.NormalizeLegacyDownloadOverrides(settings.ToolPaths);
+
+        return changed;
+    }
+
+    private static bool ShouldPersistNormalizedSettings(AppSettingsLoadStatus status)
+    {
+        return status is AppSettingsLoadStatus.LoadedPrimary or AppSettingsLoadStatus.LoadedBackup;
+    }
+
+    private static string? CombineWarningMessages(params string?[] warningMessages)
+    {
+        var messages = warningMessages
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Select(message => message!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return messages.Length == 0
+            ? null
+            : string.Join(Environment.NewLine + Environment.NewLine, messages);
     }
 }

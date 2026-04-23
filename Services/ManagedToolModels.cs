@@ -224,6 +224,36 @@ internal static class ManagedToolResolution
         return null;
     }
 
+    /// <summary>
+    /// Entfernt alte Downloadpfade aus den manuellen Override-Feldern, sobald die automatische
+    /// Werkzeugverwaltung aktiv ist.
+    /// </summary>
+    /// <remarks>
+    /// Frühere Versionen speicherten aus heruntergeladenen ZIP-/7z-Ordnern übernommene Werkzeugpfade
+    /// direkt in den Override-Feldern. Seit der verwalteten Tool-Installation sollen diese Pfade nur
+    /// noch als Fallback-Suche dienen und die automatische Installation nicht mehr blockieren.
+    /// </remarks>
+    internal static bool NormalizeLegacyDownloadOverrides(AppToolPathSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var changed = false;
+
+        if (LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
+        {
+            settings.FfprobePath = string.Empty;
+            changed = true;
+        }
+
+        if (LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
+        {
+            settings.MkvToolNixDirectoryPath = string.Empty;
+            changed = true;
+        }
+
+        return changed;
+    }
+
     private static string? TryResolveExistingExecutable(string? configuredPath)
     {
         return !string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath)
