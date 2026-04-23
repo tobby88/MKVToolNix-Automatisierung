@@ -311,11 +311,15 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         Assert.True(summary.MainVideo.HasRemoved);
         Assert.Contains("höhere Qualität", summary.MainVideo.RemovedReason, StringComparison.Ordinal);
+        Assert.Contains(summary.MainVideo.CurrentItems, item => item.IsAdded && item.Text.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase));
         Assert.True(summary.Audio.HasRemoved);
         Assert.Contains("Tonspur", summary.Audio.RemovedReason, StringComparison.Ordinal);
+        Assert.All(summary.Audio.CurrentItems, item => Assert.True(item.IsAdded));
         Assert.True(summary.AudioDescription.HasRemoved);
         Assert.Contains("AD", summary.AudioDescription.RemovedReason, StringComparison.Ordinal);
+        Assert.Contains(summary.AudioDescription.CurrentItems, item => item.IsAdded);
         Assert.False(summary.Subtitles.HasRemoved);
+        Assert.Contains(summary.Subtitles.CurrentItems, item => item.IsAdded && item.Text.EndsWith(".srt", StringComparison.OrdinalIgnoreCase));
         Assert.True(summary.Attachments.HasRemoved);
         Assert.Contains("Anhänge", summary.Attachments.RemovedReason, StringComparison.Ordinal);
     }

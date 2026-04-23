@@ -286,6 +286,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.False(summary.MainVideo.HasRemoved);
         Assert.False(summary.Subtitles.HasRemoved);
         Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
+        Assert.Contains(summary.Subtitles.CurrentItems, item => item.IsExisting && item.Text.Contains("SRT", StringComparison.Ordinal));
+        Assert.Contains(summary.Subtitles.CurrentItems, item => item.IsAdded && item.Text.EndsWith(".ass", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
         Assert.Contains(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleAssPath, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
@@ -293,6 +295,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             plan.Notes,
             note => note.Contains("Deutsch - SRT", StringComparison.Ordinal)
                 && !note.Contains("SSA", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            summary.Notes,
+            note => note.Contains("Deutsch - SRT", StringComparison.Ordinal)
+                && !note.Contains("SSA", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(summary.Notes, note => note.StartsWith("Archiv-MKV", StringComparison.OrdinalIgnoreCase));
 
         var arguments = plan.BuildArguments();
         AssertContainsSequence(

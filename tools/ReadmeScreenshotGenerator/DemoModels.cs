@@ -105,6 +105,8 @@ internal sealed class DemoEpisodeUsageSummary
     public DemoUsageGroup AudioDescription { get; init; } = DemoUsageGroup.Empty;
     public DemoUsageGroup Subtitles { get; init; } = DemoUsageGroup.Empty;
     public DemoUsageGroup Attachments { get; init; } = DemoUsageGroup.Empty;
+    public IReadOnlyList<string> Notes { get; init; } = [];
+    public bool HasNotes => Notes.Count > 0;
 }
 
 internal sealed record DemoUsageGroup(
@@ -114,7 +116,11 @@ internal sealed record DemoUsageGroup(
     string RemovedReason = "")
 {
     public static readonly DemoUsageGroup Empty = new("Keine Änderung");
+
+    public IReadOnlyList<DemoUsageItem> CurrentItems => [new(CurrentText, "Neutral")];
 }
+
+internal sealed record DemoUsageItem(string Text, string KindName);
 
 internal sealed class DemoDownloadSortViewModel
 {

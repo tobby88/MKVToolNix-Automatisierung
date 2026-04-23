@@ -16,31 +16,40 @@ internal static class SeriesEpisodeMuxPresentationBuilder
     {
         if (plan.SkipMux)
         {
-            return plan.SkipUsageSummary
+            var skipSummary = plan.SkipUsageSummary
                 ?? EpisodeUsageSummary.CreatePending(
                     plan.SkipReason ?? "Die Zieldatei ist bereits vollständig.",
                     "keine weiteren Aktionen");
+            return skipSummary with { Notes = BuildUsageSummaryNotes(plan) };
         }
 
         var (archiveAction, archiveDetails) = BuildArchiveStatus(plan);
+        var highlightAdditions = ShouldHighlightAdditions(plan);
 
         return new EpisodeUsageSummary(
             archiveAction,
             archiveDetails,
-            CreateUsageEntry(BuildVideoUsageText(plan, plan.VideoSources[0]), plan.UsageComparison.MainVideo),
             CreateUsageEntry(
-                plan.VideoSources.Count > 1
-                    ? string.Join(Environment.NewLine, plan.VideoSources.Skip(1).Select(source => BuildVideoUsageText(plan, source)))
-                    : "(keine)",
+                BuildVideoUsageItems(plan, [plan.VideoSources[0]], highlightAdditions),
+                plan.UsageComparison.MainVideo),
+            CreateUsageEntry(
+                BuildVideoUsageItems(plan, plan.VideoSources.Skip(1).ToList(), highlightAdditions),
                 plan.UsageComparison.AdditionalVideos),
-            CreateUsageEntry(BuildAudioUsageText(plan), plan.UsageComparison.Audio),
             CreateUsageEntry(
-                BuildAudioDescriptionUsageText(plan),
+                BuildAudioUsageItems(plan, highlightAdditions),
+                plan.UsageComparison.Audio),
+            CreateUsageEntry(
+                BuildAudioDescriptionUsageItems(plan, highlightAdditions),
                 plan.UsageComparison.AudioDescription),
             CreateUsageEntry(
-                BuildSubtitleUsageText(plan),
+                BuildSubtitleUsageItems(plan, highlightAdditions),
                 plan.UsageComparison.Subtitles),
-            CreateUsageEntry(BuildAttachmentPreview(plan), plan.UsageComparison.Attachments));
+            CreateUsageEntry(
+                BuildAttachmentUsageItems(plan, highlightAdditions),
+                plan.UsageComparison.Attachments))
+        {
+            Notes = BuildUsageSummaryNotes(plan)
+        };
     }
 
     public static string BuildCompactSummaryText(SeriesEpisodeMuxPlan plan)
@@ -61,12 +70,13 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
     private static IReadOnlyList<string> BuildCompactSummaryNotes(SeriesEpisodeMuxPlan plan)
     {
-        if (plan.Notes.Count == 0)
+        var notes = BuildUsageSummaryNotes(plan);
+        if (notes.Count == 0)
         {
             return [];
         }
 
-        return ["", "Hinweise:", .. plan.Notes.Select(note => "- " + note)];
+        return ["", "Hinweise:", .. notes.Select(note => "- " + note)];
     }
 
     public static IReadOnlyList<string> GetReferencedInputFiles(SeriesEpisodeMuxPlan plan)
@@ -211,73 +221,157 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         return (archiveAction, archiveDetails);
     }
 
-    private static EpisodeUsageEntry CreateUsageEntry(string currentText, ArchiveUsageChange? removedChange)
+    private static EpisodeUsageEntry CreateUsageEntry(IReadOnlyList<EpisodeUsageItem> currentItems, ArchiveUsageChange? removedChange)
     {
+        var normalizedItems = currentItems.Count == 0
+            ? [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)]
+            : currentItems;
         return new EpisodeUsageEntry(
-            CurrentText: currentText,
+            CurrentText: string.Join(Environment.NewLine, normalizedItems.Select(item => item.Text)),
             RemovedText: removedChange?.RemovedText,
-            RemovedReason: removedChange?.Reason);
+            RemovedReason: removedChange?.Reason,
+            currentItems: normalizedItems);
     }
 
-    private static string BuildVideoUsageText(SeriesEpisodeMuxPlan plan, VideoSourcePlan videoSource)
+    private static IReadOnlyList<EpisodeUsageItem> BuildVideoUsageItems(
+        SeriesEpisodeMuxPlan plan,
+        IReadOnlyList<VideoSourcePlan> videoSources,
+        bool highlightAdditions)
     {
-        return string.Equals(videoSource.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
-            ? BuildExistingTargetDisplayText(videoSource.TrackName)
-            : Path.GetFileName(videoSource.FilePath);
+        return videoSources.Count == 0
+            ? [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)]
+            : videoSources
+                .Select(source => BuildFileBackedUsageItem(
+                    plan,
+                    source.FilePath,
+                    source.TrackName,
+                    highlightAdditions))
+                .ToList();
     }
 
-    private static string BuildAudioUsageText(SeriesEpisodeMuxPlan plan)
+    private static IReadOnlyList<EpisodeUsageItem> BuildAudioUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
     {
         return plan.AudioSources.Count == 0
-            ? "(keine)"
-            : string.Join(
-                Environment.NewLine,
-                plan.AudioSources.Select(audioSource =>
-                    string.Equals(audioSource.FilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
-                        ? BuildExistingTargetDisplayText(audioSource.TrackName)
-                        : Path.GetFileName(audioSource.FilePath)));
+            ? [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)]
+            : plan.AudioSources
+                .Select(audioSource => BuildFileBackedUsageItem(
+                    plan,
+                    audioSource.FilePath,
+                    audioSource.TrackName,
+                    highlightAdditions))
+                .ToList();
     }
 
-    private static string BuildAudioDescriptionUsageText(SeriesEpisodeMuxPlan plan)
+    private static IReadOnlyList<EpisodeUsageItem> BuildAudioDescriptionUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
     {
         if (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath))
         {
-            return "(keine)";
+            return [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)];
         }
 
-        return string.Equals(plan.AudioDescriptionFilePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
-            ? BuildExistingTargetDisplayText(plan.AudioDescriptionTrackName ?? "Audiodeskription")
-            : Path.GetFileName(plan.AudioDescriptionFilePath);
+        return
+        [
+            BuildFileBackedUsageItem(
+                plan,
+                plan.AudioDescriptionFilePath,
+                plan.AudioDescriptionTrackName ?? "Audiodeskription",
+                highlightAdditions)
+        ];
     }
 
-    private static string BuildSubtitleUsageText(SeriesEpisodeMuxPlan plan)
+    private static IReadOnlyList<EpisodeUsageItem> BuildSubtitleUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
     {
         return plan.SubtitleFiles.Count == 0
-            ? "(keine)"
-            : string.Join(
-                Environment.NewLine,
-                plan.SubtitleFiles.Select(subtitle => subtitle.IsEmbedded
-                    ? BuildExistingTargetDisplayText(subtitle.TrackName)
-                    : Path.GetFileName(subtitle.FilePath)));
+            ? [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)]
+            : plan.SubtitleFiles
+                .Select(subtitle => subtitle.IsEmbedded
+                    ? new EpisodeUsageItem(
+                        BuildExistingTargetDisplayText(subtitle.TrackName),
+                        EpisodeUsageItemKind.Existing)
+                    : BuildNewOrNeutralItem(Path.GetFileName(subtitle.FilePath), highlightAdditions))
+                .ToList();
     }
 
-    private static string BuildAttachmentPreview(SeriesEpisodeMuxPlan plan)
+    private static IReadOnlyList<EpisodeUsageItem> BuildAttachmentUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
     {
-        var parts = new List<string>();
+        var items = new List<EpisodeUsageItem>();
 
         if ((plan.IncludePrimarySourceAttachments || !string.IsNullOrWhiteSpace(plan.AttachmentSourcePath))
             && plan.PreservedAttachmentNames.Count > 0)
         {
             // GUI-Vorschau soll alle wiederverwendeten Bestandteile einheitlich als Ziel-MKV-Inhalt kennzeichnen.
-            parts.AddRange(plan.PreservedAttachmentNames.Select(BuildExistingTargetDisplayText));
+            items.AddRange(plan.PreservedAttachmentNames.Select(name =>
+                new EpisodeUsageItem(BuildExistingTargetDisplayText(name), EpisodeUsageItemKind.Existing)));
         }
 
-        parts.AddRange(plan.AttachmentFilePaths
+        items.AddRange(plan.AttachmentFilePaths
             .Select(Path.GetFileName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Cast<string>());
+            .Cast<string>()
+            .Select(name => BuildNewOrNeutralItem(name, highlightAdditions)));
 
-        return parts.Count == 0 ? "keine" : string.Join(", ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
+        return items.Count == 0
+            ? [new EpisodeUsageItem("keine", EpisodeUsageItemKind.Neutral)]
+            : items
+                .DistinctBy(item => item.Text, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+    }
+
+    private static string BuildAttachmentPreview(SeriesEpisodeMuxPlan plan)
+    {
+        var items = BuildAttachmentUsageItems(plan, highlightAdditions: false);
+        return items.Count == 1 && string.Equals(items[0].Text, "keine", StringComparison.OrdinalIgnoreCase)
+            ? "keine"
+            : string.Join(", ", items.Select(item => item.Text));
+    }
+
+    private static EpisodeUsageItem BuildFileBackedUsageItem(
+        SeriesEpisodeMuxPlan plan,
+        string filePath,
+        string existingTargetLabel,
+        bool highlightAdditions)
+    {
+        return string.Equals(filePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase)
+            ? new EpisodeUsageItem(BuildExistingTargetDisplayText(existingTargetLabel), EpisodeUsageItemKind.Existing)
+            : BuildNewOrNeutralItem(Path.GetFileName(filePath), highlightAdditions);
+    }
+
+    private static EpisodeUsageItem BuildNewOrNeutralItem(string? text, bool highlightAdditions)
+    {
+        return new EpisodeUsageItem(
+            string.IsNullOrWhiteSpace(text) ? "(unbekannt)" : text,
+            highlightAdditions ? EpisodeUsageItemKind.Added : EpisodeUsageItemKind.Neutral);
+    }
+
+    private static bool ShouldHighlightAdditions(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.WorkingCopy is not null
+            || plan.HasHeaderEdits
+            || File.Exists(plan.OutputFilePath)
+            || plan.UsageComparison.MainVideo is not null
+            || plan.UsageComparison.AdditionalVideos is not null
+            || plan.UsageComparison.Audio is not null
+            || plan.UsageComparison.AudioDescription is not null
+            || plan.UsageComparison.Subtitles is not null
+            || plan.UsageComparison.Attachments is not null;
+    }
+
+    private static IReadOnlyList<string> BuildUsageSummaryNotes(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.Notes
+            .Where(IsUsageSummaryNoteRelevant)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsUsageSummaryNoteRelevant(string note)
+    {
+        return !note.StartsWith("Archiv-MKV bereits vorhanden.", StringComparison.OrdinalIgnoreCase)
+            && !note.StartsWith("Die vorhandene Archivdatei liefert", StringComparison.OrdinalIgnoreCase)
+            && !note.StartsWith("Vorhandene Videospur wird beibehalten:", StringComparison.OrdinalIgnoreCase)
+            && !note.StartsWith("Es wird weder eine Arbeitskopie", StringComparison.OrdinalIgnoreCase)
+            && !note.StartsWith("Alle Inhalte sind bereits vorhanden.", StringComparison.OrdinalIgnoreCase)
+            && !note.StartsWith("Zieldatei bereits vollständig.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildExistingTargetDisplayText(string value)

@@ -11,6 +11,40 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <DataTemplate x:Key="UsageCurrentItemTemplate">
+            <Border x:Name="ItemChrome"
+                    Margin="0,0,0,2"
+                    Padding="4,1"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="1"
+                    CornerRadius="3">
+                <TextBlock x:Name="ItemText" Text="{Binding Text, Mode=OneWay}" TextWrapping="Wrap" />
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding KindName, Mode=OneWay}" Value="Existing">
+                    <Setter TargetName="ItemChrome" Property="Background" Value="#F1F3F5" />
+                    <Setter TargetName="ItemChrome" Property="BorderBrush" Value="#D3D7DC" />
+                    <Setter TargetName="ItemText" Property="Foreground" Value="#4A5562" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding KindName, Mode=OneWay}" Value="Added">
+                    <Setter TargetName="ItemChrome" Property="Background" Value="#E9F8EE" />
+                    <Setter TargetName="ItemChrome" Property="BorderBrush" Value="#63A46C" />
+                    <Setter TargetName="ItemText" Property="Foreground" Value="#245B2E" />
+                    <Setter TargetName="ItemText" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="UsageNotesRowStyle" TargetType="Grid">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasNotes, Mode=OneWay}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
     <!-- Die Übersicht ist rein lesend; sie erwartet EpisodeUsageSummary als DataContext. -->
@@ -20,6 +54,7 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -45,9 +80,9 @@
         <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Hauptvideo" />
         <StackPanel Grid.Row="1"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding MainVideo, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding MainVideo, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -61,9 +96,9 @@
         <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Weitere Videos" />
         <StackPanel Grid.Row="2"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding AdditionalVideos, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding AdditionalVideos, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -77,9 +112,9 @@
         <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Audio" />
         <StackPanel Grid.Row="3"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding Audio, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding Audio, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -93,9 +128,9 @@
         <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="AD" />
         <StackPanel Grid.Row="4"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding AudioDescription, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding AudioDescription, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -109,9 +144,9 @@
         <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Untertitel" />
         <StackPanel Grid.Row="5"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding Subtitles, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding Subtitles, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -125,9 +160,9 @@
         <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,2,8,2" FontWeight="SemiBold" Text="Anhänge" />
         <StackPanel Grid.Row="6"
                     Grid.Column="1"
-                    Margin="0,2,0,2"
-                    DataContext="{Binding Attachments, Mode=OneWay}">
-            <TextBlock TextWrapping="Wrap" Text="{Binding CurrentText, Mode=OneWay}" />
+            Margin="0,2,0,2"
+            DataContext="{Binding Attachments, Mode=OneWay}">
+            <ItemsControl ItemTemplate="{StaticResource UsageCurrentItemTemplate}" ItemsSource="{Binding CurrentItems, Mode=OneWay}" />
             <StackPanel Margin="0,1,0,0" Style="{StaticResource RemovedUsageRowStyle}">
                 <TextBlock Foreground="#9B2D30" Opacity="0.92" TextWrapping="Wrap">
                     <Run Text="Bisher: " />
@@ -137,5 +172,34 @@
                 </TextBlock>
             </StackPanel>
         </StackPanel>
+
+        <Grid Grid.Row="7" Grid.ColumnSpan="2" Margin="0,8,0,0" Style="{StaticResource UsageNotesRowStyle}">
+            <Border Padding="8"
+                    Background="#FFF9E8"
+                    BorderBrush="#D8B46A"
+                    BorderThickness="1"
+                    CornerRadius="5">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Margin="0,0,8,0"
+                               FontWeight="SemiBold"
+                               Text="Hinweise" />
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Notes, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,0,0,4" TextWrapping="Wrap">
+                                    <Run Text="- " />
+                                    <Run Text="{Binding Mode=OneWay}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
