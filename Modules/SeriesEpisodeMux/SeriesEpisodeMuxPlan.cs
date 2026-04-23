@@ -14,7 +14,10 @@ public sealed class SeriesEpisodeMuxPlan
     /// <param name="outputFilePath">Finaler Ausgabepfad der Zieldatei.</param>
     /// <param name="title">MKV-Titel für den finalen Container.</param>
     /// <param name="videoSources">Alle einzubindenden Videospuren in Mux-Reihenfolge.</param>
-    /// <param name="audioSources">Alle einzubindenden normalen Audiospuren in finaler Reihenfolge.</param>
+    /// <param name="audioSources">
+    /// Alle einzubindenden normalen Audiospuren in finaler Reihenfolge. Bei seltenem AD-only-Sondermaterial
+    /// darf diese Liste leer sein, wenn gleichzeitig eine explizite AD-Spur geplant ist.
+    /// </param>
     /// <param name="primarySourceAudioTrackIds">Optional explizit weiterzuverwendende Audio-Track-IDs der Primärquelle.</param>
     /// <param name="primarySourceSubtitleTrackIds">Optional explizit weiterzuverwendende Untertitel-Track-IDs der Primärquelle.</param>
     /// <param name="primarySourceAttachmentIds">Optional explizit weiterzuverwendende Attachment-IDs der Primärquelle.</param>
@@ -81,9 +84,10 @@ public sealed class SeriesEpisodeMuxPlan
             throw new ArgumentException("Mindestens eine Videospur muss vorhanden sein.", nameof(videoSources));
         }
 
-        if (audioSources.Count == 0)
+        if (audioSources.Count == 0
+            && (string.IsNullOrWhiteSpace(audioDescriptionFilePath) || audioDescriptionTrackId is null))
         {
-            throw new ArgumentException("Mindestens eine normale Audiospur muss vorhanden sein.", nameof(audioSources));
+            throw new ArgumentException("Mindestens eine normale Audiospur oder eine explizite AD-Spur muss vorhanden sein.", nameof(audioSources));
         }
 
         if ((trackHeaderEdits is { Count: > 0 } || containerTitleEdit is not null)

@@ -295,6 +295,59 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WithAdOnlyArchiveTarget_AllowsAdOnlySpecialPlan()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-existing-ad-only");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-existing-ad-only");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Die Heiland - Wir sind Anwalt-Extra_ Blindenhund (Audiodeskription und UT)-0461349529.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Die Heiland - Wir sind Anwalt-Extra_ Blindenhund (Audiodeskription und UT)-0461349529.txt",
+            "Sender: ARD\r\nThema: Die Heiland - Wir sind Anwalt\r\nTitel: Extra: Blindenhund\r\nDauer: 00:05:53");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Die Heiland - Wir sind Anwalt",
+            "Specials",
+            "Die Heiland - Wir sind Anwalt - S00E56 - Extra - Blindenhund.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Extra: Blindenhund",
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "HD - H.264"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Extra: Blindenhund",
+            HasPrimaryVideoSource: false));
+
+        Assert.False(plan.SkipMux);
+        Assert.Empty(plan.AudioSources);
+        Assert.Equal([], plan.PrimarySourceAudioTrackIds);
+        Assert.Equal(outputPath, plan.VideoSources.Single().FilePath);
+        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(0, plan.AudioDescriptionTrackId);
+        Assert.Contains(plan.Notes, note => note.Contains("nur die Audiodeskription", StringComparison.OrdinalIgnoreCase));
+
+        var arguments = plan.BuildArguments();
+        Assert.Contains("--no-audio", arguments);
+        Assert.Contains(arguments, argument => string.Equals(argument, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_PreservesDetectionNotesWithoutPrimaryVideo()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-detection-notes");

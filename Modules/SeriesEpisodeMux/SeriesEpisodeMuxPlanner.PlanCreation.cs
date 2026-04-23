@@ -101,6 +101,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 IsDefaultTrack: index == 0,
                 LanguageCode: videoSelection.LanguageCode))
             .ToList();
+        var audioDescriptionPath = !string.IsNullOrWhiteSpace(archiveDecision.AudioDescriptionFilePath)
+            ? archiveDecision.AudioDescriptionFilePath
+            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
         var audioSources = await BuildNormalAudioSourcesAsync(
             mkvMergePath,
             effectiveOutputPath,
@@ -108,7 +111,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.RetainedAudioTrackIds,
             request.AudioLanguageOverride,
             cancellationToken);
-        if (audioSources.Count == 0)
+        if (audioSources.Count == 0 && string.IsNullOrWhiteSpace(audioDescriptionPath))
         {
             throw new InvalidOperationException("Es wurde keine normale Audiospur für den Mux-Plan gefunden.");
         }
@@ -118,12 +121,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Select(source => source.TrackId)
             .Distinct()
             .ToList();
-        var primaryAudioLanguage = audioSources[0].LanguageCode;
-        var primaryAudioCodecLabel = TryReadCodecLabelFromTrackName(audioSources[0].TrackName) ?? "Audio";
-
-        var audioDescriptionPath = !string.IsNullOrWhiteSpace(archiveDecision.AudioDescriptionFilePath)
-            ? archiveDecision.AudioDescriptionFilePath
-            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
+        var fallbackAudioLanguage = audioSources.Count > 0
+            ? audioSources[0].LanguageCode
+            : videoSources[0].LanguageCode;
         AudioTrackMetadata? audioDescriptionMetadata = audioDescriptionPath is null
             ? null
             : archiveDecision.AudioDescriptionTrackId is int trackId
@@ -131,9 +131,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     mkvMergePath,
                     audioDescriptionPath,
                     trackId,
-                    primaryAudioLanguage,
+                    fallbackAudioLanguage,
                     cancellationToken)
                 : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
+        var primaryAudioLanguage = audioSources.Count > 0
+            ? audioSources[0].LanguageCode
+            : audioDescriptionMetadata?.Language ?? fallbackAudioLanguage;
+        var primaryAudioCodecLabel = audioSources.Count > 0
+            ? TryReadCodecLabelFromTrackName(audioSources[0].TrackName) ?? "Audio"
+            : audioDescriptionMetadata?.CodecLabel ?? "Audio";
+        if (audioSources.Count == 0)
+        {
+            notes.Add("Keine normale Audiospur vorhanden. Der Plan übernimmt nur die Audiodeskription des Sondermaterials.");
+        }
 
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
             ? archiveDecision.SubtitleFiles
