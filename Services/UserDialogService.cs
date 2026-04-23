@@ -467,25 +467,21 @@ internal sealed class UserDialogService : IUserDialogService
     {
         try
         {
-            var process = Process.Start(new ProcessStartInfo
+            Process.Start(new ProcessStartInfo
             {
                 FileName = path,
                 UseShellExecute = true
             });
 
-            if (process is not null)
-            {
-                return true;
-            }
+            // ShellExecute kann bei Datei-/URL-Zuordnungen auch dann keinen Process-Handle
+            // liefern, wenn Windows die Standard-App erfolgreich gestartet hat.
+            return true;
         }
         catch (Exception ex)
         {
             ShowWarning(title, $"{failureMessage}{Environment.NewLine}{Environment.NewLine}Technische Details: {ex.Message}");
             return false;
         }
-
-        ShowWarning(title, failureMessage);
-        return false;
     }
 
     /// <summary>

@@ -22,6 +22,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetAudioDescription(null);
             SetStatus("AD-Datei geleert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
@@ -36,6 +37,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetAudioDescription(path);
             SetStatus("AD-Datei aktualisiert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
@@ -53,6 +55,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetSubtitles([]);
             SetStatus("Untertitel geleert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
@@ -67,6 +70,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetSubtitles(paths);
             SetStatus("Untertitel aktualisiert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
@@ -84,6 +88,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetAttachments([]);
             SetStatus("Anhänge geleert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
             return;
         }
@@ -98,6 +103,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetAttachments(paths);
             SetStatus("Anhänge aktualisiert", ProgressValue);
+            RefreshCommands();
             ScheduleSelectedItemPlanSummaryRefresh();
         }
     }
@@ -147,7 +153,48 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        await ReviewEpisodeAsync(item, isBatchPreparation: false);
+        OpenInspectableFiles(
+            item.SourceFilePaths,
+            "Quelldateien geöffnet",
+            "Quelldateien konnten nicht geöffnet werden");
+        await Task.CompletedTask;
+    }
+
+    private void OpenSelectedSubtitles()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenInspectableFiles(
+            item.SubtitlePaths,
+            "Untertitel geöffnet",
+            "Untertitel konnten nicht geöffnet werden");
+    }
+
+    private void OpenSelectedAttachments()
+    {
+        var item = SelectedEpisodeItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        OpenInspectableFiles(
+            item.AttachmentPaths,
+            "Anhänge geöffnet",
+            "Anhänge konnten nicht geöffnet werden");
+    }
+
+    private void OpenInspectableFiles(
+        IEnumerable<string> filePaths,
+        string successStatusText,
+        string failedStatusText)
+    {
+        var opened = _dialogService.TryOpenFilesWithDefaultApp(filePaths);
+        SetStatus(opened ? successStatusText : failedStatusText, ProgressValue);
     }
 
     private async Task ReviewSelectedMetadataAsync()

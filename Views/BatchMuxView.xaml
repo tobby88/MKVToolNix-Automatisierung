@@ -484,7 +484,7 @@
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Quelle pr&#252;fen" />
+                                    <Button Grid.Row="0" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSourcesCommand}" ToolTip="{Binding OpenSelectedSourcesTooltip, Mode=OneWay}" Content="Medien &#246;ffnen" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Aktive Hauptquelle" />
                                     <Border Grid.Row="1" Grid.Column="1" Margin="0,4,12,4" Style="{StaticResource CompactListSurfaceBorderStyle}">
@@ -518,7 +518,10 @@
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="Untertitel korrigieren" />
+                                    <StackPanel Grid.Row="3" Grid.Column="2" Orientation="Horizontal">
+                                        <Button Width="96" Margin="0,2,6,2" Padding="10,6" Command="{Binding EditSelectedSubtitlesCommand}" Content="UT ändern" />
+                                        <Button Width="68" Margin="0,2,0,2" Padding="10,6" Command="{Binding OpenSelectedSubtitlesCommand}" Content="Öffnen" />
+                                    </StackPanel>
                                 </Grid>
                             </GroupBox>
 
@@ -555,13 +558,21 @@
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Border>
-                                    <Button Grid.Row="0"
-                                            Grid.Column="2"
-                                            Margin="0,2,0,2"
-                                            Padding="10,6"
-                                            VerticalAlignment="Top"
-                                            Command="{Binding EditSelectedAttachmentsCommand}"
-                                            Content="Anh&#228;nge korrigieren" />
+                                    <StackPanel Grid.Row="0"
+                                                Grid.Column="2"
+                                                Orientation="Horizontal"
+                                                VerticalAlignment="Top">
+                                        <Button Width="96"
+                                                Margin="0,2,6,2"
+                                                Padding="10,6"
+                                                Command="{Binding EditSelectedAttachmentsCommand}"
+                                                Content="Anh&#228;nge" />
+                                        <Button Width="68"
+                                                Margin="0,2,0,2"
+                                                Padding="10,6"
+                                                Command="{Binding OpenSelectedAttachmentsCommand}"
+                                                Content="Öffnen" />
+                                    </StackPanel>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Ausgabe" />
                                     <Border Grid.Row="1"

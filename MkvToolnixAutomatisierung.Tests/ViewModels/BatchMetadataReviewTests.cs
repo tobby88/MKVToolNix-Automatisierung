@@ -492,6 +492,52 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task OpenSelectedSourcesCommand_OpensSelectedMediaFilesWithoutRunningManualReview()
+    {
+        var dialogService = new FakeDialogService();
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\haupt.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"C:\Temp\haupt.mp4",
+                AdditionalVideoPaths = [@"C:\Temp\weitere-spur.mp4"],
+                AudioDescriptionPath = @"C:\Temp\ad.mp4",
+                SubtitlePaths = [@"C:\Temp\untertitel.srt"],
+                AttachmentPaths = [@"C:\Temp\metadaten.txt"]
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true);
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        viewModel.OpenSelectedSourcesCommand.Execute(null);
+        await WaitUntilAsync(() => dialogService.OpenedFilePaths.Count >= 3, TimeSpan.FromSeconds(1));
+        viewModel.OpenSelectedSubtitlesCommand.Execute(null);
+        viewModel.OpenSelectedAttachmentsCommand.Execute(null);
+
+        Assert.Equal(
+        [
+            @"C:\Temp\haupt.mp4",
+            @"C:\Temp\weitere-spur.mp4",
+            @"C:\Temp\ad.mp4",
+            @"C:\Temp\untertitel.srt",
+            @"C:\Temp\metadaten.txt"
+        ],
+            dialogService.OpenedFilePaths);
+    }
+
+    [Fact]
     public void SelectAllEpisodesCommand_WithActiveFilter_AsksWhetherHiddenItemsShouldBeIncluded()
     {
         var dialogService = new FakeDialogService
@@ -1303,6 +1349,8 @@ public sealed class BatchMetadataReviewTests
 
         public string? SelectedOutputPath { get; init; }
 
+        public List<string> OpenedFilePaths { get; } = [];
+
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
         public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
         public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
@@ -1340,7 +1388,11 @@ public sealed class BatchMetadataReviewTests
             ConfirmPlanReviewCallCount++;
             return ConfirmPlanReviewResult;
         }
-        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
+        {
+            OpenedFilePaths.AddRange(filePaths);
+            return true;
+        }
         public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => throw new NotSupportedException();
         public void ShowInfo(string title, string message)

@@ -61,6 +61,35 @@ internal sealed partial class SingleEpisodeMuxViewModel
         return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     }
 
+    private void OpenMainVideo()
+    {
+        OpenInspectableFiles([MainVideoPath], "Hauptquelle geöffnet", "Hauptquelle konnte nicht geöffnet werden");
+    }
+
+    private void OpenAudioDescription()
+    {
+        OpenInspectableFiles([AudioDescriptionPath], "AD-Quelle geöffnet", "AD-Quelle konnte nicht geöffnet werden");
+    }
+
+    private void OpenSubtitles()
+    {
+        OpenInspectableFiles(SubtitlePaths, "Untertitel geöffnet", "Untertitel konnten nicht geöffnet werden");
+    }
+
+    private void OpenAttachments()
+    {
+        OpenInspectableFiles(AttachmentPaths, "Anhänge geöffnet", "Anhänge konnten nicht geöffnet werden");
+    }
+
+    private void OpenInspectableFiles(
+        IEnumerable<string> filePaths,
+        string successStatusText,
+        string failedStatusText)
+    {
+        var opened = _dialogService.TryOpenFilesWithDefaultApp(filePaths);
+        SetStatus(opened ? successStatusText : failedStatusText, ProgressValue);
+    }
+
     private string BuildSuggestedOutputPath()
     {
         return _services.OutputPaths.BuildOutputPath(

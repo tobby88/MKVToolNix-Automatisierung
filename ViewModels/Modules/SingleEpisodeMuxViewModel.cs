@@ -57,6 +57,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         SelectSubtitlesCommand = new RelayCommand(SelectSubtitles, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
         SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
+        OpenMainVideoCommand = new RelayCommand(OpenMainVideo, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
+        OpenAudioDescriptionCommand = new RelayCommand(OpenAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(AudioDescriptionPath));
+        OpenSubtitlesCommand = new RelayCommand(OpenSubtitles, () => !_isBusy && SubtitlePaths.Count > 0);
+        OpenAttachmentsCommand = new RelayCommand(OpenAttachments, () => !_isBusy && AttachmentPaths.Count > 0);
         SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
         OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
@@ -71,6 +75,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public AsyncRelayCommand SelectAudioDescriptionCommand { get; }
     public RelayCommand SelectSubtitlesCommand { get; }
     public RelayCommand SelectAttachmentCommand { get; }
+    public RelayCommand OpenMainVideoCommand { get; }
+    public RelayCommand OpenAudioDescriptionCommand { get; }
+    public RelayCommand OpenSubtitlesCommand { get; }
+    public RelayCommand OpenAttachmentsCommand { get; }
     public RelayCommand SelectOutputCommand { get; }
     public AsyncRelayCommand RescanCommand { get; }
     public AsyncRelayCommand OpenTvdbLookupCommand { get; }
@@ -246,6 +254,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         SelectAudioDescriptionCommand.RaiseCanExecuteChanged();
         SelectSubtitlesCommand.RaiseCanExecuteChanged();
         SelectAttachmentCommand.RaiseCanExecuteChanged();
+        OpenMainVideoCommand.RaiseCanExecuteChanged();
+        OpenAudioDescriptionCommand.RaiseCanExecuteChanged();
+        OpenSubtitlesCommand.RaiseCanExecuteChanged();
+        OpenAttachmentsCommand.RaiseCanExecuteChanged();
         SelectOutputCommand.RaiseCanExecuteChanged();
         RescanCommand.RaiseCanExecuteChanged();
         OpenTvdbLookupCommand.RaiseCanExecuteChanged();
@@ -343,12 +355,18 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         {
             case nameof(MainVideoPath):
                 base.OnPropertyChanged(nameof(AudioDescriptionButtonText));
+                OpenMainVideoCommand.RaiseCanExecuteChanged();
+                break;
+            case nameof(AudioDescriptionPath):
+                OpenAudioDescriptionCommand.RaiseCanExecuteChanged();
                 break;
             case nameof(SubtitlePaths):
                 base.OnPropertyChanged(nameof(SubtitleDisplayText));
+                OpenSubtitlesCommand.RaiseCanExecuteChanged();
                 break;
             case nameof(AttachmentPaths):
                 base.OnPropertyChanged(nameof(AttachmentDisplayText));
+                OpenAttachmentsCommand.RaiseCanExecuteChanged();
                 break;
             case nameof(OutputPath):
             case nameof(ArchiveState):

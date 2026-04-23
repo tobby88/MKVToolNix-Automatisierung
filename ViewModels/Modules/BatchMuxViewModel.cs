@@ -73,6 +73,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => !_isBusy && SelectedEpisodeItem is not null);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
         OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && SelectedEpisodeItem?.SourceFilePaths.Count > 0, unexpectedCommandErrorHandler);
+        OpenSelectedSubtitlesCommand = new RelayCommand(OpenSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem?.SubtitlePaths.Count > 0);
+        OpenSelectedAttachmentsCommand = new RelayCommand(OpenSelectedAttachments, () => !_isBusy && SelectedEpisodeItem?.AttachmentPaths.Count > 0);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
         RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => !_isBusy && EpisodeItems.Any(), unexpectedCommandErrorHandler);
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
@@ -95,6 +97,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public RelayCommand ToggleSelectedEpisodeSelectionCommand { get; }
     public AsyncRelayCommand ReviewPendingSourcesCommand { get; }
     public AsyncRelayCommand OpenSelectedSourcesCommand { get; }
+    public RelayCommand OpenSelectedSubtitlesCommand { get; }
+    public RelayCommand OpenSelectedAttachmentsCommand { get; }
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
     public AsyncRelayCommand RefreshAllComparisonsCommand { get; }
     public AsyncRelayCommand RedetectSelectedEpisodeCommand { get; }
@@ -218,7 +222,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     public string ReviewPendingSourcesTooltip => "Öffnet nacheinander alle noch offenen Quellen-, TVDB- und Hinweisprüfungen der ausgewählten Episoden.";
 
-    public string OpenSelectedSourcesTooltip => "Prüft die Quelldateien des markierten Eintrags und erlaubt bei Bedarf eine alternative Quelle.";
+    public string OpenSelectedSourcesTooltip => "Öffnet Haupt-, Zusatzvideo- und AD-Dateien des markierten Eintrags mit der Standardanwendung.";
 
     public string ReviewSelectedMetadataTooltip => "Öffnet den TVDB-Dialog für den aktuell ausgewählten Batch-Eintrag.";
 
@@ -330,6 +334,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         ToggleSelectedEpisodeSelectionCommand.RaiseCanExecuteChanged();
         ReviewPendingSourcesCommand.RaiseCanExecuteChanged();
         OpenSelectedSourcesCommand.RaiseCanExecuteChanged();
+        OpenSelectedSubtitlesCommand.RaiseCanExecuteChanged();
+        OpenSelectedAttachmentsCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         RefreshAllComparisonsCommand.RaiseCanExecuteChanged();
         RedetectSelectedEpisodeCommand.RaiseCanExecuteChanged();

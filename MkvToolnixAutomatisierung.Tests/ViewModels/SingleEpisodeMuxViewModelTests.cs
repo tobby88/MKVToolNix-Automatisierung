@@ -188,6 +188,35 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void OpenFileCommands_OpenTheConfiguredSourceComponents()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(),
+            dialogService);
+
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\haupt.mp4");
+        viewModel.SetAudioDescription(@"C:\Temp\ad.mp4");
+        viewModel.SetSubtitles([@"C:\Temp\untertitel.srt", @"C:\Temp\untertitel.ass"]);
+        viewModel.SetAttachments([@"C:\Temp\metadaten.txt"]);
+
+        viewModel.OpenMainVideoCommand.Execute(null);
+        viewModel.OpenAudioDescriptionCommand.Execute(null);
+        viewModel.OpenSubtitlesCommand.Execute(null);
+        viewModel.OpenAttachmentsCommand.Execute(null);
+
+        Assert.Equal(
+        [
+            @"C:\Temp\haupt.mp4",
+            @"C:\Temp\ad.mp4",
+            @"C:\Temp\untertitel.ass",
+            @"C:\Temp\untertitel.srt",
+            @"C:\Temp\metadaten.txt"
+        ],
+            dialogService.OpenedFilePaths);
+    }
+
+    [Fact]
     public void ApplyTvdbSelection_ClearsStalePlanReviewHints()
     {
         var viewModel = CreateViewModel();
@@ -335,6 +364,8 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         public string? LastOutputFileName { get; private set; }
 
+        public List<string> OpenedFilePaths { get; } = [];
+
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
 
         public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
@@ -380,7 +411,11 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         public bool ConfirmPlanReview(string episodeTitle, string reviewText) => throw new NotSupportedException();
 
-        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths) => throw new NotSupportedException();
+        public bool TryOpenFilesWithDefaultApp(IEnumerable<string> filePaths)
+        {
+            OpenedFilePaths.AddRange(filePaths);
+            return true;
+        }
 
         public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
 
