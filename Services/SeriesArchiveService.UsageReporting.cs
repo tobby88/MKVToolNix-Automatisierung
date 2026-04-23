@@ -126,10 +126,18 @@ public sealed partial class SeriesArchiveService
             notes.Add($"MKV-Titel: {FormatHeaderValue(containerTitleEdit.CurrentTitle)} -> {FormatHeaderValue(containerTitleEdit.ExpectedTitle)}");
         }
 
-        notes.AddRange(trackHeaderEdits.Select(edit =>
-            $"{edit.DisplayLabel}: {FormatHeaderValue(edit.CurrentTrackName)} -> {FormatHeaderValue(edit.ExpectedTrackName)}"));
+        notes.AddRange(trackHeaderEdits.Select(BuildTrackHeaderChangeNote));
 
         return notes;
+    }
+
+    private static string BuildTrackHeaderChangeNote(TrackHeaderEditOperation edit)
+    {
+        var currentValue = FormatHeaderValue(edit.CurrentTrackName);
+        var expectedValue = FormatHeaderValue(edit.ExpectedTrackName);
+        return string.Equals(FormatHeaderValue(edit.DisplayLabel), currentValue, StringComparison.Ordinal)
+            ? $"{currentValue} -> {expectedValue}"
+            : $"{FormatHeaderValue(edit.DisplayLabel)}: {currentValue} -> {expectedValue}";
     }
 
     private static string FormatHeaderValue(string? value)

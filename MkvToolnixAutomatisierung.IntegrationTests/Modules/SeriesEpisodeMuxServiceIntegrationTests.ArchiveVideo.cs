@@ -474,6 +474,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(
             plan.Notes,
             note => note.Contains("Alter Audiotitel -> Deutsch - E-AC-3", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(
+            plan.Notes,
+            note => note.Contains("Alter Audiotitel: Alter Audiotitel", StringComparison.OrdinalIgnoreCase));
 
         var summary = plan.BuildUsageSummary();
         Assert.Equal("Zieldatei bleibt inhaltlich unverändert", summary.ArchiveAction);
@@ -487,6 +490,49 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         var arguments = plan.BuildArguments();
         Assert.Equal(outputPath, arguments[0]);
         AssertContainsSequence(arguments, "--edit", "track:2", "--set", "name=Deutsch - E-AC-3");
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_WhenSubtitleNameIndicatesHearingImpaired_DoesNotRenameToStandard()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-name-hi");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-name-hi");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Ein starkes Team - Die letzte Runde (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Ein starkes Team - Die letzte Runde (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Ein starkes Team\r\nTitel: Die letzte Runde (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Ein starkes Team", "Season 1", "Ein starkes Team - S01E02 - Die letzte Runde.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Die letzte Runde",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateSubtitleTrack(2, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: false));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Die letzte Runde"));
+
+        Assert.True(plan.SkipMux);
+        var summary = plan.BuildUsageSummary();
+        Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
+        Assert.DoesNotContain(plan.Notes, note => note.Contains("Deutsch (hörgeschädigte) - SRT -> Deutsch - SRT", StringComparison.Ordinal));
     }
 
     [Fact]

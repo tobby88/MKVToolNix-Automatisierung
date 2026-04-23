@@ -335,7 +335,7 @@ public sealed partial class SeriesArchiveService
                     entry.Track.Language)
                 with
                 {
-                    Accessibility = entry.Track.IsHearingImpaired
+                    Accessibility = IsHearingImpairedSubtitleTrack(entry.Track)
                         ? SubtitleAccessibility.HearingImpaired
                         : SubtitleAccessibility.Standard
                 })
@@ -375,6 +375,25 @@ public sealed partial class SeriesArchiveService
     private static ContainerTrackMetadata? FindExistingAudioDescription(IReadOnlyList<ContainerTrackMetadata> existingAudioTracks)
     {
         return existingAudioTracks.FirstOrDefault(AudioTrackClassifier.IsAudioDescriptionTrack);
+    }
+
+    private static bool IsHearingImpairedSubtitleTrack(ContainerTrackMetadata track)
+    {
+        return track.IsHearingImpaired
+            || ContainsHearingImpairedSubtitleMarker(track.TrackName);
+    }
+
+    private static bool ContainsHearingImpairedSubtitleMarker(string? trackName)
+    {
+        if (string.IsNullOrWhiteSpace(trackName))
+        {
+            return false;
+        }
+
+        return trackName.Contains("hörgesch", StringComparison.OrdinalIgnoreCase)
+            || trackName.Contains("hoergesch", StringComparison.OrdinalIgnoreCase)
+            || trackName.Contains("hearing impaired", StringComparison.OrdinalIgnoreCase)
+            || trackName.Contains("sdh", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string?> TryBuildAudioDescriptionReuseNoteAsync(
