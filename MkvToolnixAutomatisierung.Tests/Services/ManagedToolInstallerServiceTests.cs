@@ -268,6 +268,72 @@ public sealed class ManagedToolInstallerServiceTests
     }
 
     [Fact]
+    public async Task EnsureManagedToolsAsync_DoesNotTreatLegacyDownloadOverrideAsManualOverride()
+    {
+        var userProfileDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-legacy-download-override", Guid.NewGuid().ToString("N"));
+        var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
+        Directory.CreateDirectory(downloadsDirectory);
+        var legacyFfprobePath = Path.Combine(downloadsDirectory, "ffmpeg", "bin", "ffprobe.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyFfprobePath)!);
+        File.WriteAllText(legacyFfprobePath, "legacy-tool");
+
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+
+            var settingsStore = new AppSettingsStore();
+            var toolPathStore = new AppToolPathStore(settingsStore);
+            var settings = toolPathStore.Load();
+            settings.ManagedMkvToolNix.AutoManageEnabled = false;
+            settings.ManagedFfprobe.AutoManageEnabled = true;
+            settings.FfprobePath = legacyFfprobePath;
+            toolPathStore.Save(settings);
+
+            var archiveBytes = "ffprobe-archive"u8.ToArray();
+            var archiveHash = Convert.ToHexString(SHA256.HashData(archiveBytes));
+            var downloadUri = new Uri("https://example.invalid/ffprobe.zip");
+            var packageSource = new RecordingPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22T10-00-00Z",
+                "Latest Auto-Build",
+                downloadUri,
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                archiveHash));
+            var service = new ManagedToolInstallerService(
+                toolPathStore,
+                [packageSource],
+                new StubArchiveExtractor(destinationDirectory =>
+                {
+                    var toolDirectory = Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin");
+                    Directory.CreateDirectory(toolDirectory);
+                    File.WriteAllText(Path.Combine(toolDirectory, "ffprobe.exe"), "tool");
+                }),
+                new HttpClient(new FakeHttpMessageHandler((downloadUri, archiveBytes))));
+
+            var result = await service.EnsureManagedToolsAsync();
+            var savedSettings = toolPathStore.Load();
+
+            Assert.False(result.HasWarning);
+            Assert.Equal(1, packageSource.CallCount);
+            Assert.NotEqual(legacyFfprobePath, savedSettings.ManagedFfprobe.InstalledPath);
+            Assert.NotEmpty(savedSettings.ManagedFfprobe.InstalledPath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
+            if (Directory.Exists(userProfileDirectory))
+            {
+                Directory.Delete(userProfileDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task EnsureManagedToolsAsync_DoesNotTouchToolsDirectoryWhenAutoManageIsDisabled()
     {
         var settingsStore = new AppSettingsStore();

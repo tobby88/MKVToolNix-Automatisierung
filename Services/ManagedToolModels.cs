@@ -155,6 +155,11 @@ internal static class ManagedToolResolution
 
         if (TryResolveExistingExecutable(settings.FfprobePath) is { } manualOverride)
         {
+            if (LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
+            {
+                return new ResolvedToolPath(manualOverride, ToolPathResolutionSource.DownloadsFallback);
+            }
+
             return new ResolvedToolPath(manualOverride, ToolPathResolutionSource.ManualOverride);
         }
 
@@ -192,6 +197,11 @@ internal static class ManagedToolResolution
 
         if (TryResolveMkvToolNixPairFromConfiguredPath(settings.MkvToolNixDirectoryPath) is { } manualOverride)
         {
+            if (LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
+            {
+                return manualOverride with { Source = ToolPathResolutionSource.DownloadsFallback };
+            }
+
             return manualOverride with { Source = ToolPathResolutionSource.ManualOverride };
         }
 
@@ -466,5 +476,34 @@ internal static class ManagedToolResolution
     private static string? GetDownloadsDirectory()
     {
         return PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory();
+    }
+
+    private static bool LooksLikeLegacyDownloadOverride(string? configuredPath, ManagedToolSettings managedSettings)
+    {
+        if (!managedSettings.AutoManageEnabled || string.IsNullOrWhiteSpace(configuredPath))
+        {
+            return false;
+        }
+
+        var downloadsDirectory = GetDownloadsDirectory();
+        if (string.IsNullOrWhiteSpace(downloadsDirectory))
+        {
+            return false;
+        }
+
+        try
+        {
+            var configuredFullPath = Path.GetFullPath(configuredPath);
+            var downloadsFullPath = Path.GetFullPath(downloadsDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var downloadsPrefix = downloadsFullPath + Path.DirectorySeparatorChar;
+
+            return configuredFullPath.StartsWith(downloadsPrefix, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(configuredFullPath, downloadsFullPath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

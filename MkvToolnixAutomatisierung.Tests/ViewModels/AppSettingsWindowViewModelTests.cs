@@ -240,6 +240,63 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Contains("übersteuert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ToolStatus_TreatsLegacyDownloadOverrideAsFallbackWhenAutoManageIsEnabled()
+    {
+        var userProfileDirectory = CreateDirectory("sandbox-profile");
+        var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
+        var legacyMkvRoot = Path.Combine(downloadsDirectory, "mkvtoolnix-64-bit-999.0-legacy");
+        var legacyMkvToolDirectory = Path.Combine(legacyMkvRoot, "mkvtoolnix");
+        Directory.CreateDirectory(legacyMkvToolDirectory);
+        var legacyFfprobeDirectory = Path.Combine(downloadsDirectory, "ffmpeg", "bin");
+        Directory.CreateDirectory(legacyFfprobeDirectory);
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+
+            var mkvMergePath = Path.Combine(legacyMkvToolDirectory, "mkvmerge.exe");
+            var mkvPropEditPath = Path.Combine(legacyMkvToolDirectory, "mkvpropedit.exe");
+            var ffprobePath = Path.Combine(legacyFfprobeDirectory, "ffprobe.exe");
+            File.WriteAllText(mkvMergePath, "tool");
+            File.WriteAllText(mkvPropEditPath, "tool");
+            File.WriteAllText(ffprobePath, "tool");
+
+            var settingsStore = new AppSettingsStore();
+            settingsStore.Save(new CombinedAppSettings
+            {
+                ToolPaths = new AppToolPathSettings
+                {
+                    MkvToolNixDirectoryPath = legacyMkvToolDirectory,
+                    FfprobePath = ffprobePath,
+                    ManagedMkvToolNix = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    },
+                    ManagedFfprobe = new ManagedToolSettings
+                    {
+                        AutoManageEnabled = true
+                    }
+                }
+            });
+
+            var viewModel = CreateViewModel(settingsStore: settingsStore);
+
+            Assert.Equal("MKVToolNix bereit (Fallback)", viewModel.MkvToolNixStatusText);
+            Assert.Equal("ffprobe bereit (Fallback)", viewModel.FfprobeStatusText);
+            Assert.DoesNotContain("übersteuert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
+            Assert.DoesNotContain("übersteuert", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
