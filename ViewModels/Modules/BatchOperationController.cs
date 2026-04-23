@@ -23,6 +23,7 @@ internal sealed class BatchOperationController : IDisposable
     public string CancelButtonText => CurrentOperationKind switch
     {
         BatchOperationKind.Scan => "Scan abbrechen",
+        BatchOperationKind.Comparison => "Vergleich abbrechen",
         BatchOperationKind.Execution => "Batch abbrechen",
         _ => "Vorgang abbrechen"
     };
@@ -42,6 +43,21 @@ internal sealed class BatchOperationController : IDisposable
         _currentOperationSource = new CancellationTokenSource();
         CurrentOperationKind = operationKind;
         return _currentOperationSource.Token;
+    }
+
+    /// <summary>
+    /// Aktualisiert die sichtbare Vorgangsart, ohne das zugrunde liegende Abbruchtoken zu ersetzen.
+    /// Das hält Scan und anschließenden automatischen Vergleich als einen cancelbaren Ablauf zusammen.
+    /// </summary>
+    /// <param name="operationKind">Neue sichtbare Vorgangsart des laufenden Ablaufs.</param>
+    public void ChangeCurrentOperationKind(BatchOperationKind operationKind)
+    {
+        if (_currentOperationSource is null)
+        {
+            throw new InvalidOperationException("Es läuft kein Batch-Vorgang.");
+        }
+
+        CurrentOperationKind = operationKind;
     }
 
     /// <summary>
@@ -75,6 +91,16 @@ internal sealed class BatchOperationController : IDisposable
         CurrentOperationKind = BatchOperationKind.None;
     }
 
+    /// <summary>
+    /// Beendet den aktuell laufenden Vorgang unabhängig von dessen sichtbarer Zwischenphase.
+    /// </summary>
+    public void CompleteCurrent()
+    {
+        _currentOperationSource?.Dispose();
+        _currentOperationSource = null;
+        CurrentOperationKind = BatchOperationKind.None;
+    }
+
     public void Dispose()
     {
         _currentOperationSource?.Cancel();
@@ -91,5 +117,6 @@ internal enum BatchOperationKind
 {
     None = 0,
     Scan = 1,
-    Execution = 2
+    Comparison = 2,
+    Execution = 3
 }

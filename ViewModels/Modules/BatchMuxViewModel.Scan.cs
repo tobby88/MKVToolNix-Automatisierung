@@ -59,10 +59,12 @@ internal sealed partial class BatchMuxViewModel
     private async Task ScanDirectoryAsync()
     {
         var cancellationToken = CancellationToken.None;
+        var operationStarted = false;
         try
         {
             SetBusy(true);
             cancellationToken = BeginBatchOperation(BatchOperationKind.Scan);
+            operationStarted = true;
             ClearEpisodeItems();
             ResetLog();
             SetStatus("Bereite Batch-Scan vor...", 0);
@@ -161,8 +163,14 @@ internal sealed partial class BatchMuxViewModel
             SetStatus(
                 $"Scan abgeschlossen: {EpisodeItems.Count} Einträge, {preselectedCount} vorausgewählt",
                 AutomaticCompareProgressStart);
+            var archiveComparisonItems = EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList();
+            if (archiveComparisonItems.Count > 0)
+            {
+                ChangeCurrentBatchOperationKind(BatchOperationKind.Comparison);
+            }
+
             await RefreshComparisonPlansAsync(
-                EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList(),
+                archiveComparisonItems,
                 automatic: true,
                 cancellationToken);
             SetStatus(StatusText, 100);
@@ -170,12 +178,19 @@ internal sealed partial class BatchMuxViewModel
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            AppendLog("ABGEBROCHEN: Batch-Scan durch Benutzer abgebrochen.");
-            SetStatus("Scan abgebrochen", ProgressValue);
+            var comparisonWasCancelled = _operationController.CurrentOperationKind == BatchOperationKind.Comparison;
+            AppendLog(comparisonWasCancelled
+                ? "ABGEBROCHEN: Archivvergleich durch Benutzer abgebrochen."
+                : "ABGEBROCHEN: Batch-Scan durch Benutzer abgebrochen.");
+            SetStatus(comparisonWasCancelled ? "Archivvergleich abgebrochen" : "Scan abgebrochen", ProgressValue);
         }
         finally
         {
-            CompleteBatchOperation(BatchOperationKind.Scan);
+            if (operationStarted)
+            {
+                CompleteCurrentBatchOperation();
+            }
+
             SetBusy(false);
         }
     }

@@ -163,9 +163,29 @@ internal sealed partial class BatchMuxViewModel
 
     private async Task RefreshAllComparisonsAsync()
     {
-        await RefreshComparisonPlansAsync(
-            EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList(),
-            automatic: false);
+        var cancellationToken = CancellationToken.None;
+        var operationStarted = false;
+        try
+        {
+            cancellationToken = BeginBatchOperation(BatchOperationKind.Comparison);
+            operationStarted = true;
+            await RefreshComparisonPlansAsync(
+                EpisodeItems.Where(item => item.HasArchiveComparisonTarget).ToList(),
+                automatic: false,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AppendLog("ABGEBROCHEN: Archivvergleich durch Benutzer abgebrochen.");
+            SetStatus("Archivvergleich abgebrochen", ProgressValue);
+        }
+        finally
+        {
+            if (operationStarted)
+            {
+                CompleteBatchOperation(BatchOperationKind.Comparison);
+            }
+        }
     }
 
 }

@@ -231,6 +231,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     public string CancelBatchOperationTooltip => _operationController.CurrentOperationKind switch
     {
         BatchOperationKind.Scan => "Bricht den laufenden Batch-Scan und die anschliessenden automatischen Vergleiche ab.",
+        BatchOperationKind.Comparison => "Bricht den laufenden Archivvergleich nach dem Batch-Scan ab.",
         BatchOperationKind.Execution => "Bricht den laufenden Batch inklusive Arbeitskopien, Mux und Done-Cleanup kontrolliert ab.",
         _ => "Bricht den aktuell laufenden Batch-Vorgang ab."
     };
@@ -439,6 +440,26 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     }
 
     /// <summary>
+    /// Wechselt die sichtbare Phase eines laufenden Batch-Vorgangs, ohne den CancellationToken
+    /// zu ersetzen. So bleibt "Scan plus automatischer Archivvergleich" ein zusammenhängender
+    /// abbrechbarer Ablauf.
+    /// </summary>
+    private void ChangeCurrentBatchOperationKind(BatchOperationKind operationKind)
+    {
+        _operationController.ChangeCurrentOperationKind(operationKind);
+        NotifyBatchOperationStateChanged();
+    }
+
+    /// <summary>
+    /// Schließt die aktuell laufende Batch-Operation unabhängig von ihrer sichtbaren Zwischenphase ab.
+    /// </summary>
+    private void CompleteCurrentBatchOperation()
+    {
+        _operationController.CompleteCurrent();
+        NotifyBatchOperationStateChanged();
+    }
+
+    /// <summary>
     /// Löst den Benutzerabbruch des aktuell laufenden Batch-Scans oder Batch-Laufs aus.
     /// </summary>
     private void CancelCurrentBatchOperation()
@@ -451,6 +472,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         StatusText = _operationController.CurrentOperationKind switch
         {
             BatchOperationKind.Scan => "Batch-Scan wird abgebrochen...",
+            BatchOperationKind.Comparison => "Archivvergleich wird abgebrochen...",
             BatchOperationKind.Execution => "Batch-Lauf wird abgebrochen...",
             _ => "Vorgang wird abgebrochen..."
         };
