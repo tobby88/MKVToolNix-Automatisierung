@@ -99,25 +99,17 @@ jobs:
           $notes = @"
           ## Nightly Build
 
-          Dieser Vorabstand wird automatisch aktualisiert, sobald neue Commits auf master vorliegen.
+          Dieser Vorabstand wird automatisch neu erzeugt, sobald neue Commits auf master vorliegen.
 
           - Commit: ${{ needs.determine-run.outputs.current_sha }}
           - Erstellt: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')
           - Buildtyp: framework-dependent Single-File (win-x64)
 
-          Hinweis: Das Prerelease nightly ist rollierend und wird bei späteren Nightly-Builds überschrieben.
+          Hinweis: Das Prerelease nightly ist rollierend und wird bei späteren Nightly-Builds neu erstellt, damit GitHub den Nightly-Stand sichtbar als aktuell anzeigt.
           "@
           Set-Content -LiteralPath '.\artifacts\release\nightly-notes.md' -Value $notes -NoNewline
 
-      - name: Update nightly tag
-        shell: pwsh
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git tag -f nightly ${{ needs.determine-run.outputs.current_sha }}
-          git push origin refs/tags/nightly --force
-
-      - name: Create or update nightly prerelease
+      - name: Recreate nightly prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -128,19 +120,13 @@ jobs:
 
           & gh release view $tagName *> $null
           if ($LASTEXITCODE -eq 0) {
-            & gh release edit $tagName --title $tagName --notes-file $notesPath
+            & gh release delete $tagName --cleanup-tag --yes
             if ($LASTEXITCODE -ne 0) {
-              throw 'Das vorhandene Nightly-Prerelease konnte nicht aktualisiert werden.'
-            }
-
-            & gh release upload $tagName $assetPath --clobber
-            if ($LASTEXITCODE -ne 0) {
-              throw 'Das Nightly-Asset konnte nicht aktualisiert werden.'
+              throw 'Das vorhandene Nightly-Prerelease konnte nicht gelöscht werden.'
             }
           }
-          else {
-            & gh release create $tagName $assetPath --title $tagName --notes-file $notesPath --prerelease
-            if ($LASTEXITCODE -ne 0) {
-              throw 'Das Nightly-Prerelease konnte nicht erstellt werden.'
-            }
+
+          & gh release create $tagName $assetPath --title $tagName --notes-file $notesPath --prerelease --target '${{ needs.determine-run.outputs.current_sha }}'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Das Nightly-Prerelease konnte nicht neu erstellt werden.'
           }

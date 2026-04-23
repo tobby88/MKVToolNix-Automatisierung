@@ -257,7 +257,7 @@ Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der
 
 Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
 
-Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und aktualisiert das GitHub-Prerelease nur dann automatisch, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
+Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und erstellt das GitHub-Prerelease nur dann automatisch neu, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
 
 Praktische Links:
 
