@@ -211,7 +211,8 @@ internal sealed class ManagedToolInstallerService
             await Task.Run(() => _archiveExtractor.ExtractArchive(
                 archivePath,
                 stagingDirectory,
-                progress?.CreateExtractionProgressAdapter(package.Kind)), cancellationToken);
+                progress?.CreateExtractionProgressAdapter(package.Kind),
+                package.Kind), cancellationToken);
 
             Directory.Move(stagingDirectory, versionDirectory);
             return ResolveInstalledPath(package.Kind, versionDirectory);
@@ -622,16 +623,21 @@ internal sealed class ManagedToolInstallerService
     {
         public void Report(ManagedToolExtractionProgress value)
         {
-            var total = Math.Max(1, value.TotalEntryCount);
-            var percent = Math.Clamp((double)value.ExtractedEntryCount / total * 100d, 0d, 100d);
+            var hasByteProgress = value.TotalByteCount is > 0 && value.ExtractedByteCount is not null;
+            var percent = hasByteProgress
+                ? Math.Clamp((double)value.ExtractedByteCount!.Value / value.TotalByteCount!.Value * 100d, 0d, 100d)
+                : Math.Clamp((double)value.ExtractedEntryCount / Math.Max(1, value.TotalEntryCount) * 100d, 0d, 100d);
             var stagePercent = ExtractionStartProgressPercent
                                + percent / 100d * (ExtractionEndProgressPercent - ExtractionStartProgressPercent);
             var currentEntry = string.IsNullOrWhiteSpace(value.CurrentEntryPath)
                 ? null
                 : Path.GetFileName(value.CurrentEntryPath);
+            var detailPrefix = hasByteProgress
+                ? $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien – {FormatFileSize(value.ExtractedByteCount!.Value)} / {FormatFileSize(value.TotalByteCount!.Value)}"
+                : $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien";
             var detail = currentEntry is null
-                ? $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien"
-                : $"{value.ExtractedEntryCount} / {value.TotalEntryCount} Dateien – {currentEntry}";
+                ? detailPrefix
+                : $"{detailPrefix} – {currentEntry}";
 
             toolProgress.Report(
                 $"{GetToolDisplayName(toolKind)} wird entpackt...",

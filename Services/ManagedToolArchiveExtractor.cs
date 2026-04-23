@@ -9,12 +9,17 @@ namespace MkvToolnixAutomatisierung.Services;
 internal interface IManagedToolArchiveExtractor
 {
     /// <summary>
-    /// Entpackt ein Archiv vollständig in das angegebene Zielverzeichnis.
+    /// Entpackt ein Archiv vollständig oder werkzeugspezifisch reduziert in das angegebene Zielverzeichnis.
     /// </summary>
     /// <param name="archivePath">Pfad zum zuvor heruntergeladenen Archiv.</param>
     /// <param name="destinationDirectory">Leeres oder neu anzulegendes Zielverzeichnis.</param>
     /// <param name="progress">Optionaler Fortschrittskanal für die Dateieinträge des Archivs.</param>
-    void ExtractArchive(string archivePath, string destinationDirectory, IProgress<ManagedToolExtractionProgress>? progress = null);
+    /// <param name="toolKind">Optionales Werkzeug, damit unnötige Archivteile übersprungen werden können.</param>
+    void ExtractArchive(
+        string archivePath,
+        string destinationDirectory,
+        IProgress<ManagedToolExtractionProgress>? progress = null,
+        ManagedToolKind? toolKind = null);
 }
 
 /// <summary>
@@ -22,8 +27,19 @@ internal interface IManagedToolArchiveExtractor
 /// </summary>
 internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
+    private static readonly HashSet<string> RequiredMkvToolExecutables = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mkvmerge.exe",
+        "mkvpropedit.exe",
+        "mkvextract.exe"
+    };
+
     /// <inheritdoc />
-    public void ExtractArchive(string archivePath, string destinationDirectory, IProgress<ManagedToolExtractionProgress>? progress = null)
+    public void ExtractArchive(
+        string archivePath,
+        string destinationDirectory,
+        IProgress<ManagedToolExtractionProgress>? progress = null,
+        ManagedToolKind? toolKind = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -31,13 +47,16 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         Directory.CreateDirectory(destinationDirectory);
 
         using var archive = ArchiveFactory.Open(archivePath);
-        var entries = archive.Entries
+        var allEntries = archive.Entries
             .Where(entry => !entry.IsDirectory)
             .ToList();
+        var entries = SelectEntriesForTool(toolKind, allEntries);
         var totalEntryCount = entries.Count;
-        progress?.Report(new ManagedToolExtractionProgress(0, totalEntryCount));
+        var totalByteCount = entries.Sum(entry => GetEntrySize(entry));
+        progress?.Report(new ManagedToolExtractionProgress(0, totalEntryCount, ExtractedByteCount: 0, TotalByteCount: totalByteCount));
 
         var extractedEntryCount = 0;
+        long extractedByteCount = 0;
         foreach (var entry in entries)
         {
             entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
@@ -47,10 +66,60 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
             });
 
             extractedEntryCount++;
+            extractedByteCount += GetEntrySize(entry);
             progress?.Report(new ManagedToolExtractionProgress(
                 extractedEntryCount,
                 totalEntryCount,
-                entry.Key));
+                entry.Key,
+                extractedByteCount,
+                totalByteCount));
         }
+    }
+
+    private static IReadOnlyList<IArchiveEntry> SelectEntriesForTool(
+        ManagedToolKind? toolKind,
+        IReadOnlyList<IArchiveEntry> entries)
+    {
+        if (toolKind != ManagedToolKind.MkvToolNix)
+        {
+            return entries;
+        }
+
+        var requiredDirectories = entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
+            .Where(entry => RequiredMkvToolExecutables.Contains(Path.GetFileName(entry.Key)!))
+            .Select(entry => GetArchiveDirectoryKey(entry.Key!))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (requiredDirectories.Count == 0)
+        {
+            return entries;
+        }
+
+        var filteredEntries = entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
+            .Where(entry => requiredDirectories.Contains(GetArchiveDirectoryKey(entry.Key!)))
+            .ToList();
+
+        return filteredEntries.Count > 0
+            ? filteredEntries
+            : entries;
+    }
+
+    private static string GetArchiveDirectoryKey(string entryKey)
+    {
+        var normalized = entryKey
+            .Replace('\\', '/')
+            .Trim('/');
+        var separatorIndex = normalized.LastIndexOf('/');
+
+        return separatorIndex >= 0
+            ? normalized[..separatorIndex]
+            : string.Empty;
+    }
+
+    private static long GetEntrySize(IArchiveEntry entry)
+    {
+        return Math.Max(0, entry.Size);
     }
 }

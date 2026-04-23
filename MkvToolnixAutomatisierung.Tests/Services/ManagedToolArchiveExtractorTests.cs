@@ -39,8 +39,42 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "nested", "readme.txt")));
         Assert.NotEmpty(progressEvents);
         Assert.Equal(0, progressEvents[0].ExtractedEntryCount);
+        Assert.Equal(0, progressEvents[0].ExtractedByteCount);
+        Assert.NotNull(progressEvents[0].TotalByteCount);
         Assert.Equal(progressEvents[^1].TotalEntryCount, progressEvents[^1].ExtractedEntryCount);
+        Assert.Equal(progressEvents[^1].TotalByteCount, progressEvents[^1].ExtractedByteCount);
         Assert.Contains(progressEvents, entry => string.Equals(entry.CurrentEntryPath, "ffprobe.exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ExtractArchive_ForMkvToolNix_SkipsDocumentationAndLocalePayload()
+    {
+        var sourceDirectory = CreateDirectory("source");
+        var toolDirectory = Path.Combine(sourceDirectory, "mkvtoolnix");
+        Directory.CreateDirectory(toolDirectory);
+        File.WriteAllText(Path.Combine(toolDirectory, "mkvmerge.exe"), "tool");
+        File.WriteAllText(Path.Combine(toolDirectory, "mkvpropedit.exe"), "tool");
+        File.WriteAllText(Path.Combine(toolDirectory, "mkvextract.exe"), "tool");
+        File.WriteAllText(Path.Combine(toolDirectory, "libebml.dll"), "dependency");
+        Directory.CreateDirectory(Path.Combine(toolDirectory, "doc"));
+        File.WriteAllText(Path.Combine(toolDirectory, "doc", "guide.txt"), "docs");
+        Directory.CreateDirectory(Path.Combine(toolDirectory, "locale"));
+        File.WriteAllText(Path.Combine(toolDirectory, "locale", "de.mo"), "translations");
+
+        var archivePath = Path.Combine(_tempDirectory, "mkvtoolnix.zip");
+        ZipFile.CreateFromDirectory(sourceDirectory, archivePath);
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "mkvtoolnix-extracted");
+        var extractor = new ManagedToolArchiveExtractor();
+
+        extractor.ExtractArchive(archivePath, destinationDirectory, toolKind: ManagedToolKind.MkvToolNix);
+
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "mkvmerge.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "mkvpropedit.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "mkvextract.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "libebml.dll")));
+        Assert.False(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "doc", "guide.txt")));
+        Assert.False(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "locale", "de.mo")));
     }
 
     [Fact]

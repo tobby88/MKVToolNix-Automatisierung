@@ -549,12 +549,16 @@ public sealed class ManagedToolInstallerServiceTests
 
     private sealed class StubArchiveExtractor(Action<string> onExtract) : IManagedToolArchiveExtractor
     {
-        public void ExtractArchive(string archivePath, string destinationDirectory, IProgress<ManagedToolExtractionProgress>? progress = null)
+        public void ExtractArchive(
+            string archivePath,
+            string destinationDirectory,
+            IProgress<ManagedToolExtractionProgress>? progress = null,
+            ManagedToolKind? toolKind = null)
         {
             Directory.CreateDirectory(destinationDirectory);
-            progress?.Report(new ManagedToolExtractionProgress(0, 1, "start"));
+            progress?.Report(new ManagedToolExtractionProgress(0, 1, "start", 0, 4));
             onExtract(destinationDirectory);
-            progress?.Report(new ManagedToolExtractionProgress(1, 1, "done"));
+            progress?.Report(new ManagedToolExtractionProgress(1, 1, "done", 4, 4));
         }
     }
 

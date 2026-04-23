@@ -71,10 +71,14 @@ internal sealed record ManagedToolStartupProgress(
 /// <param name="ExtractedEntryCount">Bereits vollständig extrahierte Datei-Einträge.</param>
 /// <param name="TotalEntryCount">Gesamtanzahl der zu extrahierenden Datei-Einträge.</param>
 /// <param name="CurrentEntryPath">Optionaler Name oder Pfad des gerade bearbeiteten Eintrags.</param>
+/// <param name="ExtractedByteCount">Optional bereits vollständig extrahierte Gesamtgröße in Bytes.</param>
+/// <param name="TotalByteCount">Optional Gesamtgröße der ausgewählten Einträge in Bytes.</param>
 internal sealed record ManagedToolExtractionProgress(
     int ExtractedEntryCount,
     int TotalEntryCount,
-    string? CurrentEntryPath = null);
+    string? CurrentEntryPath = null,
+    long? ExtractedByteCount = null,
+    long? TotalByteCount = null);
 
 /// <summary>
 /// Liefert die aktuelle Download-Metadaten eines automatisch verwalteten Werkzeugs.

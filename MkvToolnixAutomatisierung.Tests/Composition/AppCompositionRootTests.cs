@@ -129,7 +129,8 @@ public sealed class AppCompositionRootTests
         public void ExtractArchive(
             string archivePath,
             string destinationDirectory,
-            IProgress<ManagedToolExtractionProgress>? progress = null)
+            IProgress<ManagedToolExtractionProgress>? progress = null,
+            ManagedToolKind? toolKind = null)
         {
             throw new NotSupportedException();
         }
