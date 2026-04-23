@@ -33,12 +33,12 @@ public sealed class EmbySyncItemViewModelTests
         vm.ApplyAnalysis(analysis);
 
         Assert.Equal("100", vm.TvdbId);
-        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Prüfung offen", vm.StatusText);
         Assert.Equal("Warning", vm.StatusTone);
         Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("NFO: 200", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: 300", vm.Note, StringComparison.Ordinal);
-        Assert.Contains("IMDB-ID fehlt", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("IMDb prüfen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby-ID: emby-1", vm.StatusTooltip, StringComparison.Ordinal);
     }
 
@@ -62,7 +62,7 @@ public sealed class EmbySyncItemViewModelTests
 
         Assert.Equal("100", vm.TvdbId);
         Assert.Equal("tt9876543", vm.ImdbId);
-        Assert.Equal("Bereit", vm.StatusText);
+        Assert.Equal("Prüfung offen", vm.StatusText);
         Assert.Contains("TVDB 100 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: 300", vm.Note, StringComparison.Ordinal);
     }
@@ -91,8 +91,8 @@ public sealed class EmbySyncItemViewModelTests
 
         Assert.Equal("200", vm.TvdbId);
         Assert.Equal("tt9876543", vm.ImdbId);
-        Assert.Equal("Bereit", vm.StatusText);
-        Assert.Equal("IDs vorhanden.", vm.Note);
+        Assert.Equal("Prüfung offen", vm.StatusText);
+        Assert.Equal("Provider-IDs müssen noch geprüft werden.", vm.Note);
     }
 
     [Fact]
@@ -141,9 +141,9 @@ public sealed class EmbySyncItemViewModelTests
 
         vm.ApplyAnalysis(analysis);
 
-        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Prüfung offen", vm.StatusText);
         Assert.Equal("Warning", vm.StatusTone);
-        Assert.Equal("IMDB-ID fehlt.", vm.Note);
+        Assert.Equal("IMDb prüfen.", vm.Note);
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public sealed class EmbySyncItemViewModelTests
         vm.ApplyTvdbSelection(new TvdbEpisodeSelection(1, "Serie", 12345, "Pilot", "01", "01"));
 
         Assert.Equal("12345", vm.TvdbId);
-        Assert.Equal("IDs fehlen", vm.StatusText);
+        Assert.Equal("Prüfung offen", vm.StatusText);
         Assert.Equal("Warning", vm.StatusTone);
         Assert.Contains("TVDB manuell gewählt", vm.Note, StringComparison.Ordinal);
     }
@@ -270,6 +270,21 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void MarkImdbUnavailable_CompletesProviderIdsWithoutImdbId()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null));
+
+        vm.MarkImdbUnavailable();
+
+        Assert.True(vm.IsImdbUnavailable);
+        Assert.Equal(string.Empty, vm.ImdbId);
+        Assert.False(vm.HasPendingProviderReview);
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.Equal("Bereit", vm.StatusText);
+        Assert.Contains("keine IMDb-ID", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InvalidImdbId_DoesNotCountAsCompleteProviderIds()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null))
@@ -285,6 +300,7 @@ public sealed class EmbySyncItemViewModelTests
     [Theory]
     [InlineData("NFO aktuell", "Done")]
     [InlineData("Aktualisiert", "Done")]
+    [InlineData("Prüfung offen", "Warning")]
     [InlineData("IDs fehlen", "Warning")]
     [InlineData("NFO fehlt", "Warning")]
     [InlineData("NFO prüfen", "Warning")]

@@ -25,7 +25,8 @@ public sealed class EmbySyncViewModelTests
     private static EmbySyncViewModel CreateViewModel(
         IUserDialogService? dialogService = null,
         IEmbyClient? embyClient = null,
-        AppEmbySettings? configuredEmbySettings = null)
+        AppEmbySettings? configuredEmbySettings = null,
+        IEmbyProviderReviewDialogService? providerReviewDialogs = null)
     {
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
@@ -51,7 +52,7 @@ public sealed class EmbySyncViewModelTests
             episodeMetadata,
             new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
             new NullSettingsDialogService());
-        return new EmbySyncViewModel(services, dialogService ?? new NullDialogService());
+        return new EmbySyncViewModel(services, dialogService ?? new NullDialogService(), providerReviewDialogs);
     }
 
     [Fact]
@@ -155,6 +156,75 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void ReviewPendingProviderIdsCommand_ProcessesTvdbMismatchAndRequiredImdbReviews()
+    {
+        var reviewDialogs = new QueueingProviderReviewDialogs(
+            tvdbResults: [EmbyTvdbReviewResult.Apply(new TvdbEpisodeSelection(1, "Serie", 100, "Pilot", "01", "01"))],
+            imdbResults:
+            [
+                EmbyImdbReviewResult.Apply("tt1234567"),
+                EmbyImdbReviewResult.NoImdbId
+            ]);
+        var vm = CreateViewModel(providerReviewDialogs: reviewDialogs);
+        var tvdbMismatchItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("100", null));
+        tvdbMismatchItem.ApplyAnalysis(new EmbyFileAnalysis(
+            tvdbMismatchItem.MediaFilePath,
+            Path.ChangeExtension(tvdbMismatchItem.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", null),
+            EmbyItem: new EmbyItem(
+                "emby-1",
+                "Pilot",
+                tvdbMismatchItem.MediaFilePath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Tvdb"] = "300"
+                }),
+            WarningMessage: null));
+        var imdbOnlyItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E02 - Finale.mkv", new EmbyProviderIds("101", null));
+        imdbOnlyItem.ApplyAnalysis(new EmbyFileAnalysis(
+            imdbOnlyItem.MediaFilePath,
+            Path.ChangeExtension(imdbOnlyItem.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("101", null),
+            EmbyItem: null,
+            WarningMessage: null));
+        vm.Items.Add(tvdbMismatchItem);
+        vm.Items.Add(imdbOnlyItem);
+
+        Assert.True(tvdbMismatchItem.RequiresTvdbReview);
+        Assert.True(tvdbMismatchItem.RequiresImdbReview);
+        Assert.True(imdbOnlyItem.RequiresImdbReview);
+
+        vm.ReviewPendingProviderIdsCommand.Execute(null);
+
+        Assert.True(SpinWait.SpinUntil(() => vm.StatusText.Contains("abgeschlossen", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, reviewDialogs.TvdbReviewCallCount);
+        Assert.Equal(2, reviewDialogs.ImdbReviewCallCount);
+        Assert.False(tvdbMismatchItem.HasPendingProviderReview);
+        Assert.Equal("100", tvdbMismatchItem.TvdbId);
+        Assert.Equal("tt1234567", tvdbMismatchItem.ImdbId);
+        Assert.False(imdbOnlyItem.HasPendingProviderReview);
+        Assert.True(imdbOnlyItem.IsImdbUnavailable);
+        Assert.True(imdbOnlyItem.HasCompleteProviderIds);
+    }
+
+    [Fact]
+    public void RunSyncCommand_BlocksWhenProviderReviewsAreOpen()
+    {
+        var dialogService = new CapturingDialogService();
+        var vm = CreateViewModel(dialogService);
+        var item = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", "tt1234567"));
+        vm.Items.Add(item);
+
+        vm.RunSyncCommand.Execute(null);
+
+        Assert.Contains("Provider-ID-Pflichtprüfung", dialogService.LastWarningMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectReportCommand_LoadsMultipleStructuredReports()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
@@ -253,6 +323,7 @@ public sealed class EmbySyncViewModelTests
                 "Pilot",
                 mediaPath,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)));
+            item.ApplyImdbSelection("tt1234567");
             vm.Items.Add(item);
             vm.SelectedItem = item;
 
@@ -291,6 +362,7 @@ public sealed class EmbySyncViewModelTests
 
             var vm = CreateViewModel();
             var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "ttbad"));
+            item.ImdbId = "ttbad";
             vm.Items.Add(item);
 
             vm.RunSyncCommand.Execute(null);
@@ -335,6 +407,7 @@ public sealed class EmbySyncViewModelTests
                 "Pilot",
                 mediaPath,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)));
+            item.ApplyImdbSelection("tt1234567");
             vm.Items.Add(item);
 
             vm.RunSyncCommand.Execute(null);
@@ -432,13 +505,53 @@ public sealed class EmbySyncViewModelTests
         public void OpenPathWithDefaultApp(string path) { }
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => MessageBoxResult.Cancel;
         public void ShowInfo(string title, string message) { }
-        public void ShowWarning(string title, string message) { }
+        public virtual void ShowWarning(string title, string message) { }
         public void ShowError(string message) { }
     }
 
     private sealed class SelectingDialogService(IReadOnlyList<string> selectedFiles) : NullDialogService
     {
         public override string[]? SelectFiles(string title, string filter, string initialDirectory) => selectedFiles.ToArray();
+    }
+
+    private sealed class CapturingDialogService : NullDialogService
+    {
+        public string LastWarningMessage { get; private set; } = string.Empty;
+
+        public override void ShowWarning(string title, string message)
+        {
+            LastWarningMessage = message;
+        }
+    }
+
+    private sealed class QueueingProviderReviewDialogs(
+        IReadOnlyList<EmbyTvdbReviewResult> tvdbResults,
+        IReadOnlyList<EmbyImdbReviewResult> imdbResults) : IEmbyProviderReviewDialogService
+    {
+        private readonly Queue<EmbyTvdbReviewResult> _tvdbResults = new(tvdbResults);
+        private readonly Queue<EmbyImdbReviewResult> _imdbResults = new(imdbResults);
+
+        public int TvdbReviewCallCount { get; private set; }
+
+        public int ImdbReviewCallCount { get; private set; }
+
+        public EmbyTvdbReviewResult ReviewTvdb(
+            EmbySyncItemViewModel item,
+            EpisodeMetadataLookupService episodeMetadata,
+            IAppSettingsDialogService settingsDialog)
+        {
+            TvdbReviewCallCount++;
+            return _tvdbResults.Count > 0 ? _tvdbResults.Dequeue() : EmbyTvdbReviewResult.Cancelled;
+        }
+
+        public EmbyImdbReviewResult ReviewImdb(
+            EmbySyncItemViewModel item,
+            ImdbLookupService imdbLookup,
+            ImdbLookupMode lookupMode)
+        {
+            ImdbReviewCallCount++;
+            return _imdbResults.Count > 0 ? _imdbResults.Dequeue() : EmbyImdbReviewResult.Cancelled;
+        }
     }
 
     private static string WriteMetadataReport(

@@ -142,6 +142,45 @@ public sealed class EmbyNfoProviderIdServiceTests
         }
     }
 
+    [Fact]
+    public void UpdateProviderIds_RemoveImdbId_RemovesUniqueAndLegacyImdbEntries()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Episode</title>
+                  <uniqueid type="tvdb" default="true">12345</uniqueid>
+                  <uniqueid type="imdb">tt0000001</uniqueid>
+                  <imdbid>tt0000001</imdbid>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().UpdateProviderIds(
+                mediaPath,
+                new EmbyProviderIds("12345", null),
+                removeImdbId: true);
+
+            Assert.True(result.Success);
+            Assert.True(result.NfoChanged);
+
+            var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
+            Assert.DoesNotContain(updatedDocument.Root!.Elements("uniqueid"), element => (string?)element.Attribute("type") == "imdb");
+            Assert.Null(updatedDocument.Root.Element("imdbid"));
+            Assert.Equal("12345", updatedDocument.Root.Elements("uniqueid").Single(element => (string?)element.Attribute("type") == "tvdb").Value);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-tests", Guid.NewGuid().ToString("N"));

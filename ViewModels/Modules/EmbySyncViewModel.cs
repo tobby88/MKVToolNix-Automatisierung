@@ -1,12 +1,10 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using System.Windows;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
-using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -17,6 +15,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 {
     private readonly EmbyModuleServices _services;
     private readonly IUserDialogService _dialogService;
+    private readonly IEmbyProviderReviewDialogService _providerReviewDialogs;
     private readonly ObservableCollection<EmbySyncItemViewModel> _items = [];
     private readonly List<string> _reportPaths = [];
 
@@ -27,10 +26,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private int _progressValue;
     private bool _isBusy;
 
-    public EmbySyncViewModel(EmbyModuleServices services, IUserDialogService dialogService)
+    public EmbySyncViewModel(
+        EmbyModuleServices services,
+        IUserDialogService dialogService,
+        IEmbyProviderReviewDialogService? providerReviewDialogs = null)
     {
         _services = services;
         _dialogService = dialogService;
+        _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService();
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
@@ -38,6 +41,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, CanReviewSelectedImdb);
+        ReviewPendingProviderIdsCommand = new AsyncRelayCommand(ReviewPendingProviderIdsAsync, CanReviewPendingProviderIds, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
@@ -54,6 +58,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public AsyncRelayCommand ReviewSelectedMetadataCommand { get; }
 
     public RelayCommand ReviewSelectedImdbCommand { get; }
+
+    public AsyncRelayCommand ReviewPendingProviderIdsCommand { get; }
 
     public AsyncRelayCommand RunSyncCommand { get; }
 
@@ -182,6 +188,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         : string.Join(Environment.NewLine, _reportPaths);
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem abschließenden Schreibschritt noch geprüft oder korrigiert werden.";
+
+    public string ReviewPendingProviderIdsTooltip => "Arbeitet die offenen Provider-ID-Pflichtprüfungen der ausgewählten Zeilen sequenziell ab: TVDB nur bei widersprüchlichen Quellen, IMDb grundsätzlich pro Episode.";
 
     public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien. Wenn Emby-Zugangsdaten vorhanden sind und das Emby-Item bereits bekannt ist, wird danach nur für tatsächlich geänderte Einträge ein gezielter Metadatenrefresh angestoßen.";
 
@@ -338,39 +346,75 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        if (!TryGetSelectedMetadataGuess(out var guess, out var reason))
+        if (!TryGetSelectedMetadataGuess(out _, out var reason))
         {
             _dialogService.ShowWarning("TVDB-Prüfung", reason);
             return;
         }
 
-        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess!, _services.SettingsDialog)
+        if (ApplyTvdbReviewResult(
+                SelectedItem,
+                _providerReviewDialogs.ReviewTvdb(SelectedItem, _services.EpisodeMetadata, _services.SettingsDialog),
+                isBatchReview: false))
         {
-            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
-                ?? Application.Current?.MainWindow
-        };
-        if (dialog.ShowDialog() != true)
+            RefreshSummaryAndCommands();
+        }
+    }
+
+    private async Task ReviewPendingProviderIdsAsync()
+    {
+        var selectedItems = Items
+            .Where(item => item.IsSelected && item.SupportsProviderIdSync)
+            .ToList();
+        if (selectedItems.Count == 0)
         {
-            AppendLog($"TVDB-Prüfung abgebrochen: {SelectedItem.MediaFileName}");
+            _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine prüfbaren Dateien ausgewählt.");
             return;
         }
 
-        if (dialog.KeepLocalDetection)
+        var processedAny = false;
+        foreach (var item in selectedItems.Where(item => item.RequiresTvdbReview).ToList())
         {
-            AppendLog($"Lokale TVDB-Erkennung beibehalten: {SelectedItem.MediaFileName}");
-            return;
+            SelectedItem = item;
+            StatusText = $"Prüfe TVDB-Zuordnung: {item.MediaFileName}";
+            processedAny = true;
+
+            if (!ApplyTvdbReviewResult(
+                    item,
+                    _providerReviewDialogs.ReviewTvdb(item, _services.EpisodeMetadata, _services.SettingsDialog),
+                    isBatchReview: true))
+            {
+                StatusText = "Provider-ID-Pflichtprüfung abgebrochen.";
+                RefreshSummaryAndCommands();
+                return;
+            }
+
+            await Task.Yield();
         }
 
-        if (dialog.SelectedEpisodeSelection is null)
+        foreach (var item in selectedItems.Where(item => item.RequiresImdbReview).ToList())
         {
-            return;
+            SelectedItem = item;
+            StatusText = $"Prüfe IMDb-Zuordnung: {item.MediaFileName}";
+            processedAny = true;
+
+            if (!ApplyImdbReviewResult(
+                    item,
+                    _providerReviewDialogs.ReviewImdb(item, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
+                    isBatchReview: true))
+            {
+                StatusText = "Provider-ID-Pflichtprüfung abgebrochen.";
+                RefreshSummaryAndCommands();
+                return;
+            }
+
+            await Task.Yield();
         }
 
-        SelectedItem.ApplyTvdbSelection(dialog.SelectedEpisodeSelection);
-        AppendLog(
-            $"TVDB manuell gesetzt: {SelectedItem.MediaFileName} -> "
-            + $"S{dialog.SelectedEpisodeSelection.SeasonNumber}E{dialog.SelectedEpisodeSelection.EpisodeNumber} - {dialog.SelectedEpisodeSelection.EpisodeTitle}");
-        StatusText = "TVDB-Zuordnung aktualisiert. Vor dem abschließenden Schreibschritt bitte bei Bedarf nochmals prüfen.";
+        StatusText = processedAny
+            ? "Provider-ID-Pflichtprüfungen abgeschlossen."
+            : "Keine offenen Provider-ID-Pflichtprüfungen.";
+        AppendLog(StatusText);
         RefreshSummaryAndCommands();
     }
 
@@ -380,6 +424,15 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         if (selectedItems.Count == 0)
         {
             _dialogService.ShowWarning("Emby-Abgleich", "Es sind keine Dateien für den abschließenden Schreibschritt ausgewählt.");
+            return;
+        }
+
+        var pendingReviewCount = selectedItems.Count(item => item.HasPendingProviderReview);
+        if (pendingReviewCount > 0)
+        {
+            _dialogService.ShowWarning(
+                "Emby-Abgleich",
+                $"Vor dem Schreiben sind noch {pendingReviewCount} Provider-ID-Pflichtprüfung(en) offen. Bitte zuerst \"Pflichtchecks starten\" ausführen.");
             return;
         }
 
@@ -417,7 +470,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     continue;
                 }
 
-                var updateResult = _services.Sync.UpdateNfoProviderIds(item.MediaFilePath, item.ProviderIds);
+                var updateResult = _services.Sync.UpdateNfoProviderIds(
+                    item.MediaFilePath,
+                    item.ProviderIds,
+                    removeImdbId: item.IsImdbUnavailable);
                 if (!updateResult.Success)
                 {
                     item.SetStatus("NFO prüfen", updateResult.Message);
@@ -648,6 +704,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         return !_isBusy && SelectedItem?.CanReviewImdb == true;
     }
 
+    private bool CanReviewPendingProviderIds()
+    {
+        return !_isBusy && Items.Any(item => item.IsSelected && item.HasPendingProviderReview);
+    }
+
     private bool CanRunSync()
     {
         return !_isBusy && Items.Any(item => item.IsSelected);
@@ -682,6 +743,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
+        ReviewPendingProviderIdsCommand.RaiseCanExecuteChanged();
         RunSyncCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
@@ -693,7 +755,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             or nameof(EmbySyncItemViewModel.TvdbId)
             or nameof(EmbySyncItemViewModel.ImdbId)
             or nameof(EmbySyncItemViewModel.HasCompleteProviderIds)
-            or nameof(EmbySyncItemViewModel.SupportsProviderIdSync))
+            or nameof(EmbySyncItemViewModel.SupportsProviderIdSync)
+            or nameof(EmbySyncItemViewModel.HasPendingProviderReview)
+            or nameof(EmbySyncItemViewModel.RequiresTvdbReview)
+            or nameof(EmbySyncItemViewModel.RequiresImdbReview))
         {
             RefreshSummaryAndCommands();
         }
@@ -866,23 +931,65 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        SelectedItem.TryBuildMetadataGuess(out var guess);
-        var lookupMode = _services.EpisodeMetadata.LoadSettings().ImdbLookupMode;
-        var dialog = new ImdbLookupWindow(_services.ImdbLookup, lookupMode, guess, SelectedItem.ImdbId)
+        if (ApplyImdbReviewResult(
+                SelectedItem,
+                _providerReviewDialogs.ReviewImdb(SelectedItem, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
+                isBatchReview: false))
         {
-            Owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
-                ?? Application.Current?.MainWindow
-        };
-        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.SelectedImdbId))
-        {
-            AppendLog($"IMDb-Prüfung abgebrochen: {SelectedItem.MediaFileName}");
-            return;
+            RefreshSummaryAndCommands();
         }
+    }
 
-        SelectedItem.ApplyImdbSelection(dialog.SelectedImdbId);
-        AppendLog($"IMDb manuell gesetzt: {SelectedItem.MediaFileName} -> {dialog.SelectedImdbId}");
-        StatusText = "IMDb-Zuordnung aktualisiert. Vor dem abschließenden Schreibschritt bitte bei Bedarf nochmals prüfen.";
-        RefreshSummaryAndCommands();
+    private bool ApplyTvdbReviewResult(
+        EmbySyncItemViewModel item,
+        EmbyTvdbReviewResult result,
+        bool isBatchReview)
+    {
+        switch (result.Kind)
+        {
+            case EmbyProviderReviewResultKind.KeepCurrent:
+                item.ApproveCurrentTvdbId();
+                AppendLog($"TVDB geprüft und aktuelle ID beibehalten: {item.MediaFileName}");
+                StatusText = isBatchReview ? "TVDB-Zuordnung geprüft." : "TVDB-Zuordnung aktualisiert.";
+                return true;
+            case EmbyProviderReviewResultKind.Applied when result.Selection is not null:
+                item.ApplyTvdbSelection(result.Selection);
+                AppendLog(
+                    $"TVDB manuell gesetzt: {item.MediaFileName} -> "
+                    + $"S{result.Selection.SeasonNumber}E{result.Selection.EpisodeNumber} - {result.Selection.EpisodeTitle}");
+                StatusText = isBatchReview ? "TVDB-Zuordnung geprüft." : "TVDB-Zuordnung aktualisiert.";
+                return true;
+            case EmbyProviderReviewResultKind.Unavailable:
+                item.SetStatus("NFO prüfen", "TVDB-Prüfung nicht möglich: Dateiname liefert keine Serien-/Episodenvorbelegung.");
+                AppendLog($"TVDB-Prüfung nicht möglich: {item.MediaFileName}");
+                return false;
+            default:
+                AppendLog($"TVDB-Prüfung abgebrochen: {item.MediaFileName}");
+                return false;
+        }
+    }
+
+    private bool ApplyImdbReviewResult(
+        EmbySyncItemViewModel item,
+        EmbyImdbReviewResult result,
+        bool isBatchReview)
+    {
+        switch (result.Kind)
+        {
+            case EmbyProviderReviewResultKind.Applied when !string.IsNullOrWhiteSpace(result.ImdbId):
+                item.ApplyImdbSelection(result.ImdbId!);
+                AppendLog($"IMDb manuell gesetzt: {item.MediaFileName} -> {result.ImdbId}");
+                StatusText = isBatchReview ? "IMDb-Zuordnung geprüft." : "IMDb-Zuordnung aktualisiert.";
+                return true;
+            case EmbyProviderReviewResultKind.NoImdbId:
+                item.MarkImdbUnavailable();
+                AppendLog($"IMDb bewusst leer gelassen: {item.MediaFileName}");
+                StatusText = isBatchReview ? "IMDb-Zuordnung geprüft." : "IMDb-Zuordnung aktualisiert.";
+                return true;
+            default:
+                AppendLog($"IMDb-Prüfung abgebrochen: {item.MediaFileName}");
+                return false;
+        }
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

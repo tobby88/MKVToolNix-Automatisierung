@@ -335,6 +335,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="180" />
             </Grid.ColumnDefinitions>
 
@@ -354,13 +355,20 @@
                     IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                     Content="Auswahl leeren" />
             <Button Grid.Column="3"
+                    Margin="20,0,8,0"
+                    Padding="10,6"
+                    MinWidth="160"
+                    Command="{Binding ReviewPendingProviderIdsCommand}"
+                    ToolTip="{Binding ReviewPendingProviderIdsTooltip, Mode=OneWay}"
+                    Content="Pflichtchecks starten" />
+            <Button Grid.Column="4"
                     Margin="20,0,12,0"
                     MinWidth="210"
                     Style="{StaticResource PrimaryActionButtonStyle}"
                     Command="{Binding RunSyncCommand}"
                     ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
                     Content="Änderungen in Emby schreiben" />
-            <ProgressBar Grid.Column="4"
+            <ProgressBar Grid.Column="5"
                          Height="18"
                          Minimum="0"
                          Maximum="100"

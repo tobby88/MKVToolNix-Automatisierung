@@ -199,9 +199,9 @@ internal sealed class EmbyMetadataSyncService
     /// <summary>
     /// Aktualisiert die Provider-IDs in der lokalen NFO.
     /// </summary>
-    public EmbyNfoUpdateResult UpdateNfoProviderIds(string mediaFilePath, EmbyProviderIds providerIds)
+    public EmbyNfoUpdateResult UpdateNfoProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false)
     {
-        return _nfoProviderIds.UpdateProviderIds(mediaFilePath, providerIds);
+        return _nfoProviderIds.UpdateProviderIds(mediaFilePath, providerIds, removeImdbId);
     }
 
     /// <summary>

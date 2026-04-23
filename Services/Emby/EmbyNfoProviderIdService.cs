@@ -63,8 +63,9 @@ internal sealed class EmbyNfoProviderIdService
     /// </remarks>
     /// <param name="mediaFilePath">Pfad zur MKV-Datei.</param>
     /// <param name="providerIds">IDs, die in der NFO stehen sollen.</param>
+    /// <param name="removeImdbId">Entfernt vorhandene IMDb-Felder, wenn der Benutzer bewusst keine IMDb-ID vergeben hat.</param>
     /// <returns>Ergebnis mit Änderungsstatus und Hinweistext.</returns>
-    public EmbyNfoUpdateResult UpdateProviderIds(string mediaFilePath, EmbyProviderIds providerIds)
+    public EmbyNfoUpdateResult UpdateProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false)
     {
         var nfoPath = GetNfoPath(mediaFilePath);
         if (!File.Exists(nfoPath))
@@ -72,7 +73,7 @@ internal sealed class EmbyNfoProviderIdService
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false, "NFO-Datei fehlt. Bitte zuerst Emby scannen lassen.");
         }
 
-        if (!providerIds.HasAny)
+        if (!providerIds.HasAny && !removeImdbId)
         {
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false, "Keine TVDB- oder IMDB-ID vorhanden.");
         }
@@ -97,6 +98,10 @@ internal sealed class EmbyNfoProviderIdService
             {
                 changed |= SetUniqueId(root, "imdb", providerIds.ImdbId!, isDefault: false);
                 changed |= SetLegacyProviderElement(root, "imdbid", providerIds.ImdbId!);
+            }
+            else if (removeImdbId)
+            {
+                changed |= RemoveProviderId(root, "imdb", "imdbid");
             }
 
             if (!changed)
@@ -202,6 +207,30 @@ internal sealed class EmbyNfoProviderIdService
 
         element.Value = value;
         return true;
+    }
+
+    private static bool RemoveProviderId(XElement root, string uniqueIdType, string legacyElementName)
+    {
+        var changed = false;
+        foreach (var uniqueId in root
+                     .Elements("uniqueid")
+                     .Where(element => string.Equals(
+                         (string?)element.Attribute("type"),
+                         uniqueIdType,
+                         StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            uniqueId.Remove();
+            changed = true;
+        }
+
+        foreach (var element in root.Elements(legacyElementName).ToList())
+        {
+            element.Remove();
+            changed = true;
+        }
+
+        return changed;
     }
 }
 

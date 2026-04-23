@@ -32,6 +32,11 @@ public partial class ImdbLookupWindow : Window
     /// </summary>
     public string? SelectedImdbId { get; private set; }
 
+    /// <summary>
+    /// Kennzeichnet die bewusste Entscheidung, für diese Episode keine IMDb-ID zu vergeben.
+    /// </summary>
+    public bool ImdbExplicitlyUnavailable { get; private set; }
+
     private async void ImdbLookupWindow_Loaded(object sender, RoutedEventArgs e)
     {
         if (_loadedOnce)
@@ -87,6 +92,14 @@ public partial class ImdbLookupWindow : Window
         }
 
         SelectedImdbId = imdbId;
+        ImdbExplicitlyUnavailable = false;
+        DialogResult = true;
+    }
+
+    private void NoImdbButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelectedImdbId = null;
+        ImdbExplicitlyUnavailable = true;
         DialogResult = true;
     }
 
