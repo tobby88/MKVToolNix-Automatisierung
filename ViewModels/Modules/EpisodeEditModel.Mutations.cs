@@ -55,6 +55,7 @@ internal partial class EpisodeEditModel
         SetSubtitles(detected.SubtitlePaths);
         SetDetectedAttachmentPaths(detected.AttachmentPaths);
         SetRelatedEpisodeFilePaths(detected.RelatedFilePaths);
+        SetMetadataOriginalLanguage(detected.OriginalLanguage);
         _outputPathWasManuallyChanged = false;
         OutputPath = outputPath;
         Title = string.IsNullOrWhiteSpace(titleOverride) ? detected.SuggestedTitle : titleOverride;
@@ -313,6 +314,18 @@ internal partial class EpisodeEditModel
     {
         _relatedEpisodeFilePaths = paths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         OnPropertyChanged(nameof(RelatedEpisodeFilePaths));
+    }
+
+    protected void SetMetadataOriginalLanguage(string? languageCode)
+    {
+        var normalized = NormalizeMetadataOriginalLanguage(languageCode);
+        if (_metadataOriginalLanguage == normalized)
+        {
+            return;
+        }
+
+        _metadataOriginalLanguage = normalized;
+        OnPropertyChanged(nameof(EffectiveOriginalLanguage));
     }
 
     protected void SetAdditionalVideoPaths(IEnumerable<string> paths)

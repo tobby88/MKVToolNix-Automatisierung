@@ -60,7 +60,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         bool isSelected,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
-        IReadOnlyList<string> notes)
+        IReadOnlyList<string> notes,
+        string? metadataOriginalLanguage = null)
         : base(
             requestedMainVideoPath,
             mainVideoPath,
@@ -88,7 +89,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             archiveState,
             requiresManualCheck,
             manualCheckFilePaths,
-            notes)
+            notes,
+            metadataOriginalLanguage)
     {
         _isArchiveTargetPath = isArchiveTargetPath;
         _statusKind = statusKind;
@@ -275,7 +277,8 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
             isSelected,
             detected.RequiresManualCheck,
             detected.ManualCheckFilePaths,
-            detected.Notes);
+            detected.Notes,
+            detected.OriginalLanguage);
 
         if (!detected.HasPrimaryVideoSource && statusKind == BatchEpisodeStatusKind.Warning)
         {

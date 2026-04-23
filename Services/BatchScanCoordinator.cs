@@ -99,18 +99,30 @@ internal sealed class BatchScanCoordinator
         {
             detected = EpisodeMetadataMergeHelper.ApplySelection(detected, metadataResolution.Selection);
         }
+        else
+        {
+            (detected, metadataResolution) = ArchiveSpecialMetadataFallback.ApplyIfAvailable(
+                detected,
+                metadataResolution,
+                _outputPaths,
+                _episodeMetadata,
+                outputDirectory);
+        }
 
         var fallbackDirectory = Path.GetDirectoryName(detected.MainVideoPath)
             ?? Path.GetDirectoryName(sourceFilePath)
             ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-        var outputPath = _outputPaths.BuildOutputPath(
-            fallbackDirectory,
-            detected.SeriesName,
-            detected.SeasonNumber,
-            detected.EpisodeNumber,
-            detected.SuggestedTitle,
-            outputDirectory);
+        var outputPath = File.Exists(detected.SuggestedOutputFilePath)
+            && _outputPaths.IsArchivePath(detected.SuggestedOutputFilePath)
+                ? detected.SuggestedOutputFilePath
+                : _outputPaths.BuildOutputPath(
+                    fallbackDirectory,
+                    detected.SeriesName,
+                    detected.SeasonNumber,
+                    detected.EpisodeNumber,
+                    detected.SuggestedTitle,
+                    outputDirectory);
         if (!detected.HasPrimaryVideoSource)
         {
             outputPath = _outputPaths.TryResolveExistingArchiveOutputPath(

@@ -55,6 +55,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private string _videoLanguageOverride = string.Empty;
     private string _audioLanguageOverride = string.Empty;
     private string _originalLanguageOverride = string.Empty;
+    private string _metadataOriginalLanguage = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _approvedReviewPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -90,7 +91,8 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         EpisodeArchiveState? initialArchiveState,
         bool requiresManualCheck,
         IReadOnlyList<string> manualCheckFilePaths,
-        IReadOnlyList<string> notes)
+        IReadOnlyList<string> notes,
+        string? metadataOriginalLanguage = null)
     {
         _requestedMainVideoPath = requestedMainVideoPath;
         _mainVideoPath = mainVideoPath;
@@ -121,7 +123,36 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         _manualCheckFilePaths = manualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _detectionSeedPath = requestedMainVideoPath;
+        _metadataOriginalLanguage = NormalizeMetadataOriginalLanguage(metadataOriginalLanguage);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    private static string NormalizeMetadataOriginalLanguage(string? languageCode)
+    {
+        return string.IsNullOrWhiteSpace(languageCode)
+            ? string.Empty
+            : NormalizeOriginalLanguageForPlan(languageCode);
+    }
+
+    private static string NormalizeOriginalLanguageForPlan(string languageCode)
+    {
+        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
+        if (normalized is "de" or "deu" or "ger" || normalized.StartsWith("de-", StringComparison.Ordinal))
+        {
+            return "de";
+        }
+
+        if (normalized is "nds" || normalized.StartsWith("nds-", StringComparison.Ordinal))
+        {
+            return "nds";
+        }
+
+        if (normalized is "en" or "eng" || normalized.StartsWith("en-", StringComparison.Ordinal))
+        {
+            return "en";
+        }
+
+        return normalized;
+    }
 }

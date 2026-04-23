@@ -123,7 +123,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
             });
 
             _lastSuggestedTitle = detected.SuggestedTitle;
-            SetSuggestedOutputPath(BuildSuggestedOutputPath());
+            SetSuggestedOutputPath(ShouldPreserveDetectedArchiveOutputPath(detected)
+                ? detected.SuggestedOutputFilePath
+                : BuildSuggestedOutputPath());
             InvalidateCurrentPlan();
             RefreshOutputTargetStatus();
             PreviewText = BuildDetectionPreview(detected);
@@ -544,7 +546,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
             detected = EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
         }
 
-        return (detected, resolution);
+        return ArchiveSpecialMetadataFallback.ApplyIfAvailable(
+            detected,
+            resolution,
+            _services.OutputPaths,
+            _services.EpisodeMetadata,
+            outputRootOverride: null);
+    }
+
+    private bool ShouldPreserveDetectedArchiveOutputPath(AutoDetectedEpisodeFiles detected)
+    {
+        return File.Exists(detected.SuggestedOutputFilePath)
+            && _services.OutputPaths.IsArchivePath(detected.SuggestedOutputFilePath);
     }
 
     private bool ShouldPreserveManualTitle(string selectedVideoPath)

@@ -197,6 +197,121 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_ReturnsSpecialsFile_AndMetadataFromArchiveName()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(
+            archiveRoot,
+            "Die Heiland - Wir sind Anwalt",
+            "Specials",
+            "Die Heiland - Wir sind Anwalt - S00E08 - Adas Song - mit Anna Fischer.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Die Heiland", "Die Heiland - Wir sind Anwalt"],
+            "Extra_ Adas Song - mit Anna Fischer",
+            originalLanguage: "deu");
+
+        Assert.NotNull(match);
+        Assert.Equal(archiveFilePath, match!.OutputPath);
+        Assert.Equal("Die Heiland - Wir sind Anwalt", match.SeriesName);
+        Assert.Equal("00", match.SeasonNumber);
+        Assert.Equal("08", match.EpisodeNumber);
+        Assert.Equal("Adas Song - mit Anna Fischer", match.Title);
+        Assert.Equal("deu", match.OriginalLanguage);
+    }
+
+    [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_ReturnsTitleOnlyTrailerFile()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(
+            archiveRoot,
+            "Pettersson und Findus",
+            "Trailers",
+            "Findus zieht um Trailer.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Pettersson und Findus"],
+            "Findus zieht um Trailer");
+
+        Assert.NotNull(match);
+        Assert.Equal(archiveFilePath, match!.OutputPath);
+        Assert.Equal("Pettersson und Findus", match.SeriesName);
+        Assert.Equal("xx", match.SeasonNumber);
+        Assert.Equal("xx", match.EpisodeNumber);
+        Assert.Equal("Findus zieht um Trailer", match.Title);
+    }
+
+    [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_ReturnsNull_WhenBestSpecialMatchIsAmbiguous()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var firstArchiveFilePath = Path.Combine(
+            archiveRoot,
+            "Beispielserie",
+            "Specials",
+            "Beispielserie - S00E01 - Blick hinter die Kulissen.mkv");
+        var secondArchiveFilePath = Path.Combine(
+            archiveRoot,
+            "Beispielserie",
+            "Season 0",
+            "Beispielserie - S00E02 - Blick hinter die Kulissen.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(firstArchiveFilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(secondArchiveFilePath)!);
+        File.WriteAllText(firstArchiveFilePath, "archive");
+        File.WriteAllText(secondArchiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Beispielserie"],
+            "Blick hinter die Kulissen");
+
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_IgnoresNormalSeasonFolders()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(
+            archiveRoot,
+            "Beispielserie",
+            "Season 1",
+            "Beispielserie - S01E01 - Blick hinter die Kulissen.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Beispielserie"],
+            "Blick hinter die Kulissen");
+
+        Assert.Null(match);
+    }
+
+    [Fact]
     public void BuildOutputRootOverrideHint_ReturnsMessage_WhenArchiveIsUnavailableAndOverrideIsSet()
     {
         var overrideRoot = Path.Combine(_tempDirectory, "custom-output");

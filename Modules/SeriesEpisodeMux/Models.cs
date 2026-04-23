@@ -44,6 +44,22 @@ public sealed record SeriesEpisodeMuxRequest(
 /// <summary>
 /// Ergebnis der automatischen Dateierkennung rund um eine Episode.
 /// </summary>
+/// <param name="MainVideoPath">Erkannte Hauptvideoquelle oder Platzhalterpfad bei Quellen ohne eigenes Video.</param>
+/// <param name="AdditionalVideoPaths">Zusätzliche Videodateien, die zur gleichen Episode gehören.</param>
+/// <param name="AudioDescriptionPath">Optional erkannte Audiodeskriptionsquelle.</param>
+/// <param name="SubtitlePaths">Erkannte externe Untertiteldateien.</param>
+/// <param name="AttachmentPaths">Erkannte Anhänge, insbesondere TXT-Metadaten aus der Mediathek.</param>
+/// <param name="RelatedFilePaths">Alle Quelldateien, die für spätere Aufräum- und Review-Schritte zur Episode gehören.</param>
+/// <param name="SuggestedOutputFilePath">Automatisch vorgeschlagener Zielpfad.</param>
+/// <param name="SuggestedTitle">Automatisch erkannter oder abgeleiteter Episodentitel.</param>
+/// <param name="SeriesName">Automatisch erkannter Serienname.</param>
+/// <param name="SeasonNumber">Automatisch erkannte Staffelnummer oder <c>xx</c>.</param>
+/// <param name="EpisodeNumber">Automatisch erkannte Episodennummer oder <c>xx</c>.</param>
+/// <param name="RequiresManualCheck">Kennzeichnet, ob die Erkennung vor dem Muxen eine manuelle Prüfung braucht.</param>
+/// <param name="ManualCheckFilePaths">Quellpfade, die den manuellen Prüfbedarf ausgelöst haben.</param>
+/// <param name="Notes">Erkennungshinweise, die im Plan sichtbar bleiben sollen.</param>
+/// <param name="HasPrimaryVideoSource">Kennzeichnet, ob eine echte neue Hauptvideoquelle vorhanden ist.</param>
+/// <param name="OriginalLanguage">Optional bekannte Originalsprache der Serie aus TVDB oder gespeicherten Serien-Mappings.</param>
 public sealed record AutoDetectedEpisodeFiles(
     string MainVideoPath,
     IReadOnlyList<string> AdditionalVideoPaths,
@@ -59,7 +75,8 @@ public sealed record AutoDetectedEpisodeFiles(
     bool RequiresManualCheck,
     IReadOnlyList<string> ManualCheckFilePaths,
     IReadOnlyList<string> Notes,
-    bool HasPrimaryVideoSource = true);
+    bool HasPrimaryVideoSource = true,
+    string? OriginalLanguage = null);
 
 /// <summary>
 /// Fortschrittsmeldung aus der Dateierkennung.

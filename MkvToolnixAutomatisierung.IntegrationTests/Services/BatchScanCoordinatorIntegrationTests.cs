@@ -64,6 +64,68 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ScanAsync_ReusesExistingSpecialArchiveEntry_WhenTvdbHasNoEpisodeMatch()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "special-source");
+        var archiveDirectory = Path.Combine(_tempDirectory, "special-archive");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Pettersson und Findus - Findus zieht um Trailer.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Pettersson und Findus - Findus zieht um Trailer.txt",
+            "Sender: ZDF\r\nThema: Pettersson und Findus\r\nTitel: Findus zieht um Trailer\r\nDauer: 00:02:10");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "AAC"));
+
+        var archiveFilePath = Path.Combine(
+            archiveDirectory,
+            "Pettersson und Findus",
+            "Trailers",
+            "Pettersson und Findus - S00E03 - Findus zieht um Trailer.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        CreateFile(Path.GetDirectoryName(archiveFilePath)!, Path.GetFileName(archiveFilePath), "archive");
+
+        var metadataSettings = new AppMetadataSettings
+        {
+            TvdbApiKey = "integration-test-key",
+            SeriesMappings =
+            [
+                new SeriesMetadataMapping
+                {
+                    LocalSeriesName = "Pettersson und Findus",
+                    TvdbSeriesId = 42,
+                    TvdbSeriesName = "Pettersson und Findus",
+                    OriginalLanguage = "swe"
+                }
+            ]
+        };
+        var coordinator = CreateBatchScanCoordinator(
+            archiveDirectory,
+            new StubTvdbClient
+            {
+                SearchResults = [],
+                Episodes = []
+            },
+            metadataSettings);
+
+        var result = await coordinator.ScanAsync(mainVideoPath, archiveDirectory);
+
+        Assert.Equal(archiveFilePath, result.OutputPath);
+        Assert.Equal(archiveFilePath, result.Detected.SuggestedOutputFilePath);
+        Assert.Equal("Pettersson und Findus", result.Detected.SeriesName);
+        Assert.Equal("00", result.Detected.SeasonNumber);
+        Assert.Equal("03", result.Detected.EpisodeNumber);
+        Assert.Equal("Findus zieht um Trailer", result.Detected.SuggestedTitle);
+        Assert.Equal("swe", result.Detected.OriginalLanguage);
+        Assert.False(result.MetadataResolution.RequiresReview);
+        Assert.Contains("Archiv-Sondermaterial", result.MetadataResolution.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CreateDirectoryContext_KeepsAudioDescriptionOnlyEntries_AndSortsAlphabetically()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "batch-files");
@@ -275,7 +337,10 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         }
     }
 
-    private BatchScanCoordinator CreateBatchScanCoordinator(string archiveDirectory, StubTvdbClient tvdbClient)
+    private BatchScanCoordinator CreateBatchScanCoordinator(
+        string archiveDirectory,
+        StubTvdbClient tvdbClient,
+        AppMetadataSettings? metadataSettings = null)
     {
         var settingsStore = new AppSettingsStore();
         new AppToolPathStore(settingsStore).Save(new AppToolPathSettings
@@ -284,7 +349,7 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
         });
 
         var metadataStore = new AppMetadataStore(settingsStore);
-        metadataStore.Save(new AppMetadataSettings
+        metadataStore.Save(metadataSettings ?? new AppMetadataSettings
         {
             TvdbApiKey = "integration-test-key"
         });

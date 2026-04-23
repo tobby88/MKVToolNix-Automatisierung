@@ -145,6 +145,23 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void ApplyTvdbSelection_PreservesForeignOriginalLanguage_ForOriginalFlagComparison()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.ApplyTvdbSelection(new TvdbEpisodeSelection(
+            42,
+            "Pettersson und Findus",
+            100,
+            "Findus zieht um",
+            "00",
+            "03",
+            OriginalLanguage: "swe"));
+
+        Assert.Equal("swe", viewModel.EffectiveOriginalLanguage);
+    }
+
+    [Fact]
     public void CancelCurrentOperationCommand_IsDisabled_WhenNoSingleOperationRuns()
     {
         var viewModel = CreateViewModel();

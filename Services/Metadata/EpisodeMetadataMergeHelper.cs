@@ -37,7 +37,8 @@ public static class EpisodeMetadataMergeHelper
                 selection.SeasonNumber,
                 selection.EpisodeNumber,
                 selection.EpisodeTitle),
-            Notes = notes
+            Notes = notes,
+            OriginalLanguage = selection.OriginalLanguage
         };
     }
 

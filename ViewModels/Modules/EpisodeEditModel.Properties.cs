@@ -232,8 +232,8 @@ internal partial class EpisodeEditModel
 
     public string EffectiveOriginalLanguage => string.IsNullOrWhiteSpace(_originalLanguageOverride)
         ? string.IsNullOrWhiteSpace(_tvdbSelection?.OriginalLanguage)
-            ? string.Empty
-            : MediaLanguageHelper.NormalizeMuxLanguageCode(_tvdbSelection.OriginalLanguage)
+            ? _metadataOriginalLanguage
+            : NormalizeMetadataOriginalLanguage(_tvdbSelection.OriginalLanguage)
         : _originalLanguageOverride;
 
     public string PlanSummaryText

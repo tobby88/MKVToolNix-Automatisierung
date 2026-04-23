@@ -78,6 +78,32 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public void CreateFromDetection_UsesMetadataOriginalLanguage_WhenNoTvdbSelectionExists()
+    {
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\episode.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                OriginalLanguage = "swe"
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "Archiv-Sondermaterial automatisch erkannt.",
+                ConfidenceScore: 100,
+                RequiresReview: false,
+                QueryWasAttempted: true,
+                QuerySucceeded: true),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Ready,
+            isSelected: true,
+            isArchiveTargetPath: true);
+
+        Assert.Equal("swe", item.EffectiveOriginalLanguage);
+    }
+
+    [Fact]
     public void CreateFromDetection_OnlyAudioDescriptionWithoutExistingArchiveTarget_StartsWithWarning()
     {
         var audioDescriptionPath = @"C:\Temp\episode-ad.mp4";
