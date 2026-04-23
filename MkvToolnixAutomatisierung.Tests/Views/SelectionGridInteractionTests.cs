@@ -216,6 +216,133 @@ public sealed class SelectionGridInteractionTests
     }
 
     [Fact]
+    public async Task DownloadSortView_SpaceToggle_UsesRealViewWiring()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateDownloadSortViewModel();
+            var item = new DownloadSortItemViewModel(new DownloadSortCandidate(
+                DisplayName: "Episode 1",
+                FilePaths: [@"C:\Temp\episode.mp4"],
+                DetectedSeriesName: "Beispielserie",
+                SuggestedFolderName: "Beispielserie",
+                State: DownloadSortItemState.Ready,
+                Note: "Bereit"));
+            viewModel.Items.Add(item);
+            viewModel.SelectedItem = item;
+
+            var view = new DownloadSortView
+            {
+                DataContext = viewModel
+            };
+            var window = CreateHostWindow(view);
+
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+
+                var grid = Assert.IsType<DataGrid>(FindVisualChild<DataGrid>(view));
+                FocusSelectionCell(grid, item);
+                await WpfTestHost.WaitForIdleAsync();
+
+                PressSpaceOnFocusedElement();
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.False(item.IsSelected);
+                Assert.True(grid.IsKeyboardFocusWithin);
+                Assert.Same(item, viewModel.SelectedItem);
+
+                PressSpaceOnFocusedElement();
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.True(item.IsSelected);
+                Assert.True(grid.IsKeyboardFocusWithin);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task DownloadSortView_TargetFolderCombo_ExcludesReservedDefektAndReevaluatesTypedValue()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-downloadsort-view-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+            try
+            {
+                Directory.CreateDirectory(Path.Combine(tempDirectory, "defekt"));
+
+                var videoPath = Path.Combine(tempDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+                var textPath = Path.Combine(tempDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+                var subtitlePath = Path.Combine(tempDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+                File.WriteAllBytes(videoPath, new byte[1024 * 1024]);
+                File.WriteAllText(
+                    textPath,
+                    string.Join(Environment.NewLine,
+                    [
+                        "Thema:       Neues aus Büttenwarder",
+                        string.Empty,
+                        "Titel:       Bildungsschock",
+                        string.Empty,
+                        "Dauer:       00:05:00",
+                        "Größe:       100,0 MiB"
+                    ]));
+                File.WriteAllText(subtitlePath, "subtitle");
+
+                var service = new DownloadSortService();
+                var scanResult = service.Scan(tempDirectory);
+                var viewModel = CreateDownloadSortViewModel();
+                ApplyDownloadSortScanResult(viewModel, tempDirectory, scanResult);
+                var item = Assert.Single(viewModel.Items);
+                viewModel.SelectedItem = item;
+
+                var view = new DownloadSortView
+                {
+                    DataContext = viewModel
+                };
+                var window = CreateHostWindow(view);
+
+                try
+                {
+                    window.Show();
+                    await WpfTestHost.WaitForIdleAsync();
+
+                    var grid = Assert.IsType<DataGrid>(FindVisualChild<DataGrid>(view));
+                    var comboBox = GetTargetFolderComboBox(grid, item);
+
+                    Assert.DoesNotContain(comboBox.Items.Cast<object>(), entry =>
+                        string.Equals(entry?.ToString(), "defekt", StringComparison.OrdinalIgnoreCase));
+
+                    comboBox.Text = "defekt";
+                    comboBox.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+                    await WpfTestHost.WaitForIdleAsync();
+
+                    Assert.Equal(DownloadSortItemState.NeedsReview, item.State);
+                    Assert.Equal("Pruefen + Defekt", item.StatusText);
+                    Assert.Contains("reserviert", item.Note, StringComparison.Ordinal);
+                    Assert.False(viewModel.RunSortCommand.CanExecute(null));
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        });
+    }
+
+    [Fact]
     public async Task BatchMuxView_DisablesUserSortingAndReordering_ForEpisodeGrid()
     {
         await WpfTestHost.RunAsync(async () =>
@@ -485,6 +612,18 @@ public sealed class SelectionGridInteractionTests
         return Assert.IsType<CheckBox>(FindVisualChild<CheckBox>(row));
     }
 
+    private static ComboBox GetTargetFolderComboBox(DataGrid grid, object item)
+    {
+        grid.SelectedItem = item;
+        grid.CurrentCell = new DataGridCellInfo(item, grid.Columns[2]);
+        grid.ScrollIntoView(item, grid.Columns[2]);
+        grid.UpdateLayout();
+
+        var row = Assert.IsType<DataGridRow>(grid.ItemContainerGenerator.ContainerFromItem(item));
+        row.ApplyTemplate();
+        return Assert.IsType<ComboBox>(FindVisualChild<ComboBox>(row));
+    }
+
     private static MouseButtonEventArgs CreatePreviewMouseLeftButtonDown(object source, int clickCount = 1)
     {
         var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
@@ -555,6 +694,26 @@ public sealed class SelectionGridInteractionTests
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new NullSettingsDialogService());
         return new EmbySyncViewModel(services, new NullDialogService());
+    }
+
+    private static DownloadSortViewModel CreateDownloadSortViewModel()
+    {
+        return new DownloadSortViewModel(
+            new DownloadSortModuleServices(new DownloadSortService()),
+            new NullDialogService());
+    }
+
+    private static void ApplyDownloadSortScanResult(
+        DownloadSortViewModel viewModel,
+        string sourceDirectory,
+        DownloadSortScanResult scanResult)
+    {
+        typeof(DownloadSortViewModel)
+            .GetField("_sourceDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(viewModel, sourceDirectory);
+        typeof(DownloadSortViewModel)
+            .GetMethod("ApplyScanResult", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(viewModel, [scanResult]);
     }
 
     private static async Task<bool> WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)
