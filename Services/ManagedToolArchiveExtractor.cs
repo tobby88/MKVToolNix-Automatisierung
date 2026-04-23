@@ -27,12 +27,20 @@ internal interface IManagedToolArchiveExtractor
 /// </summary>
 internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
-    private static readonly HashSet<string> RequiredMkvToolExecutables = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "mkvmerge.exe",
-        "mkvpropedit.exe",
-        "mkvextract.exe"
-    };
+    private static readonly IReadOnlyDictionary<ManagedToolKind, HashSet<string>> RequiredToolExecutables =
+        new Dictionary<ManagedToolKind, HashSet<string>>
+        {
+            [ManagedToolKind.MkvToolNix] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "mkvmerge.exe",
+                "mkvpropedit.exe",
+                "mkvextract.exe"
+            },
+            [ManagedToolKind.Ffprobe] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "ffprobe.exe"
+            }
+        };
 
     /// <inheritdoc />
     public void ExtractArchive(
@@ -80,14 +88,14 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         ManagedToolKind? toolKind,
         IReadOnlyList<IArchiveEntry> entries)
     {
-        if (toolKind != ManagedToolKind.MkvToolNix)
+        if (toolKind is null || !RequiredToolExecutables.TryGetValue(toolKind.Value, out var requiredExecutables))
         {
             return entries;
         }
 
         var requiredDirectories = entries
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
-            .Where(entry => RequiredMkvToolExecutables.Contains(Path.GetFileName(entry.Key)!))
+            .Where(entry => requiredExecutables.Contains(Path.GetFileName(entry.Key)!))
             .Select(entry => GetArchiveDirectoryKey(entry.Key!))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);

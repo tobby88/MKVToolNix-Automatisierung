@@ -78,6 +78,36 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
+    public void ExtractArchive_ForFfprobe_SkipsDocumentationAndPreservesBinPayload()
+    {
+        var sourceDirectory = CreateDirectory("source");
+        var archiveRoot = Path.Combine(sourceDirectory, "ffmpeg-master-latest-win64-gpl-shared");
+        var binDirectory = Path.Combine(archiveRoot, "bin");
+        Directory.CreateDirectory(binDirectory);
+        File.WriteAllText(Path.Combine(binDirectory, "ffprobe.exe"), "tool");
+        File.WriteAllText(Path.Combine(binDirectory, "avcodec-61.dll"), "dependency");
+        File.WriteAllText(Path.Combine(binDirectory, "ffmpeg.exe"), "other-tool");
+        Directory.CreateDirectory(Path.Combine(archiveRoot, "doc"));
+        File.WriteAllText(Path.Combine(archiveRoot, "doc", "readme.txt"), "docs");
+        Directory.CreateDirectory(Path.Combine(archiveRoot, "presets"));
+        File.WriteAllText(Path.Combine(archiveRoot, "presets", "libx264.ffpreset"), "preset");
+
+        var archivePath = Path.Combine(_tempDirectory, "ffprobe.zip");
+        ZipFile.CreateFromDirectory(sourceDirectory, archivePath);
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "ffprobe-extracted");
+        var extractor = new ManagedToolArchiveExtractor();
+
+        extractor.ExtractArchive(archivePath, destinationDirectory, toolKind: ManagedToolKind.Ffprobe);
+
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin", "ffprobe.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin", "avcodec-61.dll")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin", "ffmpeg.exe")));
+        Assert.False(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "doc", "readme.txt")));
+        Assert.False(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "presets", "libx264.ffpreset")));
+    }
+
+    [Fact]
     public void ExtractArchive_ThrowsWhenArchiveIsCorrupt()
     {
         var archivePath = Path.Combine(_tempDirectory, "broken.zip");
