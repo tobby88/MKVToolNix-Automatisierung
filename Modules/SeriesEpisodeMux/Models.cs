@@ -150,7 +150,8 @@ public sealed record ContainerTrackMetadata(
     int VideoWidth,
     bool IsVisualImpaired,
     bool IsHearingImpaired,
-    bool IsDefaultTrack);
+    bool IsDefaultTrack,
+    TimeSpan? Duration = null);
 
 /// <summary>
 /// Anhänge, die beim Archivabgleich erhalten bleiben können.

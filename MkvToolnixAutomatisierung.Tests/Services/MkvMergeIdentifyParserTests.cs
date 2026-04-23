@@ -236,7 +236,7 @@ public sealed class MkvMergeIdentifyParserTests
                     },
                     {
                         "id": 1, "type": "audio", "codec": "A_AC3",
-                        "properties": { "language_ietf": "deu" }
+                        "properties": { "language_ietf": "deu", "tag_duration": "00:04:47.722000000" }
                     },
                     {
                         "id": 2, "type": "subtitles", "codec": "S_TEXT/ASS",
@@ -259,6 +259,7 @@ public sealed class MkvMergeIdentifyParserTests
         Assert.Equal(1280, result.Tracks[0].VideoWidth);
         Assert.Equal("audio", result.Tracks[1].Type, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("AC-3", result.Tracks[1].CodecLabel);
+        Assert.Equal(TimeSpan.FromSeconds(287.722), result.Tracks[1].Duration);
         Assert.Equal("subtitles", result.Tracks[2].Type, StringComparer.OrdinalIgnoreCase);
         Assert.Equal("SSA", result.Tracks[2].CodecLabel);
         Assert.Equal(2, result.Attachments.Count);

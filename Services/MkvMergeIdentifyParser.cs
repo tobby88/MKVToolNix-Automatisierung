@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
@@ -134,7 +135,8 @@ internal static class MkvMergeIdentifyParser
                 VideoWidth: width,
                 IsVisualImpaired: ReadBooleanProperty(properties, "flag_visual_impaired"),
                 IsHearingImpaired: ReadBooleanProperty(properties, "flag_hearing_impaired"),
-                IsDefaultTrack: ReadBooleanProperty(properties, "default_track")));
+                IsDefaultTrack: ReadBooleanProperty(properties, "default_track"),
+                Duration: ReadTrackDuration(properties)));
         }
 
         var attachments = new List<ContainerAttachmentMetadata>();
@@ -291,6 +293,40 @@ internal static class MkvMergeIdentifyParser
             JsonValueKind.String => bool.TryParse(property.GetString(), out var booleanValue) && booleanValue,
             _ => false
         };
+    }
+
+    private static TimeSpan? ReadTrackDuration(JsonElement properties)
+    {
+        if (properties.ValueKind == JsonValueKind.Undefined
+            || !properties.TryGetProperty("tag_duration", out var durationElement))
+        {
+            return null;
+        }
+
+        var durationText = durationElement.GetString();
+        if (string.IsNullOrWhiteSpace(durationText))
+        {
+            return null;
+        }
+
+        return TimeSpan.TryParse(NormalizeTrackDurationText(durationText), CultureInfo.InvariantCulture, out var duration)
+            ? duration
+            : null;
+    }
+
+    private static string NormalizeTrackDurationText(string durationText)
+    {
+        var trimmed = durationText.Trim();
+        var separatorIndex = trimmed.IndexOf('.', StringComparison.Ordinal);
+        if (separatorIndex < 0 || separatorIndex == trimmed.Length - 1)
+        {
+            return trimmed;
+        }
+
+        var fraction = trimmed[(separatorIndex + 1)..];
+        return fraction.Length <= 7
+            ? trimmed
+            : trimmed[..(separatorIndex + 1)] + fraction[..7];
     }
 
     private static int ParseWidth(string? pixelDimensions)

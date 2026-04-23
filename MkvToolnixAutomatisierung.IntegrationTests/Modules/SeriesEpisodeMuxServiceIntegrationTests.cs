@@ -509,7 +509,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         string codec,
         string trackName = "",
         bool isVisualImpaired = false,
-        string language = "de")
+        string language = "de",
+        string? tagDuration = null)
     {
         return new
         {
@@ -520,7 +521,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
             {
                 language_ietf = language,
                 track_name = trackName,
-                flag_visual_impaired = isVisualImpaired
+                flag_visual_impaired = isVisualImpaired,
+                tag_duration = tagDuration
             }
         };
     }

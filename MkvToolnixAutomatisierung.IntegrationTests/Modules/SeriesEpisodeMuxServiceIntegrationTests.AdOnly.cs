@@ -295,6 +295,100 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdMatchesArchiveAd_ReusesExistingAd()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-reuse");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-reuse");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Die Heiland - Wir sind Anwalt-Extra_ Tangostunde für Blinde (Audiodeskription und UT).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Die Heiland - Wir sind Anwalt-Extra_ Tangostunde für Blinde (Audiodeskription und UT).txt",
+            "Sender: ARD\r\nThema: Die Heiland - Wir sind Anwalt\r\nTitel: Extra: Tangostunde für Blinde (Audiodeskription und UT)\r\nDauer: 00:04:44");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Die Heiland - Wir sind Anwalt",
+            "Specials",
+            "Die Heiland - Wir sind Anwalt - S00E65 - Extra - Tangostunde für Blinde.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Extra: Tangostunde für Blinde",
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "HD - H.264"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, tagDuration: "00:04:47.722000000"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Extra: Tangostunde für Blinde",
+            HasPrimaryVideoSource: false));
+
+        Assert.Equal(outputPath, plan.OutputFilePath);
+        Assert.False(plan.SkipMux);
+        Assert.True(plan.HasHeaderEdits);
+        Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(2, plan.AudioDescriptionTrackId);
+        Assert.Contains(plan.Notes, note => note.Contains("vorhandenen Archiv-AD", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdDurationDiffers_ReplacesExistingAd()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-replace-different-duration");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-replace-different-duration");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02) Audiodeskription.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:41:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Pilot",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, tagDuration: "00:42:00.000000000"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Pilot",
+            HasPrimaryVideoSource: false));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(0, plan.AudioDescriptionTrackId);
+        Assert.Contains(plan.GetReferencedInputFiles(), path => string.Equals(path, audioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_AudioDescriptionOnly_WithAdOnlyArchiveTarget_AllowsAdOnlySpecialPlan()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-existing-ad-only");

@@ -8,6 +8,8 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class SeriesArchiveService
 {
+    private static readonly TimeSpan AudioDescriptionReuseDurationTolerance = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// Entscheidet, wie eine vorhandene Archivdatei in einen neuen Mux-Lauf eingebunden werden soll.
     /// Bereits vorhandene Custom-Ziele außerhalb der Serienbibliothek gelten dabei bewusst nicht als wiederverwendbares Archiv.
@@ -43,6 +45,14 @@ public sealed partial class SeriesArchiveService
             plannedVideos,
             preferredExistingVideoTracks,
             existingArchive.VideoTracks);
+        var audioDescriptionReuseNote = await TryBuildAudioDescriptionReuseNoteAsync(
+            mkvMergePath,
+            request.AudioDescriptionPath,
+            existingAudioDescription,
+            cancellationToken);
+        var effectiveRequest = audioDescriptionReuseNote is null
+            ? request
+            : request with { AudioDescriptionPath = null };
         var containerTitleEdit = BuildRelevantContainerTitleEdit(existingArchive.Container.Title, request.Title);
         var attachmentReusePlan = await BuildAttachmentReusePlanAsync(
             mkvMergePath,
@@ -54,19 +64,21 @@ public sealed partial class SeriesArchiveService
 
         if (plannedVideos.Count == 0)
         {
-            return BuildDecisionUsingExistingPrimary(
-                outputPath,
-                request,
-                plannedVideos,
-                videoPlan,
-                subtitlePlan,
-                replacedSubtitleTracks,
-                existingArchive,
-                bestExistingVideo,
-                existingAudioDescription,
-                workingCopyPlan,
-                containerTitleEdit,
-                attachmentReusePlan);
+            return AppendAudioDescriptionReuseNote(
+                BuildDecisionUsingExistingPrimary(
+                    outputPath,
+                    effectiveRequest,
+                    plannedVideos,
+                    videoPlan,
+                    subtitlePlan,
+                    replacedSubtitleTracks,
+                    existingArchive,
+                    bestExistingVideo,
+                    existingAudioDescription,
+                    workingCopyPlan,
+                    containerTitleEdit,
+                    attachmentReusePlan),
+                audioDescriptionReuseNote);
         }
 
         var selectedPrimaryVideo = videoPlan.VideoSelections.FirstOrDefault()
@@ -77,32 +89,36 @@ public sealed partial class SeriesArchiveService
             : plannedVideos.FirstOrDefault(video => string.Equals(video.FilePath, selectedPrimaryVideo.FilePath, StringComparison.OrdinalIgnoreCase));
 
         return keepExistingPrimary
-            ? BuildDecisionUsingExistingPrimary(
-                outputPath,
-                request,
-                plannedVideos,
-                videoPlan,
-                subtitlePlan,
-                replacedSubtitleTracks,
-                existingArchive,
-                bestExistingVideo,
-                existingAudioDescription,
-                workingCopyPlan,
-                containerTitleEdit,
-                attachmentReusePlan)
-            : BuildDecisionReplacingExistingPrimary(
-                outputPath,
-                request,
-                videoPlan,
-                plannedVideos,
-                subtitlePlan,
-                replacedSubtitleTracks,
-                existingArchive,
-                bestExistingVideo,
-                newPrimaryVideo ?? throw new InvalidOperationException("Die ausgewählte neue Hauptvideospur konnte nicht mehr einer frischen Quelle zugeordnet werden."),
-                existingAudioDescription,
-                workingCopyPlan,
-                attachmentReusePlan);
+            ? AppendAudioDescriptionReuseNote(
+                BuildDecisionUsingExistingPrimary(
+                    outputPath,
+                    effectiveRequest,
+                    plannedVideos,
+                    videoPlan,
+                    subtitlePlan,
+                    replacedSubtitleTracks,
+                    existingArchive,
+                    bestExistingVideo,
+                    existingAudioDescription,
+                    workingCopyPlan,
+                    containerTitleEdit,
+                    attachmentReusePlan),
+                audioDescriptionReuseNote)
+            : AppendAudioDescriptionReuseNote(
+                BuildDecisionReplacingExistingPrimary(
+                    outputPath,
+                    effectiveRequest,
+                    videoPlan,
+                    plannedVideos,
+                    subtitlePlan,
+                    replacedSubtitleTracks,
+                    existingArchive,
+                    bestExistingVideo,
+                    newPrimaryVideo ?? throw new InvalidOperationException("Die ausgewählte neue Hauptvideospur konnte nicht mehr einer frischen Quelle zugeordnet werden."),
+                    existingAudioDescription,
+                    workingCopyPlan,
+                    attachmentReusePlan),
+                audioDescriptionReuseNote);
     }
 
     private async Task<ExistingArchiveState> ReadExistingArchiveStateAsync(
@@ -361,6 +377,72 @@ public sealed partial class SeriesArchiveService
         return existingAudioTracks.FirstOrDefault(AudioTrackClassifier.IsAudioDescriptionTrack);
     }
 
+    private async Task<string?> TryBuildAudioDescriptionReuseNoteAsync(
+        string mkvMergePath,
+        string? requestedAudioDescriptionPath,
+        ContainerTrackMetadata? existingAudioDescription,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(requestedAudioDescriptionPath)
+            || existingAudioDescription is null
+            || existingAudioDescription.Duration is null)
+        {
+            return null;
+        }
+
+        var requestedMetadata = await _probeService.ReadFirstAudioTrackMetadataAsync(
+            mkvMergePath,
+            requestedAudioDescriptionPath,
+            cancellationToken);
+        if (!AudioDescriptionMetadataMatchesExisting(requestedMetadata, existingAudioDescription))
+        {
+            return null;
+        }
+
+        var requestedDuration = CompanionTextMetadataReader.ReadForMediaFile(requestedAudioDescriptionPath).Duration;
+        if (requestedDuration is null
+            || !IsSameAudioDescriptionDuration(requestedDuration.Value, existingAudioDescription.Duration.Value))
+        {
+            return null;
+        }
+
+        return "Ausgewählte AD-Quelle entspricht der vorhandenen Archiv-AD; die bestehende AD-Spur wird beibehalten.";
+    }
+
+    private static ArchiveIntegrationDecision AppendAudioDescriptionReuseNote(
+        ArchiveIntegrationDecision decision,
+        string? audioDescriptionReuseNote)
+    {
+        return string.IsNullOrWhiteSpace(audioDescriptionReuseNote)
+            ? decision
+            : decision with
+            {
+                Notes = decision.Notes
+                    .Concat([audioDescriptionReuseNote])
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+            };
+    }
+
+    private static bool AudioDescriptionMetadataMatchesExisting(
+        AudioTrackMetadata requestedMetadata,
+        ContainerTrackMetadata existingAudioDescription)
+    {
+        return string.Equals(
+                MediaLanguageHelper.NormalizeMuxLanguageCode(requestedMetadata.Language),
+                MediaLanguageHelper.NormalizeMuxLanguageCode(existingAudioDescription.Language),
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                requestedMetadata.CodecLabel.Trim(),
+                existingAudioDescription.CodecLabel.Trim(),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSameAudioDescriptionDuration(TimeSpan requestedDuration, TimeSpan existingDuration)
+    {
+        return (requestedDuration - existingDuration).Duration() <= AudioDescriptionReuseDurationTolerance;
+    }
+
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
         string outputPath,
         SeriesEpisodeMuxRequest request,
@@ -384,9 +466,9 @@ public sealed partial class SeriesArchiveService
         var requestedAudioDescriptionPath = string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
             ? null
             : request.AudioDescriptionPath;
-        // Eine explizit ausgewählte AD-Datei ist immer eine Inhaltsänderung, auch wenn das Archiv
-        // bereits eine eingebettete AD-Spur enthält. Sonst würde die neue Auswahl stillschweigend
-        // verworfen und der Benutzer bekäme fälschlich einen Skip- oder Reuse-Plan.
+        // Eine explizit ausgewählte AD-Datei bleibt grundsätzlich eine Inhaltsänderung. Nur der
+        // vorgelagerte Reuse-Check darf sie vorher entfernen, wenn sie nachweislich der Archiv-AD
+        // entspricht.
         var replacementAudioDescriptionPath = string.Equals(requestedAudioDescriptionPath, outputPath, StringComparison.OrdinalIgnoreCase)
             ? null
             : requestedAudioDescriptionPath;
