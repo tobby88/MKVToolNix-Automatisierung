@@ -82,6 +82,16 @@ internal interface IEpisodePlanInput
     /// Null oder leer, wenn unbekannt; in diesem Fall wird der <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
     /// </summary>
     string? OriginalLanguage { get; }
+
+    /// <summary>
+    /// Optionaler manueller Sprachcode für geplante Videospuren. Null oder leer bedeutet automatische Erkennung.
+    /// </summary>
+    string? VideoLanguageOverride { get; }
+
+    /// <summary>
+    /// Optionaler manueller Sprachcode für geplante normale Audiospuren. Null oder leer bedeutet automatische Erkennung.
+    /// </summary>
+    string? AudioLanguageOverride { get; }
 }
 
 /// <summary>
@@ -118,6 +128,8 @@ internal sealed class EpisodePlanCoordinator
             input.HasPrimaryVideoSource,
             input.PlannedVideoPaths,
             input.DetectionNotes,
+            input.VideoLanguageOverride,
+            input.AudioLanguageOverride,
             input.OriginalLanguage),
             cancellationToken);
     }

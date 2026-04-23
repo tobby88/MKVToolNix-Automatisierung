@@ -160,6 +160,8 @@ internal sealed class EpisodePlanCache
             input.SeriesName,
             input.SeasonNumber,
             input.EpisodeNumber,
+            input.VideoLanguageOverride,
+            input.AudioLanguageOverride,
             input.OriginalLanguage);
     }
 
@@ -195,6 +197,8 @@ internal sealed class EpisodePlanCache
         AppendValue(builder, input.SeriesName);
         AppendValue(builder, input.SeasonNumber);
         AppendValue(builder, input.EpisodeNumber);
+        AppendValue(builder, input.VideoLanguageOverride);
+        AppendValue(builder, input.AudioLanguageOverride);
         AppendValue(builder, input.OriginalLanguage);
         return builder.ToString();
     }
@@ -375,5 +379,7 @@ internal sealed class EpisodePlanCache
         string SeriesName,
         string SeasonNumber,
         string EpisodeNumber,
+        string? VideoLanguageOverride,
+        string? AudioLanguageOverride,
         string? OriginalLanguage);
 }

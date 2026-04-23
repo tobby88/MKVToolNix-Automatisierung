@@ -89,6 +89,50 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ManualLanguageOverrides_UpdateTrackLanguagesNamesAndOriginalFlags()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-language-overrides");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-language-overrides");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var videoPath = CreateFile(sourceDirectory, "Die Toten von Marnow - Musik zur Serie - Redemption (S01_E99).mp4");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            videoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Die Toten von Marnow", "Season 1", "Die Toten von Marnow - S01E99 - Musik zur Serie - Redemption.mkv");
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            videoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Musik zur Serie - Redemption",
+            VideoLanguageOverride: "en",
+            AudioLanguageOverride: "en",
+            OriginalLanguage: "en"));
+
+        Assert.Equal("en", plan.VideoSources.Single().LanguageCode);
+        Assert.Equal("English - FHD - H.264", plan.VideoSources.Single().TrackName);
+        Assert.Equal("en", plan.AudioSources.Single().LanguageCode);
+        Assert.Equal("English - AAC", plan.AudioSources.Single().TrackName);
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--language", "0:en", "--track-name", "0:English - FHD - H.264");
+        AssertContainsSequence(arguments, "--language", "1:en", "--track-name", "1:English - AAC");
+        Assert.Equal(["0:yes", "1:yes"], arguments
+            .Select((value, index) => value == "--original-flag" ? arguments[index + 1] : null)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Take(2)
+            .ToList());
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_FreshTarget_OrdersVideoTracksByLanguageThenCodec()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-plan-video-language-order");

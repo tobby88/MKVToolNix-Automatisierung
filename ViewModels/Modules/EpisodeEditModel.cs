@@ -52,6 +52,9 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private List<string> _planNotes = [];
     private bool _isPlanReviewApproved;
     private string _detectionSeedPath = string.Empty;
+    private string _videoLanguageOverride = string.Empty;
+    private string _audioLanguageOverride = string.Empty;
+    private string _originalLanguageOverride = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _approvedReviewPaths = new(StringComparer.OrdinalIgnoreCase);

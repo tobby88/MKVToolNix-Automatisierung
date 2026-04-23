@@ -280,6 +280,29 @@ public sealed class EpisodePlanCacheTests : IDisposable
         Assert.False(found);
     }
 
+    [Fact]
+    public void TryGet_ReturnsFalse_WhenTrackLanguageOverridesChange()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = new StubPlanInput
+        {
+            VideoLanguageOverride = "de",
+            AudioLanguageOverride = "de"
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        var updatedInput = input with
+        {
+            VideoLanguageOverride = "en",
+            AudioLanguageOverride = "en"
+        };
+
+        var found = cache.TryGet(owner, updatedInput, out _);
+
+        Assert.False(found);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -356,5 +379,9 @@ public sealed class EpisodePlanCacheTests : IDisposable
         public string EpisodeNumber { get; init; } = "02";
 
         public string? OriginalLanguage { get; init; } = null;
+
+        public string? VideoLanguageOverride { get; init; } = null;
+
+        public string? AudioLanguageOverride { get; init; } = null;
     }
 }

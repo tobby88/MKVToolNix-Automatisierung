@@ -528,6 +528,9 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="180" />
@@ -575,8 +578,44 @@
                                             Command="{Binding EditSelectedOutputCommand}"
                                             Content="Ausgabe &#228;ndern" />
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
-                                    <Border Grid.Row="2"
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Video-Sprache" />
+                                    <ComboBox Grid.Row="2"
+                                              Grid.Column="1"
+                                              Margin="0,4,12,4"
+                                              Width="180"
+                                              HorizontalAlignment="Left"
+                                              DisplayMemberPath="DisplayName"
+                                              SelectedValuePath="Code"
+                                              ItemsSource="{Binding SelectedEpisodeItem.LanguageOverrideOptions, Mode=OneWay}"
+                                              SelectedValue="{Binding SelectedEpisodeItem.VideoLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="&#220;berschreibt die automatisch erkannte Sprache aller geplanten Videospuren." />
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Audio-Sprache" />
+                                    <ComboBox Grid.Row="3"
+                                              Grid.Column="1"
+                                              Margin="0,4,12,4"
+                                              Width="180"
+                                              HorizontalAlignment="Left"
+                                              DisplayMemberPath="DisplayName"
+                                              SelectedValuePath="Code"
+                                              ItemsSource="{Binding SelectedEpisodeItem.LanguageOverrideOptions, Mode=OneWay}"
+                                              SelectedValue="{Binding SelectedEpisodeItem.AudioLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="&#220;berschreibt die automatisch erkannte Sprache aller normalen Tonspuren." />
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Originalsprache" />
+                                    <ComboBox Grid.Row="4"
+                                              Grid.Column="1"
+                                              Margin="0,4,12,4"
+                                              Width="180"
+                                              HorizontalAlignment="Left"
+                                              DisplayMemberPath="DisplayName"
+                                              SelectedValuePath="Code"
+                                              ItemsSource="{Binding SelectedEpisodeItem.LanguageOverrideOptions, Mode=OneWay}"
+                                              SelectedValue="{Binding SelectedEpisodeItem.OriginalLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Steuert die original-Flags. Automatisch nutzt die Originalsprache aus TVDB." />
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Top" Text="Hinweise" />
+                                    <Border Grid.Row="5"
                                             Grid.Column="1"
                                             Grid.ColumnSpan="2"
                                             Margin="0,4,0,4"

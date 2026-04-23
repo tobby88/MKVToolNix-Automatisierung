@@ -49,5 +49,35 @@ public sealed class BatchEpisodeCollectionControllerTests
         Assert.Equal(0, selectedItemPlanInputsChangedCount);
     }
 
+    [Theory]
+    [InlineData("video")]
+    [InlineData("audio")]
+    [InlineData("original")]
+    public void LanguageOverrideOnSelectedItem_TriggersSelectedItemPlanInputsChanged(string overrideKind)
+    {
+        using var controller = new BatchEpisodeCollectionController();
+        var item = BatchEpisodeItemViewModel.CreateErrorItem(@"C:\Temp\episode.mp4", "boom");
+        controller.Reset([item]);
+        controller.SelectedItem = item;
+
+        var selectedItemPlanInputsChangedCount = 0;
+        controller.SelectedItemPlanInputsChanged += () => selectedItemPlanInputsChangedCount++;
+
+        switch (overrideKind)
+        {
+            case "video":
+                item.SetVideoLanguageOverride("en");
+                break;
+            case "audio":
+                item.SetAudioLanguageOverride("en");
+                break;
+            case "original":
+                item.SetOriginalLanguageOverride("en");
+                break;
+        }
+
+        Assert.Equal(1, selectedItemPlanInputsChangedCount);
+    }
+
     private sealed class TestRow;
 }

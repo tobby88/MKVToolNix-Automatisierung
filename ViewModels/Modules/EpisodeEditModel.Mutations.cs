@@ -116,6 +116,46 @@ internal partial class EpisodeEditModel
         UsageSummary = usageSummary;
     }
 
+    public virtual void SetVideoLanguageOverride(string? languageCode)
+    {
+        var normalized = NormalizeLanguageOverride(languageCode);
+        if (_videoLanguageOverride == normalized)
+        {
+            return;
+        }
+
+        _videoLanguageOverride = normalized;
+        OnPropertyChanged(nameof(VideoLanguageOverride));
+        OnLanguageOverridesChanged();
+    }
+
+    public virtual void SetAudioLanguageOverride(string? languageCode)
+    {
+        var normalized = NormalizeLanguageOverride(languageCode);
+        if (_audioLanguageOverride == normalized)
+        {
+            return;
+        }
+
+        _audioLanguageOverride = normalized;
+        OnPropertyChanged(nameof(AudioLanguageOverride));
+        OnLanguageOverridesChanged();
+    }
+
+    public virtual void SetOriginalLanguageOverride(string? languageCode)
+    {
+        var normalized = NormalizeLanguageOverride(languageCode);
+        if (_originalLanguageOverride == normalized)
+        {
+            return;
+        }
+
+        _originalLanguageOverride = normalized;
+        OnPropertyChanged(nameof(OriginalLanguageOverride));
+        OnPropertyChanged(nameof(EffectiveOriginalLanguage));
+        OnLanguageOverridesChanged();
+    }
+
     public void ReplaceExcludedSourcePaths(IEnumerable<string> excludedSourcePaths)
     {
         _excludedSourcePaths.Clear();
@@ -355,6 +395,7 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(TvdbSeriesId));
         OnPropertyChanged(nameof(TvdbSeriesName));
         OnPropertyChanged(nameof(TvdbEpisodeId));
+        OnPropertyChanged(nameof(EffectiveOriginalLanguage));
     }
 
     protected void RefreshArchiveState()
@@ -478,6 +519,10 @@ internal partial class EpisodeEditModel
         NotifyReviewStatePropertiesChanged();
     }
 
+    protected virtual void OnLanguageOverridesChanged()
+    {
+    }
+
     private static string BuildPlanReviewKey(IEnumerable<string> notes)
     {
         return string.Join(
@@ -486,6 +531,13 @@ internal partial class EpisodeEditModel
                 .Where(EpisodeEditTextBuilder.IsActionablePlanReviewNote)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(note => note, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeLanguageOverride(string? languageCode)
+    {
+        return string.IsNullOrWhiteSpace(languageCode)
+            ? string.Empty
+            : MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode);
     }
 
 }

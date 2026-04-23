@@ -381,6 +381,12 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         MarkComparisonInputsChanged();
     }
 
+    protected override void OnLanguageOverridesChanged()
+    {
+        MarkComparisonInputsChanged();
+        IsSelected = true;
+    }
+
     /// <summary>
     /// Setzt einen manuell gewählten Ausgabepfad zusammen mit seinem Archiv-Kontext.
     /// </summary>

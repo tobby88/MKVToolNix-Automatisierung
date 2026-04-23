@@ -295,6 +295,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
         SchedulePlanSummaryRefresh();
     }
 
+    protected override void OnLanguageOverridesChanged()
+    {
+        InvalidateCurrentPlan();
+        SchedulePlanSummaryRefresh();
+    }
+
     private void RefreshOutputTargetStatus()
     {
         if (string.IsNullOrWhiteSpace(OutputPath))

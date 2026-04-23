@@ -177,6 +177,54 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task PrepareAsync_ManualLanguageOverrides_AffectArchiveVideoSlotsAndRetainedAudio()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-manual-language-overrides");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-manual-language-overrides");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var freshVideoPath = CreateFile(sourceDirectory, "Die Toten von Marnow - Musik zur Serie - Redemption (S01_E99).mp4");
+        var outputPath = Path.Combine(archiveDirectory, "Die Toten von Marnow", "Season 1", "Die Toten von Marnow - S01E99 - Musik zur Serie - Redemption.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            freshVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3", language: "de"),
+            CreateAudioTrack(2, "AAC", language: "en"));
+
+        var archiveService = CreateArchiveService(archiveDirectory);
+
+        var decision = await archiveService.PrepareAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            new SeriesEpisodeMuxRequest(
+                freshVideoPath,
+                AudioDescriptionPath: null,
+                SubtitlePaths: [],
+                AttachmentPaths: [],
+                outputPath,
+                Title: "Musik zur Serie - Redemption",
+                VideoLanguageOverride: "en",
+                AudioLanguageOverride: "en"),
+            [freshVideoPath]);
+
+        Assert.Equal(outputPath, decision.PrimarySourcePath);
+        Assert.Equal(
+            [
+                (outputPath, 0, "de"),
+                (freshVideoPath, 0, "en")
+            ],
+            decision.VideoSelections.Select(selection => (selection.FilePath, selection.TrackId, selection.LanguageCode)).ToList());
+        Assert.Equal([freshVideoPath], decision.AdditionalVideoPaths);
+        Assert.Equal([1], decision.RetainedAudioTrackIds);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_KeepingArchivePrimary_DoesNotRetainNameDetectedAudioDescriptionAsNormalAudio()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-filter-ad-normal-audio");

@@ -466,6 +466,9 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             or nameof(BatchEpisodeItemViewModel.AudioDescriptionPath)
             or nameof(BatchEpisodeItemViewModel.SubtitlePaths)
             or nameof(BatchEpisodeItemViewModel.AttachmentPaths)
+            or nameof(BatchEpisodeItemViewModel.VideoLanguageOverride)
+            or nameof(BatchEpisodeItemViewModel.AudioLanguageOverride)
+            or nameof(BatchEpisodeItemViewModel.OriginalLanguageOverride)
             or nameof(BatchEpisodeItemViewModel.OutputPath);
     }
 

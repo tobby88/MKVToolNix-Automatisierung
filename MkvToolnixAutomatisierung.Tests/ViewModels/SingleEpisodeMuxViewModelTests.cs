@@ -124,6 +124,27 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void LanguageOverrides_NormalizeCodesAndExposeEffectiveOriginalLanguage()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.ApplyTvdbSelection(new TvdbEpisodeSelection(42, "Beispielserie", 100, "Pilot", "01", "02", OriginalLanguage: "deu"));
+
+        viewModel.SetVideoLanguageOverride("eng");
+        viewModel.SetAudioLanguageOverride("en-US");
+        viewModel.SetOriginalLanguageOverride("en");
+
+        Assert.Equal("en", viewModel.VideoLanguageOverride);
+        Assert.Equal("en", viewModel.AudioLanguageOverride);
+        Assert.Equal("en", viewModel.OriginalLanguageOverride);
+        Assert.Equal("en", viewModel.EffectiveOriginalLanguage);
+
+        viewModel.SetOriginalLanguageOverride(null);
+
+        Assert.Equal(string.Empty, viewModel.OriginalLanguageOverride);
+        Assert.Equal("de", viewModel.EffectiveOriginalLanguage);
+    }
+
+    [Fact]
     public void CancelCurrentOperationCommand_IsDisabled_WhenNoSingleOperationRuns()
     {
         var viewModel = CreateViewModel();

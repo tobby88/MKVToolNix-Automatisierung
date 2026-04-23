@@ -31,7 +31,7 @@ public sealed partial class SeriesArchiveService
         }
 
         var existingArchive = await ReadExistingArchiveStateAsync(mkvMergePath, outputPath, cancellationToken);
-        var plannedVideos = await ReadPlannedVideoSourcesAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
+        var plannedVideos = await ReadPlannedVideoSourcesAsync(mkvMergePath, plannedVideoPaths, request, cancellationToken);
         var preferredExistingVideoTracks = SelectBestExistingVideoTracks(existingArchive.VideoTracks);
         var bestExistingVideo = preferredExistingVideoTracks.FirstOrDefault();
         var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
@@ -121,6 +121,7 @@ public sealed partial class SeriesArchiveService
     private async Task<List<PreparedVideoSource>> ReadPlannedVideoSourcesAsync(
         string mkvMergePath,
         IReadOnlyList<string> plannedVideoPaths,
+        SeriesEpisodeMuxRequest request,
         CancellationToken cancellationToken)
     {
         var plannedVideos = new List<PreparedVideoSource>(plannedVideoPaths.Count);
@@ -130,13 +131,15 @@ public sealed partial class SeriesArchiveService
             cancellationToken.ThrowIfCancellationRequested();
             var metadata = ApplySourceLanguageHints(
                 await _probeService.ReadPrimaryVideoMetadataAsync(mkvMergePath, videoPath, cancellationToken),
-                videoPath);
+                videoPath,
+                request.VideoLanguageOverride,
+                request.AudioLanguageOverride);
             var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, videoPath, cancellationToken);
             plannedVideos.Add(new PreparedVideoSource(
                 videoPath,
                 metadata,
                 new FileInfo(videoPath).Length,
-                ResolvePlannedNormalAudioLanguages(metadata, container)));
+                ResolvePlannedNormalAudioLanguages(metadata, container, request.AudioLanguageOverride)));
         }
 
         return plannedVideos;
@@ -679,11 +682,19 @@ public sealed partial class SeriesArchiveService
     /// </remarks>
     /// <param name="metadata">Bereits fachlich normalisierte Primärmetadaten der Quelle.</param>
     /// <param name="container">Vollständige Container-Metadaten derselben Quelle.</param>
+    /// <param name="audioLanguageOverride">Optionaler manueller Sprachcode für alle normalen frischen Audiospuren.</param>
     /// <returns>Alle Sprachcodes, die normale frische Audiospuren fachlich belegen.</returns>
     private static IReadOnlyList<string> ResolvePlannedNormalAudioLanguages(
         MediaTrackMetadata metadata,
-        ContainerMetadata container)
+        ContainerMetadata container,
+        string? audioLanguageOverride)
     {
+        var normalizedOverride = NormalizeOptionalLanguageOverride(audioLanguageOverride);
+        if (normalizedOverride is not null)
+        {
+            return [normalizedOverride];
+        }
+
         var preferredNormalAudioTracks = AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks);
         if (preferredNormalAudioTracks.Count <= 1)
         {
@@ -699,20 +710,26 @@ public sealed partial class SeriesArchiveService
             .ToList();
     }
 
-    private static MediaTrackMetadata ApplySourceLanguageHints(MediaTrackMetadata metadata, string filePath)
+    private static MediaTrackMetadata ApplySourceLanguageHints(
+        MediaTrackMetadata metadata,
+        string filePath,
+        string? videoLanguageOverride,
+        string? audioLanguageOverride)
     {
+        var normalizedVideoOverride = NormalizeOptionalLanguageOverride(videoLanguageOverride);
+        var normalizedAudioOverride = NormalizeOptionalLanguageOverride(audioLanguageOverride);
         var textMetadata = CompanionTextMetadataReader.ReadForMediaFile(filePath);
         var sourceLanguageHint = MediaLanguageHelper.TryInferMuxLanguageCodeFromText(
             Path.GetFileNameWithoutExtension(filePath),
             textMetadata.Title,
             textMetadata.Topic);
-        var videoLanguage = MediaLanguageHelper.ResolveMuxVideoLanguageCode(
+        var videoLanguage = normalizedVideoOverride ?? MediaLanguageHelper.ResolveMuxVideoLanguageCode(
             metadata.VideoLanguage,
             metadata.AudioLanguage,
             sourceLanguageHint);
-        var audioLanguage = string.IsNullOrWhiteSpace(sourceLanguageHint)
+        var audioLanguage = normalizedAudioOverride ?? (string.IsNullOrWhiteSpace(sourceLanguageHint)
             ? metadata.AudioLanguage
-            : sourceLanguageHint;
+            : sourceLanguageHint);
 
         // Der Archivabgleich muss dieselbe Mediathek-Sprachkorrektur sehen wie die
         // Dateierkennung. Sonst landen Quellen trotz korrekter Anzeige in falschen
@@ -722,6 +739,13 @@ public sealed partial class SeriesArchiveService
             VideoLanguage = videoLanguage,
             AudioLanguage = audioLanguage
         };
+    }
+
+    private static string? NormalizeOptionalLanguageOverride(string? languageCode)
+    {
+        return string.IsNullOrWhiteSpace(languageCode)
+            ? null
+            : MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode);
     }
 
     /// <summary>

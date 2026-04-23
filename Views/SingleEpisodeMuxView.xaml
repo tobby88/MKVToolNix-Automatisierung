@@ -371,6 +371,9 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="170" />
@@ -424,7 +427,43 @@
                 </Border>
                 <Button Grid.Row="3" Grid.Column="2" Margin="0,2,0,2" Padding="10,6" Command="{Binding SelectOutputCommand}" Content="Ausgabe ändern" />
 
-                <Border Grid.Row="4"
+                <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Video-Sprache" />
+                <ComboBox Grid.Row="4"
+                          Grid.Column="1"
+                          Margin="0,4,12,4"
+                          Width="180"
+                          HorizontalAlignment="Left"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValuePath="Code"
+                          ItemsSource="{Binding LanguageOverrideOptions, Mode=OneWay}"
+                          SelectedValue="{Binding VideoLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          ToolTip="Überschreibt die automatisch erkannte Sprache aller geplanten Videospuren." />
+
+                <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Audio-Sprache" />
+                <ComboBox Grid.Row="5"
+                          Grid.Column="1"
+                          Margin="0,4,12,4"
+                          Width="180"
+                          HorizontalAlignment="Left"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValuePath="Code"
+                          ItemsSource="{Binding LanguageOverrideOptions, Mode=OneWay}"
+                          SelectedValue="{Binding AudioLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          ToolTip="Überschreibt die automatisch erkannte Sprache aller normalen Tonspuren." />
+
+                <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Originalsprache" />
+                <ComboBox Grid.Row="6"
+                          Grid.Column="1"
+                          Margin="0,4,12,4"
+                          Width="180"
+                          HorizontalAlignment="Left"
+                          DisplayMemberPath="DisplayName"
+                          SelectedValuePath="Code"
+                          ItemsSource="{Binding LanguageOverrideOptions, Mode=OneWay}"
+                          SelectedValue="{Binding OriginalLanguageOverride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          ToolTip="Steuert die original-Flags. Automatisch nutzt die Originalsprache aus TVDB." />
+
+                <Border Grid.Row="7"
                         Grid.Column="0"
                         Grid.ColumnSpan="3"
                         Margin="0,4,0,4"

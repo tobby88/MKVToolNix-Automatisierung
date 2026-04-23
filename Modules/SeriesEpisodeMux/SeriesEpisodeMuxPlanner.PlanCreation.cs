@@ -91,6 +91,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var videoSelections = archiveDecision.VideoSelections.Count > 0
             ? archiveDecision.VideoSelections
             : await BuildVideoSelectionsFromPlannedPathsAsync(mkvMergePath, plannedVideoPaths, cancellationToken);
+        videoSelections = ApplyVideoLanguageOverride(videoSelections, request.VideoLanguageOverride);
 
         var videoSources = videoSelections
             .Select((videoSelection, index) => new VideoSourcePlan(
@@ -105,6 +106,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             effectiveOutputPath,
             videoSelections,
             archiveDecision.RetainedAudioTrackIds,
+            request.AudioLanguageOverride,
             cancellationToken);
         if (audioSources.Count == 0)
         {
@@ -149,7 +151,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 mkvMergePath,
                 hintSourcePath,
                 effectiveOutputPath,
-                videoSelections[0].LanguageCode,
+                videoSources[0].LanguageCode,
                 cancellationToken);
             if (!string.IsNullOrWhiteSpace(durationMismatchHint))
             {
@@ -596,11 +598,24 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return selections;
     }
 
+    private static IReadOnlyList<VideoTrackSelection> ApplyVideoLanguageOverride(
+        IReadOnlyList<VideoTrackSelection> videoSelections,
+        string? videoLanguageOverride)
+    {
+        var normalizedOverride = NormalizeOptionalLanguageOverride(videoLanguageOverride);
+        return normalizedOverride is null
+            ? videoSelections
+            : videoSelections
+                .Select(selection => selection with { LanguageCode = normalizedOverride })
+                .ToList();
+    }
+
     private async Task<IReadOnlyList<AudioSourcePlan>> BuildNormalAudioSourcesAsync(
         string mkvMergePath,
         string outputFilePath,
         IReadOnlyList<VideoTrackSelection> videoSelections,
         IReadOnlyList<int>? retainedEmbeddedAudioTrackIds,
+        string? audioLanguageOverride,
         CancellationToken cancellationToken)
     {
         var audioSources = new List<AudioSourcePlan>();
@@ -622,6 +637,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     outputFilePath,
                     retainedEmbeddedAudioTrackIds,
                     videoSelection.LanguageCode,
+                    audioLanguageOverride,
                     cancellationToken);
                 audioSources.AddRange(retainedEmbeddedSources);
                 continue;
@@ -639,6 +655,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             var freshAudioSources = await BuildFreshNormalAudioSourcesAsync(
                 mkvMergePath,
                 videoSelection.FilePath,
+                audioLanguageOverride,
                 cancellationToken);
             audioSources.AddRange(freshAudioSources);
         }
@@ -651,6 +668,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 outputFilePath,
                 retainedEmbeddedAudioTrackIds,
                 fallbackLanguage: "de",
+                audioLanguageOverride,
                 cancellationToken));
         }
 
@@ -664,6 +682,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// </summary>
     /// <param name="mkvMergePath">Pfad zur verwendeten mkvmerge-Executable.</param>
     /// <param name="inputFilePath">Zu analysierende frische Videoquelle.</param>
+    /// <param name="audioLanguageOverride">Optionaler manueller Sprachcode für alle normalen Audiospuren.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>
     /// Vollständig normalisierte normale Audiospuren der Quelle. Enthält bewusst mehrere
@@ -672,6 +691,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private async Task<IReadOnlyList<AudioSourcePlan>> BuildFreshNormalAudioSourcesAsync(
         string mkvMergePath,
         string inputFilePath,
+        string? audioLanguageOverride,
         CancellationToken cancellationToken)
     {
         var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, inputFilePath, cancellationToken);
@@ -681,13 +701,18 @@ public sealed partial class SeriesEpisodeMuxPlanner
             textMetadata.Title,
             textMetadata.Topic);
 
+        var normalizedOverride = NormalizeOptionalLanguageOverride(audioLanguageOverride);
         return AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks)
-            .Select(track => new AudioSourcePlan(
-                inputFilePath,
-                track.TrackId,
-                BuildNormalAudioTrackName(sourceLanguageHint ?? track.Language, track.CodecLabel),
-                IsDefaultTrack: false,
-                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(sourceLanguageHint ?? track.Language)))
+            .Select(track =>
+            {
+                var languageCode = normalizedOverride ?? sourceLanguageHint ?? track.Language;
+                return new AudioSourcePlan(
+                    inputFilePath,
+                    track.TrackId,
+                    BuildNormalAudioTrackName(languageCode, track.CodecLabel),
+                    IsDefaultTrack: false,
+                    LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode));
+            })
             .ToList();
     }
 
@@ -696,9 +721,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         string inputFilePath,
         IReadOnlyList<int> trackIds,
         string fallbackLanguage,
+        string? audioLanguageOverride,
         CancellationToken cancellationToken)
     {
         var audioSources = new List<AudioSourcePlan>(trackIds.Count);
+        var normalizedOverride = NormalizeOptionalLanguageOverride(audioLanguageOverride);
 
         foreach (var trackId in trackIds)
         {
@@ -709,15 +736,23 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 trackId,
                 fallbackLanguage,
                 cancellationToken);
+            var languageCode = normalizedOverride ?? metadata.Language;
             audioSources.Add(new AudioSourcePlan(
                 inputFilePath,
                 metadata.TrackId,
-                BuildNormalAudioTrackName(metadata.Language, metadata.CodecLabel),
+                BuildNormalAudioTrackName(languageCode, metadata.CodecLabel),
                 IsDefaultTrack: false,
-                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(metadata.Language)));
+                LanguageCode: MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)));
         }
 
         return audioSources;
+    }
+
+    private static string? NormalizeOptionalLanguageOverride(string? languageCode)
+    {
+        return string.IsNullOrWhiteSpace(languageCode)
+            ? null
+            : MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode);
     }
 
     private static void ValidateRequest(SeriesEpisodeMuxRequest request)

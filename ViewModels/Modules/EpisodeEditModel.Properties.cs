@@ -210,6 +210,32 @@ internal partial class EpisodeEditModel
 
     public int? TvdbEpisodeId => _tvdbSelection?.TvdbEpisodeId;
 
+    public IReadOnlyList<MuxLanguageOverrideOption> LanguageOverrideOptions => MuxLanguageOverrideOptions.All;
+
+    public string VideoLanguageOverride
+    {
+        get => _videoLanguageOverride;
+        set => SetVideoLanguageOverride(value);
+    }
+
+    public string AudioLanguageOverride
+    {
+        get => _audioLanguageOverride;
+        set => SetAudioLanguageOverride(value);
+    }
+
+    public string OriginalLanguageOverride
+    {
+        get => _originalLanguageOverride;
+        set => SetOriginalLanguageOverride(value);
+    }
+
+    public string EffectiveOriginalLanguage => string.IsNullOrWhiteSpace(_originalLanguageOverride)
+        ? string.IsNullOrWhiteSpace(_tvdbSelection?.OriginalLanguage)
+            ? string.Empty
+            : MediaLanguageHelper.NormalizeMuxLanguageCode(_tvdbSelection.OriginalLanguage)
+        : _originalLanguageOverride;
+
     public string PlanSummaryText
     {
         get => _planSummaryText;
@@ -441,7 +467,17 @@ internal partial class EpisodeEditModel
 
     string IEpisodePlanInput.EpisodeNumber => EpisodeNumber;
 
-    string? IEpisodePlanInput.OriginalLanguage => _tvdbSelection?.OriginalLanguage;
+    string? IEpisodePlanInput.OriginalLanguage => string.IsNullOrWhiteSpace(EffectiveOriginalLanguage)
+        ? null
+        : EffectiveOriginalLanguage;
+
+    string? IEpisodePlanInput.VideoLanguageOverride => string.IsNullOrWhiteSpace(VideoLanguageOverride)
+        ? null
+        : VideoLanguageOverride;
+
+    string? IEpisodePlanInput.AudioLanguageOverride => string.IsNullOrWhiteSpace(AudioLanguageOverride)
+        ? null
+        : AudioLanguageOverride;
 
     private IReadOnlyList<string> BuildPlannedVideoPaths()
     {
