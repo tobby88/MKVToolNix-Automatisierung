@@ -210,6 +210,14 @@
                        Text="{Binding StatusText}"
                        TextWrapping="Wrap" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Width="180"
+                        Margin="0,0,12,0"
+                        Padding="10,6"
+                        Click="OpenCurrentBrowserSearchButton_Click"
+                        Content="IMDb im Browser suchen"
+                        IsEnabled="{Binding CanOpenBrowserSearch}"
+                        Visibility="{Binding IsApiWorkflowVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                        ToolTip="Öffnet die IMDb-Suche im Browser mit den aktuell eingetragenen Serien- und Episodentexten. Beim Zurückkehren übernimmt der Dialog eine kopierte IMDb-URL automatisch." />
                 <Button Width="120"
                         Margin="0,0,12,0"
                         Padding="10,6"

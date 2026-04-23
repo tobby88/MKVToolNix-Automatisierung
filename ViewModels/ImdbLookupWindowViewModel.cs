@@ -76,7 +76,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         get => _seriesSearchText;
         set
         {
-            var normalized = (value ?? string.Empty).Trim();
+            var normalized = value ?? string.Empty;
             if (_seriesSearchText == normalized)
             {
                 return;
@@ -84,6 +84,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
             _seriesSearchText = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(CanOpenBrowserSearch));
         }
     }
 
@@ -95,7 +96,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         get => _episodeSearchText;
         set
         {
-            var normalized = (value ?? string.Empty).Trim();
+            var normalized = value ?? string.Empty;
             if (_episodeSearchText == normalized)
             {
                 return;
@@ -103,6 +104,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
             _episodeSearchText = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(CanOpenBrowserSearch));
             ApplyEpisodeFilter(autoSelectBest: false);
         }
     }
@@ -115,7 +117,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         get => _searchText;
         set
         {
-            var normalized = (value ?? string.Empty).Trim();
+            var normalized = value ?? string.Empty;
             if (_searchText == normalized)
             {
                 return;
@@ -123,6 +125,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
             _searchText = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(CanOpenBrowserSearch));
             RebuildSearchOptions();
         }
     }
@@ -199,6 +202,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             _selectedSearchOption = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanOpenSelectedSearch));
+            OnPropertyChanged(nameof(CanOpenBrowserSearch));
         }
     }
 
@@ -280,6 +284,14 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     public bool IsBrowserWorkflowVisible => _lookupMode == ImdbLookupMode.BrowserOnly || _browserFallbackActive;
 
     public bool CanOpenSelectedSearch => SelectedSearchOption is not null;
+
+    /// <summary>
+    /// Aktiviert die direkte Browserhilfe auch dann, wenn im API-Modus gerade nur die Suchfelder gefüllt sind.
+    /// </summary>
+    public bool CanOpenBrowserSearch => CanOpenSelectedSearch
+        || !string.IsNullOrWhiteSpace(SeriesSearchText)
+        || !string.IsNullOrWhiteSpace(EpisodeSearchText)
+        || !string.IsNullOrWhiteSpace(SearchText);
 
     public bool CanApply => TryNormalizeImdbId(ImdbInput, out _);
 
@@ -390,6 +402,31 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         StatusText = $"IMDb-Suche geöffnet: {SelectedSearchOption.DisplayText}";
+    }
+
+    /// <summary>
+    /// Aktualisiert die Browserhilfe aus den gerade sichtbaren API-Suchfeldern.
+    /// </summary>
+    /// <returns><see langword="true"/>, wenn danach ein Browserziel vorhanden ist.</returns>
+    public bool PrepareBrowserSearchFromCurrentFields()
+    {
+        var queryParts = new[]
+            {
+                SeriesSearchText,
+                EpisodeSearchText
+            }
+            .Select(part => part.Trim())
+            .Where(part => !string.IsNullOrWhiteSpace(part));
+        var query = string.Join(" ", queryParts);
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            SearchText = query;
+        }
+
+        SelectedSearchOption = SearchOptions.FirstOrDefault(option =>
+                                   string.Equals(option.DisplayText, "Suchtext", StringComparison.OrdinalIgnoreCase))
+                               ?? SearchOptions.FirstOrDefault();
+        return SelectedSearchOption is not null;
     }
 
     public bool TryBuildImdbId(out string? imdbId, out string? validationMessage)

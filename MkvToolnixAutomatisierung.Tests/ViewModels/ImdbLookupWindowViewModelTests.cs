@@ -148,6 +148,45 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public void SearchTextFields_PreserveSpacesWhileEditing()
+    {
+        using var httpClient = new HttpClient(new FailingHttpMessageHandler());
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            guess: null,
+            currentImdbId: null);
+
+        vm.SeriesSearchText = "New Series";
+        vm.EpisodeSearchText = "Episode Title";
+
+        Assert.Equal("New Series", vm.SeriesSearchText);
+        Assert.Equal("Episode Title", vm.EpisodeSearchText);
+    }
+
+    [Fact]
+    public void PrepareBrowserSearchFromCurrentFields_UsesEditedApiSearchTexts()
+    {
+        using var httpClient = new HttpClient(new FailingHttpMessageHandler());
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            guess: null,
+            currentImdbId: null)
+        {
+            SeriesSearchText = "New Series",
+            EpisodeSearchText = "Episode Title"
+        };
+
+        var prepared = vm.PrepareBrowserSearchFromCurrentFields();
+
+        Assert.True(prepared);
+        Assert.Equal("New Series Episode Title", vm.SearchText);
+        Assert.Equal("Suchtext", vm.SelectedSearchOption?.DisplayText);
+        Assert.Contains("New%20Series%20Episode%20Title", vm.SelectedSearchOption?.TargetUrl, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryBuildImdbId_AcceptsBareId()
     {
         using var httpClient = new HttpClient(new FailingHttpMessageHandler());

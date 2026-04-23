@@ -58,6 +58,16 @@ public partial class ImdbLookupWindow : Window
         OpenSelectedSearch();
     }
 
+    private void OpenCurrentBrowserSearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.PrepareBrowserSearchFromCurrentFields())
+        {
+            return;
+        }
+
+        OpenSelectedSearch();
+    }
+
     private void SearchOptionsListBox_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         OpenSelectedSearch();
