@@ -4,6 +4,7 @@ obj/
 .claude/
 .appdata/
 .dotnet-cli/
+.codex-dotnet-home/
 .dotnet-home/
 *.user
 *.suo
