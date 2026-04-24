@@ -151,7 +151,7 @@ public sealed partial class SeriesArchiveService
         string outputPath,
         IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
         IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
-        ContainerTrackMetadata? existingAudioDescription,
+        IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
         SubtitleReusePlan subtitlePlan,
         IReadOnlyList<string> preservedAttachmentNames)
     {
@@ -184,10 +184,15 @@ public sealed partial class SeriesArchiveService
                 null,
                 null),
             AudioDescription: new EpisodeUsageEntry(
-                existingAudioDescription is null
+                existingAudioDescriptions.Count == 0
                     ? "(keine)"
-                    : BuildExistingTargetDisplayText(
-                        BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language)),
+                    : string.Join(
+                        Environment.NewLine,
+                        BuildRetainedAudioDescriptionSources(
+                                outputPath,
+                                existingAudioDescriptions,
+                                retainedNormalAudioTracks.FirstOrDefault()?.Language)
+                            .Select(source => BuildExistingTargetDisplayText(source.TrackName))),
                 null,
                 null),
             Subtitles: new EpisodeUsageEntry(
@@ -218,7 +223,7 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<ContainerTrackMetadata> allExistingTracks,
         IReadOnlyList<ContainerTrackMetadata> retainedExistingVideoTracks,
         IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
-        ContainerTrackMetadata? existingAudioDescription,
+        IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
     {
@@ -247,7 +252,7 @@ public sealed partial class SeriesArchiveService
                 $"Audio {retainedNormalAudioTrack.TrackId}");
         }
 
-        if (existingAudioDescription is not null)
+        foreach (var existingAudioDescription in existingAudioDescriptions)
         {
             TryAppendTrackHeaderEdit(
                 operations,
@@ -397,6 +402,23 @@ public sealed partial class SeriesArchiveService
             ? fallbackLanguage
             : track.Language;
         return $"{MediaLanguageHelper.GetLanguageDisplayName(languageCode)} (sehbehinderte) - {track.CodecLabel}";
+    }
+
+    private static IReadOnlyList<AudioDescriptionSourcePlan> BuildRetainedAudioDescriptionSources(
+        string outputPath,
+        IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
+        string? fallbackLanguage)
+    {
+        return existingAudioDescriptions
+            .Select(track => new AudioDescriptionSourcePlan(
+                outputPath,
+                track.TrackId,
+                BuildExpectedAudioDescriptionTrackName(track, fallbackLanguage),
+                MediaLanguageHelper.NormalizeMuxLanguageCode(
+                    string.IsNullOrWhiteSpace(track.Language)
+                        ? fallbackLanguage
+                        : track.Language)))
+            .ToList();
     }
 
     private static string BuildExistingTargetDisplayText(string value)

@@ -262,6 +262,35 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.False(plan.SkipMux);
         Assert.Equal([1], plan.AudioSources.Select(source => source.TrackId).ToList());
         Assert.Equal(2, plan.AudioDescriptionTrackId);
+        Assert.Equal([2, 3], plan.AudioDescriptionSources.Select(source => source.TrackId).ToList());
+        Assert.Contains("Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText, StringComparison.Ordinal);
+        Assert.Contains("Deutsch (sehbehinderte) - AAC", plan.AudioDescriptionSources[1].TrackName, StringComparison.Ordinal);
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(
+            arguments,
+            "--audio-tracks",
+            "2",
+            "--language",
+            "2:de",
+            "--track-name",
+            "2:Deutsch (sehbehinderte) - AAC",
+            "--default-track-flag",
+            "2:no",
+            "--visual-impaired-flag",
+            "2:yes");
+        AssertContainsSequence(
+            arguments,
+            "--audio-tracks",
+            "3",
+            "--language",
+            "3:de",
+            "--track-name",
+            "3:Deutsch (sehbehinderte) - AAC",
+            "--default-track-flag",
+            "3:no",
+            "--visual-impaired-flag",
+            "3:yes");
     }
 
     [Fact]

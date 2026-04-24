@@ -169,31 +169,34 @@ internal static class SeriesEpisodeMuxArgumentBuilder
 
     private static void AppendAudioDescription(List<string> arguments, SeriesEpisodeMuxPlan plan)
     {
-        if (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath) || plan.AudioDescriptionTrackId is null)
+        if (plan.AudioDescriptionSources.Count == 0)
         {
             return;
         }
 
-        var adTrackId = plan.AudioDescriptionTrackId.Value.ToString();
-        arguments.AddRange(
-        [
-            "--no-video",
-            "--no-subtitles",
-            "--no-attachments",
-            "--audio-tracks",
-            adTrackId,
-            "--language",
-            $"{adTrackId}:{plan.AudioDescriptionLanguageCode}",
-            "--track-name",
-            $"{adTrackId}:{plan.AudioDescriptionTrackName}",
-            "--default-track-flag",
-            $"{adTrackId}:no",
-            "--visual-impaired-flag",
-            $"{adTrackId}:yes",
-            "--original-flag",
-            $"{adTrackId}:{ResolveOriginalFlag(plan.AudioDescriptionLanguageCode, plan.OriginalLanguage)}",
-            plan.ResolveRuntimeFilePath(plan.AudioDescriptionFilePath)
-        ]);
+        foreach (var audioDescriptionSource in plan.AudioDescriptionSources)
+        {
+            var adTrackId = audioDescriptionSource.TrackId.ToString();
+            arguments.AddRange(
+            [
+                "--no-video",
+                "--no-subtitles",
+                "--no-attachments",
+                "--audio-tracks",
+                adTrackId,
+                "--language",
+                $"{adTrackId}:{audioDescriptionSource.LanguageCode}",
+                "--track-name",
+                $"{adTrackId}:{audioDescriptionSource.TrackName}",
+                "--default-track-flag",
+                $"{adTrackId}:no",
+                "--visual-impaired-flag",
+                $"{adTrackId}:yes",
+                "--original-flag",
+                $"{adTrackId}:{ResolveOriginalFlag(audioDescriptionSource.LanguageCode, plan.OriginalLanguage)}",
+                plan.ResolveRuntimeFilePath(audioDescriptionSource.FilePath)
+            ]);
+        }
     }
 
     private static void AppendAudioTrackMetadata(

@@ -52,6 +52,10 @@ public sealed class SeriesEpisodeMuxPlan
     /// Originalsprache der Serie (aus TVDB-Metadaten), z. B. <c>swe</c> für Schwedisch oder <c>de</c> für Deutsch.
     /// Null oder leer, wenn unbekannt; in diesem Fall wird <c>--original-flag</c> wie bisher auf <c>yes</c> gesetzt.
     /// </param>
+    /// <param name="audioDescriptionSources">
+    /// Optional vollständig aufgelöste AD-Spuren. Wenn leer, wird aus den historischen Einzelparametern
+    /// höchstens eine AD-Spur abgeleitet.
+    /// </param>
     public SeriesEpisodeMuxPlan(
         string mkvMergePath,
         string outputFilePath,
@@ -77,15 +81,23 @@ public sealed class SeriesEpisodeMuxPlan
         IReadOnlyList<TrackHeaderEditOperation>? trackHeaderEdits = null,
         ContainerTitleEditOperation? containerTitleEdit = null,
         IReadOnlyList<string>? notes = null,
-        string? originalLanguage = null)
+        string? originalLanguage = null,
+        IReadOnlyList<AudioDescriptionSourcePlan>? audioDescriptionSources = null)
     {
         if (videoSources.Count == 0)
         {
             throw new ArgumentException("Mindestens eine Videospur muss vorhanden sein.", nameof(videoSources));
         }
 
+        var resolvedAudioDescriptionSources = ResolveAudioDescriptionSources(
+            audioDescriptionSources,
+            audioDescriptionFilePath,
+            audioDescriptionTrackId,
+            audioDescriptionTrackName,
+            audioDescriptionLanguageCode);
+
         if (audioSources.Count == 0
-            && (string.IsNullOrWhiteSpace(audioDescriptionFilePath) || audioDescriptionTrackId is null))
+            && resolvedAudioDescriptionSources.Count == 0)
         {
             throw new ArgumentException("Mindestens eine normale Audiospur oder eine explizite AD-Spur muss vorhanden sein.", nameof(audioSources));
         }
@@ -107,12 +119,13 @@ public sealed class SeriesEpisodeMuxPlan
         IncludePrimarySourceAttachments = includePrimarySourceAttachments;
         AttachmentSourcePath = attachmentSourcePath;
         AttachmentSourceAttachmentIds = attachmentSourceAttachmentIds;
-        AudioDescriptionFilePath = audioDescriptionFilePath;
-        AudioDescriptionTrackId = audioDescriptionTrackId;
-        AudioDescriptionTrackName = audioDescriptionTrackName;
-        AudioDescriptionLanguageCode = string.IsNullOrWhiteSpace(audioDescriptionTrackName)
+        AudioDescriptionSources = resolvedAudioDescriptionSources;
+        AudioDescriptionFilePath = AudioDescriptionSources.FirstOrDefault()?.FilePath;
+        AudioDescriptionTrackId = AudioDescriptionSources.FirstOrDefault()?.TrackId;
+        AudioDescriptionTrackName = AudioDescriptionSources.FirstOrDefault()?.TrackName;
+        AudioDescriptionLanguageCode = string.IsNullOrWhiteSpace(AudioDescriptionTrackName)
             ? null
-            : MediaLanguageHelper.NormalizeMuxLanguageCode(audioDescriptionLanguageCode);
+            : AudioDescriptionSources.FirstOrDefault()?.LanguageCode;
         SubtitleFiles = subtitleFiles;
         AttachmentFilePaths = attachmentFilePaths;
         PreservedAttachmentNames = preservedAttachmentNames;
@@ -152,6 +165,7 @@ public sealed class SeriesEpisodeMuxPlan
         AudioDescriptionTrackId = null;
         AudioDescriptionTrackName = null;
         AudioDescriptionLanguageCode = null;
+        AudioDescriptionSources = [];
         SubtitleFiles = [];
         AttachmentFilePaths = [];
         PreservedAttachmentNames = [];
@@ -297,6 +311,11 @@ public sealed class SeriesEpisodeMuxPlan
     public string? AudioDescriptionLanguageCode { get; }
 
     /// <summary>
+    /// Alle einzubindenden Audiodeskriptionsspuren in finaler Reihenfolge.
+    /// </summary>
+    public IReadOnlyList<AudioDescriptionSourcePlan> AudioDescriptionSources { get; }
+
+    /// <summary>
     /// Alle einzubindenden Untertitelspuren.
     /// </summary>
     public IReadOnlyList<SubtitleFile> SubtitleFiles { get; }
@@ -428,5 +447,40 @@ public sealed class SeriesEpisodeMuxPlan
         }
 
         return filePath;
+    }
+
+    private static IReadOnlyList<AudioDescriptionSourcePlan> ResolveAudioDescriptionSources(
+        IReadOnlyList<AudioDescriptionSourcePlan>? audioDescriptionSources,
+        string? audioDescriptionFilePath,
+        int? audioDescriptionTrackId,
+        string? audioDescriptionTrackName,
+        string? audioDescriptionLanguageCode)
+    {
+        if (audioDescriptionSources is { Count: > 0 })
+        {
+            return audioDescriptionSources
+                .Where(source => !string.IsNullOrWhiteSpace(source.FilePath))
+                .Select(source => source with
+                {
+                    LanguageCode = MediaLanguageHelper.NormalizeMuxLanguageCode(source.LanguageCode)
+                })
+                .ToList();
+        }
+
+        if (string.IsNullOrWhiteSpace(audioDescriptionFilePath) || audioDescriptionTrackId is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            new AudioDescriptionSourcePlan(
+                audioDescriptionFilePath,
+                audioDescriptionTrackId.Value,
+                string.IsNullOrWhiteSpace(audioDescriptionTrackName)
+                    ? "Audiodeskription"
+                    : audioDescriptionTrackName,
+                MediaLanguageHelper.NormalizeMuxLanguageCode(audioDescriptionLanguageCode))
+        ];
     }
 }

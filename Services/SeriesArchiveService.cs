@@ -237,6 +237,12 @@ public sealed record ArchiveIntegrationDecision(
     IReadOnlyList<string> Notes)
 {
     /// <summary>
+    /// Bereits vollständig aufgelöste AD-Spuren aus einer vorhandenen Archivdatei.
+    /// Bleibt leer, wenn eine frische AD-Datei verwendet oder keine AD übernommen wird.
+    /// </summary>
+    public IReadOnlyList<AudioDescriptionSourcePlan> AudioDescriptionSources { get; init; } = [];
+
+    /// <summary>
     /// Erstellt eine Archiventscheidung für ein komplett neues Ziel ohne bestehende Archivdatei.
     /// </summary>
     /// <param name="outputPath">Zielpfad der neu zu erzeugenden MKV-Datei.</param>

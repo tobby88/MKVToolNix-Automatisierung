@@ -250,6 +250,19 @@ public sealed record AudioSourcePlan(
     string LanguageCode = "de");
 
 /// <summary>
+/// Beschreibt eine einzubindende Audiodeskriptionsspur im finalen Mux-Plan.
+/// </summary>
+/// <param name="FilePath">Quelldatei, aus der die AD-Spur stammt.</param>
+/// <param name="TrackId">Track-ID innerhalb von <paramref name="FilePath"/>.</param>
+/// <param name="TrackName">Finaler Trackname für GUI und mkvmerge-Metadaten.</param>
+/// <param name="LanguageCode">Projektweit normalisierter Sprachcode der AD-Spur.</param>
+public sealed record AudioDescriptionSourcePlan(
+    string FilePath,
+    int TrackId,
+    string TrackName,
+    string LanguageCode = "de");
+
+/// <summary>
 /// Bereits fachlich ausgewählte Videospur aus einer frischen Quelldatei oder aus einer vorhandenen Ziel-MKV.
 /// </summary>
 /// <param name="FilePath">Quelldatei, aus der die Videospur gelesen wird.</param>

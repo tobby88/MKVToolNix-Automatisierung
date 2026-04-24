@@ -101,9 +101,12 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 IsDefaultTrack: index == 0,
                 LanguageCode: videoSelection.LanguageCode))
             .ToList();
-        var audioDescriptionPath = !string.IsNullOrWhiteSpace(archiveDecision.AudioDescriptionFilePath)
-            ? archiveDecision.AudioDescriptionFilePath
-            : string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
+        var retainedAudioDescriptionSources = archiveDecision.AudioDescriptionSources;
+        var audioDescriptionPath = retainedAudioDescriptionSources.Count > 0
+            ? retainedAudioDescriptionSources[0].FilePath
+            : !string.IsNullOrWhiteSpace(archiveDecision.AudioDescriptionFilePath)
+                ? archiveDecision.AudioDescriptionFilePath
+                : string.IsNullOrWhiteSpace(request.AudioDescriptionPath) ? null : request.AudioDescriptionPath;
         var audioSources = await BuildNormalAudioSourcesAsync(
             mkvMergePath,
             effectiveOutputPath,
@@ -124,9 +127,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var fallbackAudioLanguage = audioSources.Count > 0
             ? audioSources[0].LanguageCode
             : videoSources[0].LanguageCode;
-        AudioTrackMetadata? audioDescriptionMetadata = audioDescriptionPath is null
-            ? null
-            : archiveDecision.AudioDescriptionTrackId is int trackId
+        AudioTrackMetadata? audioDescriptionMetadata = null;
+        IReadOnlyList<AudioDescriptionSourcePlan> audioDescriptionSources;
+        if (retainedAudioDescriptionSources.Count > 0)
+        {
+            audioDescriptionSources = retainedAudioDescriptionSources;
+        }
+        else if (audioDescriptionPath is null)
+        {
+            audioDescriptionSources = [];
+        }
+        else
+        {
+            audioDescriptionMetadata = archiveDecision.AudioDescriptionTrackId is int trackId
                 ? await ReadEmbeddedAudioTrackMetadataAsync(
                     mkvMergePath,
                     audioDescriptionPath,
@@ -134,12 +147,19 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     fallbackAudioLanguage,
                     cancellationToken)
                 : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
-        var primaryAudioLanguage = audioSources.Count > 0
-            ? audioSources[0].LanguageCode
-            : audioDescriptionMetadata?.Language ?? fallbackAudioLanguage;
-        var primaryAudioCodecLabel = audioSources.Count > 0
-            ? TryReadCodecLabelFromTrackName(audioSources[0].TrackName) ?? "Audio"
-            : audioDescriptionMetadata?.CodecLabel ?? "Audio";
+            var (sourceTrackName, sourceLanguageCode) = BuildAudioDescriptionTrackMetadata(
+                fallbackAudioLanguage,
+                audioDescriptionMetadata.CodecLabel,
+                audioDescriptionMetadata);
+            audioDescriptionSources =
+            [
+                new AudioDescriptionSourcePlan(
+                    audioDescriptionPath,
+                    audioDescriptionMetadata.TrackId,
+                    sourceTrackName ?? "Audiodeskription",
+                    sourceLanguageCode ?? MediaLanguageHelper.NormalizeMuxLanguageCode(fallbackAudioLanguage))
+            ];
+        }
         if (audioSources.Count == 0)
         {
             notes.Add("Keine normale Audiospur vorhanden. Der Plan übernimmt nur die Audiodeskription des Sondermaterials.");
@@ -177,10 +197,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
             notes.Add("Die ausgewählte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }
 
-        var (audioDescriptionTrackName, audioDescriptionLanguageCode) = BuildAudioDescriptionTrackMetadata(
-            primaryAudioLanguage,
-            primaryAudioCodecLabel,
-            audioDescriptionMetadata);
+        var primaryAudioDescriptionSource = audioDescriptionSources.FirstOrDefault();
+        var audioDescriptionTrackName = primaryAudioDescriptionSource?.TrackName;
+        var audioDescriptionLanguageCode = primaryAudioDescriptionSource?.LanguageCode;
         var mkvPropEditPath = archiveDecision.TrackHeaderEdits.Count > 0 || archiveDecision.ContainerTitleEdit is not null
             ? _locator.FindMkvPropEditPath()
             : null;
@@ -210,7 +229,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveDecision.TrackHeaderEdits,
             archiveDecision.ContainerTitleEdit,
             notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-            request.OriginalLanguage);
+            request.OriginalLanguage,
+            audioDescriptionSources);
     }
 
     /// <summary>

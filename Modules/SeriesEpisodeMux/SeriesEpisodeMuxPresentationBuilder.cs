@@ -89,11 +89,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         var filePaths = new List<string>();
         filePaths.AddRange(plan.VideoSources.Select(video => video.FilePath));
         filePaths.AddRange(plan.AudioSources.Select(audio => audio.FilePath));
-
-        if (!string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath))
-        {
-            filePaths.Add(plan.AudioDescriptionFilePath);
-        }
+        filePaths.AddRange(plan.AudioDescriptionSources.Select(audioDescription => audioDescription.FilePath));
 
         if (!string.IsNullOrWhiteSpace(plan.AttachmentSourcePath)
             && !string.Equals(plan.AttachmentSourcePath, plan.OutputFilePath, StringComparison.OrdinalIgnoreCase))
@@ -142,7 +138,7 @@ internal static class SeriesEpisodeMuxPresentationBuilder
                 builder.AppendLine($"- {Path.GetFileName(audioSource.FilePath)} -> {audioSource.TrackName}{defaultText}");
             }
 
-            builder.AppendLine($"AD: {(plan.AudioDescriptionFilePath is null ? "keine" : Path.GetFileName(plan.AudioDescriptionFilePath))}");
+            builder.AppendLine($"AD: {BuildAudioDescriptionPreview(plan)}");
             builder.AppendLine($"Untertitel: {(plan.SubtitleFiles.Count == 0 ? "keine" : string.Join(", ", plan.SubtitleFiles.Select(file => file.PreviewLabel)))}");
             builder.AppendLine($"Anhänge: {BuildAttachmentPreview(plan)}");
 
@@ -264,19 +260,18 @@ internal static class SeriesEpisodeMuxPresentationBuilder
 
     private static IReadOnlyList<EpisodeUsageItem> BuildAudioDescriptionUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
     {
-        if (string.IsNullOrWhiteSpace(plan.AudioDescriptionFilePath))
+        if (plan.AudioDescriptionSources.Count == 0)
         {
             return [new EpisodeUsageItem("(keine)", EpisodeUsageItemKind.Neutral)];
         }
 
-        return
-        [
-            BuildFileBackedUsageItem(
+        return plan.AudioDescriptionSources
+            .Select(audioDescriptionSource => BuildFileBackedUsageItem(
                 plan,
-                plan.AudioDescriptionFilePath,
-                plan.AudioDescriptionTrackName ?? "Audiodeskription",
-                highlightAdditions)
-        ];
+                audioDescriptionSource.FilePath,
+                audioDescriptionSource.TrackName,
+                highlightAdditions))
+            .ToList();
     }
 
     private static IReadOnlyList<EpisodeUsageItem> BuildSubtitleUsageItems(SeriesEpisodeMuxPlan plan, bool highlightAdditions)
@@ -323,6 +318,13 @@ internal static class SeriesEpisodeMuxPresentationBuilder
         return items.Count == 1 && string.Equals(items[0].Text, "keine", StringComparison.OrdinalIgnoreCase)
             ? "keine"
             : string.Join(", ", items.Select(item => item.Text));
+    }
+
+    private static string BuildAudioDescriptionPreview(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.AudioDescriptionSources.Count == 0
+            ? "keine"
+            : string.Join(", ", plan.AudioDescriptionSources.Select(source => Path.GetFileName(source.FilePath)));
     }
 
     private static EpisodeUsageItem BuildFileBackedUsageItem(
