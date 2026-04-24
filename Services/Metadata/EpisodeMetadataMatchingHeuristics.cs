@@ -376,7 +376,13 @@ internal static class EpisodeMetadataMatchingHeuristics
             || normalized.StartsWith("trailer ", StringComparison.Ordinal)
             || normalized.StartsWith("backdrop ", StringComparison.Ordinal)
             || normalized.StartsWith("making of ", StringComparison.Ordinal)
-            || normalized.StartsWith("makingof ", StringComparison.Ordinal);
+            || normalized.StartsWith("makingof ", StringComparison.Ordinal)
+            || normalized.EndsWith(" trailer", StringComparison.Ordinal)
+            || normalized.EndsWith(" backdrop", StringComparison.Ordinal)
+            || normalized.EndsWith(" bonus", StringComparison.Ordinal)
+            || normalized.EndsWith(" special", StringComparison.Ordinal)
+            || normalized.Contains(" making of ", StringComparison.Ordinal)
+            || normalized.Contains(" makingof ", StringComparison.Ordinal);
     }
 
     private static bool ContainsTokenPhrase(string haystack, string needle)

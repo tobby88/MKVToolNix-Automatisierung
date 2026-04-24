@@ -372,6 +372,29 @@ public sealed class EpisodeMetadataLookupServiceTests
     }
 
     [Fact]
+    public async Task ResolveAutomaticallyAsync_DoesNotMapTrailerSuffixToNormalEpisode()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Pettersson und Findus", "1999", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(210, "Findus zieht um", 2, 10, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Pettersson und Findus", "Findus zieht um Trailer", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.Null(result.Selection);
+    }
+
+    [Fact]
     public async Task ResolveAutomaticallyAsync_DoesNotMapWeakTitleMatchByEpisodeNumberOnly()
     {
         var settings = new AppMetadataSettings

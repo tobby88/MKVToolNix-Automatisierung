@@ -507,6 +507,46 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Apply_SkipsWholeGroup_WhenDefectiveTargetAlreadyExists()
+    {
+        var defectiveDirectory = Path.Combine(_rootDirectory, "defekt");
+        Directory.CreateDirectory(defectiveDirectory);
+
+        var videoPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.txt");
+        var subtitlePath = Path.Combine(_rootDirectory, "Neues aus Büttenwarder-Bildungsschock-0186867506.srt");
+        var existingDefectiveTarget = Path.Combine(defectiveDirectory, Path.GetFileName(videoPath));
+        CreateFileWithByteLength(videoPath, length: 1024 * 1024, value: 1);
+        CreateFileWithByteLength(existingDefectiveTarget, length: 2048 * 1024, value: 2);
+        CreateCompanionText(
+            textPath,
+            topic: "Neues aus Büttenwarder",
+            title: "Bildungsschock",
+            sizeText: "100,0 MiB");
+        CreateEmptyFile(subtitlePath);
+
+        var scanResult = _service.Scan(_rootDirectory);
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            scanResult.Items
+                .Where(item => DownloadSortItemStates.IsSortable(item.State))
+                .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.SuggestedFolderName, item.DefectiveFilePaths))
+                .ToList(),
+            scanResult.FolderRenames);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(videoPath));
+        Assert.True(File.Exists(textPath));
+        Assert.True(File.Exists(subtitlePath));
+        Assert.True(File.Exists(existingDefectiveTarget));
+        Assert.Equal(2048 * 1024, new FileInfo(existingDefectiveTarget).Length);
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "Neues aus Büttenwarder", Path.GetFileName(textPath))));
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("KONFLIKT:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Apply_MovesOnlyTxtPairCompletelyToDefectiveFolder()
     {
         var videoPath = Path.Combine(_rootDirectory, "Der Alte-Der Alte_ Wunschkind-0264348449.mp4");

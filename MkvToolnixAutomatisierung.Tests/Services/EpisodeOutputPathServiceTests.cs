@@ -285,6 +285,30 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryResolveExistingSpecialArchiveMatch_DoesNotMapNormalEpisodeTitleToTrailer()
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFilePath = Path.Combine(
+            archiveRoot,
+            "Pettersson und Findus",
+            "Trailers",
+            "Findus zieht um Trailer.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFilePath)!);
+        File.WriteAllText(archiveFilePath, "archive");
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archiveService.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archiveService);
+
+        var match = service.TryResolveExistingSpecialArchiveMatch(
+            archiveRoot,
+            ["Pettersson und Findus"],
+            "Findus zieht um");
+
+        Assert.Null(match);
+    }
+
+    [Fact]
     public void TryResolveExistingSpecialArchiveMatch_ReturnsNull_WhenBestSpecialMatchIsAmbiguous()
     {
         var archiveRoot = Path.Combine(_tempDirectory, "archive-root");

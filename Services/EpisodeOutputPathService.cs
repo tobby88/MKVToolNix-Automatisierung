@@ -134,6 +134,7 @@ internal sealed class EpisodeOutputPathService
             return null;
         }
 
+        var sourceIsSpecialMaterial = IsSpecialMaterialSourceTitle(title);
         var normalizedTitleKey = BuildSpecialArchiveTitleKey(title);
         if (string.IsNullOrWhiteSpace(normalizedTitleKey))
         {
@@ -157,7 +158,9 @@ internal sealed class EpisodeOutputPathService
             .Cast<SpecialArchiveCandidate>()
             .Select(candidate => candidate with
             {
-                Score = CalculateSpecialArchiveMatchScore(normalizedTitleKey, candidate.TitleKey)
+                Score = LimitSpecialArchiveScore(
+                    CalculateSpecialArchiveMatchScore(normalizedTitleKey, candidate.TitleKey),
+                    sourceIsSpecialMaterial)
             })
             .Where(candidate => candidate.Score >= 80)
             .OrderByDescending(candidate => candidate.Score)
@@ -377,6 +380,22 @@ internal sealed class EpisodeOutputPathService
         return smallerTokenCount > 0 && sharedTokens == smallerTokenCount && sharedTokens >= 3
             ? 82
             : 0;
+    }
+
+    private static int LimitSpecialArchiveScore(int score, bool sourceIsSpecialMaterial)
+    {
+        return sourceIsSpecialMaterial || score >= 100
+            ? score
+            : 0;
+    }
+
+    private static bool IsSpecialMaterialSourceTitle(string value)
+    {
+        var normalized = NormalizeArchiveDisplayText(value);
+        return Regex.IsMatch(
+            normalized,
+            @"(^|[\s:_-])(?:Extra|Bonus|Special|Trailer|Backdrop|Making\s*[- ]?\s*of)([\s:_-]|$)",
+            RegexOptions.IgnoreCase);
     }
 
     private static string BuildSpecialArchiveTitleKey(string value)

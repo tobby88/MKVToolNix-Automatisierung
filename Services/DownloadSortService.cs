@@ -361,18 +361,28 @@ internal sealed class DownloadSortService
                 continue;
             }
 
+            var defectiveFilePaths = request.FilePaths.Where(defectiveFilePathSet.Contains).ToList();
+            var defectiveDirectory = Path.Combine(rootDirectory, DefectiveFolderName);
+            var defectiveTargetConflict = FindExistingTargetFile(defectiveFilePaths, defectiveDirectory);
+            if (!string.IsNullOrWhiteSpace(defectiveTargetConflict))
+            {
+                skippedGroupCount++;
+                logLines.Add(
+                    $"KONFLIKT: {request.DisplayName} -> Im Ordner '{DefectiveFolderName}' existiert bereits '{Path.GetFileName(defectiveTargetConflict)}'.");
+                continue;
+            }
+
             var groupMovedCount = 0;
             if (targetDirectory is not null)
             {
                 groupMovedCount += MoveFiles(regularFilePaths, targetDirectory, targetFolderName, logLines);
             }
 
-            if (defectiveFilePathSet.Count > 0)
+            if (defectiveFilePaths.Count > 0)
             {
-                var defectiveDirectory = Path.Combine(rootDirectory, DefectiveFolderName);
                 Directory.CreateDirectory(defectiveDirectory);
                 groupMovedCount += MoveFiles(
-                    request.FilePaths.Where(defectiveFilePathSet.Contains).ToList(),
+                    defectiveFilePaths,
                     defectiveDirectory,
                     DefectiveFolderName,
                     logLines);
@@ -446,6 +456,25 @@ internal sealed class DownloadSortService
         }
 
         return movedCount;
+    }
+
+    private static string? FindExistingTargetFile(IReadOnlyList<string> filePaths, string targetDirectory)
+    {
+        foreach (var filePath in filePaths)
+        {
+            var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
+            if (PathComparisonHelper.AreSamePath(filePath, destinationPath))
+            {
+                continue;
+            }
+
+            if (File.Exists(destinationPath))
+            {
+                return destinationPath;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
