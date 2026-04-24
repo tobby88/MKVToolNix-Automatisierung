@@ -334,6 +334,7 @@ public sealed class MkvMergeIdentifyParserTests
                             "language_ietf": "deu",
                             "flag_visual_impaired": true,
                             "flag_hearing_impaired": false,
+                            "flag_original": true,
                             "default_track": true
                         }
                     }
@@ -348,5 +349,6 @@ public sealed class MkvMergeIdentifyParserTests
         Assert.True(track.IsVisualImpaired);
         Assert.False(track.IsHearingImpaired);
         Assert.True(track.IsDefaultTrack);
+        Assert.True(track.IsOriginalLanguage);
     }
 }

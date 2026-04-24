@@ -140,6 +140,60 @@ public sealed class SeriesEpisodeMuxPlanTests
     }
 
     [Fact]
+    public void BuildArguments_UsesMkvPropEditForDirectTrackHeaderValueEdits()
+    {
+        var plan = new SeriesEpisodeMuxPlan(
+            mkvMergePath: @"C:\Tools\mkvmerge.exe",
+            outputFilePath: @"C:\Temp\output.mkv",
+            title: "Pilot",
+            videoSources:
+            [
+                new VideoSourcePlan(@"C:\Temp\output.mkv", 0, "Deutsch - FHD - H.264", IsDefaultTrack: true)
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(@"C:\Temp\output.mkv", 1, "Deutsch - E-AC-3", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null,
+            mkvPropEditPath: @"C:\Tools\mkvpropedit.exe",
+            trackHeaderEdits:
+            [
+                new TrackHeaderEditOperation(
+                    "track:3",
+                    "Untertitel 2",
+                    "Deutsch (hörgeschädigte) - SRT",
+                    "Deutsch (hörgeschädigte) - SRT",
+                    [
+                        new TrackHeaderValueEdit(
+                            "flag-hearing-impaired",
+                            "Hörgeschädigt",
+                            "nein",
+                            "ja",
+                            "1")
+                    ])
+            ],
+            notes: []);
+
+        var arguments = plan.BuildArguments();
+
+        AssertContainsSequence(arguments, "--edit", "track:3", "--set", "flag-hearing-impaired=1");
+    }
+
+    [Fact]
     public void BuildArguments_UsesMkvPropEditForContainerTitleNormalization()
     {
         var plan = new SeriesEpisodeMuxPlan(

@@ -526,7 +526,8 @@ public sealed partial class SeriesArchiveService
             retainedNormalAudioTracks,
             existingAudioDescriptions,
             existingArchive.SubtitleTracks,
-            subtitlePlan.EmbeddedPlans);
+            subtitlePlan.EmbeddedPlans,
+            request.OriginalLanguage);
         var requiresRelevantHeaderNormalization = relevantTrackHeaderEdits.Count > 0 || containerTitleEdit is not null;
 
         if (!needsAudioDescription

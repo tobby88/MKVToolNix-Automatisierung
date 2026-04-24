@@ -488,7 +488,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         string codec,
         string pixelDimensions,
         string trackName = "",
-        string language = "de")
+        string language = "de",
+        bool isDefaultTrack = false)
     {
         return new
         {
@@ -499,7 +500,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
             {
                 pixel_dimensions = pixelDimensions,
                 language_ietf = language,
-                track_name = trackName
+                track_name = trackName,
+                default_track = isDefaultTrack
             }
         };
     }
@@ -510,7 +512,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         string trackName = "",
         bool isVisualImpaired = false,
         string language = "de",
-        string? tagDuration = null)
+        string? tagDuration = null,
+        bool isDefaultTrack = false)
     {
         return new
         {
@@ -522,7 +525,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
                 language_ietf = language,
                 track_name = trackName,
                 flag_visual_impaired = isVisualImpaired,
-                tag_duration = tagDuration
+                tag_duration = tagDuration,
+                default_track = isDefaultTrack
             }
         };
     }

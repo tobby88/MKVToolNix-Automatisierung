@@ -38,12 +38,34 @@ internal static class SeriesEpisodeMuxHeaderEditArgumentBuilder
             arguments.AddRange(
             [
                 "--edit",
-                headerEdit.Selector,
-                "--set",
-                $"name={headerEdit.ExpectedTrackName}"
+                headerEdit.Selector
             ]);
+
+            foreach (var valueEdit in ResolveValueEdits(headerEdit))
+            {
+                arguments.AddRange(
+                [
+                    "--set",
+                    $"{valueEdit.PropertyName}={valueEdit.ExpectedMkvPropEditValue}"
+                ]);
+            }
         }
 
         return arguments;
+    }
+
+    private static IReadOnlyList<TrackHeaderValueEdit> ResolveValueEdits(TrackHeaderEditOperation headerEdit)
+    {
+        return headerEdit.ValueEdits is { Count: > 0 }
+            ? headerEdit.ValueEdits
+            :
+            [
+                new TrackHeaderValueEdit(
+                    "name",
+                    "Name",
+                    headerEdit.CurrentTrackName,
+                    headerEdit.ExpectedTrackName,
+                    headerEdit.ExpectedTrackName)
+            ];
     }
 }

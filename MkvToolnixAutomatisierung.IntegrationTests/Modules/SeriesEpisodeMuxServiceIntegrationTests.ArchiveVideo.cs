@@ -426,8 +426,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             outputPath,
             [CreateAttachment("cover.jpg")],
             "Pilot",
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
             CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
 
@@ -478,8 +478,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             outputPath,
             [CreateAttachment("cover.jpg")],
             "Pilot",
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel"),
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Alter Audiotitel", isDefaultTrack: true),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true),
             CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
 
@@ -522,7 +522,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_KeepingArchivePrimary_WhenSubtitleNameIndicatesHearingImpaired_DoesNotRenameToStandard()
+    public async Task CreatePlanAsync_KeepingArchivePrimary_WhenSubtitleNameIndicatesHearingImpaired_SetsMissingFlagWithoutRenaming()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-name-hi");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-name-hi");
@@ -544,8 +544,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
             "Die letzte Runde",
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true),
             CreateSubtitleTrack(2, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: false));
 
         var service = CreateMuxService(archiveDirectory);
@@ -558,10 +558,14 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             outputPath,
             Title: "Die letzte Runde"));
 
-        Assert.True(plan.SkipMux);
+        Assert.False(plan.SkipMux);
+        Assert.True(plan.HasTrackHeaderEdits);
         var summary = plan.BuildUsageSummary();
         Assert.Contains("Aus Zieldatei: Deutsch (hörgeschädigte) - SRT", summary.Subtitles.CurrentText, StringComparison.Ordinal);
         Assert.DoesNotContain(plan.Notes, note => note.Contains("Deutsch (hörgeschädigte) - SRT -> Deutsch - SRT", StringComparison.Ordinal));
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--edit", "track:3", "--set", "flag-hearing-impaired=1");
     }
 
     [Fact]
@@ -589,8 +593,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             outputPath,
             [],
             "Alter Pilot-Titel",
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"));
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true));
 
         var service = CreateMuxService(archiveDirectory);
 
@@ -898,8 +902,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
             "Olympische Rekorde",
-            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
-            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3"),
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true),
             CreateSubtitleTrack(2, "SubStationAlpha", trackName: "Deutsch (hörgeschädigte) - SSA", isHearingImpaired: true),
             CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
 
@@ -1060,8 +1064,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
             outputPath,
             "Büttenwarder mobil - Killerkralles Mondn Beik",
-            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de", trackName: "Deutsch - HD - H.264"),
-            CreateAudioTrack(1, "AAC", language: "de", trackName: "Deutsch - AAC"));
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de", trackName: "Deutsch - HD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "AAC", language: "de", trackName: "Deutsch - AAC", isDefaultTrack: true));
 
         var service = CreateMuxService(archiveDirectory);
 

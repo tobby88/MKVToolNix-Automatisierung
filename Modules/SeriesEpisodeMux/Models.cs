@@ -151,6 +151,7 @@ public sealed record ContainerTrackMetadata(
     bool IsVisualImpaired,
     bool IsHearingImpaired,
     bool IsDefaultTrack,
+    bool IsOriginalLanguage = false,
     TimeSpan? Duration = null);
 
 /// <summary>
@@ -169,7 +170,22 @@ public sealed record ContainerMetadata(
     IReadOnlyList<ContainerAttachmentMetadata> Attachments);
 
 /// <summary>
-/// Beschreibt eine direkte Header-Anpassung an einer bereits vorhandenen MKV-Datei.
+/// Beschreibt einen einzelnen zu ändernden Track-Header-Wert einer vorhandenen MKV-Datei.
+/// </summary>
+/// <param name="PropertyName">Von <c>mkvpropedit</c> verstandener Property-Name, z. B. <c>name</c> oder <c>flag-default</c>.</param>
+/// <param name="DisplayName">Lesbarer Anzeigename für Hinweise und Vorschau.</param>
+/// <param name="CurrentDisplayValue">Aktueller Wert in lesbarer Form.</param>
+/// <param name="ExpectedDisplayValue">Zielwert in lesbarer Form.</param>
+/// <param name="ExpectedMkvPropEditValue">Zielwert in der von <c>mkvpropedit</c> erwarteten Rohform.</param>
+public sealed record TrackHeaderValueEdit(
+    string PropertyName,
+    string DisplayName,
+    string CurrentDisplayValue,
+    string ExpectedDisplayValue,
+    string ExpectedMkvPropEditValue);
+
+/// <summary>
+/// Beschreibt direkte Header-Anpassungen an einer konkreten Spur einer vorhandenen MKV-Datei.
 /// </summary>
 /// <param name="Selector">
 /// Von <c>mkvpropedit</c> verstandener Edit-Selektor für genau den zu bearbeitenden Track.
@@ -179,11 +195,13 @@ public sealed record ContainerMetadata(
 /// <param name="DisplayLabel">Lesbare Kurzbeschreibung der betroffenen Spur für GUI und Vorschau.</param>
 /// <param name="CurrentTrackName">Aktuell im Container gesetzter Trackname.</param>
 /// <param name="ExpectedTrackName">Projektweit erwarteter Zielname für diesen Track.</param>
+/// <param name="ValueEdits">Alle Header-Werte, die an dieser Spur gesetzt werden müssen.</param>
 public sealed record TrackHeaderEditOperation(
     string Selector,
     string DisplayLabel,
     string CurrentTrackName,
-    string ExpectedTrackName);
+    string ExpectedTrackName,
+    IReadOnlyList<TrackHeaderValueEdit>? ValueEdits = null);
 
 /// <summary>
 /// Beschreibt eine direkte Anpassung des Container-Titels einer vorhandenen MKV-Datei.

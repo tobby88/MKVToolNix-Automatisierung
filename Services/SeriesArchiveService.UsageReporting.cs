@@ -133,6 +133,24 @@ public sealed partial class SeriesArchiveService
 
     private static string BuildTrackHeaderChangeNote(TrackHeaderEditOperation edit)
     {
+        if (edit.ValueEdits is { Count: > 0 })
+        {
+            if (edit.ValueEdits.Count == 1 && string.Equals(edit.ValueEdits[0].PropertyName, "name", StringComparison.Ordinal))
+            {
+                return BuildTrackNameHeaderChangeNote(edit);
+            }
+
+            var changes = edit.ValueEdits
+                .Select(valueEdit => $"{valueEdit.DisplayName}: {FormatHeaderValue(valueEdit.CurrentDisplayValue)} -> {FormatHeaderValue(valueEdit.ExpectedDisplayValue)}")
+                .ToList();
+            return $"{FormatHeaderValue(edit.DisplayLabel)}: {string.Join("; ", changes)}";
+        }
+
+        return BuildTrackNameHeaderChangeNote(edit);
+    }
+
+    private static string BuildTrackNameHeaderChangeNote(TrackHeaderEditOperation edit)
+    {
         var currentValue = FormatHeaderValue(edit.CurrentTrackName);
         var expectedValue = FormatHeaderValue(edit.ExpectedTrackName);
         return string.Equals(FormatHeaderValue(edit.DisplayLabel), currentValue, StringComparison.Ordinal)
@@ -225,41 +243,58 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<ContainerTrackMetadata> retainedNormalAudioTracks,
         IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
-        IReadOnlyList<SubtitleFile> embeddedSubtitlePlans)
+        IReadOnlyList<SubtitleFile> embeddedSubtitlePlans,
+        string? originalLanguage)
     {
         var selectorByTrackId = allExistingTracks
             .Select((track, index) => new KeyValuePair<int, string>(track.TrackId, $"track:{index + 1}"))
             .ToDictionary(entry => entry.Key, entry => entry.Value);
         var operations = new List<TrackHeaderEditOperation>();
 
-        foreach (var existingVideoTrack in retainedExistingVideoTracks)
+        foreach (var entry in retainedExistingVideoTracks.Select((track, index) => new { Track = track, Index = index }))
         {
             TryAppendTrackHeaderEdit(
                 operations,
                 selectorByTrackId,
-                existingVideoTrack,
-                BuildExpectedVideoTrackName(existingVideoTrack),
-                $"Video {existingVideoTrack.TrackId}");
+                entry.Track,
+                BuildExpectedVideoTrackName(entry.Track),
+                $"Video {entry.Track.TrackId}",
+                expectedLanguageCode: entry.Track.Language,
+                expectedDefaultFlag: entry.Index == 0,
+                expectedVisualImpairedFlag: null,
+                expectedHearingImpairedFlag: null,
+                expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
         }
 
-        foreach (var retainedNormalAudioTrack in retainedNormalAudioTracks)
+        foreach (var entry in retainedNormalAudioTracks.Select((track, index) => new { Track = track, Index = index }))
         {
             TryAppendTrackHeaderEdit(
                 operations,
                 selectorByTrackId,
-                retainedNormalAudioTrack,
-                BuildExpectedAudioTrackName(retainedNormalAudioTrack),
-                $"Audio {retainedNormalAudioTrack.TrackId}");
+                entry.Track,
+                BuildExpectedAudioTrackName(entry.Track),
+                $"Audio {entry.Track.TrackId}",
+                expectedLanguageCode: entry.Track.Language,
+                expectedDefaultFlag: entry.Index == 0,
+                expectedVisualImpairedFlag: false,
+                expectedHearingImpairedFlag: null,
+                expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
         }
 
         foreach (var existingAudioDescription in existingAudioDescriptions)
         {
+            var expectedLanguageCode = ResolveAudioDescriptionLanguage(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language);
             TryAppendTrackHeaderEdit(
                 operations,
                 selectorByTrackId,
                 existingAudioDescription,
                 BuildExpectedAudioDescriptionTrackName(existingAudioDescription, retainedNormalAudioTracks.FirstOrDefault()?.Language),
-                $"Audiodeskription {existingAudioDescription.TrackId}");
+                $"Audiodeskription {existingAudioDescription.TrackId}",
+                expectedLanguageCode,
+                expectedDefaultFlag: false,
+                expectedVisualImpairedFlag: true,
+                expectedHearingImpairedFlag: null,
+                expectedOriginalFlag: BuildExpectedOriginalFlag(expectedLanguageCode, originalLanguage));
         }
 
         foreach (var subtitlePlan in embeddedSubtitlePlans)
@@ -280,18 +315,15 @@ public sealed partial class SeriesArchiveService
                 selectorByTrackId,
                 existingTrack,
                 subtitlePlan.TrackName,
-                $"Untertitel {embeddedTrackId}");
+                $"Untertitel {embeddedTrackId}",
+                expectedLanguageCode: subtitlePlan.LanguageCode,
+                expectedDefaultFlag: false,
+                expectedVisualImpairedFlag: null,
+                expectedHearingImpairedFlag: subtitlePlan.IsHearingImpaired,
+                expectedOriginalFlag: BuildExpectedOriginalFlag(subtitlePlan.LanguageCode, originalLanguage));
         }
 
         return operations;
-    }
-
-    private static bool HasConsistentTrackName(string? currentTrackName, string expectedTrackName)
-    {
-        return string.Equals(
-            (currentTrackName ?? string.Empty).Trim(),
-            expectedTrackName.Trim(),
-            StringComparison.Ordinal);
     }
 
     private static ArchiveUsageChange? BuildRemovedAdditionalVideoChange(
@@ -398,10 +430,15 @@ public sealed partial class SeriesArchiveService
 
     private static string BuildExpectedAudioDescriptionTrackName(ContainerTrackMetadata track, string? fallbackLanguage)
     {
-        var languageCode = string.IsNullOrWhiteSpace(track.Language)
+        var languageCode = ResolveAudioDescriptionLanguage(track, fallbackLanguage);
+        return $"{MediaLanguageHelper.GetLanguageDisplayName(languageCode)} (sehbehinderte) - {track.CodecLabel}";
+    }
+
+    private static string? ResolveAudioDescriptionLanguage(ContainerTrackMetadata track, string? fallbackLanguage)
+    {
+        return string.IsNullOrWhiteSpace(track.Language)
             ? fallbackLanguage
             : track.Language;
-        return $"{MediaLanguageHelper.GetLanguageDisplayName(languageCode)} (sehbehinderte) - {track.CodecLabel}";
     }
 
     private static IReadOnlyList<AudioDescriptionSourcePlan> BuildRetainedAudioDescriptionSources(
@@ -466,10 +503,27 @@ public sealed partial class SeriesArchiveService
         IReadOnlyDictionary<int, string> selectorByTrackId,
         ContainerTrackMetadata track,
         string expectedTrackName,
-        string fallbackDisplayLabel)
+        string fallbackDisplayLabel,
+        string? expectedLanguageCode,
+        bool? expectedDefaultFlag,
+        bool? expectedVisualImpairedFlag,
+        bool? expectedHearingImpairedFlag,
+        bool? expectedOriginalFlag)
     {
-        if (HasConsistentTrackName(track.TrackName, expectedTrackName)
-            || !selectorByTrackId.TryGetValue(track.TrackId, out var selector))
+        if (!selectorByTrackId.TryGetValue(track.TrackId, out var selector))
+        {
+            return;
+        }
+
+        var valueEdits = BuildTrackHeaderValueEdits(
+            track,
+            expectedTrackName,
+            expectedLanguageCode,
+            expectedDefaultFlag,
+            expectedVisualImpairedFlag,
+            expectedHearingImpairedFlag,
+            expectedOriginalFlag);
+        if (valueEdits.Count == 0)
         {
             return;
         }
@@ -481,6 +535,100 @@ public sealed partial class SeriesArchiveService
             selector,
             displayLabel,
             track.TrackName,
-            expectedTrackName));
+            expectedTrackName,
+            valueEdits));
+    }
+
+    private static IReadOnlyList<TrackHeaderValueEdit> BuildTrackHeaderValueEdits(
+        ContainerTrackMetadata track,
+        string expectedTrackName,
+        string? expectedLanguageCode,
+        bool? expectedDefaultFlag,
+        bool? expectedVisualImpairedFlag,
+        bool? expectedHearingImpairedFlag,
+        bool? expectedOriginalFlag)
+    {
+        var edits = new List<TrackHeaderValueEdit>();
+        TryAddTextHeaderEdit(
+            edits,
+            propertyName: "name",
+            displayName: "Name",
+            currentValue: track.TrackName,
+            expectedValue: expectedTrackName);
+
+        var normalizedExpectedLanguage = MediaLanguageHelper.NormalizeMuxLanguageCode(expectedLanguageCode);
+        TryAddTextHeaderEdit(
+            edits,
+            propertyName: "language",
+            displayName: "Sprache",
+            currentValue: MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language),
+            expectedValue: normalizedExpectedLanguage);
+
+        TryAddFlagHeaderEdit(edits, "flag-default", "Standard", track.IsDefaultTrack, expectedDefaultFlag);
+        TryAddFlagHeaderEdit(edits, "flag-visual-impaired", "Sehbehindert", track.IsVisualImpaired, expectedVisualImpairedFlag);
+        TryAddFlagHeaderEdit(edits, "flag-hearing-impaired", "Hörgeschädigt", track.IsHearingImpaired, expectedHearingImpairedFlag);
+        TryAddFlagHeaderEdit(edits, "flag-original", "Originalsprache", track.IsOriginalLanguage, expectedOriginalFlag);
+
+        return edits;
+    }
+
+    private static void TryAddTextHeaderEdit(
+        ICollection<TrackHeaderValueEdit> edits,
+        string propertyName,
+        string displayName,
+        string? currentValue,
+        string? expectedValue)
+    {
+        var normalizedCurrent = (currentValue ?? string.Empty).Trim();
+        var normalizedExpected = (expectedValue ?? string.Empty).Trim();
+        if (string.Equals(normalizedCurrent, normalizedExpected, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        edits.Add(new TrackHeaderValueEdit(
+            propertyName,
+            displayName,
+            normalizedCurrent,
+            normalizedExpected,
+            normalizedExpected));
+    }
+
+    private static void TryAddFlagHeaderEdit(
+        ICollection<TrackHeaderValueEdit> edits,
+        string propertyName,
+        string displayName,
+        bool currentValue,
+        bool? expectedValue)
+    {
+        if (expectedValue is null || currentValue == expectedValue.Value)
+        {
+            return;
+        }
+
+        edits.Add(new TrackHeaderValueEdit(
+            propertyName,
+            displayName,
+            FormatBooleanHeaderValue(currentValue),
+            FormatBooleanHeaderValue(expectedValue.Value),
+            expectedValue.Value ? "1" : "0"));
+    }
+
+    private static bool? BuildExpectedOriginalFlag(string? languageCode, string? originalLanguage)
+    {
+        if (string.IsNullOrWhiteSpace(originalLanguage))
+        {
+            return null;
+        }
+
+        return string.Equals(
+            SeriesEpisodeMuxArgumentBuilder.ResolveOriginalFlag(languageCode, originalLanguage),
+            "yes",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatBooleanHeaderValue(bool value)
+    {
+        return value ? "ja" : "nein";
     }
 }
