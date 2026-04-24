@@ -496,9 +496,7 @@ public sealed partial class SeriesArchiveService
     private static string BuildSubtitleTrackLabel(string outputPath, ContainerTrackMetadata track)
     {
         var kind = SubtitleKind.FromExistingCodec(track.CodecLabel);
-        var label = kind is null
-            ? (string.IsNullOrWhiteSpace(track.TrackName) ? track.CodecLabel : track.TrackName)
-            : BuildEmbeddedSubtitleLabel(track, kind);
+        var label = BuildEmbeddedSubtitleLabel(track, kind);
         return $"{Path.GetFileName(outputPath)} -> {label}";
     }
 

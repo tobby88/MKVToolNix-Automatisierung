@@ -415,13 +415,13 @@ public sealed record SubtitleKind(string DisplayName, int SortRank)
     /// Leitet den projektweit verwendeten Untertiteltyp aus vorhandenen Container-Metadaten ab.
     /// </summary>
     /// <param name="codecLabel">Bereits normalisiertes oder rohes Codec-Label der Spur.</param>
-    /// <returns>Normalisierter Untertiteltyp oder <see langword="null"/> für unbekannte Codecs.</returns>
-    public static SubtitleKind? FromExistingCodec(string codecLabel) => codecLabel.ToUpperInvariant() switch
+    /// <returns>Normalisierter Untertiteltyp. Unbekannte Codecs bleiben als erhaltbare Fallback-Spur sichtbar.</returns>
+    public static SubtitleKind FromExistingCodec(string codecLabel) => codecLabel.ToUpperInvariant() switch
     {
         "SSA" => new SubtitleKind("SSA", 0),
         "SRT" => new SubtitleKind("SRT", 1),
         "WEBVTT" => new SubtitleKind("WebVTT", 2),
-        _ => null
+        _ => new SubtitleKind("Unbekannt", 9)
     };
 }
 

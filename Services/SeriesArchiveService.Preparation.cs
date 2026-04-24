@@ -312,14 +312,13 @@ public sealed partial class SeriesArchiveService
                 Track = track,
                 Kind = SubtitleKind.FromExistingCodec(track.CodecLabel)
             })
-            .Where(entry => entry.Kind is not null)
-            .OrderBy(entry => entry.Kind!.SortRank)
+            .OrderBy(entry => entry.Kind.SortRank)
             .ThenBy(entry => entry.Track.TrackId)
             .Select(entry => SubtitleFile.CreateEmbedded(
                     outputPath,
-                    entry.Kind!,
+                    entry.Kind,
                     entry.Track.TrackId,
-                    BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind!),
+                    BuildEmbeddedSubtitleLabel(entry.Track, entry.Kind),
                     entry.Track.Language)
                 with
                 {

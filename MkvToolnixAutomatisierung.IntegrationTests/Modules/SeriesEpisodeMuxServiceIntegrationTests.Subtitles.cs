@@ -43,7 +43,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_KeepingArchivePrimary_RemovesUnsupportedSubtitleTracks_WhenAnotherChangeRequiresMux()
+    public async Task CreatePlanAsync_KeepingArchivePrimary_PreservesUnknownEmbeddedSubtitleTracks_WhenAnotherChangeRequiresMux()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-remove-unsupported-subtitle");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-remove-unsupported-subtitle");
@@ -77,9 +77,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             ManualAttachmentPaths: [manualAttachmentPath]));
 
         Assert.False(plan.SkipMux);
-        Assert.Empty(plan.PrimarySourceSubtitleTrackIds!);
-        Assert.Contains("--no-subtitles", plan.BuildArguments());
-        Assert.Contains("Deutsch - PGS", plan.BuildUsageSummary().Subtitles.RemovedText, StringComparison.Ordinal);
+        Assert.Contains(plan.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 2 && subtitle.Kind.DisplayName == "Unbekannt");
+        Assert.Null(plan.BuildUsageSummary().Subtitles.RemovedText);
+
+        var arguments = plan.BuildArguments();
+        AssertContainsSequence(arguments, "--subtitle-tracks", "2");
     }
 
     [Fact]
