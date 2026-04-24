@@ -197,11 +197,6 @@ internal sealed class ManagedToolInstallerService
             PortableAppStorage.EnsureToolsDirectoryForSave();
             Directory.CreateDirectory(toolRootDirectory);
             ValidatePackageIntegrityMetadata(package);
-            if (Directory.Exists(versionDirectory))
-            {
-                Directory.Delete(versionDirectory, recursive: true);
-            }
-
             await DownloadArchiveAsync(package, archivePath, progress, cancellationToken);
             progress?.Report(
                 $"{GetToolDisplayName(package.Kind)} wird entpackt...",
@@ -214,8 +209,14 @@ internal sealed class ManagedToolInstallerService
                 progress?.CreateExtractionProgressAdapter(package.Kind),
                 package.Kind), cancellationToken);
 
-            Directory.Move(stagingDirectory, versionDirectory);
-            return ResolveInstalledPath(package.Kind, versionDirectory);
+            var installedPathInStaging = ResolveInstalledPath(package.Kind, stagingDirectory);
+            var installedPathInVersionDirectory = MapStagingInstalledPathToVersionDirectory(
+                stagingDirectory,
+                versionDirectory,
+                installedPathInStaging);
+
+            ReplaceVersionDirectoryWithStaging(stagingDirectory, versionDirectory);
+            return installedPathInVersionDirectory;
         }
         finally
         {
@@ -462,6 +463,60 @@ internal sealed class ManagedToolInstallerService
         return Path.Combine(
             PortableAppStorage.ToolsDirectory,
             toolKind == ManagedToolKind.MkvToolNix ? "mkvtoolnix" : "ffprobe");
+    }
+
+    private static string MapStagingInstalledPathToVersionDirectory(
+        string stagingDirectory,
+        string versionDirectory,
+        string installedPathInStaging)
+    {
+        var installedRelativePath = Path.GetRelativePath(stagingDirectory, installedPathInStaging);
+        return string.Equals(installedRelativePath, ".", StringComparison.Ordinal)
+            ? versionDirectory
+            : Path.Combine(versionDirectory, installedRelativePath);
+    }
+
+    private static void ReplaceVersionDirectoryWithStaging(string stagingDirectory, string versionDirectory)
+    {
+        var replacedDirectory = BuildReplacedVersionDirectoryPath(versionDirectory);
+        var movedExistingVersion = false;
+
+        if (Directory.Exists(versionDirectory))
+        {
+            Directory.Move(versionDirectory, replacedDirectory);
+            movedExistingVersion = true;
+        }
+
+        try
+        {
+            Directory.Move(stagingDirectory, versionDirectory);
+            TryDeleteDirectory(replacedDirectory);
+        }
+        catch
+        {
+            if (movedExistingVersion
+                && !Directory.Exists(versionDirectory)
+                && Directory.Exists(replacedDirectory))
+            {
+                Directory.Move(replacedDirectory, versionDirectory);
+            }
+
+            throw;
+        }
+    }
+
+    private static string BuildReplacedVersionDirectoryPath(string versionDirectory)
+    {
+        var parentDirectory = Path.GetDirectoryName(versionDirectory)
+                              ?? throw new InvalidOperationException("Der Zielordner für die Werkzeugversion ist ungültig.");
+        var directoryName = Path.GetFileName(versionDirectory);
+        var candidate = Path.Combine(parentDirectory, $".replaced-{directoryName}-{Guid.NewGuid():N}");
+        while (Directory.Exists(candidate))
+        {
+            candidate = Path.Combine(parentDirectory, $".replaced-{directoryName}-{Guid.NewGuid():N}");
+        }
+
+        return candidate;
     }
 
     private static string BuildWarningMessage(ManagedToolKind toolKind, Exception ex)

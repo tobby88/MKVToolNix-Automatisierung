@@ -532,6 +532,47 @@ public sealed class ManagedToolInstallerServiceTests
     }
 
     [Fact]
+    public async Task EnsureManagedToolsAsync_PreservesExistingVersionDirectory_WhenReplacementDownloadFails()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var versionDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "2026-04-22");
+        var existingFfprobePath = Path.Combine(versionDirectory, "ffprobe.exe");
+        Directory.CreateDirectory(versionDirectory);
+        File.WriteAllText(existingFfprobePath, "existing-tool");
+
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = true;
+        settings.ManagedFfprobe.InstalledPath = existingFfprobePath;
+        settings.ManagedFfprobe.InstalledVersion = "stale-version-token";
+        toolPathStore.Save(settings);
+
+        var archiveBytes = "corrupt-download"u8.ToArray();
+        var downloadUri = new Uri("https://example.invalid/ffprobe.zip");
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22",
+                "Latest Auto-Build",
+                downloadUri,
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                new string('b', 64)))],
+            new StubArchiveExtractor(_ => throw new Xunit.Sdk.XunitException("Extractor should not run after checksum failure.")),
+            new HttpClient(new FakeHttpMessageHandler((downloadUri, archiveBytes))));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+
+        Assert.False(result.HasWarning);
+        Assert.True(File.Exists(existingFfprobePath));
+        Assert.Equal("existing-tool", File.ReadAllText(existingFfprobePath));
+        Assert.Equal(existingFfprobePath, savedSettings.ManagedFfprobe.InstalledPath);
+        Assert.Equal("stale-version-token", savedSettings.ManagedFfprobe.InstalledVersion);
+    }
+
+    [Fact]
     public async Task EnsureManagedToolsAsync_ReportsMonotonicOverallProgressAcrossBothTools()
     {
         var settingsStore = new AppSettingsStore();
