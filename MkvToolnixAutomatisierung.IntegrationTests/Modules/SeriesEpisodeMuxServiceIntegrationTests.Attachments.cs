@@ -54,6 +54,48 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_ReplacingSingleArchiveVideo_KeepsSingleTextAttachment_WhenNoFreshTextExists()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-single-text-keep-without-replacement");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-single-text-keep-without-replacement");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var newPrimaryVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            newPrimaryVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFileWithAttachments(
+            outputPath,
+            [CreateAttachment("alte-spur.txt", id: 10), CreateAttachment("cover.jpg", id: 11)],
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            newPrimaryVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.Equal(outputPath, plan.AttachmentSourcePath);
+        Assert.Equal(["alte-spur.txt", "cover.jpg"], plan.PreservedAttachmentNames);
+        Assert.Empty(plan.AttachmentFilePaths);
+
+        var arguments = plan.BuildArguments();
+        var runtimeArchivePath = plan.WorkingCopy!.DestinationFilePath;
+        AssertContainsSequence(arguments, "--attachments", "10,11", runtimeArchivePath);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_ReplacingArchiveVideo_KeepsExistingTextAttachments_WhenMappingIsAmbiguous()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-ambiguous-text-keep");

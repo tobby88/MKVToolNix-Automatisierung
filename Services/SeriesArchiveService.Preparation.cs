@@ -54,6 +54,7 @@ public sealed partial class SeriesArchiveService
             existingArchive.Container.Attachments,
             existingArchive.VideoTracks,
             videoPlan.VideoSelections,
+            request.AttachmentPaths,
             cancellationToken);
 
         if (plannedVideos.Count == 0)

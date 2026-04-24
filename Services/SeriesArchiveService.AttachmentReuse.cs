@@ -18,6 +18,7 @@ public sealed partial class SeriesArchiveService
     /// <param name="existingAttachments">Alle bereits im Archivcontainer vorhandenen Attachments.</param>
     /// <param name="existingVideoTracks">Vorhandene Archivvideospuren zur Zuordnung eingebetteter TXT-Anhänge.</param>
     /// <param name="selectedVideoTracks">Final ausgewählte Videospuren des neuen Plans.</param>
+    /// <param name="requestAttachmentPaths">Explizit oder automatisch ausgewählte externe TXT-Anhänge des neuen Plans.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
     /// <returns>
     /// Eine Wiederverwendungsentscheidung für Archiv-Attachments. Nicht-TXT-Anhänge bleiben grundsätzlich erhalten;
@@ -29,6 +30,7 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<ContainerAttachmentMetadata> existingAttachments,
         IReadOnlyList<ContainerTrackMetadata> existingVideoTracks,
         IReadOnlyList<VideoTrackSelection> selectedVideoTracks,
+        IReadOnlyList<string> requestAttachmentPaths,
         CancellationToken cancellationToken)
     {
         if (existingAttachments.Count == 0)
@@ -56,6 +58,11 @@ public sealed partial class SeriesArchiveService
             : null;
         var keepsSingleExistingVideo = singleExistingVideo is not null
             && keptExistingTrackIds.Contains(singleExistingVideo.TrackId);
+        var hasFreshTextAttachmentForSelectedVideo = selectedVideoTracks
+            .Where(selection => !string.Equals(selection.FilePath, outputPath, StringComparison.OrdinalIgnoreCase))
+            .Select(selection => Path.ChangeExtension(selection.FilePath, ".txt"))
+            .Any(File.Exists)
+            || requestAttachmentPaths.Any(IsTextAttachment);
 
         if (textAttachments.Count > 0)
         {
@@ -85,6 +92,7 @@ public sealed partial class SeriesArchiveService
 
         if (singleExistingVideo is not null
             && !keepsSingleExistingVideo
+            && hasFreshTextAttachmentForSelectedVideo
             && textAttachments.Count == 1
             && preservedAttachmentIds.Contains(textAttachments[0].Id))
         {
