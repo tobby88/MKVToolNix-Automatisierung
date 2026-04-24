@@ -263,6 +263,7 @@ public sealed partial class SeriesArchiveService
                 expectedDefaultFlag: entry.Index == 0,
                 expectedVisualImpairedFlag: null,
                 expectedHearingImpairedFlag: null,
+                expectedForcedFlag: null,
                 expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
         }
 
@@ -278,6 +279,7 @@ public sealed partial class SeriesArchiveService
                 expectedDefaultFlag: entry.Index == 0,
                 expectedVisualImpairedFlag: false,
                 expectedHearingImpairedFlag: null,
+                expectedForcedFlag: null,
                 expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
         }
 
@@ -294,6 +296,7 @@ public sealed partial class SeriesArchiveService
                 expectedDefaultFlag: false,
                 expectedVisualImpairedFlag: true,
                 expectedHearingImpairedFlag: null,
+                expectedForcedFlag: null,
                 expectedOriginalFlag: BuildExpectedOriginalFlag(expectedLanguageCode, originalLanguage));
         }
 
@@ -320,6 +323,7 @@ public sealed partial class SeriesArchiveService
                 expectedDefaultFlag: false,
                 expectedVisualImpairedFlag: null,
                 expectedHearingImpairedFlag: subtitlePlan.IsHearingImpaired,
+                expectedForcedFlag: subtitlePlan.IsForced,
                 expectedOriginalFlag: BuildExpectedOriginalFlag(subtitlePlan.LanguageCode, originalLanguage));
         }
 
@@ -508,6 +512,7 @@ public sealed partial class SeriesArchiveService
         bool? expectedDefaultFlag,
         bool? expectedVisualImpairedFlag,
         bool? expectedHearingImpairedFlag,
+        bool? expectedForcedFlag,
         bool? expectedOriginalFlag)
     {
         if (!selectorByTrackId.TryGetValue(track.TrackId, out var selector))
@@ -522,6 +527,7 @@ public sealed partial class SeriesArchiveService
             expectedDefaultFlag,
             expectedVisualImpairedFlag,
             expectedHearingImpairedFlag,
+            expectedForcedFlag,
             expectedOriginalFlag);
         if (valueEdits.Count == 0)
         {
@@ -546,6 +552,7 @@ public sealed partial class SeriesArchiveService
         bool? expectedDefaultFlag,
         bool? expectedVisualImpairedFlag,
         bool? expectedHearingImpairedFlag,
+        bool? expectedForcedFlag,
         bool? expectedOriginalFlag)
     {
         var edits = new List<TrackHeaderValueEdit>();
@@ -567,6 +574,7 @@ public sealed partial class SeriesArchiveService
         TryAddFlagHeaderEdit(edits, "flag-default", "Standard", track.IsDefaultTrack, expectedDefaultFlag);
         TryAddFlagHeaderEdit(edits, "flag-visual-impaired", "Sehbehindert", track.IsVisualImpaired, expectedVisualImpairedFlag);
         TryAddFlagHeaderEdit(edits, "flag-hearing-impaired", "Hörgeschädigt", track.IsHearingImpaired, expectedHearingImpairedFlag);
+        TryAddFlagHeaderEdit(edits, "flag-forced", "Forced", track.IsForcedTrack, expectedForcedFlag);
         TryAddFlagHeaderEdit(edits, "flag-original", "Originalsprache", track.IsOriginalLanguage, expectedOriginalFlag);
 
         return edits;

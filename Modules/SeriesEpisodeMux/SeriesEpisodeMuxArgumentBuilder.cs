@@ -257,6 +257,8 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             $"{embeddedTrackIdText}:no",
             "--hearing-impaired-flag",
             subtitle.IsHearingImpaired ? $"{embeddedTrackIdText}:yes" : $"{embeddedTrackIdText}:no",
+            "--forced-display-flag",
+            subtitle.IsForced ? $"{embeddedTrackIdText}:yes" : $"{embeddedTrackIdText}:no",
             "--original-flag",
             $"{embeddedTrackIdText}:{ResolveOriginalFlag(subtitle.LanguageCode, plan.OriginalLanguage)}",
             plan.ResolveRuntimeFilePath(subtitle.FilePath)
@@ -275,6 +277,8 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "0:no",
             "--hearing-impaired-flag",
             subtitle.IsHearingImpaired ? "0:yes" : "0:no",
+            "--forced-display-flag",
+            subtitle.IsForced ? "0:yes" : "0:no",
             "--original-flag",
             $"0:{ResolveOriginalFlag(subtitle.LanguageCode, seriesOriginalLanguage)}",
             subtitle.FilePath

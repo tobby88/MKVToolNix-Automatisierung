@@ -325,7 +325,8 @@ public sealed partial class SeriesArchiveService
                 {
                     Accessibility = IsHearingImpairedSubtitleTrack(entry.Track)
                         ? SubtitleAccessibility.HearingImpaired
-                        : SubtitleAccessibility.Standard
+                        : SubtitleAccessibility.Standard,
+                    IsForced = entry.Track.IsForcedTrack
                 })
             .ToList();
 

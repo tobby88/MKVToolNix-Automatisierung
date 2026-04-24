@@ -354,6 +354,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             "3:no",
             "--hearing-impaired-flag",
             "3:yes",
+            "--forced-display-flag",
+            "3:no",
             "--original-flag",
             "3:yes");
     }

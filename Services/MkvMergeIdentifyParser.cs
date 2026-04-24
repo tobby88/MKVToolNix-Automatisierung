@@ -136,6 +136,8 @@ internal static class MkvMergeIdentifyParser
                 IsVisualImpaired: ReadBooleanProperty(properties, "flag_visual_impaired"),
                 IsHearingImpaired: ReadBooleanProperty(properties, "flag_hearing_impaired"),
                 IsDefaultTrack: ReadBooleanProperty(properties, "default_track"),
+                IsForcedTrack: ReadBooleanProperty(properties, "forced_track")
+                    || ReadBooleanProperty(properties, "flag_forced"),
                 IsOriginalLanguage: ReadBooleanProperty(properties, "flag_original"),
                 Duration: ReadTrackDuration(properties)));
         }

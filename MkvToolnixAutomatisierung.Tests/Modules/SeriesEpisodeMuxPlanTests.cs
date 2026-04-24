@@ -40,6 +40,23 @@ public sealed class SeriesEpisodeMuxPlanTests
     }
 
     [Fact]
+    public void BuildArguments_UsesForcedDisplayFlag_ForForcedSubtitles()
+    {
+        var subtitlePath = CreateTempFile("subtitle-forced.srt");
+        var plan = CreatePlan(
+        [
+            new SubtitleFile(subtitlePath, new SubtitleKind("SRT", 1))
+            {
+                IsForced = true
+            }
+        ]);
+
+        var arguments = plan.BuildArguments();
+
+        AssertContainsSequence(arguments, "--forced-display-flag", "0:yes");
+    }
+
+    [Fact]
     public void BuildArguments_UsesConfiguredLanguageCodes_ForVideoAudioAndSubtitles()
     {
         var subtitlePath = CreateTempFile("subtitle-en.srt");

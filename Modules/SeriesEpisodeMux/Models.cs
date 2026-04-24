@@ -151,6 +151,7 @@ public sealed record ContainerTrackMetadata(
     bool IsVisualImpaired,
     bool IsHearingImpaired,
     bool IsDefaultTrack,
+    bool IsForcedTrack = false,
     bool IsOriginalLanguage = false,
     TimeSpan? Duration = null);
 
@@ -371,6 +372,11 @@ public sealed record SubtitleFile(
     /// Kennzeichnet, ob die Spur als Untertitel für Hörgeschädigte markiert ist.
     /// </summary>
     public bool IsHearingImpaired => Accessibility == SubtitleAccessibility.HearingImpaired;
+
+    /// <summary>
+    /// Kennzeichnet, dass die Untertitelspur als Forced-Subtitle-Spur markiert werden soll.
+    /// </summary>
+    public bool IsForced { get; init; }
 
     /// <summary>
     /// Vollständig aufgelöster Trackname für GUI und mkvmerge-Metadaten.
