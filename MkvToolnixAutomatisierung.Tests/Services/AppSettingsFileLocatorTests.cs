@@ -78,6 +78,45 @@ public sealed class AppSettingsFileLocatorTests
     }
 
     [Fact]
+    public void SaveCombinedSettings_PreservesLastGoodBackup_WhenPrimaryIsCorrupt()
+    {
+        AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+        {
+            Metadata = new AppMetadataSettings
+            {
+                TvdbApiKey = "backup-key"
+            }
+        });
+
+        AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+        {
+            Metadata = new AppMetadataSettings
+            {
+                TvdbApiKey = "current-key"
+            }
+        });
+
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, "{ invalid primary");
+
+        AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
+        {
+            Metadata = new AppMetadataSettings
+            {
+                TvdbApiKey = "recovered-key"
+            }
+        });
+
+        var backup = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
+
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, "{ invalid primary again");
+        var recoveredFromBackup = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
+
+        Assert.Equal("recovered-key", backup.Settings.Metadata!.TvdbApiKey);
+        Assert.Equal(AppSettingsLoadStatus.LoadedBackup, recoveredFromBackup.Status);
+        Assert.Equal("backup-key", recoveredFromBackup.Settings.Metadata!.TvdbApiKey);
+    }
+
+    [Fact]
     public void LoadCombinedSettingsWithDiagnostics_WritesBundledReadme_WhenMissing()
     {
         if (File.Exists(PortableAppStorage.ReadmeFilePath))

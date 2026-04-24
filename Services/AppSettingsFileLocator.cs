@@ -65,7 +65,7 @@ public static class AppSettingsFileLocator
         {
             File.WriteAllText(temporaryPath, json, Utf8Encoding);
 
-            if (File.Exists(settingsPath))
+            if (CanPromotePrimaryToBackup(settingsPath))
             {
                 File.Copy(settingsPath, backupPath, overwrite: true);
             }
@@ -95,6 +95,11 @@ public static class AppSettingsFileLocator
     private static string BuildTemporarySettingsFilePath(string settingsPath)
     {
         return $"{settingsPath}.tmp-{Environment.ProcessId}-{Guid.NewGuid():N}";
+    }
+
+    private static bool CanPromotePrimaryToBackup(string settingsPath)
+    {
+        return TryLoadSettings(settingsPath).Success;
     }
 
     private static AppSettingsLoadResult LoadCombinedSettingsInternal(bool captureCorruptSnapshots)
