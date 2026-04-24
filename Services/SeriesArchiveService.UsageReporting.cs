@@ -75,7 +75,7 @@ public sealed partial class SeriesArchiveService
     private static string BuildSuppressedExternalSubtitleNote(IReadOnlyList<SubtitleFile> suppressedExternalSubtitlePlans)
     {
         var occupiedSlots = suppressedExternalSubtitlePlans
-            .Select(subtitle => $"{MediaLanguageHelper.GetLanguageDisplayName(subtitle.LanguageCode)} - {subtitle.Kind.DisplayName}")
+            .Select(subtitle => subtitle.TrackName)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(slot => slot, StringComparer.OrdinalIgnoreCase)
             .ToList();

@@ -103,7 +103,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             outputPath,
             CreateVideoTrack(0, "AVC/H.264", "1280x720"),
             CreateAudioTrack(1, "E-AC-3"),
-            CreateSubtitleTrack(3, "SubRip/SRT"));
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch (hörgeschädigte) - SRT", isHearingImpaired: true));
 
         var archiveService = CreateArchiveService(archiveDirectory);
 
@@ -120,6 +120,46 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         Assert.DoesNotContain(decision.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, externalSubtitlePath, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(decision.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_KeepsExplicitExternalSubtitle_WhenExistingSameKindIsStandard()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-subtitles-accessibility");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-subtitles-accessibility");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var externalSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).srt", "subtitle");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"),
+            CreateSubtitleTrack(3, "SubRip/SRT", trackName: "Deutsch - SRT", isHearingImpaired: false));
+
+        var archiveService = CreateArchiveService(archiveDirectory);
+
+        var decision = await archiveService.PrepareAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(),
+            new SeriesEpisodeMuxRequest(
+                mainVideoPath,
+                AudioDescriptionPath: null,
+                SubtitlePaths: [externalSubtitlePath],
+                AttachmentPaths: [],
+                outputPath,
+                Title: "Pilot"),
+            [mainVideoPath]);
+
+        Assert.Contains(decision.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, externalSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(decision.SubtitleFiles, subtitle => subtitle.IsEmbedded && subtitle.EmbeddedTrackId == 3 && !subtitle.IsHearingImpaired);
     }
 
     [Fact]
@@ -293,11 +333,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.DoesNotContain(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded && string.Equals(subtitle.FilePath, subtitleSrtPath, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(
             plan.Notes,
-            note => note.Contains("Deutsch - SRT", StringComparison.Ordinal)
+            note => note.Contains("Deutsch (hörgeschädigte) - SRT", StringComparison.Ordinal)
                 && !note.Contains("SSA", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(
             summary.Notes,
-            note => note.Contains("Deutsch - SRT", StringComparison.Ordinal)
+            note => note.Contains("Deutsch (hörgeschädigte) - SRT", StringComparison.Ordinal)
                 && !note.Contains("SSA", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(summary.Notes, note => note.StartsWith("Archiv-MKV", StringComparison.OrdinalIgnoreCase));
 

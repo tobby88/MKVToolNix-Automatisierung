@@ -343,13 +343,10 @@ public sealed partial class SeriesArchiveService
             .ToList();
 
         var embeddedCoverage = embeddedSubtitlePlans
-            // Externe Untertitel werden projektweit weiterhin vorsichtig als HI/SDH markiert,
-            // solange keine sichere Unterscheidung vorliegt. Diese konservative Anzeige darf im
-            // Archivabgleich aber nicht dazu führen, dass dieselbe Sprache und derselbe Typ noch
-            // einmal extern angehängt werden, obwohl die Ziel-MKV den fachlichen Slot bereits
-            // belegt. Für die Wiederverwendungsentscheidung zählt deshalb bewusst nur
-            // Typ + Sprache; die genaue Accessibility-Markierung des vorhandenen Archivtracks
-            // bleibt für Track-Metadaten und GUI sichtbar, steuert hier aber keine Duplikate.
+            // Typ und Sprache allein reichen nicht als Slot-Schlüssel: Ein normaler SRT und
+            // ein SDH/HI-SRT sind fachlich unterschiedliche Untertitel. Externe Untertitel
+            // werden weiterhin konservativ als HI erkannt; unterdrückt werden sie deshalb
+            // nur, wenn genau dieser Accessibility-Slot bereits in der Ziel-MKV vorhanden ist.
             .Select(BuildSubtitleReuseCoverageKey)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -927,12 +924,12 @@ public sealed partial class SeriesArchiveService
 
     private static string BuildSubtitleReuseCoverageKey(SubtitleFile subtitle)
     {
-        return BuildSubtitleReuseCoverageKey(subtitle.Kind, subtitle.LanguageCode);
+        return BuildSubtitleReuseCoverageKey(subtitle.Kind, subtitle.LanguageCode, subtitle.Accessibility);
     }
 
-    private static string BuildSubtitleReuseCoverageKey(SubtitleKind kind, string? languageCode)
+    private static string BuildSubtitleReuseCoverageKey(SubtitleKind kind, string? languageCode, SubtitleAccessibility accessibility)
     {
-        return $"{kind.DisplayName}|{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}";
+        return $"{kind.DisplayName}|{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}|{accessibility}";
     }
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)
