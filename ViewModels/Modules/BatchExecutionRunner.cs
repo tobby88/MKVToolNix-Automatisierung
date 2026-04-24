@@ -119,6 +119,7 @@ internal sealed class BatchExecutionRunner
             var plan = workItem.Plan;
             item.RefreshArchivePresence();
             var outputExistedBeforeRun = item.ArchiveState == EpisodeArchiveState.Existing;
+            var outputSnapshotBeforeRun = FileStateSnapshot.TryCreate(item.OutputPath);
             item.SetStatus(BatchEpisodeStatusKind.Running);
             onCurrentItemChanged?.Invoke(item);
             appendLog($"STARTE: {item.MainVideoFileName}");
@@ -194,7 +195,7 @@ internal sealed class BatchExecutionRunner
                     }
                 }
                 else if ((result.ExitCode == 0 && result.HasWarning)
-                    || (result.ExitCode == 1 && File.Exists(item.OutputPath)))
+                    || (result.ExitCode == 1 && WasOutputCreatedOrChanged(outputSnapshotBeforeRun, item.OutputPath)))
                 {
                     warningCount++;
                     var warningStatusText = BuildWarningStatusText(plan, result);
@@ -335,6 +336,12 @@ internal sealed class BatchExecutionRunner
             : plan.HasHeaderEdits
                 ? "Warnung (Header aktualisiert, Exit-Code 1)"
                 : "Warnung (Datei erstellt, Exit-Code 1)";
+    }
+
+    private static bool WasOutputCreatedOrChanged(FileStateSnapshot? beforeRun, string outputPath)
+    {
+        var afterRun = FileStateSnapshot.TryCreate(outputPath);
+        return afterRun is not null && !afterRun.Equals(beforeRun);
     }
 
     private static void AddNewOutput(

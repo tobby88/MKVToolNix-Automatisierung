@@ -206,6 +206,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var usableAudioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
             .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
             .ToList();
+        var cleanupEligibleVideoSeeds = usableEpisodeSeeds
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
+            .ToList();
         var sourceHealthNotes = BuildSourceHealthNotes(defectiveSeedHealth);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -265,7 +268,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
                     .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .ToList(),
-                CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName)
+                CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName)
                     .Concat(defectiveSeedCompanionCleanupPaths)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -285,7 +288,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. usableEpisodeSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName);
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName);
 
         return new EpisodeDetectionContext(
             directory,

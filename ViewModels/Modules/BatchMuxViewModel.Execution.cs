@@ -188,7 +188,8 @@ internal sealed partial class BatchMuxViewModel
             item.RelatedEpisodeFilePaths.Concat(plan.GetReferencedInputFiles()),
             item.OutputPath,
             plan.WorkingCopy?.DestinationFilePath,
-            SourceDirectory);
+            SourceDirectory,
+            item.ExcludedSourcePaths);
     }
 
     private async Task OfferBatchDoneCleanupAsync(

@@ -480,7 +480,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
         return _services.CleanupFiles.BuildCleanupFileList(
             sourceFilePaths,
             plan.OutputFilePath,
-            plan.WorkingCopy?.DestinationFilePath);
+            plan.WorkingCopy?.DestinationFilePath,
+            excludedSourcePaths: ExcludedSourcePaths);
     }
 
     private static string GetPreferredVideoDirectory()

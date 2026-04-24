@@ -266,6 +266,36 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecutePlansAsync_TreatsExitCodeOneWithoutOutputChangeAsError()
+    {
+        var outputPath = Path.Combine(_tempDirectory, "existing-warning", "Episode.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "existing");
+        var cleanupSource = CreateFile("must-stay.txt");
+        var muxWorkflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (_, _) => Task.FromResult(new MuxExecutionResult(1, HasWarning: false, LastProgressPercent: 100))
+        };
+        var cleanup = new StubCleanupService();
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), muxWorkflow, cleanup);
+        var item = CreateBatchEpisodeItem(outputPath);
+
+        var outcome = await runner.ExecutePlansAsync(
+        [
+            new BatchExecutionWorkItem(item, CreatePlan(outputPath), [cleanupSource])
+        ],
+            Path.Combine(_tempDirectory, "done"),
+            new BatchRunProgressTracker(1, (_, _) => { }),
+            _ => { });
+
+        Assert.Equal(0, outcome.SuccessCount);
+        Assert.Equal(0, outcome.WarningCount);
+        Assert.Equal(1, outcome.ErrorCount);
+        Assert.Equal(BatchEpisodeStatusKind.Error, item.StatusKind);
+        Assert.Empty(cleanup.LastMoveSourceFiles);
+    }
+
+    [Fact]
     public async Task ExecutePlansAsync_TreatsMkvMergeWarningsAsWarning_AndExplainsSource()
     {
         var outputPath = Path.Combine(_tempDirectory, "warning-lines", "Episode.mkv");

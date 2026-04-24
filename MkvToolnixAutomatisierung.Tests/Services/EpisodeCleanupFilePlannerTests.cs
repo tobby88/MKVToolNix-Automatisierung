@@ -47,6 +47,35 @@ public sealed class EpisodeCleanupFilePlannerTests : IDisposable
         Assert.Equal(keepFile, cleanupFiles[0]);
     }
 
+    [Fact]
+    public void BuildCleanupFileList_ExcludesRejectedSourceAndExactCompanions()
+    {
+        var sourceRoot = Path.Combine(_tempDirectory, "source-root");
+        Directory.CreateDirectory(sourceRoot);
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+
+        var selectedVideo = CreateFile(Path.Combine(sourceRoot, "selected.mp4"));
+        var selectedText = CreateFile(Path.Combine(sourceRoot, "selected.txt"));
+        var rejectedVideo = CreateFile(Path.Combine(sourceRoot, "rejected.mp4"));
+        var rejectedText = CreateFile(Path.Combine(sourceRoot, "rejected.txt"));
+        var rejectedSubtitle = CreateFile(Path.Combine(sourceRoot, "rejected.srt"));
+        var outputFile = CreateFile(Path.Combine(sourceRoot, "output.mkv"));
+
+        var cleanupFiles = planner.BuildCleanupFileList(
+            [selectedVideo, selectedText, rejectedVideo, rejectedText, rejectedSubtitle],
+            outputFile,
+            sourceRoot: sourceRoot,
+            excludedSourcePaths: [rejectedVideo]);
+
+        Assert.Contains(selectedVideo, cleanupFiles);
+        Assert.Contains(selectedText, cleanupFiles);
+        Assert.DoesNotContain(rejectedVideo, cleanupFiles);
+        Assert.DoesNotContain(rejectedText, cleanupFiles);
+        Assert.DoesNotContain(rejectedSubtitle, cleanupFiles);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
