@@ -295,7 +295,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdMatchesArchiveAd_ReusesExistingAd()
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdMatchesArchiveAd_StillUsesSelectedAd()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-reuse");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-reuse");
@@ -337,12 +337,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         Assert.Equal(outputPath, plan.OutputFilePath);
         Assert.False(plan.SkipMux);
-        Assert.True(plan.HasHeaderEdits);
-        Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
-        Assert.Equal(2, plan.AudioDescriptionTrackId);
-        Assert.Contains(plan.Notes, note => note.Contains("vorhandenen Archiv-AD", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
-        Assert.Equal("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText);
+        Assert.False(plan.HasHeaderEdits);
+        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(1, plan.AudioDescriptionTrackId);
+        Assert.Contains(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsAdded);
     }
 
     [Fact]
