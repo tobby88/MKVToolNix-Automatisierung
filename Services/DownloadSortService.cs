@@ -36,8 +36,18 @@ internal sealed class DownloadSortService
     {
         "backstage",
         "der samstagskrimi",
+        "doku",
+        "dokus",
+        "dokumentation",
+        "dokumentationen",
+        "fernsehfilm",
+        "fernsehfilme",
         "filme",
         "hallo deutschland",
+        "krimi",
+        "krimis",
+        "reportage",
+        "reportagen",
         "riverboat"
     };
 
@@ -282,8 +292,14 @@ internal sealed class DownloadSortService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var sourcePath = Path.Combine(rootDirectory, renamePlan.CurrentFolderName);
-            var destinationPath = Path.Combine(rootDirectory, renamePlan.TargetFolderName);
+            if (!TryBuildSafeRootChildPath(rootDirectory, renamePlan.CurrentFolderName, out var sourcePath)
+                || !TryBuildSafeRootChildPath(rootDirectory, renamePlan.TargetFolderName, out var destinationPath)
+                || IsReservedTargetFolderName(renamePlan.TargetFolderName))
+            {
+                logLines.Add($"UEBERSPRUNGEN: Ordner-Umbenennung '{renamePlan.CurrentFolderName}' -> '{renamePlan.TargetFolderName}' ist kein sicherer direkter Download-Unterordner.");
+                continue;
+            }
+
             if (!Directory.Exists(sourcePath))
             {
                 continue;
@@ -497,7 +513,7 @@ internal sealed class DownloadSortService
                      .Where(path => !string.IsNullOrWhiteSpace(path))
                      .Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var companionVideoPath = Path.ChangeExtension(filePath, ".mp4");
+            var companionVideoPath = BuildLogicalVideoCompanionPath(filePath);
             if (!File.Exists(companionVideoPath)
                 || filePaths.Contains(companionVideoPath, StringComparer.OrdinalIgnoreCase))
             {
@@ -1016,7 +1032,7 @@ internal sealed class DownloadSortService
     {
         return Directory.EnumerateFiles(directoryPath)
             .Where(IsSupportedSortFile)
-            .GroupBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
+            .GroupBy(BuildLogicalSortGroupKey, StringComparer.OrdinalIgnoreCase)
             .Select(group => new DownloadFileGroup(
                 BuildGroupDisplayName(group.Key),
                 group
@@ -1029,6 +1045,43 @@ internal sealed class DownloadSortService
     private static bool IsSupportedSortFile(string filePath)
     {
         return SupportedExtensions.Contains(Path.GetExtension(filePath));
+    }
+
+    private static string BuildLogicalSortGroupKey(string filePath)
+    {
+        var key = Path.GetFileNameWithoutExtension(filePath);
+        if (VideoExtensions.Contains(Path.GetExtension(filePath)))
+        {
+            return key;
+        }
+
+        return StripSidecarLanguageSuffixes(key);
+    }
+
+    private static string BuildLogicalVideoCompanionPath(string sidecarPath)
+    {
+        var directory = Path.GetDirectoryName(sidecarPath) ?? string.Empty;
+        var logicalStem = StripSidecarLanguageSuffixes(Path.GetFileNameWithoutExtension(sidecarPath));
+        return Path.Combine(directory, logicalStem + ".mp4");
+    }
+
+    private static string StripSidecarLanguageSuffixes(string stem)
+    {
+        var normalized = stem;
+        while (true)
+        {
+            var stripped = Regex.Replace(
+                normalized,
+                @"\.(?:de|deu|ger|en|eng|nds|fr|fra|fre|es|spa|it|ita|nl|nld|dut|sv|swe|da|dan|no|nor|fi|fin|pl|pol|pt|por|tr|tur|forced|sdh|cc|hoh|hi)$",
+                string.Empty,
+                RegexOptions.IgnoreCase);
+            if (string.Equals(stripped, normalized, StringComparison.Ordinal))
+            {
+                return normalized;
+            }
+
+            normalized = stripped;
+        }
     }
 
     private static int GetExtensionPriority(string filePath)
@@ -1067,6 +1120,29 @@ internal sealed class DownloadSortService
         }
 
         return EpisodeFileNameHelper.SanitizePathSegment(targetFolderName.Trim());
+    }
+
+    private static bool TryBuildSafeRootChildPath(string rootDirectory, string folderName, out string childPath)
+    {
+        childPath = string.Empty;
+        var normalizedFolderName = NormalizeTargetFolderName(folderName);
+        if (string.IsNullOrWhiteSpace(normalizedFolderName)
+            || !string.Equals(normalizedFolderName, folderName.Trim(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var rootPath = Path.GetFullPath(rootDirectory);
+        var candidatePath = Path.GetFullPath(Path.Combine(rootPath, normalizedFolderName));
+        if (!PathComparisonHelper.IsPathWithinRoot(candidatePath, rootPath)
+            || Path.GetDirectoryName(candidatePath) is not { } parentPath
+            || !PathComparisonHelper.AreSamePath(parentPath, rootPath))
+        {
+            return false;
+        }
+
+        childPath = candidatePath;
+        return true;
     }
 
     /// <summary>

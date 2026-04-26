@@ -57,6 +57,23 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_UsesContainedAlias_WhenTxtTopicIsGenericDokuCategory()
+    {
+        CreateEmptyFile(Path.Combine(_rootDirectory, "Dokus-Pettersson und Findus - Findus zieht um-0585373376.mp4"));
+        CreateCompanionText(
+            Path.Combine(_rootDirectory, "Dokus-Pettersson und Findus - Findus zieht um-0585373376.txt"),
+            topic: "Dokus",
+            title: "Pettersson und Findus - Findus zieht um");
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal("Pettersson und Findus", item.DetectedSeriesName);
+        Assert.Equal("Pettersson und Findus", item.SuggestedFolderName);
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+    }
+
+    [Fact]
     public void Scan_MapsKnownMucklasSpecialCase_ToPetterssonAndFindusFolder()
     {
         CreateEmptyFile(Path.Combine(_rootDirectory, "Filme-Die Mucklas - Ein neues Abenteuer-1864316966.mp4"));
@@ -287,6 +304,32 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_GroupsLanguageSuffixedSidecarsWithMainVideo()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Pettersson und Findus-Findus zieht um-0585373376.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Pettersson und Findus-Findus zieht um-0585373376.txt");
+        var germanSubtitlePath = Path.Combine(_rootDirectory, "Pettersson und Findus-Findus zieht um-0585373376.de.srt");
+        var forcedSubtitlePath = Path.Combine(_rootDirectory, "Pettersson und Findus-Findus zieht um-0585373376.de.forced.ass");
+        CreateEmptyFile(videoPath);
+        CreateCompanionText(
+            textPath,
+            topic: "Pettersson und Findus",
+            title: "Findus zieht um");
+        CreateEmptyFile(germanSubtitlePath);
+        CreateEmptyFile(forcedSubtitlePath);
+
+        var result = _service.Scan(_rootDirectory);
+        var item = Assert.Single(result.Items);
+
+        Assert.Equal(DownloadSortItemState.Ready, item.State);
+        Assert.Contains("Pettersson und Findus", item.DisplayName, StringComparison.Ordinal);
+        Assert.Contains(videoPath, item.FilePaths);
+        Assert.Contains(textPath, item.FilePaths);
+        Assert.Contains(germanSubtitlePath, item.FilePaths);
+        Assert.Contains(forcedSubtitlePath, item.FilePaths);
+    }
+
+    [Fact]
     public void Scan_UsesNeedsReviewStateForMixedDefectivePackage_WhenNoRegularTargetCanBeDerived()
     {
         var videoPath = Path.Combine(_rootDirectory, "Filme-1234.mp4");
@@ -417,6 +460,35 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(canonicalDirectory, Path.GetFileName(looseTextPath))));
         Assert.False(File.Exists(looseVideoPath));
         Assert.False(File.Exists(looseTextPath));
+    }
+
+    [Fact]
+    public void Apply_SkipsUnsafeFolderRenamePlan_OutsideDownloadRoot()
+    {
+        var parentDirectory = Directory.GetParent(_rootDirectory)!.FullName;
+        var externalDirectory = Path.Combine(parentDirectory, "mkv-auto-download-sort-external-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(externalDirectory);
+        try
+        {
+            var looseVideoPath = Path.Combine(_rootDirectory, "Pettersson und Findus-Findus zieht um-0585373376.mp4");
+            CreateEmptyFile(looseVideoPath);
+
+            var applyResult = _service.Apply(
+                _rootDirectory,
+                [new DownloadSortMoveRequest("Pettersson und Findus-Findus zieht um", [looseVideoPath], "Pettersson und Findus")],
+                [new DownloadSortFolderRenamePlan(externalDirectory, "Pettersson und Findus", "Stale externer Testplan")]);
+
+            Assert.Equal(0, applyResult.RenamedFolderCount);
+            Assert.True(Directory.Exists(externalDirectory));
+            Assert.Contains(applyResult.LogLines, line => line.Contains("kein sicherer direkter Download-Unterordner", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(externalDirectory))
+            {
+                Directory.Delete(externalDirectory, recursive: true);
+            }
+        }
     }
 
     [Fact]
@@ -596,6 +668,28 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(videoPath));
         Assert.True(File.Exists(textPath));
         Assert.False(File.Exists(Path.Combine(_rootDirectory, "Stralsund", Path.GetFileName(textPath))));
+        Assert.Contains(applyResult.LogLines, line => line.StartsWith("UEBERSPRUNGEN:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Apply_SkipsLanguageSuffixedSidecarOnlyRequest_WhenHealthyLooseVideoStillExists()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Stralsund-Außer Kontrolle (S01_E02)-1030257331.mp4");
+        var subtitlePath = Path.Combine(_rootDirectory, "Stralsund-Außer Kontrolle (S01_E02)-1030257331.de.srt");
+        CreateFileWithByteLength(videoPath, length: 100 * 1024 * 1024);
+        CreateEmptyFile(subtitlePath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Stralsund-Außer Kontrolle", [subtitlePath], "Stralsund")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(videoPath));
+        Assert.True(File.Exists(subtitlePath));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "Stralsund", Path.GetFileName(subtitlePath))));
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("UEBERSPRUNGEN:", StringComparison.Ordinal));
     }
 
