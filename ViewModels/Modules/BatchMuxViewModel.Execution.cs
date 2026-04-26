@@ -55,7 +55,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             SetStatus("Erstelle Mux-Pläne...", 0);
-            var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatus);
+            var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatusFromAnyThread);
             var executablePlans = await BuildExecutionWorkItemsAsync(
                 readyItems,
                 planningTracker,
@@ -70,7 +70,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatus);
+            var progressTracker = new BatchRunProgressTracker(executablePlans.Count, SetStatusFromAnyThread);
             var copyPreparation = _executionRunner.BuildCopyPreparation(executablePlans);
 
             if (!_dialogService.ConfirmBatchExecution(

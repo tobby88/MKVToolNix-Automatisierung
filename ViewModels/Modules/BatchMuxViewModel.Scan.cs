@@ -69,7 +69,10 @@ internal sealed partial class BatchMuxViewModel
             ResetLog();
             SetStatus("Bereite Batch-Scan vor...", 0);
 
-            var directoryContext = await Task.Run(() => _services.BatchScan.CreateDirectoryContext(SourceDirectory), cancellationToken);
+            var sourceDirectory = SourceDirectory;
+            var directoryContext = await Task.Run(
+                () => _services.BatchScan.CreateDirectoryContext(sourceDirectory, cancellationToken),
+                cancellationToken);
             var mainVideoFiles = directoryContext.MainVideoFiles;
 
             var total = mainVideoFiles.Count;

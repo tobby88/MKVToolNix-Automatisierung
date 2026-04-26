@@ -236,7 +236,10 @@ internal sealed partial class BatchMuxViewModel
     {
         var paths = item.HasPrimaryVideoSource
             ? new[] { item.MainVideoPath }.Concat(item.AdditionalVideoPaths)
-            : item.AdditionalVideoPaths;
+            : item.AdditionalVideoPaths
+                .Concat(string.IsNullOrWhiteSpace(item.AudioDescriptionPath)
+                    ? Enumerable.Empty<string>()
+                    : [item.AudioDescriptionPath]);
 
         return paths
             .Where(path => !string.IsNullOrWhiteSpace(path))

@@ -24,9 +24,13 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
+        var ownsBusyState = !_isBusy;
         try
         {
-            SetBusy(true);
+            if (ownsBusyState)
+            {
+                SetBusy(true);
+            }
 
             for (var index = 0; index < items.Count; index++)
             {
@@ -62,7 +66,10 @@ internal sealed partial class BatchMuxViewModel
         }
         finally
         {
-            SetBusy(false);
+            if (ownsBusyState)
+            {
+                SetBusy(false);
+            }
         }
     }
 
@@ -97,6 +104,7 @@ internal sealed partial class BatchMuxViewModel
 
             item.SetPlanSummary(string.Empty);
             item.SetPlanNotes([]);
+            item.SetUsageSummary(null);
             return;
         }
 
@@ -193,19 +201,20 @@ internal sealed partial class BatchMuxViewModel
         BatchEpisodeItemViewModel item,
         CancellationToken cancellationToken = default)
     {
-        var cachedPlan = await _planCache.TryGetAsync(item, item, cancellationToken);
+        var snapshot = EpisodePlanInputSnapshot.Create(item);
+        var cachedPlan = await _planCache.TryGetAsync(item, snapshot, cancellationToken);
         if (cachedPlan is not null)
         {
             return cachedPlan;
         }
 
-        var plan = await BuildFreshPlanForItemAsync(item, cancellationToken);
-        await _planCache.StoreAsync(item, item, plan, cancellationToken);
+        var plan = await BuildFreshPlanForItemAsync(snapshot, cancellationToken);
+        await _planCache.StoreAsync(item, snapshot, plan, cancellationToken);
         return plan;
     }
 
     private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanForItemAsync(
-        BatchEpisodeItemViewModel item,
+        IEpisodePlanInput item,
         CancellationToken cancellationToken = default)
     {
         return await _services.EpisodePlans.BuildPlanAsync(item, cancellationToken);
@@ -428,6 +437,7 @@ internal sealed partial class BatchMuxViewModel
         {
             item.SetPlanSummary(string.Empty);
             item.SetPlanNotes([]);
+            item.SetUsageSummary(null);
             return;
         }
 

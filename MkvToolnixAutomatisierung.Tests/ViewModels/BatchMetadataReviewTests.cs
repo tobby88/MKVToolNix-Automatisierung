@@ -546,6 +546,42 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task OpenSelectedSourcesCommand_OpensAudioDescription_WhenItemHasNoPrimaryVideo()
+    {
+        var dialogService = new FakeDialogService();
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+        var item = BatchEpisodeItemViewModel.CreateFromDetection(
+            requestedMainVideoPath: @"C:\Temp\ad-only.mp4",
+            CreateLocalGuess(),
+            CreateDetectedEpisode() with
+            {
+                MainVideoPath = @"C:\Temp\ad-only.mp4",
+                HasPrimaryVideoSource = false,
+                AudioDescriptionPath = @"C:\Temp\ad-only.mp4"
+            },
+            new EpisodeMetadataResolutionResult(
+                CreateLocalGuess(),
+                Selection: null,
+                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                ConfidenceScore: 0,
+                RequiresReview: false,
+                QueryWasAttempted: false,
+                QuerySucceeded: false),
+            outputPath: @"C:\Temp\output.mkv",
+            statusKind: BatchEpisodeStatusKind.Warning,
+            isSelected: true);
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+
+        Assert.True(viewModel.OpenSelectedSourcesCommand.CanExecute(null));
+
+        viewModel.OpenSelectedSourcesCommand.Execute(null);
+        await WaitUntilAsync(() => dialogService.OpenedFilePaths.Count == 1, TimeSpan.FromSeconds(1));
+
+        Assert.Equal([@"C:\Temp\ad-only.mp4"], dialogService.OpenedFilePaths);
+    }
+
+    [Fact]
     public void SelectAllEpisodesCommand_WithActiveFilter_AsksWhetherHiddenItemsShouldBeIncluded()
     {
         var dialogService = new FakeDialogService
@@ -895,6 +931,30 @@ public sealed class BatchMetadataReviewTests
         Assert.NotNull(resumedRefresh);
         await resumedRefresh!;
         Assert.Null(viewModel.SelectedItemPlanSummaryRefreshTask);
+    }
+
+    [Fact]
+    public async Task SelectedItemPlanSummaryRefresh_ClearsUsageSummary_WhenInputsBecomeInvalid()
+    {
+        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+        var item = CreateReadyItem(@"C:\Temp\episode-invalid.mp4", @"C:\Temp\episode-invalid.mkv");
+        viewModel.EpisodeItems.Add(item);
+        viewModel.SelectedEpisodeItem = item;
+        if (viewModel.SelectedItemPlanSummaryRefreshTask is { } initialRefresh)
+        {
+            await initialRefresh;
+        }
+
+        item.SetPlanSummary("Veralteter Plan");
+        item.SetUsageSummary(EpisodeUsageSummary.CreatePending("Veraltet", "Darf nicht sichtbar bleiben"));
+        item.SetOutputPath(string.Empty);
+        if (viewModel.SelectedItemPlanSummaryRefreshTask is { } invalidRefresh)
+        {
+            await invalidRefresh;
+        }
+
+        Assert.Equal(string.Empty, item.PlanSummaryText);
+        Assert.Null(item.UsageSummary);
     }
 
     [Fact]
@@ -1318,7 +1378,7 @@ public sealed class BatchMetadataReviewTests
     {
         var field = typeof(BatchMuxViewModel).GetField("_planCache", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         var cache = Assert.IsType<EpisodePlanCache>(field?.GetValue(viewModel));
-        await cache.StoreAsync(item, item, plan);
+        await cache.StoreAsync(item, EpisodePlanInputSnapshot.Create(item), plan);
     }
 
     private static async Task<bool> WaitUntilAsync(Func<bool> predicate, TimeSpan timeout)

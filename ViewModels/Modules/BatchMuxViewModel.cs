@@ -422,6 +422,21 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     }
 
     /// <summary>
+    /// Aktualisiert den Batch-Fortschritt auch dann sicher, wenn ein Worker-Callback nicht vom UI-Thread kommt.
+    /// </summary>
+    private void SetStatusFromAnyThread(string text, int progress)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            SetStatus(text, progress);
+            return;
+        }
+
+        _ = dispatcher.BeginInvoke(() => SetStatus(text, progress));
+    }
+
+    /// <summary>
     /// Aktualisiert die aggregierten Zähler für Kopfbereich und Statusübersichten.
     /// </summary>
     private void RefreshOverview()
