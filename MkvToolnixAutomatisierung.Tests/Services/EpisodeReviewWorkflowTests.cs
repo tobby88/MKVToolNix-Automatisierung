@@ -1,12 +1,19 @@
 using System.Windows;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
 
+[Collection("PortableStorage")]
 public sealed class EpisodeReviewWorkflowTests
 {
+    public EpisodeReviewWorkflowTests(PortableStorageFixture storageFixture)
+    {
+        storageFixture.Reset();
+    }
+
     [Fact]
     public async Task ReviewManualSourceAsync_ReviewsAllPendingSourcesBeforeReturning()
     {

@@ -19,8 +19,14 @@ using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Views;
 
+[Collection("PortableStorage")]
 public sealed class SelectionGridInteractionTests
 {
+    public SelectionGridInteractionTests(PortableStorageFixture storageFixture)
+    {
+        storageFixture.Reset();
+    }
+
     [Fact]
     public async Task BatchSelectionGrid_SpaceToggle_KeepsFocusAndDoesNotTriggerPlanRefresh()
     {

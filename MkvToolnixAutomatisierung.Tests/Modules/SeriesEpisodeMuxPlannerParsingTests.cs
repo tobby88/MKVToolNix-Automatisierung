@@ -2,12 +2,19 @@ using System.IO;
 using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Modules;
 
+[Collection("PortableStorage")]
 public sealed class SeriesEpisodeMuxPlannerParsingTests
 {
+    public SeriesEpisodeMuxPlannerParsingTests(PortableStorageFixture storageFixture)
+    {
+        storageFixture.Reset();
+    }
+
     [Fact]
     public void FindEpisodePattern_ParsesYearBasedSeasonNumbers()
     {

@@ -3,12 +3,19 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Composition;
 
+[Collection("PortableStorage")]
 public sealed class ToolingCompositionModuleTests
 {
+    public ToolingCompositionModuleTests(PortableStorageFixture storageFixture)
+    {
+        storageFixture.Reset();
+    }
+
     [Fact]
     public void Register_ConfiguresShortHttpClientTimeoutForStartup()
     {
