@@ -156,7 +156,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void ReviewPendingProviderIdsCommand_ProcessesTvdbMismatchAndRequiredImdbReviews()
+    public async Task ReviewPendingProviderIdsCommand_ProcessesTvdbMismatchAndRequiredImdbReviews()
     {
         var reviewDialogs = new QueueingProviderReviewDialogs(
             tvdbResults: [EmbyTvdbReviewResult.Apply(new TvdbEpisodeSelection(1, "Serie", 100, "Pilot", "01", "01"))],
@@ -198,9 +198,9 @@ public sealed class EmbySyncViewModelTests
         Assert.True(tvdbMismatchItem.RequiresImdbReview);
         Assert.True(imdbOnlyItem.RequiresImdbReview);
 
-        vm.ReviewPendingProviderIdsCommand.Execute(null);
+        await vm.ReviewPendingProviderIdsCommand.ExecuteAsync();
 
-        Assert.True(SpinWait.SpinUntil(() => vm.StatusText.Contains("abgeschlossen", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+        Assert.Contains("abgeschlossen", vm.StatusText, StringComparison.Ordinal);
         Assert.Equal(1, reviewDialogs.TvdbReviewCallCount);
         Assert.Equal(2, reviewDialogs.ImdbReviewCallCount);
         Assert.False(tvdbMismatchItem.HasPendingProviderReview);
@@ -212,7 +212,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void ReviewSelectedMetadataCommand_AllowsKeepingCurrentTvdbId_WhenFileNameCannotSeedSearch()
+    public async Task ReviewSelectedMetadataCommand_AllowsKeepingCurrentTvdbId_WhenFileNameCannotSeedSearch()
     {
         var reviewDialogs = new QueueingProviderReviewDialogs(
             tvdbResults: [EmbyTvdbReviewResult.KeepCurrent],
@@ -233,29 +233,29 @@ public sealed class EmbySyncViewModelTests
         Assert.True(item.RequiresTvdbReview);
         Assert.True(vm.ReviewSelectedMetadataCommand.CanExecute(null));
 
-        vm.ReviewSelectedMetadataCommand.Execute(null);
+        await vm.ReviewSelectedMetadataCommand.ExecuteAsync();
 
-        Assert.True(SpinWait.SpinUntil(() => vm.StatusText.Contains("TVDB-Zuordnung", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+        Assert.Contains("TVDB-Zuordnung", vm.StatusText, StringComparison.Ordinal);
         Assert.Equal(1, reviewDialogs.TvdbReviewCallCount);
         Assert.False(item.RequiresTvdbReview);
         Assert.Equal("100", item.TvdbId);
     }
 
     [Fact]
-    public void RunSyncCommand_BlocksWhenProviderReviewsAreOpen()
+    public async Task RunSyncCommand_BlocksWhenProviderReviewsAreOpen()
     {
         var dialogService = new CapturingDialogService();
         var vm = CreateViewModel(dialogService);
         var item = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", "tt1234567"));
         vm.Items.Add(item);
 
-        vm.RunSyncCommand.Execute(null);
+        await vm.RunSyncCommand.ExecuteAsync();
 
         Assert.Contains("Provider-ID-Pflichtprüfung", dialogService.LastWarningMessage, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SelectReportCommand_LoadsMultipleStructuredReports()
+    public async Task SelectReportCommand_LoadsMultipleStructuredReports()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -274,9 +274,8 @@ public sealed class EmbySyncViewModelTests
             var dialogService = new SelectingDialogService([firstReportPath, secondReportPath]);
             var vm = CreateViewModel(dialogService);
 
-            vm.SelectReportCommand.Execute(null);
+            await vm.SelectReportCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 2, TimeSpan.FromSeconds(2)));
             Assert.Equal(2, vm.ItemCount);
             Assert.Contains(firstReportPath, vm.ReportPath, StringComparison.Ordinal);
             Assert.Contains(secondReportPath, vm.ReportPath, StringComparison.Ordinal);
@@ -292,7 +291,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void SelectReportCommand_MergesDuplicateEntriesAcrossReports_ByRecencyAndComplementsMissingIds()
+    public async Task SelectReportCommand_MergesDuplicateEntriesAcrossReports_ByRecencyAndComplementsMissingIds()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -318,9 +317,9 @@ public sealed class EmbySyncViewModelTests
             var dialogService = new SelectingDialogService([olderReportPath, newerReportPath]);
             var vm = CreateViewModel(dialogService);
 
-            vm.SelectReportCommand.Execute(null);
+            await vm.SelectReportCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 1 && vm.StatusText.Contains("Prüfung abgeschlossen", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+            Assert.Contains("Prüfung abgeschlossen", vm.StatusText, StringComparison.Ordinal);
             var item = Assert.Single(vm.Items);
             Assert.Equal("202", item.TvdbId);
             Assert.Equal("tt1234567", item.ImdbId);
@@ -335,7 +334,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_WithoutEmbyCredentials_UpdatesLocalNfoAndSkipsRefresh()
+    public async Task RunSyncCommand_WithoutEmbyCredentials_UpdatesLocalNfoAndSkipsRefresh()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -359,9 +358,9 @@ public sealed class EmbySyncViewModelTests
 
             Assert.True(vm.RunSyncCommand.CanExecute(null));
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Aktualisiert", TimeSpan.FromSeconds(2)));
+            Assert.Equal("Aktualisiert", item.StatusText);
             Assert.Contains("keine Emby-API-Zugangsdaten", item.Note, StringComparison.Ordinal);
             Assert.Contains("Emby-Refresh wurde wegen fehlender API-Zugangsdaten", vm.StatusText, StringComparison.Ordinal);
             var updatedText = File.ReadAllText(nfoPath);
@@ -378,7 +377,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_RefreshesEmby_WhenNfoIsCurrentButServerIdsDiffer()
+    public async Task RunSyncCommand_RefreshesEmby_WhenNfoIsCurrentButServerIdsDiffer()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -429,9 +428,9 @@ public sealed class EmbySyncViewModelTests
             item.ApplyImdbSelection("tt1234567");
             vm.Items.Add(item);
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Aktualisiert", TimeSpan.FromSeconds(2)));
+            Assert.Equal("Aktualisiert", item.StatusText);
             Assert.Equal(1, embyClient.RefreshCallCount);
             Assert.Equal("emby-1", embyClient.LastRefreshItemId);
             Assert.Contains("NFO war bereits aktuell", item.Note, StringComparison.Ordinal);
@@ -447,7 +446,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_DoesNotMarkDone_WhenRefreshOnlyUpdateFails()
+    public async Task RunSyncCommand_DoesNotMarkDone_WhenRefreshOnlyUpdateFails()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -483,8 +482,8 @@ public sealed class EmbySyncViewModelTests
                     ApiKey = "token",
                     ScanWaitTimeoutSeconds = 60
                 });
-            vm.SelectReportCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 1, TimeSpan.FromSeconds(2)));
+            await vm.SelectReportCommand.ExecuteAsync();
+            Assert.Equal(1, vm.ItemCount);
             var item = Assert.Single(vm.Items);
             item.ApplyAnalysis(new EmbyFileAnalysis(
                 item.MediaFilePath,
@@ -505,9 +504,9 @@ public sealed class EmbySyncViewModelTests
             item.ApproveCurrentTvdbId();
             item.ApplyImdbSelection("tt1234567");
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Refresh prüfen", TimeSpan.FromSeconds(2)));
+            Assert.Equal("Refresh prüfen", item.StatusText);
             var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath))!;
             Assert.Null(Assert.Single(report.Items).EmbySyncDone);
             Assert.Contains("Emby-Refresh-Fehler", vm.StatusText, StringComparison.Ordinal);
@@ -522,7 +521,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_MarksCompletedReportAndMovesItToDoneDirectory()
+    public async Task RunSyncCommand_MarksCompletedReportAndMovesItToDoneDirectory()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -541,16 +540,16 @@ public sealed class EmbySyncViewModelTests
             var dialogService = new SelectingDialogService([reportPath]);
             var vm = CreateViewModel(dialogService);
 
-            vm.SelectReportCommand.Execute(null);
+            await vm.SelectReportCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => vm.ItemCount == 1, TimeSpan.FromSeconds(2)));
+            Assert.Equal(1, vm.ItemCount);
             var item = Assert.Single(vm.Items);
             item.ApplyImdbSelection("tt1234567");
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
             var doneReportPath = Path.Combine(tempDirectory, "done", "run.metadata.json");
-            Assert.True(SpinWait.SpinUntil(() => File.Exists(doneReportPath), TimeSpan.FromSeconds(2)));
+            Assert.True(File.Exists(doneReportPath));
             Assert.False(File.Exists(reportPath));
             Assert.Contains(doneReportPath, vm.ReportPath, StringComparison.OrdinalIgnoreCase);
             var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(doneReportPath))!;
@@ -569,7 +568,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_SkipsInvalidProviderIds_BeforeWritingNfo()
+    public async Task RunSyncCommand_SkipsInvalidProviderIds_BeforeWritingNfo()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -586,9 +585,9 @@ public sealed class EmbySyncViewModelTests
             item.ImdbId = "ttbad";
             vm.Items.Add(item);
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "IDs prüfen", TimeSpan.FromSeconds(2)));
+            Assert.Equal("IDs prüfen", item.StatusText);
             Assert.Equal(originalNfo, File.ReadAllText(nfoPath));
             Assert.Contains("IMDB-ID muss im Format", item.Note, StringComparison.Ordinal);
         }
@@ -602,7 +601,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public void RunSyncCommand_ContinuesAfterRefreshFailure_AndMarksAffectedRow()
+    public async Task RunSyncCommand_ContinuesAfterRefreshFailure_AndMarksAffectedRow()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -631,9 +630,9 @@ public sealed class EmbySyncViewModelTests
             item.ApplyImdbSelection("tt1234567");
             vm.Items.Add(item);
 
-            vm.RunSyncCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.True(SpinWait.SpinUntil(() => item.StatusText == "Refresh prüfen", TimeSpan.FromSeconds(2)));
+            Assert.Equal("Refresh prüfen", item.StatusText);
             Assert.Equal(1, embyClient.RefreshCallCount);
             Assert.Contains("fehlgeschlagen", item.Note, StringComparison.Ordinal);
             Assert.Contains("Emby-Refresh-Fehler", vm.StatusText, StringComparison.Ordinal);

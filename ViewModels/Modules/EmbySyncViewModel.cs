@@ -772,7 +772,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private bool CanReviewSelectedMetadata()
     {
-        return !_isBusy && TryGetSelectedMetadataGuess(out _, out _);
+        return !_isBusy && SelectedItem?.CanReviewTvdb == true;
     }
 
     private bool CanReviewSelectedImdb()

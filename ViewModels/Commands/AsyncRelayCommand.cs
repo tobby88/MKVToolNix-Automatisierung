@@ -45,7 +45,17 @@ internal sealed class AsyncRelayCommand : ICommand
         return !_isExecuting && (_canExecute?.Invoke() ?? true);
     }
 
-    public async void Execute(object? parameter)
+    public void Execute(object? parameter)
+    {
+        _ = ExecuteAsync(parameter);
+    }
+
+    /// <summary>
+    /// Führt dasselbe Kommando awaitbar aus. Die GUI nutzt weiterhin <see cref="ICommand.Execute"/>;
+    /// Tests und koordinierende ViewModel-Logik können damit ohne zeitbasiertes Polling warten.
+    /// </summary>
+    /// <param name="parameter">Nicht verwendeter ICommand-Parameter.</param>
+    public async Task ExecuteAsync(object? parameter = null)
     {
         if (!CanExecute(parameter))
         {
