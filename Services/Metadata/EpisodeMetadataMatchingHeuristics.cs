@@ -199,7 +199,7 @@ internal static class EpisodeMetadataMatchingHeuristics
 
         if (match.TitleSimilarity >= 30 && match.ExactTitleMatchCount == 1)
         {
-            return false;
+            return match.ScoreGap < 8;
         }
 
         if (match.TitleSimilarity >= 30)

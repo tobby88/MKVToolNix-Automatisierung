@@ -282,36 +282,37 @@ internal sealed class EpisodeMetadataLookupService
     /// <param name="series">Ausgewählte TVDB-Serie.</param>
     public void SaveSeriesMapping(string localSeriesName, TvdbSeriesSearchResult series)
     {
-        var settings = LoadSettings();
         var normalized = EpisodeMetadataMatchingHeuristics.NormalizeText(localSeriesName);
-        var existing = settings.SeriesMappings.FirstOrDefault(mapping =>
-            string.Equals(
-                EpisodeMetadataMatchingHeuristics.NormalizeText(mapping.LocalSeriesName),
-                normalized,
-                StringComparison.OrdinalIgnoreCase));
-
-        if (existing is null)
+        _store.Update(settings =>
         {
-            settings.SeriesMappings.Add(new SeriesMetadataMapping
+            var existing = settings.SeriesMappings.FirstOrDefault(mapping =>
+                string.Equals(
+                    EpisodeMetadataMatchingHeuristics.NormalizeText(mapping.LocalSeriesName),
+                    normalized,
+                    StringComparison.OrdinalIgnoreCase));
+
+            if (existing is null)
             {
-                LocalSeriesName = localSeriesName,
-                TvdbSeriesId = series.Id,
-                TvdbSeriesName = series.Name,
-                OriginalLanguage = series.PrimaryLanguage
-            });
-        }
-        else
-        {
-            existing.LocalSeriesName = localSeriesName;
-            existing.TvdbSeriesId = series.Id;
-            existing.TvdbSeriesName = series.Name;
-            existing.OriginalLanguage = series.PrimaryLanguage;
-        }
+                settings.SeriesMappings.Add(new SeriesMetadataMapping
+                {
+                    LocalSeriesName = localSeriesName,
+                    TvdbSeriesId = series.Id,
+                    TvdbSeriesName = series.Name,
+                    OriginalLanguage = series.PrimaryLanguage
+                });
+            }
+            else
+            {
+                existing.LocalSeriesName = localSeriesName;
+                existing.TvdbSeriesId = series.Id;
+                existing.TvdbSeriesName = series.Name;
+                existing.OriginalLanguage = series.PrimaryLanguage;
+            }
 
-        settings.SeriesMappings = settings.SeriesMappings
-            .OrderBy(mapping => mapping.LocalSeriesName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        _store.Save(settings);
+            settings.SeriesMappings = settings.SeriesMappings
+                .OrderBy(mapping => mapping.LocalSeriesName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        });
     }
 
     /// <summary>

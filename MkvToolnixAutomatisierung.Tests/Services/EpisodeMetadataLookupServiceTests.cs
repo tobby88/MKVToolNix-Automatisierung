@@ -238,7 +238,22 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal(100, result.Selection.TvdbEpisodeId);
         Assert.Contains("TVDB automatisch erkannt", result.StatusText);
         Assert.Equal(1, store.SaveCallCount);
+        Assert.Equal(1, store.UpdateCallCount);
         Assert.Contains(store.CurrentSettings.SeriesMappings, mapping => mapping.TvdbSeriesId == 42 && mapping.LocalSeriesName == "Beispielserie");
+    }
+
+    [Fact]
+    public void AppMetadataSettingsClone_ToleratesNullSeriesMappingsFromLegacyJson()
+    {
+        var settings = new AppMetadataSettings
+        {
+            SeriesMappings = null!
+        };
+
+        var clone = settings.Clone();
+
+        Assert.NotNull(clone.SeriesMappings);
+        Assert.Empty(clone.SeriesMappings);
     }
 
     [Fact]
@@ -418,6 +433,36 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Contains("keine Episode sicher zuordenbar", result.StatusText);
     }
 
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_RequiresReview_WhenExactEpisodeTitleIsAmbiguousAcrossSeries()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ =>
+            [
+                new TvdbSeriesSearchResult(42, "SOKO Leipzig", "2001", null),
+                new TvdbSeriesSearchResult(43, "SOKO Leipzig", "2026", null)
+            ],
+            EpisodesResultFactory = seriesId => [new TvdbEpisodeRecord(seriesId * 10, "Take Me Out", 1, 1, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("SOKO Leipzig", "Take Me Out", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.NotNull(result.Selection);
+        Assert.Contains("TVDB-Vorschlag prüfen", result.StatusText);
+        Assert.Equal(0, store.SaveCallCount);
+        Assert.Equal(0, store.UpdateCallCount);
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)
@@ -428,6 +473,8 @@ public sealed class EpisodeMetadataLookupServiceTests
         public AppMetadataSettings CurrentSettings { get; private set; }
 
         public int SaveCallCount { get; private set; }
+
+        public int UpdateCallCount { get; private set; }
 
         public string SettingsFilePath => "test-settings.json";
 
@@ -440,6 +487,15 @@ public sealed class EpisodeMetadataLookupServiceTests
         {
             SaveCallCount++;
             CurrentSettings = settings.Clone();
+        }
+
+        public void Update(Action<AppMetadataSettings> updateAction)
+        {
+            SaveCallCount++;
+            UpdateCallCount++;
+            var updatedSettings = CurrentSettings.Clone();
+            updateAction(updatedSettings);
+            CurrentSettings = updatedSettings.Clone();
         }
     }
 

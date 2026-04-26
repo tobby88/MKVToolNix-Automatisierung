@@ -162,6 +162,13 @@ public sealed class TvdbLookupWindowViewModelTests
         {
             CurrentSettings = settings.Clone();
         }
+
+        public void Update(Action<AppMetadataSettings> updateAction)
+        {
+            var updatedSettings = CurrentSettings.Clone();
+            updateAction(updatedSettings);
+            CurrentSettings = updatedSettings.Clone();
+        }
     }
 
     private sealed class FakeTvdbClient : ITvdbClient

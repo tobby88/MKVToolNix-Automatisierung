@@ -18,6 +18,11 @@ internal interface IAppMetadataStore
     void Save(AppMetadataSettings settings);
 
     /// <summary>
+    /// Aktualisiert ausschließlich den Metadaten-Teil atomar innerhalb des kombinierten Settings-Stores.
+    /// </summary>
+    void Update(Action<AppMetadataSettings> updateAction);
+
+    /// <summary>
     /// Pfad der zugrunde liegenden portablen Settings-Datei.
     /// </summary>
     string SettingsFilePath { get; }
@@ -67,13 +72,29 @@ internal sealed class AppMetadataStore : IAppMetadataStore
     }
 
     /// <summary>
+    /// Aktualisiert den Metadaten-Teil innerhalb derselben Sperre wie die kombinierte Settings-Datei.
+    /// </summary>
+    /// <param name="updateAction">Mutation auf einem geklonten Metadaten-Einstellungssatz.</param>
+    public void Update(Action<AppMetadataSettings> updateAction)
+    {
+        ArgumentNullException.ThrowIfNull(updateAction);
+
+        _settingsStore.Update(combinedSettings =>
+        {
+            var metadataSettings = combinedSettings.Metadata?.Clone() ?? new AppMetadataSettings();
+            updateAction(metadataSettings);
+            combinedSettings.Metadata = metadataSettings.Clone();
+        });
+    }
+
+    /// <summary>
     /// Pfad der zugrunde liegenden portablen Settings-Datei.
     /// </summary>
     public string SettingsFilePath => AppSettingsFileLocator.GetSettingsFilePath();
 }
 
 /// <summary>
-/// Persistente TVDB-Zugangsdaten plus lokale Zuordnungstabelle zwischen Dateinamen und TVDB-Serien.
+/// Bevorzugte Strategie für den IMDb-Abgleich im Emby-Modul.
 /// </summary>
 public enum ImdbLookupMode
 {
@@ -129,7 +150,10 @@ public sealed class AppMetadataSettings
             TvdbApiKey = TvdbApiKey?.Trim() ?? string.Empty,
             TvdbPin = TvdbPin?.Trim() ?? string.Empty,
             ImdbLookupMode = ImdbLookupMode,
-            SeriesMappings = SeriesMappings.Select(mapping => mapping.Clone()).ToList()
+            SeriesMappings = (SeriesMappings ?? [])
+                .Where(mapping => mapping is not null)
+                .Select(mapping => mapping.Clone())
+                .ToList()
         };
     }
 }
