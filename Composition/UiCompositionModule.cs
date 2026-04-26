@@ -21,14 +21,12 @@ internal static class UiCompositionModule
     {
         services.AddSingleton<IUserDialogService>(_ => new UserDialogService());
         services.AddSingleton<AppSettingsModuleServices>(provider => new AppSettingsModuleServices(
+            provider.GetRequiredService<AppSettingsStore>(),
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),
-            provider.GetRequiredService<IFfprobeLocator>(),
-            provider.GetRequiredService<IMkvToolNixLocator>(),
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
             provider.GetRequiredService<AppEmbySettingsStore>(),
-            provider.GetRequiredService<EmbyMetadataSyncService>(),
-            provider.GetRequiredService<ImdbLookupService>()));
+            provider.GetRequiredService<EmbyMetadataSyncService>()));
         services.AddSingleton<IAppSettingsDialogService>(provider => new AppSettingsDialogService(
             provider.GetRequiredService<AppSettingsModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));

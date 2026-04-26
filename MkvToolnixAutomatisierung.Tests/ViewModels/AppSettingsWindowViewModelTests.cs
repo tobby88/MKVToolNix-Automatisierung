@@ -312,20 +312,13 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     {
         settingsStore ??= new AppSettingsStore();
         var services = new AppSettingsModuleServices(
+            settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),
             new AppToolPathStore(settingsStore),
-            new StubFfprobeLocator(),
-            new StubMkvToolNixLocator(),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()),
-            CreateImdbLookupService());
+            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Archive);
-    }
-
-    private static ImdbLookupService CreateImdbLookupService()
-    {
-        return new ImdbLookupService(new HttpClient(new StubHttpMessageHandler()));
     }
 
     private string CreateDirectory(string relativePath)
@@ -341,35 +334,6 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;
-    }
-
-    private sealed class StubFfprobeLocator : IFfprobeLocator
-    {
-        public string? TryFindFfprobePath()
-        {
-            return null;
-        }
-    }
-
-    private sealed class StubMkvToolNixLocator : IMkvToolNixLocator
-    {
-        public string FindMkvMergePath()
-        {
-            throw new NotSupportedException();
-        }
-
-        public string FindMkvPropEditPath()
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    private sealed class StubHttpMessageHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
     }
 
     private sealed class StubEmbyClient(EmbyServerInfo serverInfo) : IEmbyClient

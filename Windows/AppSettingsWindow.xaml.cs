@@ -10,6 +10,7 @@ namespace MkvToolnixAutomatisierung.Windows;
 public partial class AppSettingsWindow : Window
 {
     private readonly AppSettingsWindowViewModel _viewModel;
+    private bool _isSynchronizingSecretFields;
 
     internal AppSettingsWindow(AppSettingsWindowViewModel viewModel)
     {
@@ -18,6 +19,7 @@ public partial class AppSettingsWindow : Window
         _viewModel.CloseRequested += ViewModelOnCloseRequested;
         DataContext = _viewModel;
         SettingsTabControl.SelectedIndex = (int)_viewModel.SelectedPage;
+        SynchronizeSecretFieldsFromViewModel();
         Closed += AppSettingsWindow_Closed;
         Closing += AppSettingsWindow_Closing;
     }
@@ -84,5 +86,44 @@ public partial class AppSettingsWindow : Window
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.Cancel();
+    }
+
+    private void TvdbApiKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_isSynchronizingSecretFields)
+        {
+            _viewModel.TvdbApiKey = TvdbApiKeyBox.Password;
+        }
+    }
+
+    private void TvdbPinBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_isSynchronizingSecretFields)
+        {
+            _viewModel.TvdbPin = TvdbPinBox.Password;
+        }
+    }
+
+    private void EmbyApiKeyBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_isSynchronizingSecretFields)
+        {
+            _viewModel.EmbyApiKey = EmbyApiKeyBox.Password;
+        }
+    }
+
+    private void SynchronizeSecretFieldsFromViewModel()
+    {
+        _isSynchronizingSecretFields = true;
+        try
+        {
+            TvdbApiKeyBox.Password = _viewModel.TvdbApiKey;
+            TvdbPinBox.Password = _viewModel.TvdbPin;
+            EmbyApiKeyBox.Password = _viewModel.EmbyApiKey;
+        }
+        finally
+        {
+            _isSynchronizingSecretFields = false;
+        }
     }
 }

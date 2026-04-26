@@ -55,18 +55,51 @@ public sealed class AppSettingsWindowTests
         });
     }
 
+    [Fact]
+    public async Task Window_UsesPasswordBoxesForSecretSettings()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateViewModel(new PendingEmbyClient(Task.FromResult(new EmbyServerInfo("Test", "1.0", "id"))));
+            viewModel.TvdbApiKey = "tvdb-secret";
+            viewModel.TvdbPin = "tvdb-pin";
+            viewModel.EmbyApiKey = "emby-secret";
+            var window = new AppSettingsWindow(viewModel);
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+
+                var tvdbApiKeyBox = Assert.IsType<PasswordBox>(window.FindName("TvdbApiKeyBox"));
+                var tvdbPinBox = Assert.IsType<PasswordBox>(window.FindName("TvdbPinBox"));
+                var embyApiKeyBox = Assert.IsType<PasswordBox>(window.FindName("EmbyApiKeyBox"));
+
+                Assert.Equal("tvdb-secret", tvdbApiKeyBox.Password);
+                Assert.Equal("tvdb-pin", tvdbPinBox.Password);
+                Assert.Equal("emby-secret", embyApiKeyBox.Password);
+
+                embyApiKeyBox.Password = "changed";
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.Equal("changed", viewModel.EmbyApiKey);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient)
     {
         var settingsStore = new AppSettingsStore();
         var services = new AppSettingsModuleServices(
+            settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),
             new AppToolPathStore(settingsStore),
-            new NullFfprobeLocator(),
-            new NullMkvToolNixLocator(),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()),
-            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())));
+            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Emby);
     }
 
@@ -106,26 +139,6 @@ public sealed class AppSettingsWindowTests
         public void Dispose()
         {
         }
-    }
-
-    private sealed class StubHttpMessageHandler : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-    }
-
-    private sealed class NullFfprobeLocator : IFfprobeLocator
-    {
-        public string? TryFindFfprobePath() => null;
-    }
-
-    private sealed class NullMkvToolNixLocator : IMkvToolNixLocator
-    {
-        public string FindMkvMergePath() => throw new FileNotFoundException();
-
-        public string FindMkvPropEditPath() => throw new FileNotFoundException();
     }
 
     private sealed class NullDialogService : IUserDialogService

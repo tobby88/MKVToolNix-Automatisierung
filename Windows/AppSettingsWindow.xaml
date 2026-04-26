@@ -86,11 +86,12 @@
                                        Grid.Column="0"
                                        Margin="0,2,12,8"
                                        VerticalAlignment="Center"
-                                       Text="Manueller Override" />
+                                       Text="Override (Vorrang)" />
                             <TextBox Grid.Row="1"
                                      Grid.Column="1"
                                      Margin="0,0,12,6"
-                                     Text="{Binding MkvToolNixDirectoryPath, UpdateSourceTrigger=PropertyChanged}" />
+                                     ToolTip="Optionaler manueller Pfad. Wenn gesetzt, hat er Vorrang vor der automatischen Verwaltung."
+                                     Text="{Binding MkvToolNixDirectoryPath}" />
                             <Button Grid.Row="1"
                                     Grid.Column="2"
                                     Margin="0,0,0,4"
@@ -130,11 +131,12 @@
                                        Grid.Column="0"
                                        Margin="0,2,12,8"
                                        VerticalAlignment="Center"
-                                       Text="Manueller Override" />
+                                       Text="Override (Vorrang)" />
                             <TextBox Grid.Row="1"
                                      Grid.Column="1"
                                      Margin="0,0,12,6"
-                                     Text="{Binding FfprobePath, UpdateSourceTrigger=PropertyChanged}" />
+                                     ToolTip="Optionaler manueller Pfad. Wenn gesetzt, hat er Vorrang vor der automatischen Verwaltung."
+                                     Text="{Binding FfprobePath}" />
                             <Button Grid.Row="1"
                                     Grid.Column="2"
                                     Margin="0,0,0,4"
@@ -167,16 +169,18 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB API-Key" />
-                    <TextBox Grid.Row="0"
-                             Grid.Column="1"
-                             Margin="0,4,0,4"
-                             Text="{Binding TvdbApiKey, UpdateSourceTrigger=PropertyChanged}" />
+                    <PasswordBox x:Name="TvdbApiKeyBox"
+                                 Grid.Row="0"
+                                 Grid.Column="1"
+                                 Margin="0,4,0,4"
+                                 PasswordChanged="TvdbApiKeyBox_PasswordChanged" />
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="TVDB PIN (optional)" />
-                    <TextBox Grid.Row="1"
-                             Grid.Column="1"
-                             Margin="0,4,0,4"
-                             Text="{Binding TvdbPin, UpdateSourceTrigger=PropertyChanged}" />
+                    <PasswordBox x:Name="TvdbPinBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Margin="0,4,0,4"
+                                 PasswordChanged="TvdbPinBox_PasswordChanged" />
 
                     <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="IMDb-Zuordnung" />
                     <ComboBox Grid.Row="3"
@@ -217,11 +221,12 @@
                              Text="{Binding EmbyServerUrl, UpdateSourceTrigger=PropertyChanged}" />
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="API-Key" />
-                    <TextBox Grid.Row="1"
-                             Grid.Column="1"
-                             Grid.ColumnSpan="2"
-                             Margin="0,4,0,4"
-                             Text="{Binding EmbyApiKey, UpdateSourceTrigger=PropertyChanged}" />
+                    <PasswordBox x:Name="EmbyApiKeyBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,4,0,4"
+                                 PasswordChanged="EmbyApiKeyBox_PasswordChanged" />
 
                     <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Scan-Wartezeit" />
                     <TextBox Grid.Row="2"

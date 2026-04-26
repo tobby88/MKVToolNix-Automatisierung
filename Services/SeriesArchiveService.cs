@@ -99,12 +99,21 @@ public sealed partial class SeriesArchiveService
     /// <param name="archiveRootDirectory">Neuer Bibliothekswurzelpfad.</param>
     public void ConfigureArchiveRootDirectory(string archiveRootDirectory)
     {
-        var normalizedPath = NormalizeArchiveRootDirectory(archiveRootDirectory);
+        var normalizedPath = NormalizeArchiveRootDirectoryForSettings(archiveRootDirectory);
         _archiveSettingsStore.Save(new AppArchiveSettings
         {
             DefaultSeriesArchiveRootPath = normalizedPath
         });
-        ArchiveRootDirectory = normalizedPath;
+        ApplyArchiveRootDirectoryForCurrentSession(normalizedPath);
+    }
+
+    /// <summary>
+    /// Aktualisiert nur den laufenden Archivdienst, nachdem ein anderer Codepfad die Settings bereits atomar gespeichert hat.
+    /// </summary>
+    /// <param name="archiveRootDirectory">Bereits gespeicherter oder zu normalisierender Archivwurzelpfad.</param>
+    internal void ApplyArchiveRootDirectoryForCurrentSession(string archiveRootDirectory)
+    {
+        ArchiveRootDirectory = NormalizeArchiveRootDirectoryForSettings(archiveRootDirectory);
         _hasValidArchiveRootConfiguration = true;
     }
 
@@ -153,6 +162,14 @@ public sealed partial class SeriesArchiveService
         }
 
         throw new ArgumentException("Der konfigurierte Archivwurzelpfad ist ungültig.", nameof(archiveRootDirectory));
+    }
+
+    /// <summary>
+    /// Normalisiert einen Archivwurzelpfad für persistente Einstellungen und UI-Speicherung.
+    /// </summary>
+    internal static string NormalizeArchiveRootDirectoryForSettings(string? archiveRootDirectory)
+    {
+        return NormalizeArchiveRootDirectory(archiveRootDirectory);
     }
 
     /// <summary>

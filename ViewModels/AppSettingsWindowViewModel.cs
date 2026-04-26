@@ -400,23 +400,28 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public void SaveSettings()
     {
-        _services.Archive.ConfigureArchiveRootDirectory(ArchiveRootDirectory);
-        var toolSettings = _services.ToolPaths.Load();
-        toolSettings.FfprobePath = FfprobePath;
-        toolSettings.MkvToolNixDirectoryPath = MkvToolNixDirectoryPath;
-        toolSettings.ManagedFfprobe = _managedFfprobeSettings.Clone();
-        toolSettings.ManagedFfprobe.AutoManageEnabled = AutoManageFfprobe;
-        toolSettings.ManagedMkvToolNix = _managedMkvToolNixSettings.Clone();
-        toolSettings.ManagedMkvToolNix.AutoManageEnabled = AutoManageMkvToolNix;
-        _services.ToolPaths.Save(toolSettings);
+        var normalizedArchiveRootDirectory = SeriesArchiveService.NormalizeArchiveRootDirectoryForSettings(ArchiveRootDirectory);
+        _services.Settings.Update(settings =>
+        {
+            settings.Archive ??= new AppArchiveSettings();
+            settings.Archive.DefaultSeriesArchiveRootPath = normalizedArchiveRootDirectory;
 
-        var metadataSettings = _services.EpisodeMetadata.LoadSettings();
-        metadataSettings.TvdbApiKey = TvdbApiKey;
-        metadataSettings.TvdbPin = TvdbPin;
-        metadataSettings.ImdbLookupMode = SelectedImdbLookupMode;
-        _services.EpisodeMetadata.SaveSettings(metadataSettings);
+            settings.ToolPaths ??= new AppToolPathSettings();
+            settings.ToolPaths.FfprobePath = FfprobePath;
+            settings.ToolPaths.MkvToolNixDirectoryPath = MkvToolNixDirectoryPath;
+            settings.ToolPaths.ManagedFfprobe = _managedFfprobeSettings.Clone();
+            settings.ToolPaths.ManagedFfprobe.AutoManageEnabled = AutoManageFfprobe;
+            settings.ToolPaths.ManagedMkvToolNix = _managedMkvToolNixSettings.Clone();
+            settings.ToolPaths.ManagedMkvToolNix.AutoManageEnabled = AutoManageMkvToolNix;
 
-        _services.EmbySettings.Save(BuildEmbySettings());
+            settings.Metadata ??= new AppMetadataSettings();
+            settings.Metadata.TvdbApiKey = TvdbApiKey;
+            settings.Metadata.TvdbPin = TvdbPin;
+            settings.Metadata.ImdbLookupMode = SelectedImdbLookupMode;
+
+            settings.Emby = BuildEmbySettings();
+        });
+        _services.Archive.ApplyArchiveRootDirectoryForCurrentSession(normalizedArchiveRootDirectory);
 
         RefreshDerivedState();
         StatusText = $"Einstellungen gespeichert: {SettingsFilePath}";

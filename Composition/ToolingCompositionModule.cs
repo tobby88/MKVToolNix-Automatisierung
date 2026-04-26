@@ -2,6 +2,8 @@ using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Services;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace MkvToolnixAutomatisierung.Composition;
 
@@ -21,7 +23,7 @@ internal static class ToolingCompositionModule
             var client = new HttpClient();
             // Der Start darf bei langsamen oder blockierten Upstream-Diensten nicht minutenlang hängen bleiben.
             client.Timeout = TimeSpan.FromSeconds(15);
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MkvToolnixAutomatisierung", "1.2.0"));
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MkvToolnixAutomatisierung", GetApplicationVersionForUserAgent()));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             return client;
         });
@@ -38,5 +40,19 @@ internal static class ToolingCompositionModule
             provider.GetRequiredService<MkvToolNixLocator>(),
             provider.GetRequiredService<FfprobeLocator>(),
             provider.GetRequiredService<MkvMergeProbeService>()));
+    }
+
+    private static string GetApplicationVersionForUserAgent()
+    {
+        var assembly = typeof(ToolingCompositionModule).Assembly;
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        var version = string.IsNullOrWhiteSpace(informationalVersion)
+            ? assembly.GetName().Version?.ToString(3)
+            : informationalVersion.Split('+')[0];
+
+        version = string.IsNullOrWhiteSpace(version) ? "0.0.0" : version;
+        return Regex.Replace(version, @"[^0-9A-Za-z.!#$%&'*+^_`|~-]", "-");
     }
 }

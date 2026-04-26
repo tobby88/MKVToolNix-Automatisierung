@@ -125,23 +125,19 @@ internal sealed record EmbyModuleServices(
 /// <summary>
 /// Bündelt die Stores und Infrastruktur für den zentralen Einstellungsdialog.
 /// </summary>
+/// <param name="Settings">Gemeinsamer Settings-Store, damit mehrere Einstellungsbereiche atomar gespeichert werden.</param>
 /// <param name="Archive">Archivdienst für die live wirksame Serienwurzel.</param>
 /// <param name="ToolPaths">Persistenter Store für ffprobe- und MKVToolNix-Pfade.</param>
-/// <param name="FfprobeLocator">Locator für die aktuell auflösbare <c>ffprobe.exe</c>.</param>
-/// <param name="MkvToolNixLocator">Locator für die aktuell auflösbare MKVToolNix-Installation.</param>
 /// <param name="EpisodeMetadata">TVDB-Settings- und Mappingstore samt Lookup-Logik.</param>
 /// <param name="EmbySettings">Persistenter Store für Emby-Serveradresse und API-Key.</param>
 /// <param name="EmbySync">Fachservice für Emby-Verbindungstest und nachgelagerten NFO-/Refresh-Abgleich.</param>
-/// <param name="ImdbLookup">Optionaler IMDb-Provider über die freie REST-API.</param>
 internal sealed record AppSettingsModuleServices(
+    AppSettingsStore Settings,
     SeriesArchiveService Archive,
     AppToolPathStore ToolPaths,
-    IFfprobeLocator FfprobeLocator,
-    IMkvToolNixLocator MkvToolNixLocator,
     EpisodeMetadataLookupService EpisodeMetadata,
     AppEmbySettingsStore EmbySettings,
-    EmbyMetadataSyncService EmbySync,
-    ImdbLookupService ImdbLookup);
+    EmbyMetadataSyncService EmbySync);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.
