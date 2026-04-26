@@ -12,6 +12,19 @@ internal static class EpisodeEditTextBuilder
         "gesplittete episodenvariante"
     ];
 
+    private static readonly string[] ArchivePlanReviewMarkers =
+    [
+        "archivtreffer",
+        "dateilaufzeit widersprechen",
+        "laufzeit der quelle"
+    ];
+
+    private static readonly string[] OutputTargetPlanReviewMarkers =
+    [
+        "dieselbe ausgabedatei",
+        "episodencode und ausgabeziel"
+    ];
+
     public static string BuildManualCheckText(bool requiresManualCheck, bool isManualCheckApproved)
     {
         if (!requiresManualCheck)
@@ -234,10 +247,8 @@ internal static class EpisodeEditTextBuilder
         }
 
         return ContainsAny(note, MultipartPlanReviewMarkers)
-            || (note.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
-                && note.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
-            || (note.Contains("Bitte", StringComparison.OrdinalIgnoreCase)
-                && note.Contains("prüf", StringComparison.OrdinalIgnoreCase));
+            || ContainsAny(note, ArchivePlanReviewMarkers)
+            || ContainsAny(note, OutputTargetPlanReviewMarkers);
     }
 
     public static string? GetPrimaryActionablePlanReviewNote(IEnumerable<string> notes)
@@ -263,10 +274,14 @@ internal static class EpisodeEditTextBuilder
             return "Mehrfachfolge prüfen";
         }
 
-        if (primaryNote.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
-            || primaryNote.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
+        if (ContainsAny(primaryNote, ArchivePlanReviewMarkers))
         {
             return "Archiv prüfen";
+        }
+
+        if (ContainsAny(primaryNote, OutputTargetPlanReviewMarkers))
+        {
+            return "Ziel prüfen";
         }
 
         return "Hinweis prüfen";
@@ -298,13 +313,17 @@ internal static class EpisodeEditTextBuilder
             return 0;
         }
 
-        if (note.Contains("Archivtreffer", StringComparison.OrdinalIgnoreCase)
-            || note.Contains("Episodencode", StringComparison.OrdinalIgnoreCase))
+        if (ContainsAny(note, ArchivePlanReviewMarkers))
         {
             return 1;
         }
 
-        return 2;
+        if (ContainsAny(note, OutputTargetPlanReviewMarkers))
+        {
+            return 2;
+        }
+
+        return 3;
     }
 
     private static bool ContainsAny(string value, IEnumerable<string> needles)

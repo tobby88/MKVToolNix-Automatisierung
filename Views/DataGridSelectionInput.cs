@@ -66,15 +66,15 @@ internal static class DataGridSelectionInput
     /// <param name="dataGrid">Das betroffene DataGrid.</param>
     /// <param name="e">Das PreviewMouseLeftButtonDown-Ereignis des DataGrids.</param>
     /// <param name="toggleCommand">Das fachliche Kommando, das die aktuell markierte Zeile umschaltet.</param>
-    /// <param name="toggleColumnDisplayIndex">
-    /// DisplayIndex der Auswahlspalte. Nur Klicks in diese Spalte loesen den Toggle aus.
+    /// <param name="toggleColumnIndex">
+    /// Deklarativer Spaltenindex der Auswahlspalte. Nur Klicks in diese Spalte loesen den Toggle aus.
     /// </param>
     /// <returns><see langword="true"/>, wenn der Mausklick verarbeitet wurde.</returns>
     public static bool TryHandleMouseToggle(
         DataGrid dataGrid,
         MouseButtonEventArgs e,
         ICommand toggleCommand,
-        int toggleColumnDisplayIndex = 0)
+        int toggleColumnIndex = 0)
     {
         ArgumentNullException.ThrowIfNull(dataGrid);
         ArgumentNullException.ThrowIfNull(e);
@@ -85,7 +85,7 @@ internal static class DataGridSelectionInput
             return false;
         }
 
-        if (!IsSelectionColumnSource(dataGrid, e.OriginalSource as DependencyObject, toggleColumnDisplayIndex))
+        if (!IsSelectionColumnSource(dataGrid, e.OriginalSource as DependencyObject, toggleColumnIndex))
         {
             return false;
         }

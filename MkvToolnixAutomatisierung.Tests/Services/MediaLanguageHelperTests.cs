@@ -24,4 +24,18 @@ public sealed class MediaLanguageHelperTests
 
         Assert.Equal(expected, result);
     }
+
+    [Theory]
+    [InlineData("fra", "fr", "Français")]
+    [InlineData("es-MX", "es", "Español")]
+    [InlineData("swe", "sv", "Svenska")]
+    [InlineData("jpn", "ja", "日本語")]
+    public void NormalizeMuxLanguageCode_SupportsManualOverrideLanguages(
+        string rawCode,
+        string expectedCode,
+        string expectedDisplayName)
+    {
+        Assert.Equal(expectedCode, MediaLanguageHelper.NormalizeMuxLanguageCode(rawCode));
+        Assert.Equal(expectedDisplayName, MediaLanguageHelper.GetLanguageDisplayName(rawCode));
+    }
 }

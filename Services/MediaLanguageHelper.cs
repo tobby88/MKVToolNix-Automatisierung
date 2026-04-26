@@ -34,6 +34,89 @@ internal static class MediaLanguageHelper
             return "en";
         }
 
+        if (normalized is "fr" or "fra" or "fre" || normalized.StartsWith("fr-", StringComparison.Ordinal))
+        {
+            return "fr";
+        }
+
+        if (normalized is "es" or "spa" || normalized.StartsWith("es-", StringComparison.Ordinal))
+        {
+            return "es";
+        }
+
+        if (normalized is "it" or "ita" || normalized.StartsWith("it-", StringComparison.Ordinal))
+        {
+            return "it";
+        }
+
+        if (normalized is "nl" or "nld" or "dut" || normalized.StartsWith("nl-", StringComparison.Ordinal))
+        {
+            return "nl";
+        }
+
+        if (normalized is "sv" or "swe" || normalized.StartsWith("sv-", StringComparison.Ordinal))
+        {
+            return "sv";
+        }
+
+        if (normalized is "da" or "dan" || normalized.StartsWith("da-", StringComparison.Ordinal))
+        {
+            return "da";
+        }
+
+        if (normalized is "no" or "nor" or "nb" or "nob" or "nn" or "nno"
+            || normalized.StartsWith("no-", StringComparison.Ordinal)
+            || normalized.StartsWith("nb-", StringComparison.Ordinal)
+            || normalized.StartsWith("nn-", StringComparison.Ordinal))
+        {
+            return "no";
+        }
+
+        if (normalized is "fi" or "fin" || normalized.StartsWith("fi-", StringComparison.Ordinal))
+        {
+            return "fi";
+        }
+
+        if (normalized is "pl" or "pol" || normalized.StartsWith("pl-", StringComparison.Ordinal))
+        {
+            return "pl";
+        }
+
+        if (normalized is "pt" or "por" || normalized.StartsWith("pt-", StringComparison.Ordinal))
+        {
+            return "pt";
+        }
+
+        if (normalized is "tr" or "tur" || normalized.StartsWith("tr-", StringComparison.Ordinal))
+        {
+            return "tr";
+        }
+
+        if (normalized is "uk" or "ukr" || normalized.StartsWith("uk-", StringComparison.Ordinal))
+        {
+            return "uk";
+        }
+
+        if (normalized is "ru" or "rus" || normalized.StartsWith("ru-", StringComparison.Ordinal))
+        {
+            return "ru";
+        }
+
+        if (normalized is "ja" or "jpn" || normalized.StartsWith("ja-", StringComparison.Ordinal))
+        {
+            return "ja";
+        }
+
+        if (normalized is "ko" or "kor" || normalized.StartsWith("ko-", StringComparison.Ordinal))
+        {
+            return "ko";
+        }
+
+        if (normalized is "zh" or "zho" or "chi" or "cmn" || normalized.StartsWith("zh-", StringComparison.Ordinal))
+        {
+            return "zh";
+        }
+
         return "de";
     }
 
@@ -155,6 +238,22 @@ internal static class MediaLanguageHelper
             // damit Mehrspuren-Sets sprachlich konsistent und direkt lesbar bleiben.
             "nds" => "Plattdüütsch",
             "en" => "English",
+            "fr" => "Français",
+            "es" => "Español",
+            "it" => "Italiano",
+            "nl" => "Nederlands",
+            "sv" => "Svenska",
+            "da" => "Dansk",
+            "no" => "Norsk",
+            "fi" => "Suomi",
+            "pl" => "Polski",
+            "pt" => "Português",
+            "tr" => "Türkçe",
+            "uk" => "Українська",
+            "ru" => "Русский",
+            "ja" => "日本語",
+            "ko" => "한국어",
+            "zh" => "中文",
             _ => "Deutsch"
         };
     }
@@ -172,7 +271,23 @@ internal static class MediaLanguageHelper
             "de" => 0,
             "nds" => 1,
             "en" => 2,
-            _ => 9
+            "fr" => 3,
+            "es" => 4,
+            "it" => 5,
+            "nl" => 6,
+            "sv" => 7,
+            "da" => 8,
+            "no" => 9,
+            "fi" => 10,
+            "pl" => 11,
+            "pt" => 12,
+            "tr" => 13,
+            "uk" => 14,
+            "ru" => 15,
+            "ja" => 16,
+            "ko" => 17,
+            "zh" => 18,
+            _ => 99
         };
     }
 }

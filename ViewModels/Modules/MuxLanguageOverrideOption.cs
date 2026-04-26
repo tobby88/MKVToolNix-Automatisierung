@@ -15,6 +15,22 @@ internal static class MuxLanguageOverrideOptions
         new(string.Empty, "Automatisch"),
         new("de", "Deutsch"),
         new("en", "English"),
-        new("nds", "Plattdüütsch")
+        new("nds", "Plattdüütsch"),
+        new("da", "Dansk"),
+        new("es", "Español"),
+        new("fi", "Suomi"),
+        new("fr", "Français"),
+        new("it", "Italiano"),
+        new("nl", "Nederlands"),
+        new("no", "Norsk"),
+        new("pl", "Polski"),
+        new("pt", "Português"),
+        new("ru", "Русский"),
+        new("sv", "Svenska"),
+        new("tr", "Türkçe"),
+        new("uk", "Українська"),
+        new("ja", "日本語"),
+        new("ko", "한국어"),
+        new("zh", "中文")
     ];
 }
