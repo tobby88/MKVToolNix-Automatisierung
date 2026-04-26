@@ -145,8 +145,6 @@ internal sealed class EmbyClient : IEmbyClient
             return null;
         }
 
-        EmbyItem? singleCandidate = null;
-        var candidateCount = 0;
         foreach (var itemElement in itemsElement.EnumerateArray())
         {
             var item = ParseItem(itemElement);
@@ -155,17 +153,15 @@ internal sealed class EmbyClient : IEmbyClient
                 continue;
             }
 
-            candidateCount++;
-            singleCandidate = item;
-            if (string.Equals(item.Path, mediaFilePath, StringComparison.OrdinalIgnoreCase))
+            if (AreSameEmbyPath(item.Path, mediaFilePath))
             {
                 return item;
             }
         }
 
-        // Wenn Emby mehrere Treffer zum Path-Filter liefert, waere ein beliebiger "erster" Fallback
-        // fachlich gefaehrlich: Danach wuerden Provider-IDs und Refreshs am falschen Item landen.
-        return candidateCount == 1 ? singleCandidate : null;
+        // Emby behandelt den Path-Filter nicht in allen Versionen als harte Gleichheitsbedingung.
+        // Ein nicht exakt passender Einzeltreffer ist deshalb genauso unsicher wie mehrere Treffer.
+        return null;
     }
 
     /// <inheritdoc />
@@ -378,6 +374,22 @@ internal sealed class EmbyClient : IEmbyClient
         }
 
         return new EmbyItem(id, name, path, providerIds);
+    }
+
+    private static bool AreSameEmbyPath(string? left, string? right)
+    {
+        var normalizedLeft = NormalizeEmbyPath(left);
+        var normalizedRight = NormalizeEmbyPath(right);
+        return normalizedLeft is not null
+            && normalizedRight is not null
+            && string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizeEmbyPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path)
+            ? null
+            : path.Replace('\\', '/').TrimEnd('/');
     }
 
     private static EmbyLibraryFolder? ParseLibraryFolder(JsonElement itemElement)

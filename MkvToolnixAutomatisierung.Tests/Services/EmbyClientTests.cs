@@ -94,6 +94,57 @@ public sealed class EmbyClientTests
     }
 
     [Fact]
+    public async Task FindItemByPathAsync_ReturnsNull_WhenSingleReturnedItemPathDiffers()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "Id": "item-1",
+                      "Name": "Pilot",
+                      "Path": "Z:\\Videos\\Serien\\Andere Folge.mkv"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var item = await client.FindItemByPathAsync(CreateSettings(), @"Z:\Videos\Serien\Pilot.mkv");
+
+        Assert.Null(item);
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_AcceptsSlashOnlyDifferences()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "Id": "item-1",
+                      "Name": "Pilot",
+                      "Path": "/mnt/raid/Videos/Serien/Pilot.mkv"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var item = await client.FindItemByPathAsync(CreateSettings(), "/mnt/raid/Videos/Serien/Pilot.mkv");
+
+        Assert.NotNull(item);
+        Assert.Equal("item-1", item!.Id);
+    }
+
+    [Fact]
     public async Task GetLibrariesAsync_ParsesLocationsAndRefreshStatus()
     {
         using var httpClient = new HttpClient(new StubHttpMessageHandler

@@ -97,10 +97,10 @@ public sealed class EmbySyncViewModelTests
     {
         var vm = CreateViewModel();
         var syncableItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
-        var embyOnlyItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Trailer.mkv", EmbyProviderIds.Empty);
+        var embyOnlyItem = new EmbySyncItemViewModel(@"C:\Videos\Serie\trailers\Serie - S00E01 - Trailer.mkv", EmbyProviderIds.Empty);
         embyOnlyItem.ApplyAnalysis(new EmbyFileAnalysis(
             embyOnlyItem.MediaFilePath,
-            @"C:\Videos\Serie - S00E01 - Trailer.nfo",
+            @"C:\Videos\Serie\trailers\Serie - S00E01 - Trailer.nfo",
             MediaFileExists: true,
             NfoExists: false,
             NfoProviderIds: EmbyProviderIds.Empty,

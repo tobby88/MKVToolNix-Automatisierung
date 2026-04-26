@@ -311,17 +311,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
                 return;
             }
 
-            SupportsProviderIdSync = analysis.EmbyItem is null;
-            if (!SupportsProviderIdSync)
-            {
-                MarkProviderReviewsApproved();
-            }
-
             SetStatus(
-                analysis.EmbyItem is null ? "NFO fehlt" : "Ohne NFO-Sync",
+                "NFO fehlt",
                 analysis.EmbyItem is null
                     ? "NFO fehlt. Erst Emby scannen."
-                    : "Emby-Asset ohne Episoden-NFO.");
+                    : "Emby-Item gefunden, aber lokale Episoden-NFO fehlt noch.");
             return;
         }
 
@@ -848,9 +842,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             return false;
         }
 
-        return directory
+        var directParent = directory
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => EmbyAssetFoldersWithoutEpisodeNfo.Contains(segment));
+            .LastOrDefault(segment => !string.IsNullOrWhiteSpace(segment));
+        return directParent is not null
+            && EmbyAssetFoldersWithoutEpisodeNfo.Contains(directParent);
     }
 
     private static string MapStatusTone(string statusText)

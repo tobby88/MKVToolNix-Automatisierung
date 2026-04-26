@@ -147,31 +147,30 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
-    public void ApplyAnalysis_WithEmbyItemButWithoutNfo_DisablesProviderIdSync()
+    public void ApplyAnalysis_NormalEpisodeWithEmbyItemButWithoutNfo_RequiresLocalNfo()
     {
-        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Trailer.mkv", EmbyProviderIds.Empty);
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
         var analysis = new EmbyFileAnalysis(
             vm.MediaFilePath,
-            @"C:\Videos\Serie - S00E01 - Trailer.nfo",
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
             MediaFileExists: true,
             NfoExists: false,
             NfoProviderIds: EmbyProviderIds.Empty,
             EmbyItem: new EmbyItem(
-                "emby-trailer",
-                "Trailer",
+                "emby-episode",
+                "Pilot",
                 vm.MediaFilePath,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)),
             WarningMessage: null);
 
         vm.ApplyAnalysis(analysis);
 
-        Assert.False(vm.SupportsProviderIdSync);
-        Assert.False(vm.CanEditProviderIds);
-        Assert.False(vm.CanReviewTvdb);
-        Assert.Equal("Ohne NFO-Sync", vm.StatusText);
-        Assert.Equal("Neutral", vm.StatusTone);
-        Assert.Equal("Emby-Asset ohne Episoden-NFO.", vm.Note);
-        Assert.Contains("nicht anwendbar", vm.ProviderIdEditTooltip, StringComparison.Ordinal);
+        Assert.True(vm.SupportsProviderIdSync);
+        Assert.True(vm.CanEditProviderIds);
+        Assert.True(vm.CanReviewTvdb);
+        Assert.Equal("NFO fehlt", vm.StatusText);
+        Assert.Equal("Warning", vm.StatusTone);
+        Assert.Equal("Emby-Item gefunden, aber lokale Episoden-NFO fehlt noch.", vm.Note);
     }
 
     [Theory]
@@ -197,6 +196,27 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Equal("Ohne NFO-Sync", vm.StatusText);
         Assert.Equal("Emby-Asset ohne Episoden-NFO.", vm.Note);
         Assert.DoesNotContain("Bitte Emby zuerst scannen", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyAnalysis_DoesNotTreatDistantAssetFolderSegmentAsEmbyAsset()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\trailers\Serie\Season 01\Serie - S01E01 - Pilot.mkv",
+            EmbyProviderIds.Empty);
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            Path.ChangeExtension(vm.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: false,
+            NfoProviderIds: EmbyProviderIds.Empty,
+            EmbyItem: null,
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.True(vm.SupportsProviderIdSync);
+        Assert.Equal("NFO fehlt", vm.StatusText);
     }
 
     [Fact]
