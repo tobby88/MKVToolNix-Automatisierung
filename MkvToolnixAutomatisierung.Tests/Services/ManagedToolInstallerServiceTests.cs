@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -58,6 +59,41 @@ public sealed class ManagedToolInstallerServiceTests
         Assert.True(Directory.Exists(savedSettings.ManagedMkvToolNix.InstalledPath));
         Assert.True(File.Exists(Path.Combine(savedSettings.ManagedMkvToolNix.InstalledPath, "mkvmerge.exe")));
         Assert.True(File.Exists(Path.Combine(savedSettings.ManagedMkvToolNix.InstalledPath, "mkvpropedit.exe")));
+        Assert.Single(handler.RequestedUris);
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_InstallsFfprobeWithRealArchiveExtractor()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        toolPathStore.Save(settings);
+
+        var archiveBytes = CreateFfprobeZipArchive();
+        var archiveHash = Convert.ToHexString(SHA256.HashData(archiveBytes));
+        var downloadUri = new Uri("https://example.invalid/ffprobe.zip");
+        var handler = new FakeHttpMessageHandler((downloadUri, archiveBytes));
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22T10-00-00Z",
+                "Latest Auto-Build",
+                downloadUri,
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                archiveHash))],
+            new ManagedToolArchiveExtractor(),
+            new HttpClient(handler));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+
+        Assert.False(result.HasWarning);
+        Assert.Equal("2026-04-22T10-00-00Z", savedSettings.ManagedFfprobe.InstalledVersion);
+        Assert.EndsWith("ffprobe.exe", savedSettings.ManagedFfprobe.InstalledPath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("tool", File.ReadAllText(savedSettings.ManagedFfprobe.InstalledPath));
         Assert.Single(handler.RequestedUris);
     }
 
@@ -750,6 +786,7 @@ public sealed class ManagedToolInstallerServiceTests
 
         public Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(package);
         }
     }
@@ -762,6 +799,7 @@ public sealed class ManagedToolInstallerServiceTests
 
         public Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             CallCount++;
             return Task.FromResult(package);
         }
@@ -805,6 +843,11 @@ public sealed class ManagedToolInstallerServiceTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromCanceled<HttpResponseMessage>(cancellationToken);
+            }
+
             RequestedUris.Add(request.RequestUri!);
             if (_responses.TryGetValue(request.RequestUri!.ToString(), out var content))
             {
@@ -826,5 +869,25 @@ public sealed class ManagedToolInstallerServiceTests
         {
             events.Add(value);
         }
+    }
+
+    private static byte[] CreateFfprobeZipArchive()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/bin/ffprobe.exe", "tool");
+            WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/bin/avcodec-61.dll", "dependency");
+            WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/doc/readme.txt", "docs");
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void WriteZipEntry(ZipArchive archive, string entryName, string content)
+    {
+        var entry = archive.CreateEntry(entryName);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
     }
 }

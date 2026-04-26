@@ -12,6 +12,34 @@ public static class FakeMkvMergeMarker
 
 internal static class Program
 {
+    private static readonly HashSet<string> MuxOptionsWithValue = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--output",
+        "--title",
+        "--audio-tracks",
+        "--subtitle-tracks",
+        "--attachments",
+        "--video-tracks",
+        "--language",
+        "--track-name",
+        "--default-track-flag",
+        "--stereo-mode",
+        "--original-flag",
+        "--visual-impaired-flag",
+        "--hearing-impaired-flag",
+        "--forced-display-flag",
+        "--attachment-mime-type",
+        "--attach-file"
+    };
+
+    private static readonly HashSet<string> MuxSwitchesWithoutValue = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--no-audio",
+        "--no-video",
+        "--no-subtitles",
+        "--no-attachments"
+    };
+
     private static int Main(string[] args)
     {
         try
@@ -282,11 +310,9 @@ internal static class Program
 
     private static int ExecuteMux(IReadOnlyList<string> args)
     {
-        var outputFilePath = FindArgumentValue(args, "--output");
-        if (string.IsNullOrWhiteSpace(outputFilePath))
+        if (!TryValidateMuxArguments(args, out var outputFilePath, out var validationExitCode))
         {
-            Console.Error.WriteLine("FakeMkvMerge: --output fehlt.");
-            return 2;
+            return validationExitCode;
         }
 
         var muxConfig = LoadMuxConfig(outputFilePath);
@@ -316,6 +342,87 @@ internal static class Program
         }
 
         return muxConfig.ExitCode;
+    }
+
+    private static bool TryValidateMuxArguments(
+        IReadOnlyList<string> args,
+        out string outputFilePath,
+        out int exitCode)
+    {
+        outputFilePath = string.Empty;
+        exitCode = 0;
+        var inputFilePaths = new List<string>();
+
+        for (var index = 0; index < args.Count; index++)
+        {
+            var argument = args[index];
+            if (MuxOptionsWithValue.Contains(argument))
+            {
+                if (index + 1 >= args.Count || IsOptionToken(args[index + 1]))
+                {
+                    Console.Error.WriteLine($"FakeMkvMerge: Option '{argument}' hat keinen Wert.");
+                    exitCode = 6;
+                    return false;
+                }
+
+                var value = args[++index];
+                if (string.Equals(argument, "--output", StringComparison.OrdinalIgnoreCase))
+                {
+                    outputFilePath = value;
+                }
+                else if (string.Equals(argument, "--attach-file", StringComparison.OrdinalIgnoreCase))
+                {
+                    inputFilePaths.Add(value);
+                }
+
+                continue;
+            }
+
+            if (MuxSwitchesWithoutValue.Contains(argument))
+            {
+                continue;
+            }
+
+            if (IsOptionToken(argument))
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Nicht unterstützte Mux-Option '{argument}'.");
+                exitCode = 6;
+                return false;
+            }
+
+            inputFilePaths.Add(argument);
+        }
+
+        if (string.IsNullOrWhiteSpace(outputFilePath))
+        {
+            Console.Error.WriteLine("FakeMkvMerge: --output fehlt.");
+            exitCode = 2;
+            return false;
+        }
+
+        if (inputFilePaths.Count == 0)
+        {
+            Console.Error.WriteLine("FakeMkvMerge: Eingabedatei fehlt.");
+            exitCode = 6;
+            return false;
+        }
+
+        foreach (var inputFilePath in inputFilePaths)
+        {
+            if (!File.Exists(inputFilePath))
+            {
+                Console.Error.WriteLine($"FakeMkvMerge: Eingabedatei fehlt: {inputFilePath}");
+                exitCode = 7;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsOptionToken(string value)
+    {
+        return value.StartsWith("--", StringComparison.Ordinal);
     }
 
     private static (int DelayBeforeOutputMilliseconds, string? InvocationLogFilePath, string Json) LoadProbeResponse(string inputFilePath)
@@ -362,19 +469,6 @@ internal static class Program
         }
 
         File.AppendAllText(invocationLogFilePath, inputFilePath + Environment.NewLine);
-    }
-
-    private static string? FindArgumentValue(IReadOnlyList<string> args, string argumentName)
-    {
-        for (var index = 0; index < args.Count - 1; index++)
-        {
-            if (string.Equals(args[index], argumentName, StringComparison.OrdinalIgnoreCase))
-            {
-                return args[index + 1];
-            }
-        }
-
-        return null;
     }
 
     private static FakeMuxRunConfiguration LoadMuxConfig(string outputFilePath)

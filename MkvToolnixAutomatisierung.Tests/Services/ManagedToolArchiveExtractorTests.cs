@@ -78,6 +78,20 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
+    public void ExtractArchive_ReadsSevenZipArchives()
+    {
+        var archivePath = Path.Combine(_tempDirectory, "fixture.7z");
+        WriteEmbeddedSevenZipFixture(archivePath);
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "mkvtoolnix-7z-extracted");
+        var extractor = new ManagedToolArchiveExtractor();
+
+        extractor.ExtractArchive(archivePath, destinationDirectory);
+
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "7Zip.Tar.tar")));
+    }
+
+    [Fact]
     public void ExtractArchive_ForFfprobe_SkipsDocumentationAndPreservesBinPayload()
     {
         var sourceDirectory = CreateDirectory("source");
@@ -173,6 +187,21 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var path = Path.Combine(_tempDirectory, relativePath);
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static void WriteEmbeddedSevenZipFixture(string archivePath)
+    {
+        // SharpCompress 0.44 kann 7z lesen, aber noch nicht schreiben. Dieses winzige LZMA-Fixture
+        // stammt aus den MIT-lizenzierten SharpCompress-Testdaten und hält den Test unabhängig von 7z.exe.
+        const string sevenZipTarArchiveBase64 =
+            "N3q8ryccAAROQeMgjgAAAAAAAABiAAAAAAAAAPuVhFTgJ/8Ahl0AG5aJJwF8"
+            + "i4Hohbo/g3l1MhrPDLofTBbHVI8Pdh5jx6VLFVj6aObpjQsRguRsba+9Od+7"
+            + "hRsFwfPBHfAJn7TexW8Go5hhdsgkt8J385KiQ14huF0gETgQxlOd0GRYF3d/"
+            + "72iFMHpwYsuRh6ZEowfn9eiH2qi+DtrM0CAL7ge9/YeKGC3oUgAAAQQGAAEJ"
+            + "gI4ABwsBAAEhIQEDDKgAAAgKAV3XFwsAAAUBGQoAAAAAAAAAAAAAERsANwBa"
+            + "AGkAcAAuAFQAYQByAC4AdABhAHIAAAAZABQKAQAAJgdey9fZARUGAQAggKSB"
+            + "AAA=";
+        File.WriteAllBytes(archivePath, Convert.FromBase64String(sevenZipTarArchiveBase64));
     }
 
     private sealed class CollectingProgress(List<ManagedToolExtractionProgress> events) : IProgress<ManagedToolExtractionProgress>

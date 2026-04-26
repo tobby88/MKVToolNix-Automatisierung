@@ -43,7 +43,7 @@ public partial class DownloadSortView : UserControl
                 dataGrid,
                 e,
                 viewModel.ToggleSelectedItemSelectionCommand,
-                toggleColumnDisplayIndex: 0);
+                toggleColumnIndex: 0);
         }
     }
 }
