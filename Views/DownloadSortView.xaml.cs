@@ -46,4 +46,12 @@ public partial class DownloadSortView : UserControl
                 toggleColumnIndex: 0);
         }
     }
+
+    /// <summary>
+    /// Hält das Einsortier-Protokoll wie die anderen Modulprotokolle automatisch am Ende.
+    /// </summary>
+    private void LogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(sender as TextBox);
+    }
 }

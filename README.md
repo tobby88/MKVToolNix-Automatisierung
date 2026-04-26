@@ -50,8 +50,8 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 ## Voraussetzungen
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
-- `mkvmerge.exe` aus MKVToolNix ist für das eigentliche Muxing erforderlich.
-- `ffprobe.exe` ist optional. Wenn `ffprobe` fehlt, nutzt die App für Laufzeiten den Windows-Fallback.
+- MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
+- Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
 - Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
@@ -61,7 +61,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data` und `.\Logs`.
+- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`.
 - Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
@@ -71,8 +71,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 1. App starten.
 2. Über `Einstellungen` die selten geänderten Dinge zentral hinterlegen:
    - Standard-Archivpfad
-   - MKVToolNix-Ordner
-   - optional `ffprobe.exe`
+   - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
@@ -204,7 +203,8 @@ Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
 
 ## Hinweise für die Nutzung
 
-- `mkvmerge.exe` wird automatisch im neuesten Ordner `%USERPROFILE%\Downloads\mkvtoolnix-64-bit-*\mkvtoolnix` gesucht.
+- MKVToolNix und `ffprobe` werden standardmäßig automatisch im portablen `.\Tools`-Ordner verwaltet.
+- Manuelle Toolpfad-Overrides in den Einstellungen haben Vorrang vor den automatisch verwalteten Tools.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
@@ -253,9 +253,9 @@ Die PNGs landen danach unter `.\docs\images\readme\`.
 
 ### Releases
 
-Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt ein Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
+Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt Release-Notes, setzt danach das Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
 
-Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; `mkvmerge.exe` und optional `ffprobe.exe` bleiben separate Werkzeuge.
+Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet.
 
 Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und erstellt das GitHub-Prerelease nur dann automatisch neu, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
 

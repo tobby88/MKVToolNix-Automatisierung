@@ -5,11 +5,11 @@ on:
     branches:
       - master
     paths:
-      - 'docs/releases/1.0.0.md'
+      - 'docs/releases/*.md'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release-Version ohne v-Praefix, z. B. 1.0.0'
+        description: 'Release-Version ohne v-Präfix, z. B. 1.4.0'
         required: true
         type: string
 
@@ -35,7 +35,19 @@ jobs:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         shell: pwsh
         run: |
-          $version = if ($env:EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { '1.0.0' }
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $version = $env:INPUT_VERSION
+          } else {
+            $version = (git diff-tree --no-commit-id --name-only -r HEAD |
+              Where-Object { $_ -match '^docs/releases/(\d+\.\d+\.\d+)\.md$' } |
+              ForEach-Object { [regex]::Match($_, '^docs/releases/(\d+\.\d+\.\d+)\.md$').Groups[1].Value } |
+              Select-Object -First 1)
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            Write-Host 'Keine konkrete Release-Notes-Datei im letzten Commit gefunden.'
+            return
+          }
           if ($version -notmatch '^\d+\.\d+\.\d+$') {
             throw "Version muss im Format Major.Minor.Patch angegeben werden, z. B. 1.0.0."
           }

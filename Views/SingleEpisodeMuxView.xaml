@@ -200,7 +200,7 @@
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <DockPanel>
+                        <DockPanel LastChildFill="False">
                             <StackPanel>
                                 <TextBlock FontWeight="SemiBold"
                                            Text="Wichtiger Hinweis vor dem Muxen" />
@@ -259,7 +259,7 @@
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <DockPanel>
+                        <DockPanel LastChildFill="False">
                             <TextBlock DockPanel.Dock="Left"
                                        VerticalAlignment="Center"
                                        TextWrapping="Wrap"
@@ -341,7 +341,7 @@
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <DockPanel>
+                        <DockPanel LastChildFill="False">
                             <TextBlock DockPanel.Dock="Left"
                                        VerticalAlignment="Center"
                                        TextWrapping="Wrap"

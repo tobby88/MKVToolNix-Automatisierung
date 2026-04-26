@@ -206,13 +206,15 @@
         </StackPanel>
 
         <GroupBox Grid.Row="4" Header="Protokoll">
-            <TextBox Margin="8"
+            <TextBox x:Name="LogTextBox"
+                     Margin="8"
                      Text="{Binding LogText, Mode=OneWay}"
                      IsReadOnly="True"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
-                     HorizontalScrollBarVisibility="Disabled" />
+                     HorizontalScrollBarVisibility="Disabled"
+                     TextChanged="LogTextBox_OnTextChanged" />
         </GroupBox>
 
         <Grid Grid.Row="5" Margin="0,10,0,0">

@@ -8,6 +8,8 @@ Die Anwendung verwendet bewusst portable Laufzeitordner relativ zur EXE:
   - Einstellungen, Backups und Korruptions-Snapshots
 - `.\Logs`
   - Batch-Logs und Listen neu erzeugter Ausgabedateien
+- `.\Tools`
+  - automatisch bereitgestellte MKVToolNix- und ffprobe-Versionen
 
 Ein persistenter Dateisystem-`Cache` ist absichtlich nicht mehr Teil des Projekts. Kurzlebige Performance-Caches bleiben ausschließlich im Speicher.
 
@@ -15,4 +17,5 @@ Ein persistenter Dateisystem-`Cache` ist absichtlich nicht mehr Teil des Projekt
 
 - `Data/settings.json` kann TVDB-Zugangsdaten und lokale Serienzuordnungen enthalten und gehört nicht in ein öffentliches Repository.
 - `Logs` kann lokale Dateipfade enthalten und sollte bei Releases oder Uploads ebenfalls bewusst behandelt werden.
-- `.gitignore` schließt beide Verzeichnisse deshalb standardmäßig aus.
+- `Tools` kann große heruntergeladene Toolversionen enthalten und wird jederzeit aus den Einstellungen bzw. vom Start-Check neu aufgebaut.
+- `.gitignore` schließt diese lokalen Laufzeitverzeichnisse deshalb standardmäßig aus.

@@ -64,6 +64,12 @@ jobs:
         shell: pwsh
         run: .\scripts\publish-release.ps1 -Version '${{ inputs.version }}' -RuntimeIdentifier 'win-x64'
 
+      - name: Build release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\scripts\build-release-notes.ps1 -Version '${{ inputs.version }}' -OutputPath '.\artifacts\release\release-notes.md'
+
       - name: Create git tag
         shell: pwsh
         run: |
@@ -77,12 +83,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git tag $tagName
           git push origin $tagName
-
-      - name: Build release notes
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: .\scripts\build-release-notes.ps1 -Version '${{ inputs.version }}' -OutputPath '.\artifacts\release\release-notes.md'
 
       - name: Create GitHub release
         shell: pwsh

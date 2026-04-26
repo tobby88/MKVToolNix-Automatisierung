@@ -74,10 +74,21 @@
                             <Border Margin="0,0,0,8"
                                     MinHeight="62"
                                     Padding="10"
-                                    Background="White"
-                                    BorderBrush="#D9D9D9"
-                                    BorderThickness="1"
                                     CornerRadius="6">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="White" />
+                                        <Setter Property="BorderBrush" Value="#D9D9D9" />
+                                        <Setter Property="BorderThickness" Value="1" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                <Setter Property="Background" Value="#EAF1FF" />
+                                                <Setter Property="BorderBrush" Value="#1F5FB8" />
+                                                <Setter Property="BorderThickness" Value="2" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <StackPanel>
                                     <TextBlock FontWeight="SemiBold"
                                                TextWrapping="Wrap"
