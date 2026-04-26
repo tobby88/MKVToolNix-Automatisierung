@@ -346,9 +346,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        if (!TryGetSelectedMetadataGuess(out _, out var reason))
+        if (!SelectedItem.CanReviewTvdb)
         {
-            _dialogService.ShowWarning("TVDB-Prüfung", reason);
+            _dialogService.ShowWarning(
+                "TVDB-Prüfung",
+                "Die ausgewählte Zeile hat keine TVDB-ID und der Dateiname kann nicht automatisch in die TVDB-Suche übernommen werden.");
             return;
         }
 

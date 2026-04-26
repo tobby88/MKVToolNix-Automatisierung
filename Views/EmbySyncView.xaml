@@ -363,11 +363,11 @@
                     Content="Pflichtchecks starten" />
             <Button Grid.Column="4"
                     Margin="20,0,12,0"
-                    MinWidth="210"
+                    MinWidth="230"
                     Style="{StaticResource PrimaryActionButtonStyle}"
                     Command="{Binding RunSyncCommand}"
                     ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
-                    Content="Änderungen in Emby schreiben" />
+                    Content="NFO speichern + Emby aktualisieren" />
             <ProgressBar Grid.Column="5"
                          Height="18"
                          Minimum="0"

@@ -212,6 +212,36 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public void ReviewSelectedMetadataCommand_AllowsKeepingCurrentTvdbId_WhenFileNameCannotSeedSearch()
+    {
+        var reviewDialogs = new QueueingProviderReviewDialogs(
+            tvdbResults: [EmbyTvdbReviewResult.KeepCurrent],
+            imdbResults: []);
+        var vm = CreateViewModel(providerReviewDialogs: reviewDialogs);
+        var item = new EmbySyncItemViewModel(@"C:\Videos\Nicht standardisiert.mkv", new EmbyProviderIds("100", null));
+        item.ApplyAnalysis(new EmbyFileAnalysis(
+            item.MediaFilePath,
+            Path.ChangeExtension(item.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", null),
+            EmbyItem: null,
+            WarningMessage: null));
+        vm.Items.Add(item);
+        vm.SelectedItem = item;
+
+        Assert.True(item.RequiresTvdbReview);
+        Assert.True(vm.ReviewSelectedMetadataCommand.CanExecute(null));
+
+        vm.ReviewSelectedMetadataCommand.Execute(null);
+
+        Assert.True(SpinWait.SpinUntil(() => vm.StatusText.Contains("TVDB-Zuordnung", StringComparison.Ordinal), TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, reviewDialogs.TvdbReviewCallCount);
+        Assert.False(item.RequiresTvdbReview);
+        Assert.Equal("100", item.TvdbId);
+    }
+
+    [Fact]
     public void RunSyncCommand_BlocksWhenProviderReviewsAreOpen()
     {
         var dialogService = new CapturingDialogService();

@@ -265,6 +265,16 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void CanReviewTvdb_AllowsCurrentIdApproval_WhenFileNameCannotSeedSearch()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Nicht standardisiert.mkv", new EmbyProviderIds("12345", null));
+
+        Assert.False(vm.TryBuildMetadataGuess(out _));
+        Assert.True(vm.CanReviewTvdb);
+        Assert.Contains("bestätigt", vm.TvdbLookupTooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ApplyTvdbSelection_UpdatesTvdbIdAndNote()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);

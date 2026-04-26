@@ -33,6 +33,19 @@ internal sealed class EmbyProviderReviewDialogService : IEmbyProviderReviewDialo
     {
         if (!item.TryBuildMetadataGuess(out var guess))
         {
+            if (!string.IsNullOrWhiteSpace(item.TvdbId))
+            {
+                var result = MessageBox.Show(
+                    ResolveOwner(),
+                    $"Für diese Datei kann die TVDB-Suche nicht automatisch vorbefüllt werden:\n\n{item.MediaFileName}\n\nAktuelle TVDB-ID beibehalten und als geprüft markieren?\n\nTVDB-ID: {item.TvdbId}",
+                    "TVDB-ID bestätigen",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                return result == MessageBoxResult.Yes
+                    ? EmbyTvdbReviewResult.KeepCurrent
+                    : EmbyTvdbReviewResult.Cancelled;
+            }
+
             return EmbyTvdbReviewResult.Unavailable;
         }
 

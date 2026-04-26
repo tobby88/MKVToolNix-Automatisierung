@@ -229,10 +229,10 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public bool HasValidProviderIds => GetProviderIdValidationMessage() is null;
 
     /// <summary>
-    /// Sichtbare TVDB-Suche ist nur dann sinnvoll, wenn der Dateiname vorbefüllt werden kann und
-    /// die Zeile später tatsächlich in eine Episoden-NFO zurückgeschrieben wird.
+    /// Sichtbare TVDB-Prüfung ist möglich, wenn entweder eine Suche vorbefüllt werden kann oder
+    /// wenigstens eine vorhandene TVDB-ID bewusst bestätigt werden kann.
     /// </summary>
-    public bool CanReviewTvdb => SupportsProviderIdSync && _metadataGuess is not null;
+    public bool CanReviewTvdb => SupportsProviderIdSync && (_metadataGuess is not null || HasTvdbId);
 
     /// <summary>
     /// Die IMDb-Prüfung bleibt auch ohne perfekte Vorbelegung sinnvoll, weil der Dialog notfalls
@@ -267,7 +267,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         ? "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Eine TVDB-Korrektur ist hier nicht nötig."
         : _metadataGuess is not null
             ? "Öffnet die TVDB-Suche für genau diese MKV-Zeile."
-            : "Die MKV-Benennung kann nicht automatisch in die TVDB-Suche übernommen werden.";
+            : HasTvdbId
+                ? "Dateiname nicht automatisch suchbar. Die aktuelle TVDB-ID kann aber geprüft und bestätigt werden."
+                : "Die MKV-Benennung kann nicht automatisch in die TVDB-Suche übernommen werden.";
 
     public string ImdbLookupTooltip => !SupportsProviderIdSync
         ? "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Eine IMDb-Korrektur ist hier nicht nötig."
