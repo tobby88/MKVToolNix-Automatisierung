@@ -441,6 +441,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             var settings = LoadConfiguredSettings();
             var canRefreshEmby = HasEmbyApiSettings();
             var updatedCount = 0;
+            var refreshOnlyCount = 0;
             var skippedCount = 0;
             var refreshFailureCount = 0;
             var completedMediaFilePaths = new List<string>();
@@ -487,6 +488,25 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 {
                     if (item.HasCompleteProviderIds)
                     {
+                        if (canRefreshEmby && item.HasKnownEmbyProviderIdMismatch)
+                        {
+                            try
+                            {
+                                await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
+                                refreshOnlyCount++;
+                                item.MarkCurrentAndRefreshed();
+                                completedMediaFilePaths.Add(item.MediaFilePath);
+                            }
+                            catch (Exception ex)
+                            {
+                                refreshFailureCount++;
+                                item.MarkCurrentRefreshFailed(ex.Message);
+                                AppendLog($"Emby-Refresh fehlgeschlagen: {item.MediaFileName} -> {ex.Message}");
+                            }
+
+                            continue;
+                        }
+
                         item.SetStatus("NFO aktuell", updateResult.Message);
                         completedMediaFilePaths.Add(item.MediaFilePath);
                     }
@@ -532,7 +552,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = 100;
-            StatusText = BuildRunSyncSummary(updatedCount, skippedCount, refreshFailureCount, canRefreshEmby);
+            StatusText = BuildRunSyncSummary(updatedCount, refreshOnlyCount, skippedCount, refreshFailureCount, canRefreshEmby);
             AppendLog(StatusText);
             MarkSelectedReportsDone(completedMediaFilePaths);
             RefreshSummaryAndCommands();
@@ -1075,6 +1095,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private static string BuildRunSyncSummary(
         int updatedCount,
+        int refreshOnlyCount,
         int skippedCount,
         int refreshFailureCount,
         bool canRefreshEmby)
@@ -1083,6 +1104,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         {
             $"Änderungen geschrieben: {updatedCount} aktualisiert, {skippedCount} übersprungen."
         };
+        if (refreshOnlyCount > 0)
+        {
+            parts.Add($"{refreshOnlyCount} Emby-Refresh ohne NFO-Änderung.");
+        }
+
         if (refreshFailureCount > 0)
         {
             parts.Add($"{refreshFailureCount} Emby-Refresh-Fehler.");

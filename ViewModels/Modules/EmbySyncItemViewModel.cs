@@ -118,6 +118,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             OnPropertyChanged(nameof(RequiresImdbReview));
             OnPropertyChanged(nameof(HasPendingProviderReview));
             OnPropertyChanged(nameof(HasCompleteProviderIds));
+            OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
             OnPropertyChanged(nameof(ProviderIdEditTooltip));
             OnPropertyChanged(nameof(TvdbLookupTooltip));
             OnPropertyChanged(nameof(ImdbLookupTooltip));
@@ -148,6 +149,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _embyItemId = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
             OnPropertyChanged(nameof(StatusTooltip));
         }
     }
@@ -210,6 +212,16 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         && HasValidProviderIds
         && !HasPendingProviderReview
         && (HasImdbId || IsImdbUnavailable);
+
+    /// <summary>
+    /// Kennzeichnet, ob das bereits gefundene Emby-Item noch andere Provider-IDs kennt als die geprüfte lokale Auswahl.
+    /// </summary>
+    public bool HasKnownEmbyProviderIdMismatch => SupportsProviderIdSync
+        && !string.IsNullOrWhiteSpace(EmbyItemId)
+        && (ProviderIdDiffers(TvdbId, _embyProviderIds.TvdbId)
+            || (IsImdbUnavailable
+                ? !string.IsNullOrWhiteSpace(_embyProviderIds.ImdbId)
+                : ProviderIdDiffers(ImdbId, _embyProviderIds.ImdbId)));
 
     /// <summary>
     /// Kennzeichnet, ob alle aktuell befüllten Provider-ID-Felder formal gültig sind.
@@ -511,6 +523,27 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     }
 
     /// <summary>
+    /// Kennzeichnet einen Refresh, der nötig war, obwohl die lokale NFO bereits korrekt war.
+    /// </summary>
+    public void MarkCurrentAndRefreshed()
+    {
+        SetStatus(
+            "Aktualisiert",
+            "NFO war bereits aktuell, Emby-Refresh wegen abweichender Server-IDs angestoßen.");
+    }
+
+    /// <summary>
+    /// Kennzeichnet einen fehlgeschlagenen Refresh, wenn nur Emby selbst hinter der lokalen NFO zurücklag.
+    /// </summary>
+    public void MarkCurrentRefreshFailed(string failureMessage)
+    {
+        var normalizedFailureMessage = string.IsNullOrWhiteSpace(failureMessage)
+            ? "NFO aktuell, Emby-Refresh wegen abweichender Server-IDs fehlgeschlagen."
+            : $"NFO aktuell, Emby-Refresh wegen abweichender Server-IDs fehlgeschlagen: {failureMessage.Trim()}";
+        SetStatus("Refresh prüfen", normalizedFailureMessage);
+    }
+
+    /// <summary>
     /// Kennzeichnet, dass die NFO bereits den aktuell verfügbaren Stand widerspiegelt, fachlich
     /// aber noch Provider-IDs fehlen.
     /// </summary>
@@ -671,6 +704,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             OnPropertyChanged(nameof(HasValidTvdbId));
             OnPropertyChanged(nameof(HasProviderIds));
             OnPropertyChanged(nameof(HasValidProviderIds));
+            OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
         }
 
         if (markReviewResolved && !string.IsNullOrWhiteSpace(normalized))
@@ -697,6 +731,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             OnPropertyChanged(nameof(HasValidImdbId));
             OnPropertyChanged(nameof(HasProviderIds));
             OnPropertyChanged(nameof(HasValidProviderIds));
+            OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
         }
 
         if (markReviewResolved && !string.IsNullOrWhiteSpace(normalized))
@@ -772,6 +807,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
     }
 
+    private static bool ProviderIdDiffers(string? expectedValue, string? actualValue)
+    {
+        return !string.IsNullOrWhiteSpace(expectedValue)
+            && !string.Equals(expectedValue.Trim(), actualValue?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
     private void NotifyProviderReviewPropertiesChanged()
     {
         OnPropertyChanged(nameof(IsImdbUnavailable));
@@ -779,6 +820,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         OnPropertyChanged(nameof(RequiresImdbReview));
         OnPropertyChanged(nameof(HasPendingProviderReview));
         OnPropertyChanged(nameof(HasCompleteProviderIds));
+        OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
         OnPropertyChanged(nameof(StatusTooltip));
     }
 

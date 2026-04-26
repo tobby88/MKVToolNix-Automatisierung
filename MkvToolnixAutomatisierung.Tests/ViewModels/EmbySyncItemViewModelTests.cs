@@ -124,6 +124,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.Contains("IMDb tt1234567 vorgesehen", vm.Note, StringComparison.Ordinal);
         Assert.Contains("NFO: tt7654321", vm.Note, StringComparison.Ordinal);
         Assert.Contains("Emby: tt1111111", vm.Note, StringComparison.Ordinal);
+        Assert.True(vm.HasKnownEmbyProviderIdMismatch);
     }
 
     [Fact]
