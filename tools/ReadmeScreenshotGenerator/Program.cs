@@ -28,6 +28,17 @@ internal static class Program
         {
             RenderScreenshot(
                 outputDirectory,
+                "single-mux.png",
+                "Einzel-Mux",
+                new SingleEpisodeMuxView
+                {
+                    DataContext = DemoData.CreateSingleViewModel()
+                },
+                1420,
+                900);
+
+            RenderScreenshot(
+                outputDirectory,
                 "batch-mux.png",
                 "Batch-Mux",
                 new BatchMuxView
@@ -200,18 +211,12 @@ internal static class Program
             [
                 "Archiv: bereit",
                 "MKVToolNix: bereit",
-                "Laufzeiten: ffprobe"
+                "Laufzeiten: ffprobe",
+                @"Daten: .\Data"
             ],
             "#F8FAFC",
             "#D5DEE8",
             new Thickness(0, 8, 0, 0)));
-
-        sideBarFooter.Children.Add(CreateFooterCard(
-            "Portable: lokale Daten in .\\Data",
-            [],
-            "#F3F6FA",
-            "#C7D1DC",
-            new Thickness(0, 10, 0, 0)));
 
         var contentHost = new Border
         {

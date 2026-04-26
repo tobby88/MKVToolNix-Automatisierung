@@ -16,6 +16,80 @@ internal static class DemoData
         return (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
     }
 
+    public static DemoSingleViewModel CreateSingleViewModel()
+    {
+        var languageOptions = new ObservableCollection<DemoLanguageOption>
+        {
+            new("", "Automatisch"),
+            new("de", "Deutsch"),
+            new("en", "English")
+        };
+
+        return new DemoSingleViewModel
+        {
+            MainVideoPath = @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.mp4",
+            HasPlanSummary = true,
+            OutputTargetBadgeBackground = Brush("#FFE9F8EE"),
+            OutputTargetBadgeBorderBrush = Brush("#FF63A46C"),
+            OutputTargetBadgeText = "Archiv gefunden",
+            OutputTargetBadgeTooltip = "Eine passende Bibliotheksdatei wird als Arbeitskopie verwendet.",
+            ManualCheckBadgeBackground = Brush("#FFFFF4D6"),
+            ManualCheckBadgeBorderBrush = Brush("#FFD6A62A"),
+            ManualCheckBadgeText = "Hinweis offen",
+            ManualCheckBadgeTooltip = "Vor dem Muxen sollte die Doppelfolge kurz geprüft werden.",
+            MetadataBadgeBackground = Brush("#FFE9F2FF"),
+            MetadataBadgeBorderBrush = Brush("#FF4C84D3"),
+            MetadataBadgeText = "TVDB bestätigt",
+            MetadataBadgeTooltip = "Metadaten wurden aus der TVDB übernommen.",
+            UsageSummary = new DemoEpisodeUsageSummary
+            {
+                ArchiveAction = "Arbeitskopie",
+                ArchiveDetails = "Vorhandene Doppelfolge bleibt Basis, frische FHD-Spur ersetzt die alte HD-Spur.",
+                MainVideo = new DemoUsageGroup("Deutsch - FHD - H.264 aus frischer Quelle", true, "Deutsch - HD - H.264 aus Bibliothek", "bessere Auflösung verfügbar"),
+                AdditionalVideos = new DemoUsageGroup("Plattdüütsch - HD - H.264 bleibt erhalten"),
+                Audio = new DemoUsageGroup("Deutsch - AAC aus frischer Quelle, Plattdüütsch - AAC aus Archiv"),
+                AudioDescription = new DemoUsageGroup("Keine AD-Quelle vorhanden"),
+                Subtitles = new DemoUsageGroup("Deutsch (hörgeschädigte) - SRT wird ergänzt"),
+                Attachments = new DemoUsageGroup("Rififi.txt wird neu eingebettet")
+            },
+            HasPendingPlanReview = true,
+            PrimaryActionablePlanNote = "Doppelfolge erkannt. Vor dem Muxen bitte kurz prüfen, ob die kombinierte Archivdatei als Ziel korrekt ist.",
+            RequiresManualCheck = false,
+            SeriesName = "Neues aus Büttenwarder",
+            SeasonNumber = "2014",
+            EpisodeNumber = "05-06",
+            Title = "Rififi",
+            HasMetadataStatus = true,
+            MetadataStatusText = "S2014E05-E06 - Rififi wurde bestätigt. Originalsprache: Deutsch.",
+            MetadataActionButtonText = "TVDB prüfen",
+            MetadataActionButtonTooltip = "TVDB-Auswahl öffnen.",
+            AudioDescriptionPath = "Keine separate AD-Datei ausgewählt.",
+            AudioDescriptionButtonText = "AD korrigieren",
+            SubtitlePaths =
+            [
+                @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.de.srt",
+                @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.nds.ass"
+            ],
+            AttachmentPaths =
+            [
+                @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.txt"
+            ],
+            OutputPath = @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014\Neues aus Büttenwarder - S2014E05-E06 - Rififi.mkv",
+            LanguageOverrideOptions = languageOptions,
+            VideoLanguageOverride = string.Empty,
+            AudioLanguageOverride = string.Empty,
+            OriginalLanguageOverride = "de",
+            HasOutputTargetStatus = true,
+            OutputTargetStatusText = "Ausgabe liegt im Serienarchiv. Der vorhandene Zielcontainer wird als Arbeitskopie genutzt.",
+            StatusText = "Vorschau bereit. Offenen Hinweis prüfen, dann muxen.",
+            ProgressValue = 0,
+            PreviewText = "mkvmerge --output \"...Rififi.mkv\" --title \"Rififi\" ...\r\nGeplante Änderung: Deutsch - FHD - H.264 ersetzt Deutsch - HD - H.264.",
+            CreatePreviewButtonTooltip = "Geplanten mkvmerge-Aufruf aktualisieren.",
+            CancelCurrentOperationTooltip = "Kein laufender Vorgang.",
+            ExecuteMuxButtonTooltip = "Mux mit den geprüften Einstellungen starten."
+        };
+    }
+
     public static DemoBatchViewModel CreateBatchViewModel()
     {
         var filterModes = new ObservableCollection<DemoChoice>
@@ -59,19 +133,19 @@ internal static class DemoData
                 MetadataStatusText = "TVDB-Zuordnung bestätigt und Archivvergleich geprüft.",
                 RequestedSourcePaths =
                 [
-                    @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder\Rififi.mp4",
-                    @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder\Rififi op Platt.mp4"
+                    @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.mp4",
+                    @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi op Platt.mp4"
                 ],
                 MainVideoDisplayText = "Deutsch - FHD - H.264 aus der frischen Mediathek-Quelle",
                 VideoAndAudioDescriptionDisplayText = "Plattdüütsch - HD - H.264, Audiodeskription: keine",
                 SubtitlePaths =
                 [
-                    @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder\Rififi.de.srt",
-                    @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder\Rififi.nds.ass"
+                    @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.de.srt",
+                    @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.nds.ass"
                 ],
                 AttachmentPaths =
                 [
-                    @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder\Rififi.txt"
+                    @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.txt"
                 ],
                 OutputPath = @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014\Neues aus Büttenwarder - S2014E05-E06 - Rififi.mkv",
                 Notes =
@@ -138,7 +212,7 @@ internal static class DemoData
         return new DemoBatchViewModel
         {
             IsInteractive = true,
-            SourceDirectory = @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads\Neues aus Büttenwarder",
+            SourceDirectory = @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder",
             OutputDirectory = @"Z:\Videos\Serien",
             HasOutputDirectoryHint = true,
             OutputDirectoryHintText = "Die Serienbibliothek ist erreichbar. Ausgabepfade werden direkt in die passenden Serienordner geplant.",
@@ -217,7 +291,7 @@ internal static class DemoData
         return new DemoDownloadSortViewModel
         {
             IsInteractive = true,
-            SourceDirectory = @"C:\Users\tobby\Downloads\MediathekView-latest-win\Downloads",
+            SourceDirectory = @"C:\Demo\Downloads\MediathekView",
             SummaryText = "3 lose Download-Pakete erkannt. 2 können direkt einsortiert werden, 1 ist als defekt markiert.",
             Items = items,
             SelectedItem = items[1],

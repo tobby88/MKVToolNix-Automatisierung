@@ -35,6 +35,10 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 ## Screenshots
 
+### Einzel-Mux
+
+![Einzel-Mux](docs/images/readme/single-mux.png)
+
 ### Batch-Mux
 
 ![Batch-Mux](docs/images/readme/batch-mux.png)

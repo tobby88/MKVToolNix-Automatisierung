@@ -24,6 +24,77 @@ internal sealed record DemoChoice(string Title, string Description = "")
     public string DisplayName => Title;
 }
 
+internal sealed record DemoLanguageOption(string Code, string DisplayName);
+
+internal sealed class DemoSingleViewModel
+{
+    public string MainVideoPath { get; init; } = string.Empty;
+    public bool HasPlanSummary { get; init; }
+    public Brush OutputTargetBadgeBackground { get; init; } = Brushes.Transparent;
+    public Brush OutputTargetBadgeBorderBrush { get; init; } = Brushes.Transparent;
+    public string OutputTargetBadgeText { get; init; } = string.Empty;
+    public string OutputTargetBadgeTooltip { get; init; } = string.Empty;
+    public Brush ManualCheckBadgeBackground { get; init; } = Brushes.Transparent;
+    public Brush ManualCheckBadgeBorderBrush { get; init; } = Brushes.Transparent;
+    public string ManualCheckBadgeText { get; init; } = string.Empty;
+    public string ManualCheckBadgeTooltip { get; init; } = string.Empty;
+    public Brush MetadataBadgeBackground { get; init; } = Brushes.Transparent;
+    public Brush MetadataBadgeBorderBrush { get; init; } = Brushes.Transparent;
+    public string MetadataBadgeText { get; init; } = string.Empty;
+    public string MetadataBadgeTooltip { get; init; } = string.Empty;
+    public DemoEpisodeUsageSummary? UsageSummary { get; init; }
+    public bool HasPendingPlanReview { get; init; }
+    public string PrimaryActionablePlanNote { get; init; } = string.Empty;
+    public bool HasPlanRefreshProblem { get; init; }
+    public string PlanRefreshProblemText { get; init; } = string.Empty;
+    public bool RequiresManualCheck { get; init; }
+    public string ManualCheckText { get; init; } = string.Empty;
+    public string ManualCheckButtonText { get; init; } = string.Empty;
+    public string ManualCheckButtonTooltip { get; init; } = string.Empty;
+    public string SeriesName { get; set; } = string.Empty;
+    public string SeasonNumber { get; set; } = string.Empty;
+    public string EpisodeNumber { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public bool HasMetadataStatus { get; init; }
+    public string MetadataStatusText { get; init; } = string.Empty;
+    public string MetadataActionButtonText { get; init; } = string.Empty;
+    public string MetadataActionButtonTooltip { get; init; } = string.Empty;
+    public string AudioDescriptionPath { get; init; } = string.Empty;
+    public string AudioDescriptionButtonText { get; init; } = string.Empty;
+    public ObservableCollection<string> SubtitlePaths { get; init; } = [];
+    public ObservableCollection<string> AttachmentPaths { get; init; } = [];
+    public string OutputPath { get; init; } = string.Empty;
+    public ObservableCollection<DemoLanguageOption> LanguageOverrideOptions { get; init; } = [];
+    public string? VideoLanguageOverride { get; set; }
+    public string? AudioLanguageOverride { get; set; }
+    public string? OriginalLanguageOverride { get; set; }
+    public bool HasOutputTargetStatus { get; init; }
+    public string OutputTargetStatusText { get; init; } = string.Empty;
+    public string StatusText { get; init; } = string.Empty;
+    public int ProgressValue { get; init; }
+    public string PreviewText { get; init; } = string.Empty;
+    public ICommand SelectMainVideoCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenMainVideoCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand ApprovePlanReviewCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand TestSelectedSourcesCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenTvdbLookupCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand RescanCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectAudioDescriptionCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenAudioDescriptionCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectSubtitlesCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSubtitlesCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectAttachmentCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenAttachmentsCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectOutputCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenOutputCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand CreatePreviewCommand { get; init; } = new NoOpRelayCommand();
+    public string CreatePreviewButtonTooltip { get; init; } = string.Empty;
+    public ICommand CancelCurrentOperationCommand { get; init; } = new NoOpRelayCommand();
+    public string CancelCurrentOperationTooltip { get; init; } = string.Empty;
+    public ICommand ExecuteMuxCommand { get; init; } = new NoOpRelayCommand();
+    public string ExecuteMuxButtonTooltip { get; init; } = string.Empty;
+}
+
 internal sealed class DemoBatchViewModel
 {
     public bool IsInteractive { get; init; }
