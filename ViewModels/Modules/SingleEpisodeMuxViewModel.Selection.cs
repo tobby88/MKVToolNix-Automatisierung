@@ -43,18 +43,20 @@ internal sealed partial class SingleEpisodeMuxViewModel
         if (!string.IsNullOrWhiteSpace(OutputPath))
         {
             var outputDirectory = Path.GetDirectoryName(OutputPath);
-            if (!string.IsNullOrWhiteSpace(outputDirectory))
+            var existingOutputDirectory = ResolveNearestExistingDirectory(outputDirectory);
+            if (!string.IsNullOrWhiteSpace(existingOutputDirectory))
             {
-                return outputDirectory;
+                return existingOutputDirectory;
             }
         }
 
         if (!string.IsNullOrWhiteSpace(MainVideoPath))
         {
             var sourceDirectory = Path.GetDirectoryName(MainVideoPath);
-            if (!string.IsNullOrWhiteSpace(sourceDirectory))
+            var existingSourceDirectory = ResolveNearestExistingDirectory(sourceDirectory);
+            if (!string.IsNullOrWhiteSpace(existingSourceDirectory))
             {
-                return sourceDirectory;
+                return existingSourceDirectory;
             }
         }
 
@@ -63,7 +65,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void OpenMainVideo()
     {
-        OpenInspectableFiles([MainVideoPath], "Hauptquelle geöffnet", "Hauptquelle konnte nicht geöffnet werden");
+        OpenInspectableFiles(
+            new[] { MainVideoPath }.Concat(AdditionalVideoPaths),
+            "Videoquelle(n) geöffnet",
+            "Videoquelle(n) konnten nicht geöffnet werden");
     }
 
     private void OpenAudioDescription()
@@ -193,6 +198,21 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
             SetBusy(false);
         }
+    }
+
+    private static string? ResolveNearestExistingDirectory(string? directory)
+    {
+        while (!string.IsNullOrWhiteSpace(directory))
+        {
+            if (Directory.Exists(directory))
+            {
+                return directory;
+            }
+
+            directory = Path.GetDirectoryName(directory);
+        }
+
+        return null;
     }
 
     private void HandleDetectionUpdate(int detectionProgressVersion, DetectionProgressUpdate update)

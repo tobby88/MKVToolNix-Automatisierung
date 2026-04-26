@@ -178,6 +178,7 @@ public sealed class SingleEpisodeMuxViewModelTests
             ViewModelTestContext.CreateSingleEpisodeServices(),
             dialogService);
         var expectedDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-single-output");
+        Directory.CreateDirectory(expectedDirectory);
 
         viewModel.SetOutputPath(Path.Combine(expectedDirectory, "Folge.mkv"));
 
@@ -185,6 +186,45 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         Assert.Equal(expectedDirectory, dialogService.LastOutputInitialDirectory);
         Assert.Equal("Folge.mkv", dialogService.LastOutputFileName);
+    }
+
+    [Fact]
+    public void SelectOutputCommand_UsesNearestExistingDirectory_WhenCurrentOutputDirectoryIsMissing()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(),
+            dialogService);
+        var existingParent = Path.Combine(Path.GetTempPath(), "mkv-auto-single-output", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(existingParent);
+        var missingDirectory = Path.Combine(existingParent, "fehlt", "noch");
+
+        viewModel.SetOutputPath(Path.Combine(missingDirectory, "Folge.mkv"));
+
+        viewModel.SelectOutputCommand.Execute(null);
+
+        Assert.Equal(existingParent, dialogService.LastOutputInitialDirectory);
+        Assert.Equal("Folge.mkv", dialogService.LastOutputFileName);
+    }
+
+    [Fact]
+    public void EpisodePlanInputSnapshot_KeepsValuesStable_WhenSourceModelChangesLater()
+    {
+        var viewModel = CreateViewModel();
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.HasPrimaryVideoSource), true);
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\alt.mp4");
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), @"C:\Temp\alt.mkv");
+        viewModel.Title = "Alt";
+
+        var snapshot = EpisodePlanInputSnapshot.Create(viewModel);
+
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\neu.mp4");
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), @"C:\Temp\neu.mkv");
+        viewModel.Title = "Neu";
+
+        Assert.Equal(@"C:\Temp\alt.mp4", snapshot.MainVideoPath);
+        Assert.Equal(@"C:\Temp\alt.mkv", snapshot.OutputPath);
+        Assert.Equal("Alt", snapshot.TitleForMux);
     }
 
     [Fact]
@@ -199,6 +239,7 @@ public sealed class SingleEpisodeMuxViewModelTests
         File.WriteAllText(outputPath, "archive");
 
         SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\haupt.mp4");
+        InvokeSetAdditionalVideoPaths(viewModel, [@"C:\Temp\weitere-spur.mp4"]);
         viewModel.SetAudioDescription(@"C:\Temp\ad.mp4");
         viewModel.SetSubtitles([@"C:\Temp\untertitel.srt", @"C:\Temp\untertitel.ass"]);
         viewModel.SetAttachments([@"C:\Temp\metadaten.txt"]);
@@ -214,6 +255,7 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.Equal(
         [
             @"C:\Temp\haupt.mp4",
+            @"C:\Temp\weitere-spur.mp4",
             @"C:\Temp\ad.mp4",
             @"C:\Temp\untertitel.ass",
             @"C:\Temp\untertitel.srt",
@@ -340,7 +382,10 @@ public sealed class SingleEpisodeMuxViewModelTests
     {
         var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
             "BuildFreshPlanAsync",
-            BindingFlags.Instance | BindingFlags.NonPublic);
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: [typeof(CancellationToken)],
+            modifiers: null);
         Assert.NotNull(method);
         return Assert.IsType<Task<SeriesEpisodeMuxPlan>>(method!.Invoke(viewModel, [CancellationToken.None]));
     }
@@ -363,6 +408,15 @@ public sealed class SingleEpisodeMuxViewModelTests
         var setter = property!.GetSetMethod(nonPublic: true);
         Assert.NotNull(setter);
         setter!.Invoke(target, [value]);
+    }
+
+    private static void InvokeSetAdditionalVideoPaths(EpisodeEditModel viewModel, IEnumerable<string> paths)
+    {
+        var method = typeof(EpisodeEditModel).GetMethod(
+            "SetAdditionalVideoPaths",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, [paths]);
     }
 
     private sealed class CapturingDialogService : IUserDialogService

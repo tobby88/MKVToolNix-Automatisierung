@@ -21,10 +21,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
-            RefreshOutputTargetStatusFromPlan(_currentPlan);
-            SetPlanNotes(_currentPlan.Notes);
-            PlanSummaryText = _currentPlan.BuildCompactSummaryText();
-            UsageSummary = _currentPlan.BuildUsageSummary();
+            ApplyPlanPresentation(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
             SetStatus("Vorschau bereit", 0);
         }
@@ -54,24 +51,13 @@ internal sealed partial class SingleEpisodeMuxViewModel
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             var outputExistedBeforeRun = File.Exists(_currentPlan.OutputFilePath);
             PlanRefreshProblemText = string.Empty;
-            RefreshOutputTargetStatusFromPlan(_currentPlan);
-            SetPlanNotes(_currentPlan.Notes);
-            PlanSummaryText = _currentPlan.BuildCompactSummaryText();
-            UsageSummary = _currentPlan.BuildUsageSummary();
+            ApplyPlanPresentation(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
                 + Environment.NewLine
                 + Environment.NewLine
                 + "MKVToolNix-Ausgabe:"
                 + Environment.NewLine;
             ResetPreviewOutputBuffer(PreviewText);
-
-            if (_currentPlan.SkipMux)
-            {
-                SetStatus("Zieldatei bereits aktuell", 100);
-                _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
-                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
-                return;
-            }
 
             if (RequiresManualCheck && !IsManualCheckApproved)
             {
@@ -93,6 +79,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
                     "Hinweis",
                     "Vor dem Muxen ist noch ein offener Archiv-/Mehrfachfolgenhinweis zu prüfen. Bitte bestätige den Hinweis zuerst explizit.");
                 SetStatus("Hinweisprüfung fehlt", 0);
+                return;
+            }
+
+            if (_currentPlan.SkipMux)
+            {
+                SetStatus("Zieldatei bereits aktuell", 100);
+                _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
+                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
                 return;
             }
 
@@ -185,16 +179,26 @@ internal sealed partial class SingleEpisodeMuxViewModel
             return;
         }
 
-        _ = _services.BatchLogs.SaveBatchRunArtifacts(
-            Path.GetDirectoryName(DetectionSeedPath ?? MainVideoPath ?? plan.OutputFilePath) ?? string.Empty,
-            Path.GetDirectoryName(plan.OutputFilePath) ?? string.Empty,
-            PreviewText,
-            [plan.OutputFilePath],
-            successCount: hasWarning ? 0 : 1,
-            warningCount: hasWarning ? 1 : 0,
-            errorCount: 0,
-            newOutputMetadata: [CreateSingleEpisodeOutputMetadata(plan.OutputFilePath)],
-            runLabel: "Einzel");
+        try
+        {
+            _ = _services.BatchLogs.SaveBatchRunArtifacts(
+                Path.GetDirectoryName(DetectionSeedPath ?? MainVideoPath ?? plan.OutputFilePath) ?? string.Empty,
+                Path.GetDirectoryName(plan.OutputFilePath) ?? string.Empty,
+                _previewOutputBuffer.GetTextSnapshot(),
+                [plan.OutputFilePath],
+                successCount: hasWarning ? 0 : 1,
+                warningCount: hasWarning ? 1 : 0,
+                errorCount: 0,
+                newOutputMetadata: [CreateSingleEpisodeOutputMetadata(plan.OutputFilePath)],
+                runLabel: "Einzel");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _dialogService.ShowWarning(
+                "Warnung",
+                "Der Mux-Lauf war erfolgreich, aber Log- oder Metadatenartefakte konnten nicht gespeichert werden:\n"
+                + ex.Message);
+        }
     }
 
     private BatchOutputMetadataEntry CreateSingleEpisodeOutputMetadata(string outputPath)
@@ -226,46 +230,62 @@ internal sealed partial class SingleEpisodeMuxViewModel
         };
     }
 
-    private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(CancellationToken cancellationToken = default)
+    private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(
+        CancellationToken cancellationToken = default,
+        bool assignCurrentPlan = true)
     {
-        var cachedPlan = await _planCache.TryGetAsync(this, this, cancellationToken);
+        var snapshot = EpisodePlanInputSnapshot.Create(this);
+        var cachedPlan = await _planCache.TryGetAsync(this, snapshot, cancellationToken);
         if (cachedPlan is not null)
         {
-            return _currentPlan = cachedPlan;
+            if (assignCurrentPlan)
+            {
+                _currentPlan = cachedPlan;
+            }
+
+            return cachedPlan;
         }
 
-        return _currentPlan = await BuildFreshPlanAsync(cancellationToken);
+        var plan = await BuildFreshPlanAsync(snapshot, cancellationToken);
+        await _planCache.StoreAsync(this, snapshot, plan, cancellationToken);
+        if (assignCurrentPlan)
+        {
+            _currentPlan = plan;
+        }
+
+        return plan;
     }
 
-    private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanAsync(CancellationToken cancellationToken = default)
+    private Task<SeriesEpisodeMuxPlan> BuildFreshPlanAsync(CancellationToken cancellationToken = default)
     {
-        if (HasPrimaryVideoSource)
+        return BuildFreshPlanAsync(EpisodePlanInputSnapshot.Create(this), cancellationToken);
+    }
+
+    private async Task<SeriesEpisodeMuxPlan> BuildFreshPlanAsync(
+        IEpisodePlanInput input,
+        CancellationToken cancellationToken = default)
+    {
+        if (input.HasPrimaryVideoSource)
         {
-            RequireValue(MainVideoPath, "Bitte ein Hauptvideo auswählen.");
+            RequireValue(input.MainVideoPath, "Bitte ein Hauptvideo auswählen.");
         }
-        else if (!HasSupplementOnlySource())
+        else if (!HasSupplementOnlySource(input))
         {
             throw new InvalidOperationException("Bitte eine AD-Datei oder Untertitel auswählen.");
         }
 
-        RequireValue(OutputPath, "Bitte eine Ausgabedatei wählen.");
-        RequireValue(Title.Trim(), "Bitte einen Dateititel eingeben.");
-        var plan = await _services.EpisodePlans.BuildPlanAsync(this, cancellationToken);
-        await _planCache.StoreAsync(this, this, plan, cancellationToken);
-        return plan;
+        RequireValue(input.OutputPath, "Bitte eine Ausgabedatei wählen.");
+        RequireValue(input.TitleForMux.Trim(), "Bitte einen Dateititel eingeben.");
+        return await _services.EpisodePlans.BuildPlanAsync(input, cancellationToken);
     }
 
     private async Task<bool> RefreshPlanSummaryImmediatelyAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            var plan = await GetOrBuildPlanAsync(cancellationToken);
-            _currentPlan = plan;
+            var plan = await GetOrBuildPlanAsync(cancellationToken, assignCurrentPlan: false);
             PlanRefreshProblemText = string.Empty;
-            RefreshOutputTargetStatusFromPlan(plan);
-            SetPlanNotes(plan.Notes);
-            PlanSummaryText = plan.BuildCompactSummaryText();
-            UsageSummary = plan.BuildUsageSummary();
+            ApplyPlanPresentation(plan);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -288,9 +308,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
     /// <see langword="true"/>, wenn mindestens eine AD- oder Untertitelquelle vorhanden ist;
     /// andernfalls <see langword="false"/>.
     /// </returns>
-    private bool HasSupplementOnlySource()
+    private bool HasSupplementOnlySource(IEpisodePlanInput input)
     {
-        return !string.IsNullOrWhiteSpace(AudioDescriptionPath) || SubtitlePaths.Count > 0;
+        return !string.IsNullOrWhiteSpace(input.AudioDescriptionPath) || input.SubtitlePaths.Count > 0;
+    }
+
+    private void ApplyPlanPresentation(SeriesEpisodeMuxPlan plan)
+    {
+        _currentPlan = plan;
+        RefreshOutputTargetStatusFromPlan(plan);
+        SetPlanNotes(plan.Notes);
+        PlanSummaryText = plan.BuildCompactSummaryText();
+        UsageSummary = plan.BuildUsageSummary();
     }
 
     /// <summary>
@@ -507,16 +536,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
         try
         {
-            var updated = await RefreshPlanSummaryImmediatelyAsync(cancellationToken);
+            var plan = await GetOrBuildPlanAsync(cancellationToken, assignCurrentPlan: false);
             if (!_planSummaryRefresh.IsCurrent(version) || cancellationToken.IsCancellationRequested)
             {
                 return;
             }
 
-            if (!updated)
-            {
-                return;
-            }
+            PlanRefreshProblemText = string.Empty;
+            ApplyPlanPresentation(plan);
         }
         catch (OperationCanceledException)
         {
