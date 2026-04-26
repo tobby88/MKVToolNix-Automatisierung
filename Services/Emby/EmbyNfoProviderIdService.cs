@@ -109,7 +109,7 @@ internal sealed class EmbyNfoProviderIdService
                 return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: true, "NFO-Provider-IDs waren bereits aktuell.");
             }
 
-            document.Save(nfoPath);
+            SaveAtomically(document, nfoPath);
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: true, Success: true, "NFO-Provider-IDs aktualisiert.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
@@ -120,12 +120,15 @@ internal sealed class EmbyNfoProviderIdService
 
     private static string? ReadProviderId(XElement root, string uniqueIdType, string legacyElementName)
     {
-        var uniqueId = root
+        var matchingUniqueIds = root
             .Elements("uniqueid")
-            .FirstOrDefault(element => string.Equals(
+            .Where(element => string.Equals(
                 (string?)element.Attribute("type"),
                 uniqueIdType,
-                StringComparison.OrdinalIgnoreCase));
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var uniqueId = matchingUniqueIds.FirstOrDefault(IsDefaultUniqueId)
+                       ?? matchingUniqueIds.FirstOrDefault();
         var uniqueIdValue = uniqueId?.Value.Trim();
         if (!string.IsNullOrWhiteSpace(uniqueIdValue))
         {
@@ -231,6 +234,34 @@ internal sealed class EmbyNfoProviderIdService
         }
 
         return changed;
+    }
+
+    private static bool IsDefaultUniqueId(XElement uniqueId)
+    {
+        return string.Equals(
+            (string?)uniqueId.Attribute("default"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void SaveAtomically(XDocument document, string nfoPath)
+    {
+        var directory = Path.GetDirectoryName(nfoPath);
+        var tempPath = Path.Combine(
+            string.IsNullOrWhiteSpace(directory) ? "." : directory,
+            $".{Path.GetFileName(nfoPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            document.Save(tempPath);
+            File.Replace(tempPath, nfoPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
     }
 }
 

@@ -38,6 +38,34 @@ public sealed class EmbyNfoProviderIdServiceTests
     }
 
     [Fact]
+    public void ReadProviderIds_PrefersDefaultUniqueId_WhenDuplicateProviderIdsExist()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <uniqueid type="tvdb">11111</uniqueid>
+                  <uniqueid type="tvdb" default="true">22222</uniqueid>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().ReadProviderIds(mediaPath);
+
+            Assert.Equal("22222", result.ProviderIds.TvdbId);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void UpdateProviderIds_UpdatesUniqueIdsAndLegacyElements()
     {
         var directory = CreateTempDirectory();
@@ -67,6 +95,7 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.Contains("""<uniqueid type="imdb">tt9876543</uniqueid>""", updatedText);
             Assert.Contains("<tvdbid>12345</tvdbid>", updatedText);
             Assert.Contains("<imdbid>tt9876543</imdbid>", updatedText);
+            Assert.Empty(Directory.EnumerateFiles(directory, "*.tmp"));
         }
         finally
         {

@@ -127,6 +127,42 @@ public sealed class EmbyMetadataSyncServiceTests
     }
 
     [Fact]
+    public void MarkOutputReportsDone_MovesAlreadyCompletedReport_WhenPreviousMoveFailed()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var firstMediaPath = Path.Combine(directory, "Serie - S01E01 - Pilot.mkv");
+            var secondMediaPath = Path.Combine(directory, "Serie - S01E02 - Finale.mkv");
+            var reportPath = Path.Combine(directory, "Neu erzeugte Ausgabedateien.metadata.json");
+            WriteReport(reportPath, firstMediaPath, secondMediaPath);
+            var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath))!;
+            foreach (var item in report.Items)
+            {
+                item.EmbySyncDone = true;
+                item.EmbySyncDoneAt = DateTimeOffset.Now.AddMinutes(-5);
+            }
+
+            report.EmbySyncCompletedAt = DateTimeOffset.Now.AddMinutes(-5);
+            File.WriteAllText(reportPath, BatchOutputMetadataReportJson.Serialize(report));
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+            var result = service.MarkOutputReportsDone([reportPath], [firstMediaPath]);
+
+            var movedReport = Assert.Single(result.MovedReports);
+            Assert.Equal(reportPath, movedReport.SourcePath);
+            Assert.False(File.Exists(reportPath));
+            Assert.True(File.Exists(movedReport.TargetPath));
+            Assert.Empty(result.UpdatedReportPaths);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task TriggerSeriesLibraryScanAsync_UsesArchiveRootItem_WhenEmbyFindsIt()
     {
         var client = new RecordingEmbyClient
@@ -217,6 +253,38 @@ public sealed class EmbyMetadataSyncServiceTests
 
         Assert.NotNull(result);
         Assert.Equal("library-1", result.Library.Id);
+        Assert.Equal(@"Z:\Videos\Serien", result.MatchedLocation);
+    }
+
+    [Fact]
+    public async Task FindSeriesLibraryAsync_PrefersClosestParentLibrary_WhenMultipleParentsMatch()
+    {
+        var client = new RecordingEmbyClient
+        {
+            Libraries =
+            [
+                new EmbyLibraryFolder(
+                    "library-broad",
+                    "Videos",
+                    [@"Z:\Videos"],
+                    RefreshProgress: null,
+                    RefreshStatus: null),
+                new EmbyLibraryFolder(
+                    "library-series",
+                    "Serien",
+                    [@"Z:\Videos\Serien"],
+                    RefreshProgress: null,
+                    RefreshStatus: null)
+            ]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var result = await service.FindSeriesLibraryAsync(
+            new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
+            @"Z:\Videos\Serien\Kids");
+
+        Assert.NotNull(result);
+        Assert.Equal("library-series", result.Library.Id);
         Assert.Equal(@"Z:\Videos\Serien", result.MatchedLocation);
     }
 

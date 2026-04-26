@@ -71,14 +71,10 @@ internal sealed class EmbyMetadataSyncService
             return exactMatch;
         }
 
-        var rootMatch = libraries
-            .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
-            .FirstOrDefault(match =>
-                PathComparisonHelper.IsPathWithinRoot(archiveRootPath, match.MatchedLocation)
-                || PathComparisonHelper.IsPathWithinRoot(match.MatchedLocation, archiveRootPath));
-        if (rootMatch is not null)
+        var directPathRelationshipMatch = FindBestDirectPathRelationshipLibrary(libraries, archiveRootPath);
+        if (directPathRelationshipMatch is not null)
         {
-            return rootMatch;
+            return directPathRelationshipMatch;
         }
 
         return FindComparableAlignedLibrary(libraries, archiveRootPath);
@@ -323,22 +319,30 @@ internal sealed class EmbyMetadataSyncService
             changed = true;
         }
 
-        if (!changed)
-        {
-            return SingleReportCompletionResult.Empty;
-        }
-
         var isComplete = relevantItems.All(item => item.EmbySyncDone == true);
-        if (isComplete)
+        if (isComplete && report.EmbySyncCompletedAt is null)
         {
             report.EmbySyncCompletedAt = completedAt;
+            changed = true;
         }
 
-        File.WriteAllText(reportPath, BatchOutputMetadataReportJson.Serialize(report));
-
-        if (!isComplete || IsAlreadyInDoneDirectory(reportPath))
+        if (changed)
         {
-            return new SingleReportCompletionResult(reportPath, MovedReport: null);
+            File.WriteAllText(reportPath, BatchOutputMetadataReportJson.Serialize(report));
+        }
+
+        if (!isComplete)
+        {
+            return changed
+                ? new SingleReportCompletionResult(reportPath, MovedReport: null)
+                : SingleReportCompletionResult.Empty;
+        }
+
+        if (IsAlreadyInDoneDirectory(reportPath))
+        {
+            return changed
+                ? new SingleReportCompletionResult(reportPath, MovedReport: null)
+                : SingleReportCompletionResult.Empty;
         }
 
         var targetDirectory = Path.Combine(Path.GetDirectoryName(reportPath)!, "done");
@@ -521,6 +525,62 @@ internal sealed class EmbyMetadataSyncService
                 && candidate.IgnoredPrefixSegments == bestCandidate.IgnoredPrefixSegments);
 
         return isAmbiguous ? null : bestCandidate.Match;
+    }
+
+    /// <summary>
+    /// Wählt bei normalen Pfadvergleichen die engste Parent-/Child-Beziehung statt des ersten Emby-Treffers.
+    /// </summary>
+    private static EmbyLibraryMatch? FindBestDirectPathRelationshipLibrary(
+        IReadOnlyList<EmbyLibraryFolder> libraries,
+        string archiveRootPath)
+    {
+        var candidates = libraries
+            .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
+            .Select(match => BuildDirectPathRelationshipCandidate(match, archiveRootPath))
+            .Where(candidate => candidate is not null)
+            .Cast<DirectLibraryRelationshipCandidate>()
+            .OrderByDescending(candidate => candidate.Score)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var bestCandidate = candidates[0];
+        var isAmbiguous = candidates
+            .Skip(1)
+            .Any(candidate => candidate.Score == bestCandidate.Score);
+        return isAmbiguous ? null : bestCandidate.Match;
+    }
+
+    private static DirectLibraryRelationshipCandidate? BuildDirectPathRelationshipCandidate(
+        EmbyLibraryMatch match,
+        string archiveRootPath)
+    {
+        var archiveBelowLibrary = PathComparisonHelper.TryGetRelativePathWithinRoot(archiveRootPath, match.MatchedLocation);
+        if (!string.IsNullOrWhiteSpace(archiveBelowLibrary) && archiveBelowLibrary != ".")
+        {
+            return new DirectLibraryRelationshipCandidate(
+                match,
+                Score: 2_000 - CountRelativePathSegments(archiveBelowLibrary));
+        }
+
+        var libraryBelowArchive = PathComparisonHelper.TryGetRelativePathWithinRoot(match.MatchedLocation, archiveRootPath);
+        if (!string.IsNullOrWhiteSpace(libraryBelowArchive) && libraryBelowArchive != ".")
+        {
+            return new DirectLibraryRelationshipCandidate(
+                match,
+                Score: 1_000 - CountRelativePathSegments(libraryBelowArchive));
+        }
+
+        return null;
+    }
+
+    private static int CountRelativePathSegments(string relativePath)
+    {
+        return relativePath
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Count(segment => !string.IsNullOrWhiteSpace(segment) && segment != ".");
     }
 
     /// <summary>
@@ -771,3 +831,7 @@ internal sealed record ComparableRootAlignment(
     IReadOnlyList<string> RightTrailingSegments,
     int LeftIgnoredPrefixCount,
     int RightIgnoredPrefixCount);
+
+internal sealed record DirectLibraryRelationshipCandidate(
+    EmbyLibraryMatch Match,
+    int Score);
