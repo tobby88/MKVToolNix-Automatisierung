@@ -121,6 +121,45 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(destinationDirectory));
     }
 
+    [Fact]
+    public void ExtractArchive_RejectsEntriesOutsideDestinationDirectory()
+    {
+        var archivePath = Path.Combine(_tempDirectory, "zip-slip.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("../evil.txt");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("outside");
+        }
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "zip-slip-extracted");
+        var extractor = new ManagedToolArchiveExtractor();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            extractor.ExtractArchive(archivePath, destinationDirectory));
+
+        Assert.Contains("unsicheren relativen Pfad", exception.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_tempDirectory, "evil.txt")));
+    }
+
+    [Fact]
+    public void ExtractArchive_ObservesCancellationBeforeWritingNextEntry()
+    {
+        var sourceDirectory = CreateDirectory("cancel-source");
+        File.WriteAllText(Path.Combine(sourceDirectory, "ffprobe.exe"), "tool");
+        var archivePath = Path.Combine(_tempDirectory, "cancel.zip");
+        ZipFile.CreateFromDirectory(sourceDirectory, archivePath);
+        var destinationDirectory = Path.Combine(_tempDirectory, "cancel-extracted");
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+        var extractor = new ManagedToolArchiveExtractor();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            extractor.ExtractArchive(archivePath, destinationDirectory, cancellationToken: cancellationSource.Token));
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(destinationDirectory));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

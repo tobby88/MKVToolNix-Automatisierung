@@ -1,5 +1,4 @@
 using SharpCompress.Archives;
-using SharpCompress.Common;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -15,11 +14,13 @@ internal interface IManagedToolArchiveExtractor
     /// <param name="destinationDirectory">Leeres oder neu anzulegendes Zielverzeichnis.</param>
     /// <param name="progress">Optionaler Fortschrittskanal für die Dateieinträge des Archivs.</param>
     /// <param name="toolKind">Optionales Werkzeug, damit unnötige Archivteile übersprungen werden können.</param>
+    /// <param name="cancellationToken">Abbruchsignal zwischen Archiveinträgen.</param>
     void ExtractArchive(
         string archivePath,
         string destinationDirectory,
         IProgress<ManagedToolExtractionProgress>? progress = null,
-        ManagedToolKind? toolKind = null);
+        ManagedToolKind? toolKind = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -47,7 +48,8 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         string archivePath,
         string destinationDirectory,
         IProgress<ManagedToolExtractionProgress>? progress = null,
-        ManagedToolKind? toolKind = null)
+        ManagedToolKind? toolKind = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
@@ -67,11 +69,9 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         long extractedByteCount = 0;
         foreach (var entry in entries)
         {
-            entry.WriteToDirectory(destinationDirectory, new ExtractionOptions
-            {
-                ExtractFullPath = true,
-                Overwrite = true
-            });
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetPath = GetArchiveEntryDestinationPath(destinationDirectory, entry.Key);
+            ExtractEntry(entry, targetPath, cancellationToken);
 
             extractedEntryCount++;
             extractedByteCount += GetEntrySize(entry);
@@ -124,6 +124,52 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         return separatorIndex >= 0
             ? normalized[..separatorIndex]
             : string.Empty;
+    }
+
+    private static string GetArchiveEntryDestinationPath(string destinationDirectory, string? entryKey)
+    {
+        if (string.IsNullOrWhiteSpace(entryKey))
+        {
+            throw new InvalidOperationException("Das Werkzeugarchiv enthält einen Eintrag ohne sicheren relativen Pfad.");
+        }
+
+        var normalizedEntryKey = entryKey.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(normalizedEntryKey))
+        {
+            throw new InvalidOperationException($"Das Werkzeugarchiv enthält einen absoluten Pfad: {entryKey}");
+        }
+
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        var targetPath = Path.GetFullPath(Path.Combine(destinationRoot, normalizedEntryKey));
+        if (!PathComparisonHelper.IsPathWithinRoot(targetPath, destinationRoot)
+            || PathComparisonHelper.AreSamePath(targetPath, destinationRoot))
+        {
+            throw new InvalidOperationException($"Das Werkzeugarchiv enthält einen unsicheren relativen Pfad: {entryKey}");
+        }
+
+        return targetPath;
+    }
+
+    private static void ExtractEntry(IArchiveEntry entry, string targetPath, CancellationToken cancellationToken)
+    {
+        var targetDirectory = Path.GetDirectoryName(targetPath)
+                              ?? throw new InvalidOperationException($"Der Zielpfad für '{entry.Key}' ist ungültig.");
+        Directory.CreateDirectory(targetDirectory);
+
+        using var input = entry.OpenEntryStream();
+        using var output = File.Create(targetPath);
+        var buffer = new byte[81920];
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var bytesRead = input.Read(buffer, 0, buffer.Length);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            output.Write(buffer, 0, bytesRead);
+        }
     }
 
     private static long GetEntrySize(IArchiveEntry entry)

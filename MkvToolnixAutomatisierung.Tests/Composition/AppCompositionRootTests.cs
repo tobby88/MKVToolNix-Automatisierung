@@ -130,7 +130,8 @@ public sealed class AppCompositionRootTests
             string archivePath,
             string destinationDirectory,
             IProgress<ManagedToolExtractionProgress>? progress = null,
-            ManagedToolKind? toolKind = null)
+            ManagedToolKind? toolKind = null,
+            CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }

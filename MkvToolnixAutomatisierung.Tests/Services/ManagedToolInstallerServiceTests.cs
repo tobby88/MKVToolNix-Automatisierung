@@ -66,7 +66,11 @@ public sealed class ManagedToolInstallerServiceTests
     {
         var settingsStore = new AppSettingsStore();
         var toolPathStore = new AppToolPathStore(settingsStore);
-        var managedFfprobeDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe-existing");
+        var managedFfprobeDirectory = Path.Combine(
+            PortableAppStorage.ToolsDirectory,
+            "ffprobe",
+            "2026-04-18T13-04-00Z",
+            "bin");
         Directory.CreateDirectory(managedFfprobeDirectory);
         var managedFfprobePath = Path.Combine(managedFfprobeDirectory, "ffprobe.exe");
         File.WriteAllText(managedFfprobePath, "tool");
@@ -223,6 +227,66 @@ public sealed class ManagedToolInstallerServiceTests
     }
 
     [Fact]
+    public async Task EnsureManagedToolsAsync_PersistsFailedCheckBackoff_WhenExistingToolCanStillBeUsed()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var managedFfprobeDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "old-version");
+        Directory.CreateDirectory(managedFfprobeDirectory);
+        var managedFfprobePath = Path.Combine(managedFfprobeDirectory, "ffprobe.exe");
+        File.WriteAllText(managedFfprobePath, "tool");
+
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = true;
+        settings.ManagedFfprobe.InstalledPath = managedFfprobePath;
+        settings.ManagedFfprobe.InstalledVersion = "old-version";
+        toolPathStore.Save(settings);
+
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new ThrowingPackageSource(ManagedToolKind.Ffprobe, new InvalidOperationException("offline"))],
+            new StubArchiveExtractor(_ => throw new Xunit.Sdk.XunitException("Extractor should not run.")),
+            new HttpClient(new FakeHttpMessageHandler()));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+
+        Assert.False(result.HasWarning);
+        Assert.NotNull(savedSettings.ManagedFfprobe.LastFailedCheckUtc);
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_PropagatesCancellationWithoutRecordingFailedBackoff()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = true;
+        toolPathStore.Save(settings);
+        using var cancellationSource = new CancellationTokenSource();
+        cancellationSource.Cancel();
+
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new RecordingPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22T10-00-00Z",
+                "Latest Auto-Build",
+                new Uri("https://example.invalid/ffprobe.zip"),
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                new string('a', 64)))],
+            new StubArchiveExtractor(_ => throw new Xunit.Sdk.XunitException("Extractor should not run.")),
+            new HttpClient(new FakeHttpMessageHandler()));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.EnsureManagedToolsAsync(cancellationToken: cancellationSource.Token));
+
+        Assert.Null(toolPathStore.Load().ManagedFfprobe.LastFailedCheckUtc);
+    }
+
+    [Fact]
     public async Task EnsureManagedToolsAsync_SkipsManagedInstallWhenManualOverrideExists()
     {
         var settingsStore = new AppSettingsStore();
@@ -331,6 +395,55 @@ public sealed class ManagedToolInstallerServiceTests
                 Directory.Delete(userProfileDirectory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_ReinstallsWhenInstalledPathDoesNotMatchVersionDirectory()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var externalDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "external-copy");
+        Directory.CreateDirectory(externalDirectory);
+        var externalFfprobePath = Path.Combine(externalDirectory, "ffprobe.exe");
+        File.WriteAllText(externalFfprobePath, "stale-tool");
+
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = true;
+        settings.ManagedFfprobe.InstalledPath = externalFfprobePath;
+        settings.ManagedFfprobe.InstalledVersion = "2026-04-22T10-00-00Z";
+        toolPathStore.Save(settings);
+
+        var archiveBytes = "ffprobe-archive"u8.ToArray();
+        var archiveHash = Convert.ToHexString(SHA256.HashData(archiveBytes));
+        var downloadUri = new Uri("https://example.invalid/ffprobe.zip");
+        var handler = new FakeHttpMessageHandler((downloadUri, archiveBytes));
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.Ffprobe,
+                "2026-04-22T10-00-00Z",
+                "Latest Auto-Build",
+                downloadUri,
+                "ffmpeg-master-latest-win64-gpl-shared.zip",
+                archiveHash))],
+            new StubArchiveExtractor(destinationDirectory =>
+            {
+                var toolDirectory = Path.Combine(destinationDirectory, "ffmpeg", "bin");
+                Directory.CreateDirectory(toolDirectory);
+                File.WriteAllText(Path.Combine(toolDirectory, "ffprobe.exe"), "fresh-tool");
+            }),
+            new HttpClient(handler));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+
+        Assert.False(result.HasWarning);
+        Assert.Single(handler.RequestedUris);
+        Assert.NotEqual(externalFfprobePath, savedSettings.ManagedFfprobe.InstalledPath);
+        Assert.True(PathComparisonHelper.IsPathWithinRoot(
+            savedSettings.ManagedFfprobe.InstalledPath,
+            Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "2026-04-22T10-00-00Z")));
     }
 
     [Fact]
@@ -654,14 +767,26 @@ public sealed class ManagedToolInstallerServiceTests
         }
     }
 
+    private sealed class ThrowingPackageSource(ManagedToolKind kind, Exception exception) : IManagedToolPackageSource
+    {
+        public ManagedToolKind Kind => kind;
+
+        public Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
+        {
+            throw exception;
+        }
+    }
+
     private sealed class StubArchiveExtractor(Action<string> onExtract) : IManagedToolArchiveExtractor
     {
         public void ExtractArchive(
             string archivePath,
             string destinationDirectory,
             IProgress<ManagedToolExtractionProgress>? progress = null,
-            ManagedToolKind? toolKind = null)
+            ManagedToolKind? toolKind = null,
+            CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(destinationDirectory);
             progress?.Report(new ManagedToolExtractionProgress(0, 1, "start", 0, 4));
             onExtract(destinationDirectory);

@@ -10,6 +10,7 @@ internal sealed class ManagedToolInstallerService
 {
     private static readonly TimeSpan SuccessfulMetadataRefreshInterval = TimeSpan.FromHours(24);
     private static readonly TimeSpan FailedMetadataRefreshBackoffInterval = TimeSpan.FromHours(2);
+    private static readonly TimeSpan DownloadReadIdleTimeout = TimeSpan.FromSeconds(30);
     private const double MetadataLookupProgressPercent = 8d;
     private const double DownloadStartProgressPercent = 15d;
     private const double DownloadEndProgressPercent = 70d;
@@ -138,9 +139,7 @@ internal sealed class ManagedToolInstallerService
                 MetadataLookupProgressPercent,
                 false);
             var latestPackage = await _packageSources[toolKind].GetLatestPackageAsync(cancellationToken);
-            var hasValidInstalledVersion = HasValidManagedInstallation(toolKind, toolSettings.InstalledPath);
-            if (hasValidInstalledVersion
-                && string.Equals(toolSettings.InstalledVersion, latestPackage.VersionToken, StringComparison.OrdinalIgnoreCase))
+            if (HasValidManagedInstallation(toolKind, toolSettings, latestPackage.VersionToken))
             {
                 toolSettings.LastCheckedUtc = now;
                 toolSettings.LastFailedCheckUtc = null;
@@ -165,6 +164,10 @@ internal sealed class ManagedToolInstallerService
                 false);
             return true;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             toolSettings.LastFailedCheckUtc = now;
@@ -178,7 +181,7 @@ internal sealed class ManagedToolInstallerService
                 ex.Message,
                 FinishedProgressPercent,
                 false);
-            return false;
+            return true;
         }
     }
 
@@ -207,7 +210,8 @@ internal sealed class ManagedToolInstallerService
                 archivePath,
                 stagingDirectory,
                 progress?.CreateExtractionProgressAdapter(package.Kind),
-                package.Kind), cancellationToken);
+                package.Kind,
+                cancellationToken), cancellationToken);
 
             var installedPathInStaging = ResolveInstalledPath(package.Kind, stagingDirectory);
             var installedPathInVersionDirectory = MapStagingInstalledPathToVersionDirectory(
@@ -251,7 +255,7 @@ internal sealed class ManagedToolInstallerService
 
             while (true)
             {
-                var bytesRead = await contentStream.ReadAsync(buffer, cancellationToken);
+                var bytesRead = await ReadWithIdleTimeoutAsync(contentStream, buffer, DownloadReadIdleTimeout, cancellationToken);
                 if (bytesRead == 0)
                 {
                     break;
@@ -301,9 +305,43 @@ internal sealed class ManagedToolInstallerService
         return Convert.ToHexString(hash);
     }
 
-    private static bool HasValidManagedInstallation(ManagedToolKind toolKind, string? installedPath)
+    private static async ValueTask<int> ReadWithIdleTimeoutAsync(
+        Stream stream,
+        byte[] buffer,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(timeout);
+
+        try
+        {
+            return await stream.ReadAsync(buffer, timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutSource.IsCancellationRequested)
+        {
+            throw new TimeoutException("Der Werkzeugdownload liefert seit längerer Zeit keine weiteren Daten.");
+        }
+    }
+
+    private static bool HasValidManagedInstallation(
+        ManagedToolKind toolKind,
+        ManagedToolSettings toolSettings,
+        string expectedVersionToken)
+    {
+        var installedPath = toolSettings.InstalledPath;
         if (string.IsNullOrWhiteSpace(installedPath))
+        {
+            return false;
+        }
+
+        if (!string.Equals(toolSettings.InstalledVersion, expectedVersionToken, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expectedVersionDirectory = Path.Combine(GetToolRootDirectory(toolKind), SanitizePathSegment(expectedVersionToken));
+        if (!PathComparisonHelper.IsPathWithinRoot(installedPath, expectedVersionDirectory))
         {
             return false;
         }
