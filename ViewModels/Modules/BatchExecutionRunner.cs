@@ -161,8 +161,12 @@ internal sealed class BatchExecutionRunner
                     update => progressTracker.ReportMuxProgress(index + 1, update.ProgressPercent, update.HasWarning),
                     cancellationToken,
                     MuxWorkflowTemporaryCleanup.KeepWorkingCopy);
+                var outcomeKind = MuxExecutionResultClassifier.Classify(
+                    result,
+                    outputSnapshotBeforeRun,
+                    item.OutputPath);
 
-                if (result.ExitCode == 0 && !result.HasWarning)
+                if (outcomeKind == MuxExecutionOutcomeKind.Success)
                 {
                     item.SetStatus(BatchEpisodeStatusKind.Success);
                     successCount++;
@@ -193,8 +197,7 @@ internal sealed class BatchExecutionRunner
                         throw new OperationCanceledException(cancellationToken);
                     }
                 }
-                else if ((result.ExitCode == 0 && result.HasWarning)
-                    || (result.ExitCode == 1 && WasOutputCreatedOrChanged(outputSnapshotBeforeRun, item.OutputPath)))
+                else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
                 {
                     warningCount++;
                     var warningStatusText = BuildWarningStatusText(plan, result);
@@ -335,12 +338,6 @@ internal sealed class BatchExecutionRunner
             : plan.HasHeaderEdits
                 ? "Warnung (Header aktualisiert, Exit-Code 1)"
                 : "Warnung (Datei erstellt, Exit-Code 1)";
-    }
-
-    private static bool WasOutputCreatedOrChanged(FileStateSnapshot? beforeRun, string outputPath)
-    {
-        var afterRun = FileStateSnapshot.TryCreate(outputPath);
-        return afterRun is not null && !afterRun.Equals(beforeRun);
     }
 
     private static void AddNewOutput(

@@ -48,7 +48,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
             var cancellationToken = operationSource.Token;
             SetBusy(true);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
-            var outputExistedBeforeRun = File.Exists(_currentPlan.OutputFilePath);
+            var outputSnapshotBeforeRun = FileStateSnapshot.TryCreate(_currentPlan.OutputFilePath);
+            var outputExistedBeforeRun = outputSnapshotBeforeRun is not null;
             PlanRefreshProblemText = string.Empty;
             ApplyPlanPresentation(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan)
@@ -111,7 +112,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 HandleMuxUpdate,
                 cancellationToken);
 
-            if (result.ExitCode == 0 && !result.HasWarning)
+            var outcomeKind = MuxExecutionResultClassifier.Classify(
+                result,
+                outputSnapshotBeforeRun,
+                _currentPlan.OutputFilePath);
+
+            if (outcomeKind == MuxExecutionOutcomeKind.Success)
             {
                 SetStatus(
                     _currentPlan.HasHeaderEdits
@@ -126,8 +132,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: false);
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
             }
-            else if ((result.ExitCode == 0 && result.HasWarning)
-                || (result.ExitCode == 1 && File.Exists(_currentPlan.OutputFilePath)))
+            else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
             {
                 SetStatus(
                     _currentPlan.HasHeaderEdits
