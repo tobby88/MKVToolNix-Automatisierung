@@ -76,6 +76,9 @@ internal static class UiCompositionModule
             provider.GetRequiredService<BatchModuleServices>(),
             provider.GetRequiredService<IUserDialogService>(),
             provider.GetRequiredService<IAppSettingsDialogService>()));
+        services.AddSingleton<MuxModuleViewModel>(provider => new MuxModuleViewModel(
+            provider.GetRequiredService<SingleEpisodeMuxViewModel>(),
+            provider.GetRequiredService<BatchMuxViewModel>()));
         services.AddSingleton<DownloadSortViewModel>(provider => new DownloadSortViewModel(
             provider.GetRequiredService<DownloadSortModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
@@ -96,13 +99,9 @@ internal static class UiCompositionModule
                     "MediathekView-Dateien in Serienordner einsortieren",
                     provider.GetRequiredService<DownloadSortViewModel>()),
                 new ModuleNavigationItem(
-                    "Einzel-Mux",
-                    "Eine Episode erkennen, prüfen und muxen",
-                    provider.GetRequiredService<SingleEpisodeMuxViewModel>()),
-                new ModuleNavigationItem(
-                    "Batch-Mux",
-                    "Ordner scannen und gesammelt muxen",
-                    provider.GetRequiredService<BatchMuxViewModel>()),
+                    "Muxen",
+                    "Einzel- und Batch-Mux in einem gemeinsamen Schritt",
+                    provider.GetRequiredService<MuxModuleViewModel>()),
                 new ModuleNavigationItem(
                     "Emby-Abgleich",
                     "Neue MKV-Dateien scannen und NFO-IDs abgleichen",

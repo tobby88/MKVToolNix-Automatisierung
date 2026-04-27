@@ -74,10 +74,10 @@ public sealed class AppCompositionRootTests
                     return new ManagedToolStartupResult([]);
                 });
 
-            var batchModule = composition.MainWindowViewModel.Modules
-                .Single(module => module.ContentViewModel is BatchMuxViewModel)
+            var muxModule = composition.MainWindowViewModel.Modules
+                .Single(module => module.ContentViewModel is MuxModuleViewModel)
                 .ContentViewModel;
-            var batchViewModel = Assert.IsType<BatchMuxViewModel>(batchModule);
+            var batchViewModel = Assert.IsType<MuxModuleViewModel>(muxModule).BatchMux;
             var collectionViewDispatcher = Assert
                 .IsAssignableFrom<DispatcherObject>(batchViewModel.EpisodeItemsView)
                 .Dispatcher;

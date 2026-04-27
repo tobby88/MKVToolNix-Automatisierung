@@ -19,6 +19,9 @@
         <DataTemplate DataType="{x:Type moduleVm:BatchMuxViewModel}">
             <views:BatchMuxView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type moduleVm:MuxModuleViewModel}">
+            <views:MuxModuleView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type moduleVm:DownloadViewModel}">
             <views:DownloadView />
         </DataTemplate>
