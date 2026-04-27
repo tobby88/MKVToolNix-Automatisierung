@@ -43,6 +43,7 @@ internal sealed record MetadataServices(EpisodeMetadataLookupService Lookup);
 /// <param name="Mux">Fassade für Detection, Planerzeugung und mkvmerge-Ausführung.</param>
 /// <param name="EpisodePlans">Koordinator für Planerzeugung aus UI-Eingaben.</param>
 /// <param name="BatchScan">Batch-spezifische Scan- und Gruppierungslogik.</param>
+/// <param name="DetectionWorkflow">Gemeinsamer Workflow für Dateierkennung und automatische Metadatenauflösung.</param>
 /// <param name="Archive">Archivdienst für Bibliotheksintegration und Wiederverwendungsentscheidungen.</param>
 /// <param name="OutputPaths">Dienst für automatische Zielpfadbildung und Archivziel-Erkennung.</param>
 /// <param name="CleanupFiles">Planer für Cleanup- und Done-Dateilisten.</param>
@@ -50,6 +51,7 @@ internal sealed record MuxDomainServices(
     SeriesEpisodeMuxService Mux,
     EpisodePlanCoordinator EpisodePlans,
     BatchScanCoordinator BatchScan,
+    EpisodeDetectionWorkflow DetectionWorkflow,
     SeriesArchiveService Archive,
     EpisodeOutputPathService OutputPaths,
     EpisodeCleanupFilePlanner CleanupFiles);

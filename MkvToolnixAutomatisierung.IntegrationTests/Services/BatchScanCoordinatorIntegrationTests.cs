@@ -366,10 +366,12 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             new MuxExecutionService(),
             new MkvMergeOutputParser());
 
+        var outputPaths = new EpisodeOutputPathService(archiveService);
+        var metadataLookup = new EpisodeMetadataLookupService(metadataStore, tvdbClient);
         return new BatchScanCoordinator(
             muxService,
-            new EpisodeMetadataLookupService(metadataStore, tvdbClient),
-            new EpisodeOutputPathService(archiveService));
+            new EpisodeDetectionWorkflow(muxService, metadataLookup, outputPaths),
+            outputPaths);
     }
 
     private string CreateFile(string directory, string fileName, string content = "data")

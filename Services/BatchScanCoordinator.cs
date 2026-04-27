@@ -9,16 +9,16 @@ namespace MkvToolnixAutomatisierung.Services;
 internal sealed class BatchScanCoordinator
 {
     private readonly SeriesEpisodeMuxService _muxService;
-    private readonly EpisodeMetadataLookupService _episodeMetadata;
+    private readonly EpisodeDetectionWorkflow _detectionWorkflow;
     private readonly EpisodeOutputPathService _outputPaths;
 
     public BatchScanCoordinator(
         SeriesEpisodeMuxService muxService,
-        EpisodeMetadataLookupService episodeMetadata,
+        EpisodeDetectionWorkflow detectionWorkflow,
         EpisodeOutputPathService outputPaths)
     {
         _muxService = muxService;
-        _episodeMetadata = episodeMetadata;
+        _detectionWorkflow = detectionWorkflow;
         _outputPaths = outputPaths;
     }
 
@@ -81,33 +81,16 @@ internal sealed class BatchScanCoordinator
         IReadOnlyCollection<string>? excludedSourcePaths = null,
         CancellationToken cancellationToken = default)
     {
-        var detected = await _muxService.DetectFromSelectedVideoAsync(
-            sourceFilePath,
-            directoryContext.DetectionContext,
-            onDetectionProgress,
-            excludedSourcePaths,
-            cancellationToken);
-        var localGuess = new EpisodeMetadataGuess(
-            detected.SeriesName,
-            detected.SuggestedTitle,
-            detected.SeasonNumber,
-            detected.EpisodeNumber);
-
-        cancellationToken.ThrowIfCancellationRequested();
-        var metadataResolution = await _episodeMetadata.ResolveAutomaticallyAsync(localGuess, cancellationToken);
-        if (metadataResolution.Selection is not null)
-        {
-            detected = EpisodeMetadataMergeHelper.ApplySelection(detected, metadataResolution.Selection);
-        }
-        else
-        {
-            (detected, metadataResolution) = ArchiveSpecialMetadataFallback.ApplyIfAvailable(
-                detected,
-                metadataResolution,
-                _outputPaths,
-                _episodeMetadata,
-                outputDirectory);
-        }
+        var workflowResult = await _detectionWorkflow.DetectAndResolveAsync(
+            selectedVideoPath: sourceFilePath,
+            directoryContext: directoryContext.DetectionContext,
+            onDetectionProgress: onDetectionProgress,
+            excludedSourcePaths: excludedSourcePaths,
+            specialFallbackOutputRoot: outputDirectory,
+            cancellationToken: cancellationToken);
+        var detected = workflowResult.Detected;
+        var localGuess = workflowResult.LocalGuess;
+        var metadataResolution = workflowResult.MetadataResolution;
 
         var fallbackDirectory = Path.GetDirectoryName(detected.MainVideoPath)
             ?? Path.GetDirectoryName(sourceFilePath)

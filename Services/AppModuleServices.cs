@@ -12,12 +12,14 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <param name="OutputPaths">Dienst für Ausgabezielbildung und Archivziel-Erkennung.</param>
 /// <param name="CleanupFiles">Planer für Cleanup-Dateilisten nach Einzel- oder Batch-Läufen.</param>
 /// <param name="EpisodeMetadata">Metadatenservice für TVDB-Auflösung und Review-Automatik.</param>
+/// <param name="DetectionWorkflow">Gemeinsamer Workflow für Dateierkennung und automatische Metadatenauflösung.</param>
 internal sealed record SharedEpisodeModuleServices(
     SeriesEpisodeMuxService SeriesEpisodeMux,
     EpisodePlanCoordinator EpisodePlans,
     EpisodeOutputPathService OutputPaths,
     EpisodeCleanupFilePlanner CleanupFiles,
-    EpisodeMetadataLookupService EpisodeMetadata);
+    EpisodeMetadataLookupService EpisodeMetadata,
+    EpisodeDetectionWorkflow DetectionWorkflow);
 
 /// <summary>
 /// Bündelt nur die Services, die der Einzelmodus tatsächlich für Erkennung, Vorschau und Mux-Ausführung benötigt.
@@ -56,6 +58,11 @@ internal sealed record SingleEpisodeModuleServices(
     /// Kurzgriff auf TVDB-/Metadatenlogik des gemeinsam genutzten Service-Bundles.
     /// </summary>
     public EpisodeMetadataLookupService EpisodeMetadata => Shared.EpisodeMetadata;
+
+    /// <summary>
+    /// Kurzgriff auf den gemeinsamen Detection-/Metadaten-Workflow.
+    /// </summary>
+    public EpisodeDetectionWorkflow DetectionWorkflow => Shared.DetectionWorkflow;
 }
 
 /// <summary>
@@ -96,6 +103,11 @@ internal sealed record BatchModuleServices(
     /// Kurzgriff auf TVDB-/Metadatenlogik des gemeinsam genutzten Service-Bundles.
     /// </summary>
     public EpisodeMetadataLookupService EpisodeMetadata => Shared.EpisodeMetadata;
+
+    /// <summary>
+    /// Kurzgriff auf den gemeinsamen Detection-/Metadaten-Workflow.
+    /// </summary>
+    public EpisodeDetectionWorkflow DetectionWorkflow => Shared.DetectionWorkflow;
 }
 
 /// <summary>

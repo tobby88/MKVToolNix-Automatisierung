@@ -132,20 +132,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
             PreviewText = "Erkennung läuft...";
 
             detectionProgressVersion = BeginDetectionProgressSession();
-            var detected = await _services.SeriesEpisodeMux.DetectFromSelectedVideoAsync(
+            var detectionResult = await _services.DetectionWorkflow.DetectAndResolveAsync(
                 selectedVideoPath,
                 update => HandleDetectionUpdate(detectionProgressVersion, update),
-                excludedSourcePaths);
+                excludedSourcePaths,
+                onDetectionCompleted: () => SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue));
             CompleteDetectionProgressSession(detectionProgressVersion);
             detectionProgressVersion = 0;
-            var localGuess = new EpisodeMetadataGuess(
-                detected.SeriesName,
-                detected.SuggestedTitle,
-                detected.SeasonNumber,
-                detected.EpisodeNumber);
-            SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue);
-            var automaticMetadata = await ApplyAutomaticMetadataAsync(detected);
-            detected = automaticMetadata.Detected;
+            var detected = detectionResult.Detected;
+            var localGuess = detectionResult.LocalGuess;
             var resolvedTitle = ShouldPreserveManualTitle(selectedVideoPath)
                 ? Title
                 : detected.SuggestedTitle;
@@ -156,7 +151,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                     selectedVideoPath,
                     localGuess,
                     detected,
-                    automaticMetadata.Resolution,
+                    detectionResult.MetadataResolution,
                     detected.SuggestedOutputFilePath,
                     resolvedTitle);
             });
@@ -585,27 +580,6 @@ internal sealed partial class SingleEpisodeMuxViewModel
         UpdateSuggestedOutputPathIfAutomatic();
         RefreshOutputTargetStatus();
         SchedulePlanSummaryRefresh();
-    }
-
-    private async Task<(AutoDetectedEpisodeFiles Detected, EpisodeMetadataResolutionResult Resolution)> ApplyAutomaticMetadataAsync(AutoDetectedEpisodeFiles detected)
-    {
-        var resolution = await _services.EpisodeMetadata.ResolveAutomaticallyAsync(new EpisodeMetadataGuess(
-            detected.SeriesName,
-            detected.SuggestedTitle,
-            detected.SeasonNumber,
-            detected.EpisodeNumber));
-
-        if (resolution.Selection is not null)
-        {
-            detected = EpisodeMetadataMergeHelper.ApplySelection(detected, resolution.Selection);
-        }
-
-        return ArchiveSpecialMetadataFallback.ApplyIfAvailable(
-            detected,
-            resolution,
-            _services.OutputPaths,
-            _services.EpisodeMetadata,
-            outputRootOverride: null);
     }
 
     private bool ShouldPreserveDetectedArchiveOutputPath(AutoDetectedEpisodeFiles detected)

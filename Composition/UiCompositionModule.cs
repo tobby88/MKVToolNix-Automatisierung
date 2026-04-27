@@ -35,7 +35,8 @@ internal static class UiCompositionModule
             provider.GetRequiredService<EpisodePlanCoordinator>(),
             provider.GetRequiredService<EpisodeOutputPathService>(),
             provider.GetRequiredService<EpisodeCleanupFilePlanner>(),
-            provider.GetRequiredService<EpisodeMetadataLookupService>()));
+            provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<EpisodeDetectionWorkflow>()));
         services.AddSingleton<SingleEpisodeModuleServices>(provider => new SingleEpisodeModuleServices(
             provider.GetRequiredService<SharedEpisodeModuleServices>(),
             provider.GetRequiredService<IEpisodeCleanupService>(),

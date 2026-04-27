@@ -138,16 +138,18 @@ internal static class ViewModelTestContext
             effectiveFileCopy,
             effectiveCleanup);
 
+        var detectionWorkflow = new EpisodeDetectionWorkflow(seriesEpisodeMux, metadata, outputPaths);
         var shared = new SharedEpisodeModuleServices(
             seriesEpisodeMux,
             new EpisodePlanCoordinator(seriesEpisodeMux),
             outputPaths,
             new EpisodeCleanupFilePlanner(outputPaths),
-            metadata);
+            metadata,
+            detectionWorkflow);
 
         return new TestServiceGraph(
             shared,
-            new BatchScanCoordinator(seriesEpisodeMux, metadata, outputPaths),
+            new BatchScanCoordinator(seriesEpisodeMux, detectionWorkflow, outputPaths),
             archiveService,
             effectiveFileCopy,
             effectiveCleanup,

@@ -35,15 +35,20 @@ internal static class MuxCompositionModule
             new MuxExecutionService(),
             new MkvMergeOutputParser()));
         services.AddSingleton<EpisodePlanCoordinator>(provider => new EpisodePlanCoordinator(provider.GetRequiredService<SeriesEpisodeMuxService>()));
-        services.AddSingleton<BatchScanCoordinator>(provider => new BatchScanCoordinator(
+        services.AddSingleton<EpisodeDetectionWorkflow>(provider => new EpisodeDetectionWorkflow(
             provider.GetRequiredService<SeriesEpisodeMuxService>(),
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<EpisodeOutputPathService>()));
+        services.AddSingleton<BatchScanCoordinator>(provider => new BatchScanCoordinator(
+            provider.GetRequiredService<SeriesEpisodeMuxService>(),
+            provider.GetRequiredService<EpisodeDetectionWorkflow>(),
             provider.GetRequiredService<EpisodeOutputPathService>()));
         services.AddSingleton<EpisodeCleanupFilePlanner>(provider => new EpisodeCleanupFilePlanner(provider.GetRequiredService<EpisodeOutputPathService>()));
         services.AddSingleton<MuxDomainServices>(provider => new MuxDomainServices(
             provider.GetRequiredService<SeriesEpisodeMuxService>(),
             provider.GetRequiredService<EpisodePlanCoordinator>(),
             provider.GetRequiredService<BatchScanCoordinator>(),
+            provider.GetRequiredService<EpisodeDetectionWorkflow>(),
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<EpisodeOutputPathService>(),
             provider.GetRequiredService<EpisodeCleanupFilePlanner>()));
