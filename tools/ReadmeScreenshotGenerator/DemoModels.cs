@@ -106,10 +106,27 @@ internal sealed class DemoBatchViewModel
     public DemoChoice? SelectedFilterMode { get; set; }
     public ObservableCollection<DemoChoice> SortModes { get; init; } = [];
     public DemoChoice? SelectedSortMode { get; set; }
+    public ICommand SelectSourceDirectoryCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectOutputDirectoryCommand { get; init; } = new NoOpRelayCommand();
     public ICommand RefreshAllComparisonsCommand { get; init; } = new NoOpRelayCommand();
     public string RefreshAllComparisonsTooltip { get; init; } = string.Empty;
     public ObservableCollection<DemoBatchEpisodeItem> EpisodeItemsView { get; init; } = [];
     public DemoBatchEpisodeItem? SelectedEpisodeItem { get; set; }
+    public ICommand ApproveSelectedPlanReviewCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand ReviewSelectedMetadataCommand { get; init; } = new NoOpRelayCommand();
+    public string ReviewSelectedMetadataTooltip { get; init; } = string.Empty;
+    public ICommand OpenSelectedSourcesCommand { get; init; } = new NoOpRelayCommand();
+    public string OpenSelectedSourcesTooltip { get; init; } = string.Empty;
+    public ICommand RedetectSelectedEpisodeCommand { get; init; } = new NoOpRelayCommand();
+    public string RedetectSelectedEpisodeTooltip { get; init; } = string.Empty;
+    public ICommand EditSelectedAudioDescriptionCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSelectedAudioDescriptionCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand EditSelectedSubtitlesCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSelectedSubtitlesCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand EditSelectedAttachmentsCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSelectedAttachmentsCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand EditSelectedOutputCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSelectedOutputCommand { get; init; } = new NoOpRelayCommand();
     public string BatchLogInfoText { get; init; } = string.Empty;
     public string LogText { get; init; } = string.Empty;
     public string StatusText { get; init; } = string.Empty;
@@ -131,7 +148,7 @@ internal sealed class DemoBatchViewModel
 internal sealed class DemoBatchEpisodeItem
 {
     public bool IsSelected { get; set; }
-    public string Title { get; init; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
     public string EpisodeCodeDisplayText { get; init; } = string.Empty;
     public string ArchiveStateText { get; init; } = string.Empty;
     public string ArchiveStateTooltip { get; init; } = string.Empty;
@@ -146,15 +163,19 @@ internal sealed class DemoBatchEpisodeItem
     public Brush StatusBadgeBackground { get; init; } = Brushes.Transparent;
     public Brush StatusBadgeBorderBrush { get; init; } = Brushes.Transparent;
     public string MainVideoFileName { get; init; } = string.Empty;
-    public string SeriesName { get; init; } = string.Empty;
-    public string SeasonNumber { get; init; } = string.Empty;
-    public string EpisodeNumber { get; init; } = string.Empty;
-    public string TitleForMux { get; init; } = string.Empty;
+    public string SeriesName { get; set; } = string.Empty;
+    public string SeasonNumber { get; set; } = string.Empty;
+    public string EpisodeNumber { get; set; } = string.Empty;
+    public string TitleForMux { get; set; } = string.Empty;
     public string MetadataDisplayText { get; init; } = string.Empty;
     public string MetadataStatusText { get; init; } = string.Empty;
     public string MainVideoDisplayText { get; init; } = string.Empty;
     public string VideoAndAudioDescriptionDisplayText { get; init; } = string.Empty;
     public string OutputPath { get; init; } = string.Empty;
+    public ObservableCollection<DemoLanguageOption> LanguageOverrideOptions { get; init; } = [];
+    public string? VideoLanguageOverride { get; set; }
+    public string? AudioLanguageOverride { get; set; }
+    public string? OriginalLanguageOverride { get; set; }
     public string NotesDisplayText { get; init; } = string.Empty;
     public bool HasNotes { get; init; }
     public bool HasActionablePlanNotes { get; init; }
@@ -229,6 +250,9 @@ internal sealed class DemoEmbySyncViewModel
 {
     public bool IsInteractive { get; init; }
     public string ReportPath { get; init; } = string.Empty;
+    public string ReportSelectionSummaryText { get; init; } = string.Empty;
+    public string ReportSelectionDetailText { get; init; } = string.Empty;
+    public string ReportSelectionTooltip { get; init; } = string.Empty;
     public ObservableCollection<DemoEmbyItem> Items { get; init; } = [];
     public DemoEmbyItem? SelectedItem { get; set; }
     public ICommand SelectReportCommand { get; init; } = new NoOpRelayCommand();
@@ -236,6 +260,8 @@ internal sealed class DemoEmbySyncViewModel
     public string RunScanTooltip { get; init; } = string.Empty;
     public ICommand RunSyncCommand { get; init; } = new NoOpRelayCommand();
     public string RunSyncTooltip { get; init; } = string.Empty;
+    public ICommand ReviewPendingProviderIdsCommand { get; init; } = new NoOpRelayCommand();
+    public string ReviewPendingProviderIdsTooltip { get; init; } = string.Empty;
     public ICommand SelectAllCommand { get; init; } = new NoOpRelayCommand();
     public ICommand DeselectAllCommand { get; init; } = new NoOpRelayCommand();
     public string LogText { get; init; } = string.Empty;

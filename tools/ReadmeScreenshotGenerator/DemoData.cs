@@ -101,8 +101,16 @@ internal static class DemoData
         var sortModes = new ObservableCollection<DemoChoice>
         {
             new("Serie / Titel"),
+            new("S/E"),
             new("Status"),
             new("Quelle")
+        };
+        var languageOptions = new ObservableCollection<DemoLanguageOption>
+        {
+            new("", "Automatisch"),
+            new("de", "Deutsch"),
+            new("nds", "Plattdüütsch"),
+            new("en", "English")
         };
 
         var items = new ObservableCollection<DemoBatchEpisodeItem>
@@ -148,6 +156,10 @@ internal static class DemoData
                     @"C:\Demo\Downloads\MediathekView\Neues aus Büttenwarder\Rififi.txt"
                 ],
                 OutputPath = @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014\Neues aus Büttenwarder - S2014E05-E06 - Rififi.mkv",
+                LanguageOverrideOptions = languageOptions,
+                VideoLanguageOverride = string.Empty,
+                AudioLanguageOverride = string.Empty,
+                OriginalLanguageOverride = "de",
                 Notes =
                 [
                     "Doppelfolge erkannt: Archivvergleich gegen die kombinierte Bibliotheksdatei.",
@@ -219,11 +231,14 @@ internal static class DemoData
             FilterModes = filterModes,
             SelectedFilterMode = filterModes[0],
             SortModes = sortModes,
-            SelectedSortMode = sortModes[0],
+            SelectedSortMode = sortModes[1],
             RefreshAllComparisonsCommand = NoOpCommand,
             RefreshAllComparisonsTooltip = "Erneut gegen die Bibliothek vergleichen.",
             EpisodeItemsView = items,
             SelectedEpisodeItem = items[0],
+            ReviewSelectedMetadataTooltip = "TVDB-Zuordnung für den markierten Eintrag prüfen.",
+            OpenSelectedSourcesTooltip = "Öffnet alle Hauptvideoquellen des markierten Eintrags.",
+            RedetectSelectedEpisodeTooltip = "Erkennung und Archivvergleich für den markierten Eintrag neu starten.",
             BatchLogInfoText = "Das Batch-Protokoll zeigt Scan, Pflichtchecks und den aktuellen Mux-Lauf der Sitzung.",
             LogText = "[10:12:14] Scan gestartet\r\n[10:12:21] 3 Episoden erkannt\r\n[10:12:29] Rififi gegen Archiv-Doppelfolge abgeglichen",
             StatusText = "Bereit für den Batch-Lauf",
@@ -374,12 +389,17 @@ internal static class DemoData
                 Environment.NewLine,
                 @".\Logs\Neu erzeugte Ausgabedateien - 2026-04-21 10-12.metadata.json",
                 @".\Logs\Neu erzeugte Ausgabedateien - 2026-04-21 10-26.metadata.json"),
+            ReportSelectionSummaryText = "2 Reports ausgewählt",
+            ReportSelectionDetailText = "3 neue MKV-Dateien aus den letzten Batch- und Einzel-Läufen.",
+            ReportSelectionTooltip = "Die Reports werden beim Auswählen direkt geladen und geprüft.",
             Items = items,
             SelectedItem = items[1],
             RunScanCommand = NoOpCommand,
             RunScanTooltip = "Liest Emby nach einem Bibliotheksscan erneut ein.",
             RunSyncCommand = NoOpCommand,
             RunSyncTooltip = "Schreibt geänderte IDs in die NFO zurück.",
+            ReviewPendingProviderIdsCommand = NoOpCommand,
+            ReviewPendingProviderIdsTooltip = "Abarbeiten aller offenen TVDB-/IMDb-Pflichtprüfungen.",
             SelectReportCommand = NoOpCommand,
             SelectAllCommand = NoOpCommand,
             DeselectAllCommand = NoOpCommand,
