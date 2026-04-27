@@ -349,6 +349,7 @@
                                                    TextWrapping="Wrap"
                                                    Text="{Binding SelectedEpisodeItem.PrimaryActionablePlanNote, Mode=OneWay}" />
                                         <Button Margin="0,8,0,0"
+                                                MinWidth="132"
                                                 HorizontalAlignment="Left"
                                                 Padding="10,4"
                                                 Command="{Binding ApproveSelectedPlanReviewCommand}"

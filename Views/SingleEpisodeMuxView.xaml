@@ -200,21 +200,26 @@
                                 </Style.Triggers>
                             </Style>
                         </Border.Style>
-                        <DockPanel LastChildFill="False">
-                            <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
                                 <TextBlock FontWeight="SemiBold"
                                            Text="Wichtiger Hinweis vor dem Muxen" />
                                 <TextBlock Margin="0,4,0,0"
                                            TextWrapping="Wrap"
                                            Text="{Binding PrimaryActionablePlanNote, Mode=OneWay}" />
                             </StackPanel>
-                            <Button DockPanel.Dock="Right"
+                            <Button Grid.Column="1"
+                                    MinWidth="132"
                                     Margin="12,0,0,0"
                                     Padding="10,6"
                                     VerticalAlignment="Center"
                                     Command="{Binding ApprovePlanReviewCommand}"
                                     Content="Hinweis geprüft" />
-                        </DockPanel>
+                        </Grid>
                     </Border>
 
                     <Border Grid.Row="3"
