@@ -1,0 +1,64 @@
+name: Update README Screenshots
+
+on:
+  schedule:
+    - cron: '15 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: readme-screenshots
+  cancel-in-progress: false
+
+jobs:
+  update-screenshots:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Generate README screenshots
+        shell: pwsh
+        run: .\scripts\generate-readme-screenshots.ps1
+
+      - name: Create screenshot update PR
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $changes = git status --porcelain -- docs/images/readme
+          if (-not $changes) {
+            Write-Host 'README-Screenshots sind bereits aktuell.'
+            return
+          }
+
+          $branch = 'automation/readme-screenshots'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -B $branch
+          git add docs/images/readme
+          git commit -m 'Update README screenshots'
+          git push origin "HEAD:$branch" --force
+
+          $existingPr = gh pr list --head $branch --base master --state open --json number --jq '.[0].number'
+          if ($existingPr) {
+            Write-Host "Bestehender Screenshot-PR #$existingPr wurde aktualisiert."
+            return
+          }
+
+          gh pr create `
+            --head $branch `
+            --base master `
+            --title 'Update README screenshots' `
+            --body 'Automatisch generierte Aktualisierung der README-Screenshots.'

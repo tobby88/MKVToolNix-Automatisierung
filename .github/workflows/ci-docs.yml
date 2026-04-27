@@ -56,15 +56,9 @@ jobs:
       - name: Run integration tests
         run: dotnet test .\MkvToolnixAutomatisierung.IntegrationTests\MkvToolnixAutomatisierung.IntegrationTests.csproj --configuration Release --no-restore
 
-      - name: Verify README screenshots
+      - name: Render README screenshots
         shell: pwsh
-        run: |
-          .\scripts\generate-readme-screenshots.ps1
-          $changes = git status --porcelain -- docs/images/readme
-          if ($changes) {
-            $changes
-            throw 'README-Screenshots sind nicht aktuell. Bitte .\scripts\generate-readme-screenshots.ps1 lokal ausführen und die geänderten PNGs committen.'
-          }
+        run: .\scripts\generate-readme-screenshots.ps1
 
       - name: Build docs
         run: dotnet tool run docfx .\docs\docfx.json --warningsAsErrors

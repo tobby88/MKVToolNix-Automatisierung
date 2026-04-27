@@ -308,6 +308,7 @@ README-Screenshots neu erzeugen:
 ```
 
 Die PNGs landen danach unter `.\docs\images\readme\`.
+Der CI-Workflow rendert die Screenshots zusätzlich als Smoke-Test, damit der Generator nicht unbemerkt bricht. Da Windows-Runner und lokaler Desktop PNGs leicht unterschiedlich rendern können, blockiert die normale CI aber nicht auf Bild-Diffs. Für gelegentliche automatische Aktualisierungen gibt es stattdessen `.github/workflows/readme-screenshots.yml`; dieser Workflow läuft wöchentlich oder manuell und öffnet bei geänderten Bildern einen PR.
 
 ### Releases
 
