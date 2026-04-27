@@ -33,9 +33,13 @@ public sealed class EmbyClientTests
     [Fact]
     public async Task FindItemByPathAsync_ParsesProviderIds()
     {
+        HttpRequestMessage? capturedRequest = null;
         using var httpClient = new HttpClient(new StubHttpMessageHandler
         {
-            Responder = _ => JsonResponse(
+            Responder = request =>
+            {
+                capturedRequest = request;
+                return JsonResponse(
                 """
                 {
                   "Items": [
@@ -51,7 +55,8 @@ public sealed class EmbyClientTests
                   ],
                   "TotalRecordCount": 1
                 }
-                """)
+                """);
+            }
         });
         using var client = new EmbyClient(httpClient);
 
@@ -61,6 +66,10 @@ public sealed class EmbyClientTests
         Assert.Equal("item-1", item!.Id);
         Assert.Equal("12345", item.GetProviderId("tvdb"));
         Assert.Equal("tt9876543", item.GetProviderId("IMDB"));
+        var request = capturedRequest!;
+        Assert.Equal("true", GetQueryParameter(request, "Recursive"));
+        Assert.Equal(@"Z:\Videos\Serien\Pilot.mkv", GetQueryParameter(request, "Path"));
+        Assert.Equal("Path,ProviderIds", GetQueryParameter(request, "Fields"));
     }
 
     [Fact]
@@ -199,6 +208,31 @@ public sealed class EmbyClientTests
     }
 
     [Fact]
+    public async Task TriggerItemFileScanAsync_PostsRecursiveDefaultRefreshRequest()
+    {
+        HttpRequestMessage? capturedRequest = null;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request =>
+            {
+                capturedRequest = request;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+        });
+        using var client = new EmbyClient(httpClient);
+
+        await client.TriggerItemFileScanAsync(CreateSettings(), "folder/1");
+
+        Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
+        Assert.Equal("/Items/folder%2F1/Refresh", capturedRequest.RequestUri!.AbsolutePath);
+        Assert.Equal("true", GetQueryParameter(capturedRequest, "Recursive"));
+        Assert.Equal("Default", GetQueryParameter(capturedRequest, "MetadataRefreshMode"));
+        Assert.Equal("Default", GetQueryParameter(capturedRequest, "ImageRefreshMode"));
+        Assert.Equal("false", GetQueryParameter(capturedRequest, "ReplaceAllMetadata"));
+        Assert.Equal("false", GetQueryParameter(capturedRequest, "ReplaceAllImages"));
+    }
+
+    [Fact]
     public async Task RefreshItemMetadataAsync_PostsFullRefreshRequest()
     {
         HttpRequestMessage? capturedRequest = null;
@@ -217,6 +251,26 @@ public sealed class EmbyClientTests
         Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
         Assert.Contains("/Items/item-1/Refresh?", capturedRequest.RequestUri!.ToString(), StringComparison.Ordinal);
         Assert.Contains("MetadataRefreshMode=FullRefresh", capturedRequest.RequestUri!.Query, StringComparison.Ordinal);
+        Assert.Equal("false", GetQueryParameter(capturedRequest, "Recursive"));
+        Assert.Equal("FullRefresh", GetQueryParameter(capturedRequest, "MetadataRefreshMode"));
+    }
+
+    [Fact]
+    public async Task GetSystemInfoAsync_ThrowsFriendlyError_WhenApiKeyIsRejected()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent("Access denied", Encoding.UTF8, "text/plain")
+            }
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSystemInfoAsync(CreateSettings()));
+
+        Assert.Contains("Emby lehnt den API-Key ab.", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Access denied", exception.Message, StringComparison.Ordinal);
     }
 
     private static AppEmbySettings CreateSettings()
@@ -234,6 +288,26 @@ public sealed class EmbyClientTests
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
+    }
+
+    private static string? GetQueryParameter(HttpRequestMessage request, string name)
+    {
+        Assert.NotNull(request.RequestUri);
+        var query = request.RequestUri!.Query.TrimStart('?');
+        foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separatorIndex = part.IndexOf('=', StringComparison.Ordinal);
+            var key = separatorIndex >= 0 ? part[..separatorIndex] : part;
+            if (!string.Equals(Uri.UnescapeDataString(key), name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = separatorIndex >= 0 ? part[(separatorIndex + 1)..] : string.Empty;
+            return Uri.UnescapeDataString(value);
+        }
+
+        return null;
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
