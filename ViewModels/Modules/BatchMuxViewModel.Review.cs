@@ -154,8 +154,11 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             EnumerateVideoFiles(item),
+            SetStatus,
+            ProgressValue,
             "Videoquellen geöffnet",
             "Videoquellen konnten nicht geöffnet werden");
         await Task.CompletedTask;
@@ -169,8 +172,11 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             [item.AudioDescriptionPath],
+            SetStatus,
+            ProgressValue,
             "AD-Quelle geöffnet",
             "AD-Quelle konnte nicht geöffnet werden");
     }
@@ -183,8 +189,11 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             item.SubtitlePaths,
+            SetStatus,
+            ProgressValue,
             "Untertitel geöffnet",
             "Untertitel konnten nicht geöffnet werden");
     }
@@ -197,8 +206,11 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             item.AttachmentPaths,
+            SetStatus,
+            ProgressValue,
             "Anhänge geöffnet",
             "Anhänge konnten nicht geöffnet werden");
     }
@@ -211,19 +223,13 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             [item.OutputPath],
+            SetStatus,
+            ProgressValue,
             "Zieldatei geöffnet",
             "Zieldatei konnte nicht geöffnet werden");
-    }
-
-    private void OpenInspectableFiles(
-        IEnumerable<string> filePaths,
-        string successStatusText,
-        string failedStatusText)
-    {
-        var opened = _dialogService.TryOpenFilesWithDefaultApp(filePaths);
-        SetStatus(opened ? successStatusText : failedStatusText, ProgressValue);
     }
 
     private bool HasSelectedVideoFiles()

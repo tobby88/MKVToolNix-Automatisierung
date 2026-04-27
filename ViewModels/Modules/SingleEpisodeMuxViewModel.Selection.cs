@@ -65,39 +65,57 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void OpenMainVideo()
     {
-        OpenInspectableFiles(
+        InspectableFileOpenHelper.Open(
+            _dialogService,
             new[] { MainVideoPath }.Concat(AdditionalVideoPaths),
+            SetStatus,
+            ProgressValue,
             "Videoquelle(n) geöffnet",
             "Videoquelle(n) konnten nicht geöffnet werden");
     }
 
     private void OpenAudioDescription()
     {
-        OpenInspectableFiles([AudioDescriptionPath], "AD-Quelle geöffnet", "AD-Quelle konnte nicht geöffnet werden");
+        InspectableFileOpenHelper.Open(
+            _dialogService,
+            [AudioDescriptionPath],
+            SetStatus,
+            ProgressValue,
+            "AD-Quelle geöffnet",
+            "AD-Quelle konnte nicht geöffnet werden");
     }
 
     private void OpenSubtitles()
     {
-        OpenInspectableFiles(SubtitlePaths, "Untertitel geöffnet", "Untertitel konnten nicht geöffnet werden");
+        InspectableFileOpenHelper.Open(
+            _dialogService,
+            SubtitlePaths,
+            SetStatus,
+            ProgressValue,
+            "Untertitel geöffnet",
+            "Untertitel konnten nicht geöffnet werden");
     }
 
     private void OpenAttachments()
     {
-        OpenInspectableFiles(AttachmentPaths, "Anhänge geöffnet", "Anhänge konnten nicht geöffnet werden");
+        InspectableFileOpenHelper.Open(
+            _dialogService,
+            AttachmentPaths,
+            SetStatus,
+            ProgressValue,
+            "Anhänge geöffnet",
+            "Anhänge konnten nicht geöffnet werden");
     }
 
     private void OpenOutput()
     {
-        OpenInspectableFiles([OutputPath], "Zieldatei geöffnet", "Zieldatei konnte nicht geöffnet werden");
-    }
-
-    private void OpenInspectableFiles(
-        IEnumerable<string> filePaths,
-        string successStatusText,
-        string failedStatusText)
-    {
-        var opened = _dialogService.TryOpenFilesWithDefaultApp(filePaths);
-        SetStatus(opened ? successStatusText : failedStatusText, ProgressValue);
+        InspectableFileOpenHelper.Open(
+            _dialogService,
+            [OutputPath],
+            SetStatus,
+            ProgressValue,
+            "Zieldatei geöffnet",
+            "Zieldatei konnte nicht geöffnet werden");
     }
 
     private string BuildSuggestedOutputPath()
