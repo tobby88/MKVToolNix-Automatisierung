@@ -155,7 +155,7 @@ Die `Archivpflege` ist der nachgelagerte Kontrollschritt für bereits vorhandene
 4. Im Detailbereich die konkreten Änderungen prüfen.
 5. Nur freigegebene Zeilen auswählen und `Ausgewählte Änderungen anwenden`.
 
-Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/Forced-/Original-/Accessibility-Flags sowie sichere Dateinamen-Normalisierungen inklusive gleichnamiger Emby-Begleitdateien. Fehlende AD- oder Untertitelspuren werden bewusst nicht als Problem gemeldet: das Archivpflege-Modul bewertet den vorhandenen Bestand und fordert keine Inhalte an, die nie gemuxt wurden. Doppelte AD-Spuren oder doppelte Untertitel-Slots werden dagegen als Remux-Hinweis markiert, weil diese Fälle nicht sauber per Header-Edit aufzulösen sind.
+Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/Forced-/Original-/Accessibility-Flags sowie sichere Dateinamen-Normalisierungen inklusive gleichnamiger Emby-Begleitdateien. Wenn eine gleichnamige `.nfo` eine TVDB-Episoden-ID enthält und für die Serie bereits ein TVDB-Mapping gespeichert ist, wird der TVDB-Titel als Sollwert genutzt; sonst bleibt der lokale Dateiname der Fallback. Fehlende AD- oder Untertitelspuren werden bewusst nicht als Problem gemeldet: das Archivpflege-Modul bewertet den vorhandenen Bestand und fordert keine Inhalte an, die nie gemuxt wurden. Doppelte AD-Spuren oder doppelte Untertitel-Slots werden dagegen als Remux-Hinweis markiert, weil diese Fälle nicht sauber per Header-Edit aufzulösen sind.
 
 ## Typischer Workflow: Einsortieren
 

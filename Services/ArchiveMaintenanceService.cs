@@ -1,5 +1,8 @@
 using System.Text.RegularExpressions;
+using System.Net.Http;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
+using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -17,6 +20,8 @@ internal sealed class ArchiveMaintenanceService
     private readonly MkvMergeProbeService _probeService;
     private readonly IMkvToolNixLocator _toolLocator;
     private readonly MuxExecutionService _executionService;
+    private readonly EpisodeMetadataLookupService? _metadataLookup;
+    private readonly EmbyNfoProviderIdService? _nfoProviderIds;
 
     /// <summary>
     /// Initialisiert die Archivpflege mit Probe-, Tool- und Prozessdiensten.
@@ -24,11 +29,15 @@ internal sealed class ArchiveMaintenanceService
     public ArchiveMaintenanceService(
         MkvMergeProbeService probeService,
         IMkvToolNixLocator toolLocator,
-        MuxExecutionService executionService)
+        MuxExecutionService executionService,
+        EpisodeMetadataLookupService? metadataLookup = null,
+        EmbyNfoProviderIdService? nfoProviderIds = null)
     {
         _probeService = probeService;
         _toolLocator = toolLocator;
         _executionService = executionService;
+        _metadataLookup = metadataLookup;
+        _nfoProviderIds = nfoProviderIds;
     }
 
     /// <summary>
@@ -143,7 +152,8 @@ internal sealed class ArchiveMaintenanceService
         try
         {
             var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, filePath, cancellationToken);
-            return AnalyzeContainer(filePath, container);
+            var expectedMetadata = await TryResolveExpectedMetadataFromNfoAsync(filePath, cancellationToken);
+            return AnalyzeContainer(filePath, container, expectedMetadata);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
@@ -163,16 +173,19 @@ internal sealed class ArchiveMaintenanceService
     /// Bewertet einen bereits gelesenen Container ohne Toolzugriff. Dieser Pfad hält die
     /// Fachregeln testbar und wird vom rekursiven Scan nach dem eigentlichen Probe-Aufruf genutzt.
     /// </summary>
-    internal static ArchiveMaintenanceItemAnalysis AnalyzeContainer(string filePath, ContainerMetadata container)
+    internal static ArchiveMaintenanceItemAnalysis AnalyzeContainer(
+        string filePath,
+        ContainerMetadata container,
+        ArchiveExpectedEpisodeMetadata? expectedMetadata = null)
     {
         var parsedName = TryParseEpisodeFileName(filePath);
-        var expectedTitle = parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath);
+        var expectedTitle = expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath);
         var normalization = ArchiveHeaderNormalizationService.BuildForArchiveFile(
             filePath,
             container,
             expectedTitle,
-            originalLanguage: null);
-        var renameOperation = BuildRenameOperation(filePath, parsedName);
+            expectedMetadata?.OriginalLanguage);
+        var renameOperation = BuildRenameOperation(filePath, parsedName, expectedMetadata);
         var issues = BuildRemuxIssues(container);
         var changeNotes = ArchiveHeaderNormalizationService
             .BuildHeaderChangeNotes(normalization.ContainerTitleEdit, normalization.TrackHeaderEdits)
@@ -190,6 +203,55 @@ internal sealed class ArchiveMaintenanceService
             issues,
             changeNotes,
             ErrorMessage: null);
+    }
+
+    private async Task<ArchiveExpectedEpisodeMetadata?> TryResolveExpectedMetadataFromNfoAsync(
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        if (_metadataLookup is null || _nfoProviderIds is null)
+        {
+            return null;
+        }
+
+        var parsedName = TryParseEpisodeFileName(filePath);
+        if (parsedName is null)
+        {
+            return null;
+        }
+
+        var nfoResult = _nfoProviderIds.ReadProviderIds(filePath);
+        if (!nfoResult.NfoExists
+            || !int.TryParse(nfoResult.ProviderIds.TvdbId, out var tvdbEpisodeId))
+        {
+            return null;
+        }
+
+        var mapping = _metadataLookup.FindSeriesMapping(parsedName.SeriesName);
+        if (mapping is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var episodes = await _metadataLookup.LoadEpisodesAsync(mapping.TvdbSeriesId, cancellationToken);
+            var episode = episodes.FirstOrDefault(candidate => candidate.Id == tvdbEpisodeId);
+            if (episode is null || string.IsNullOrWhiteSpace(episode.Name))
+            {
+                return null;
+            }
+
+            return new ArchiveExpectedEpisodeMetadata(
+                episode.Name.Trim(),
+                episode.SeasonNumber?.ToString("00") ?? parsedName.SeasonNumber,
+                episode.EpisodeNumber?.ToString("00") ?? parsedName.EpisodeNumber,
+                mapping.OriginalLanguage);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or HttpRequestException)
+        {
+            return null;
+        }
     }
 
     private static ArchiveEpisodeFileNameParts? TryParseEpisodeFileName(string filePath)
@@ -210,7 +272,8 @@ internal sealed class ArchiveMaintenanceService
 
     private static ArchiveRenameOperation? BuildRenameOperation(
         string filePath,
-        ArchiveEpisodeFileNameParts? parsedName)
+        ArchiveEpisodeFileNameParts? parsedName,
+        ArchiveExpectedEpisodeMetadata? expectedMetadata)
     {
         if (parsedName is null)
         {
@@ -219,9 +282,9 @@ internal sealed class ArchiveMaintenanceService
 
         var expectedFileName = EpisodeFileNameHelper.BuildEpisodeFileName(
             parsedName.SeriesName,
-            parsedName.SeasonNumber,
-            parsedName.EpisodeNumber,
-            parsedName.Title);
+            expectedMetadata?.SeasonNumber ?? parsedName.SeasonNumber,
+            expectedMetadata?.EpisodeNumber ?? parsedName.EpisodeNumber,
+            expectedMetadata?.Title ?? parsedName.Title);
         var targetPath = Path.Combine(
             Path.GetDirectoryName(filePath) ?? string.Empty,
             expectedFileName);
@@ -386,3 +449,9 @@ internal sealed record ArchiveEpisodeFileNameParts(
     string SeasonNumber,
     string EpisodeNumber,
     string Title);
+
+internal sealed record ArchiveExpectedEpisodeMetadata(
+    string Title,
+    string SeasonNumber,
+    string EpisodeNumber,
+    string? OriginalLanguage);
