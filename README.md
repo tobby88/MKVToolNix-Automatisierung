@@ -31,8 +31,8 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `Download`: zum Starten der installierten oder portablen MediathekView-Variante als erstem Workflow-Schritt
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
 - `Muxen`: gemeinsamer Arbeitsbereich für Einzel- und Batch-Mux mit derselben Erkennungs-, Planungs- und Archivvergleichslogik
-- `Archivpflege`: für bestehende Archiv-MKVs, deren Header oder Dateinamen nachträglich vereinheitlicht werden sollen
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
+- `Archivpflege`: für bestehende Archiv-MKVs, deren Header oder Dateinamen nachträglich vereinheitlicht werden sollen
 
 ## Screenshots
 
@@ -91,7 +91,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional IMDb-Abgleichmodus für den Emby-Dialog
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
-4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, optional `Archivpflege`, danach `Emby-Abgleich`.
+4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich` und optional `Archivpflege`.
 
 ## Typischer Workflow: Download
 

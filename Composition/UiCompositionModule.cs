@@ -110,13 +110,13 @@ internal static class UiCompositionModule
                     "Erkennen, Archiv vergleichen und MKV-Dateien bauen",
                     provider.GetRequiredService<MuxModuleViewModel>()),
                 new ModuleNavigationItem(
-                    "Archivpflege",
-                    "Bestehende MKV-Dateien prüfen und Header korrigieren",
-                    provider.GetRequiredService<ArchiveMaintenanceViewModel>()),
-                new ModuleNavigationItem(
                     "Emby-Abgleich",
                     "Neue MKV-Dateien scannen und NFO-IDs abgleichen",
-                    provider.GetRequiredService<EmbySyncViewModel>())
+                    provider.GetRequiredService<EmbySyncViewModel>()),
+                new ModuleNavigationItem(
+                    "Archivpflege",
+                    "Bestehende MKV-Dateien prüfen und Header korrigieren",
+                    provider.GetRequiredService<ArchiveMaintenanceViewModel>())
             ],
             provider.GetRequiredService<MainWindowModuleServices>()));
     }
