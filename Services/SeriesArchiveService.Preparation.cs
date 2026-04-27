@@ -392,10 +392,13 @@ public sealed partial class SeriesArchiveService
         var requestedTextDuration = CompanionTextMetadataReader
             .ReadForMediaFile(request.AudioDescriptionPath)
             .Duration;
+        var hasRequestedContainerDuration = requestedAudioDescription.Duration is not null;
+        var requestedComparisonDuration = requestedAudioDescription.Duration ?? requestedTextDuration;
         return existingAudioDescriptions.Any(existingAudioDescription =>
             DoesExistingAudioDescriptionCoverRequest(
                 requestedAudioDescription,
-                requestedTextDuration,
+                requestedComparisonDuration,
+                hasRequestedContainerDuration,
                 existingAudioDescription))
             ? request with { AudioDescriptionPath = null }
             : request;
@@ -413,7 +416,8 @@ public sealed partial class SeriesArchiveService
 
     private static bool DoesExistingAudioDescriptionCoverRequest(
         ContainerTrackMetadata requestedAudioDescription,
-        TimeSpan? requestedTextDuration,
+        TimeSpan? requestedComparisonDuration,
+        bool hasRequestedContainerDuration,
         ContainerTrackMetadata existingAudioDescription)
     {
         return string.Equals(requestedAudioDescription.CodecLabel, existingAudioDescription.CodecLabel, StringComparison.OrdinalIgnoreCase)
@@ -422,11 +426,15 @@ public sealed partial class SeriesArchiveService
                 MediaLanguageHelper.NormalizeMuxLanguageCode(existingAudioDescription.Language),
                 StringComparison.OrdinalIgnoreCase)
             && AreAudioDescriptionDurationsCompatible(
-                requestedAudioDescription.Duration ?? requestedTextDuration,
-                existingAudioDescription.Duration);
+                requestedComparisonDuration,
+                existingAudioDescription.Duration,
+                hasRequestedContainerDuration);
     }
 
-    private static bool AreAudioDescriptionDurationsCompatible(TimeSpan? requestedDuration, TimeSpan? existingDuration)
+    private static bool AreAudioDescriptionDurationsCompatible(
+        TimeSpan? requestedDuration,
+        TimeSpan? existingDuration,
+        bool hasRequestedContainerDuration)
     {
         if (requestedDuration is null || existingDuration is null)
         {
@@ -435,7 +443,12 @@ public sealed partial class SeriesArchiveService
 
         var differenceSeconds = Math.Abs((requestedDuration.Value - existingDuration.Value).TotalSeconds);
         var referenceSeconds = Math.Max(requestedDuration.Value.TotalSeconds, existingDuration.Value.TotalSeconds);
-        var toleranceSeconds = Math.Max(10d, Math.Round(referenceSeconds * 0.01d));
+        // mkvmerge liefert bei MP4-AD-Quellen nicht immer eine Trackdauer. Dann bleibt nur die
+        // Mediathek-TXT-Dauer, die haeufig auf volle Minuten gerundet ist. Diese Fallback-Werte
+        // brauchen mehr Toleranz als echte Containerdauern, duerfen aber keine minutenlangen
+        // Ersatzfaelle verdecken.
+        var minimumToleranceSeconds = hasRequestedContainerDuration ? 10d : 30d;
+        var toleranceSeconds = Math.Max(minimumToleranceSeconds, Math.Round(referenceSeconds * 0.01d));
         return differenceSeconds <= toleranceSeconds;
     }
 

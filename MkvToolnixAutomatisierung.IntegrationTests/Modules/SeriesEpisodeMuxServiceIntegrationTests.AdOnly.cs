@@ -397,6 +397,54 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WithRoundedTextDuration_RetainsExistingAd()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-rounded-text-duration");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-rounded-text-duration");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder-Rififi (1) - Hörfassung-1056764341.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder-Rififi (1) - Hörfassung-1056764341.txt",
+            "Sender: ARD\r\nThema: Neues aus Büttenwarder\r\nTitel: Rififi (1) - Hörfassung\r\nDauer: 00:27:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season 2014",
+            "Neues aus Büttenwarder - S2014E05 - Rififi (1).mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Rififi (1)",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", language: "de", isDefaultTrack: true),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de", tagDuration: "00:26:34.965000000", isDefaultTrack: true),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, language: "de", tagDuration: "00:26:34.965000000"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: audioDescriptionPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Rififi (1)",
+            HasPrimaryVideoSource: false));
+
+        Assert.True(plan.SkipMux);
+        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsExisting);
+        Assert.Contains("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_WithBetterFreshVideoAndMatchingArchiveAd_RetainsArchiveAd()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-fresh-video-retains-existing-ad");
