@@ -232,6 +232,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             OnPropertyChanged(nameof(ExecutionStatusBadgeBackground));
             OnPropertyChanged(nameof(ExecutionStatusBadgeBorderBrush));
             OnPropertyChanged(nameof(ExecutionStatusTooltip));
+            OnPropertyChanged(nameof(HasSingleEpisodeStatusBand));
         }
     }
 
@@ -242,6 +243,11 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public string ExecutionStatusBadgeBorderBrush => EpisodeUiStyleBuilder.BuildSingleExecutionStatusBadgeBorderBrush(ExecutionStatusKind);
 
     public string ExecutionStatusTooltip => EpisodeEditTextBuilder.BuildSingleExecutionStatusTooltip(ExecutionStatusKind, StatusText);
+
+    public bool HasSingleEpisodeStatusBand => HasPlanSummary
+        || ExecutionStatusKind != SingleEpisodeExecutionStatusKind.Ready
+        || !string.IsNullOrWhiteSpace(MainVideoPath)
+        || !string.IsNullOrWhiteSpace(OutputPath);
 
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
 
@@ -396,6 +402,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             case nameof(MainVideoPath):
                 base.OnPropertyChanged(nameof(AudioDescriptionButtonText));
                 OpenMainVideoCommand.RaiseCanExecuteChanged();
+                base.OnPropertyChanged(nameof(HasSingleEpisodeStatusBand));
                 break;
             case nameof(AudioDescriptionPath):
                 OpenAudioDescriptionCommand.RaiseCanExecuteChanged();
@@ -411,6 +418,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             case nameof(OutputPath):
             case nameof(ArchiveState):
                 OpenOutputCommand.RaiseCanExecuteChanged();
+                base.OnPropertyChanged(nameof(HasSingleEpisodeStatusBand));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeState));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeText));
                 base.OnPropertyChanged(nameof(OutputTargetBadgeBackground));
@@ -447,6 +455,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
                 break;
             case nameof(PlanSummaryText):
                 base.OnPropertyChanged(nameof(HasPlanSummary));
+                base.OnPropertyChanged(nameof(HasSingleEpisodeStatusBand));
                 break;
             case nameof(HasPendingPlanReview):
             case nameof(IsPlanReviewApproved):

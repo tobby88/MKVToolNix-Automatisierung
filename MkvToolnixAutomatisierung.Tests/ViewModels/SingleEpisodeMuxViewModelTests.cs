@@ -363,6 +363,18 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.Equal("Ziel aktuell", viewModel.ExecutionStatusBadgeText);
         Assert.Equal("#EEF6E8", viewModel.ExecutionStatusBadgeBackground);
         Assert.Equal("Die Zieldatei ist bereits vollständig.", viewModel.OutputTargetStatusText);
+        Assert.True(viewModel.HasSingleEpisodeStatusBand);
+    }
+
+    [Fact]
+    public void SingleExecutionStatusBadge_ExplainsOpenComparisonWithoutRunningState()
+    {
+        Assert.Equal(
+            "Vergleich offen",
+            EpisodeEditTextBuilder.BuildSingleExecutionStatusText(SingleEpisodeExecutionStatusKind.ComparisonPending));
+        Assert.Equal(
+            "#E8F3FF",
+            EpisodeUiStyleBuilder.BuildSingleExecutionStatusBadgeBackground(SingleEpisodeExecutionStatusKind.ComparisonPending));
     }
 
     [Fact]
@@ -408,6 +420,7 @@ public sealed class SingleEpisodeMuxViewModelTests
         Assert.Equal(100, viewModel.ProgressValue);
         Assert.Equal(SingleEpisodeExecutionStatusKind.Success, viewModel.ExecutionStatusKind);
         Assert.Equal("Erfolgreich", viewModel.ExecutionStatusBadgeText);
+        Assert.True(viewModel.HasSingleEpisodeStatusBand);
     }
 
     [Fact]

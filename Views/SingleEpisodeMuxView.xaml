@@ -138,7 +138,7 @@
                             <Style TargetType="Border">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                    <DataTrigger Binding="{Binding HasSingleEpisodeStatusBand}" Value="True">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -150,10 +150,30 @@
                                 <Border Margin="0,0,8,6"
                                         Padding="8,3"
                                         CornerRadius="10"
+                                        Background="{Binding ExecutionStatusBadgeBackground, Mode=OneWay}"
+                                        BorderBrush="{Binding ExecutionStatusBadgeBorderBrush, Mode=OneWay}"
+                                        ToolTip="{Binding ExecutionStatusTooltip, Mode=OneWay}"
+                                        BorderThickness="1">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding ExecutionStatusBadgeText, Mode=OneWay}" />
+                                </Border>
+
+                                <Border Margin="0,0,8,6"
+                                        Padding="8,3"
+                                        CornerRadius="10"
                                         Background="{Binding OutputTargetBadgeBackground, Mode=OneWay}"
                                         BorderBrush="{Binding OutputTargetBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding OutputTargetBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding OutputTargetBadgeText, Mode=OneWay}" />
                                 </Border>
 
@@ -164,6 +184,16 @@
                                         BorderBrush="{Binding ManualCheckBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding ManualCheckBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding ManualCheckBadgeText, Mode=OneWay}" />
                                 </Border>
 
@@ -174,10 +204,31 @@
                                         BorderBrush="{Binding MetadataBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding MetadataBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding MetadataBadgeText, Mode=OneWay}" />
                                 </Border>
                             </WrapPanel>
-                            <views:EpisodeUsageSummaryView DataContext="{Binding UsageSummary, Mode=OneWay}" />
+                            <views:EpisodeUsageSummaryView DataContext="{Binding UsageSummary, Mode=OneWay}">
+                                <views:EpisodeUsageSummaryView.Style>
+                                    <Style TargetType="{x:Type views:EpisodeUsageSummaryView}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </views:EpisodeUsageSummaryView.Style>
+                            </views:EpisodeUsageSummaryView>
                         </StackPanel>
                     </Border>
 
@@ -516,24 +567,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
-                    <Border DockPanel.Dock="Left"
-                            MinWidth="96"
-                            Margin="0,0,10,0"
-                            Padding="8,3"
-                            CornerRadius="10"
-                            Background="{Binding ExecutionStatusBadgeBackground, Mode=OneWay}"
-                            BorderBrush="{Binding ExecutionStatusBadgeBorderBrush, Mode=OneWay}"
-                            BorderThickness="1"
-                            ToolTip="{Binding ExecutionStatusTooltip, Mode=OneWay}">
-                        <TextBlock HorizontalAlignment="Center"
-                                   FontWeight="SemiBold"
-                                   Text="{Binding ExecutionStatusBadgeText, Mode=OneWay}" />
-                    </Border>
-                    <TextBlock VerticalAlignment="Center"
-                               TextWrapping="Wrap"
-                               Text="{Binding StatusText, Mode=OneWay}" />
-                </DockPanel>
+                <TextBlock Grid.Row="0" Margin="0,0,0,6" TextWrapping="Wrap" Text="{Binding StatusText, Mode=OneWay}" />
                 <ProgressBar Grid.Row="1" Margin="0,0,0,8" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
                 <Expander Grid.Row="2"

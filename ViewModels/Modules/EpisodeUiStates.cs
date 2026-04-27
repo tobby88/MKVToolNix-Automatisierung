@@ -78,9 +78,10 @@ internal enum SingleEpisodeExecutionStatusKind
     Warning = 1,
     Running = 2,
     Cancelled = 3,
-    Ready = 4,
-    UpToDate = 5,
-    Success = 6
+    ComparisonPending = 4,
+    Ready = 5,
+    UpToDate = 6,
+    Success = 7
 }
 
 /// <summary>

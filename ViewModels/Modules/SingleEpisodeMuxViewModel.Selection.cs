@@ -186,6 +186,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             var planSummaryReady = await RefreshPlanSummaryImmediatelyAsync(CancellationToken.None);
             if (!planSummaryReady)
             {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.ComparisonPending);
                 SchedulePlanSummaryRefresh();
             }
 

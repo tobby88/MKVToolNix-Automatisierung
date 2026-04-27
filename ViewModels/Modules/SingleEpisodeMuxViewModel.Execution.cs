@@ -593,6 +593,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
         {
             ClearPlanPresentation();
             PlanRefreshProblemText = string.Empty;
+            if (ExecutionStatusKind is SingleEpisodeExecutionStatusKind.Running or SingleEpisodeExecutionStatusKind.ComparisonPending)
+            {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Ready);
+            }
+
             return;
         }
 
@@ -619,6 +624,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
             ClearPlanPresentation();
             PlanRefreshProblemText = "Plan konnte gerade nicht aktualisiert werden: " + ex.Message;
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.ComparisonPending);
         }
     }
 

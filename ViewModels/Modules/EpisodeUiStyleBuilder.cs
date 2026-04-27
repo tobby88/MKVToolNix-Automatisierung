@@ -118,6 +118,7 @@ internal static class EpisodeUiStyleBuilder
             SingleEpisodeExecutionStatusKind.Error => "#FCE8E8",
             SingleEpisodeExecutionStatusKind.Warning or SingleEpisodeExecutionStatusKind.Running => "#FFF4D6",
             SingleEpisodeExecutionStatusKind.Cancelled => "#F3F6FA",
+            SingleEpisodeExecutionStatusKind.ComparisonPending => "#E8F3FF",
             SingleEpisodeExecutionStatusKind.Ready or SingleEpisodeExecutionStatusKind.UpToDate or SingleEpisodeExecutionStatusKind.Success => "#EEF6E8",
             _ => "#F3F6FA"
         };
@@ -130,6 +131,7 @@ internal static class EpisodeUiStyleBuilder
             SingleEpisodeExecutionStatusKind.Error => "#D28A8A",
             SingleEpisodeExecutionStatusKind.Warning or SingleEpisodeExecutionStatusKind.Running => "#D8B46A",
             SingleEpisodeExecutionStatusKind.Cancelled => "#C7D1DC",
+            SingleEpisodeExecutionStatusKind.ComparisonPending => "#8CB4D8",
             SingleEpisodeExecutionStatusKind.Ready or SingleEpisodeExecutionStatusKind.UpToDate or SingleEpisodeExecutionStatusKind.Success => "#88B06E",
             _ => "#C7D1DC"
         };
