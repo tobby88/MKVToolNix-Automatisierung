@@ -213,13 +213,13 @@ public sealed class SingleEpisodeMuxViewModelTests
         var viewModel = CreateViewModel();
         SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.HasPrimaryVideoSource), true);
         SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\alt.mp4");
-        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), @"C:\Temp\alt.mkv");
+        viewModel.SetOutputPath(@"C:\Temp\alt.mkv");
         viewModel.Title = "Alt";
 
         var snapshot = EpisodePlanInputSnapshot.Create(viewModel);
 
         SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\neu.mp4");
-        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.OutputPath), @"C:\Temp\neu.mkv");
+        viewModel.SetOutputPath(@"C:\Temp\neu.mkv");
         viewModel.Title = "Neu";
 
         Assert.Equal(@"C:\Temp\alt.mp4", snapshot.MainVideoPath);

@@ -363,6 +363,23 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             return;
         }
 
+        if (e.OldItems is not null)
+        {
+            foreach (BatchEpisodeItemViewModel item in e.OldItems)
+            {
+                item.PropertyChanged -= EpisodeItem_PropertyChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (BatchEpisodeItemViewModel item in e.NewItems)
+            {
+                item.PropertyChanged -= EpisodeItem_PropertyChanged;
+                item.PropertyChanged += EpisodeItem_PropertyChanged;
+            }
+        }
+
         CommandsChanged?.Invoke();
         OverviewChanged?.Invoke();
     }
