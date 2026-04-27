@@ -28,6 +28,9 @@
         <DataTemplate DataType="{x:Type moduleVm:DownloadSortViewModel}">
             <views:DownloadSortView />
         </DataTemplate>
+        <DataTemplate DataType="{x:Type moduleVm:ArchiveMaintenanceViewModel}">
+            <views:ArchiveMaintenanceView />
+        </DataTemplate>
         <DataTemplate DataType="{x:Type moduleVm:EmbySyncViewModel}">
             <views:EmbySyncView />
         </DataTemplate>
