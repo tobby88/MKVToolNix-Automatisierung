@@ -80,6 +80,25 @@ public sealed class BatchEpisodeCollectionControllerTests
     }
 
     [Fact]
+    public void DirectCollectionChanges_KeepSelectedItemPlanInputSubscriptionsConsistent()
+    {
+        using var controller = new BatchEpisodeCollectionController();
+        var item = BatchEpisodeItemViewModel.CreateErrorItem(@"C:\Temp\episode.mp4", "boom");
+        controller.Items.Add(item);
+        controller.SelectedItem = item;
+
+        var selectedItemPlanInputsChangedCount = 0;
+        controller.SelectedItemPlanInputsChanged += () => selectedItemPlanInputsChangedCount++;
+
+        item.SetOutputPath(@"C:\Temp\episode.mkv");
+        controller.Items.Clear();
+        item.SetOutputPath(@"C:\Temp\episode-neu.mkv");
+
+        Assert.Equal(1, selectedItemPlanInputsChangedCount);
+        Assert.Null(controller.SelectedItem);
+    }
+
+    [Fact]
     public void SeasonEpisodeSortMode_OrdersByNumericSeasonAndEpisode()
     {
         using var controller = new BatchEpisodeCollectionController();
