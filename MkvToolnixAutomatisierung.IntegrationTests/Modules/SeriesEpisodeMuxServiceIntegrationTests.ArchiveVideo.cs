@@ -523,6 +523,48 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_DoesNotClearDefaultFlagFromSecondRegularAudio()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-audio-defaults");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-audio-defaults");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Pilot",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", isDefaultTrack: true),
+            CreateAudioTrack(1, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch - AAC", isDefaultTrack: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.True(plan.SkipMux);
+        Assert.False(plan.HasTrackHeaderEdits);
+        Assert.Empty(plan.TrackHeaderEdits);
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_KeepingArchivePrimary_WhenSubtitleNameIndicatesHearingImpaired_SetsMissingFlagWithoutRenaming()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-name-hi");

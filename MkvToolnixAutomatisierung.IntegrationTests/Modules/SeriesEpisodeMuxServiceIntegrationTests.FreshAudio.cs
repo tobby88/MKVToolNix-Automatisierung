@@ -41,10 +41,13 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Equal(
             ["Deutsch - E-AC-3", "English - AAC"],
             plan.AudioSources.Select(source => source.TrackName).ToArray());
+        Assert.All(plan.AudioSources, source => Assert.True(source.IsDefaultTrack));
         Assert.Equal([1, 2], plan.PrimarySourceAudioTrackIds);
 
         var arguments = plan.BuildArguments();
         AssertContainsSequence(arguments, "--audio-tracks", "1,2");
+        AssertContainsSequence(arguments, "--default-track-flag", "1:yes");
+        AssertContainsSequence(arguments, "--default-track-flag", "2:yes");
         Assert.DoesNotContain("3:Deutsch (sehbehinderte) - AAC", arguments);
     }
 }

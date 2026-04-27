@@ -259,7 +259,10 @@ public sealed record VideoSourcePlan(
 /// <param name="FilePath">Quelldatei, aus der die Audiospur stammt.</param>
 /// <param name="TrackId">Track-ID innerhalb von <paramref name="FilePath"/>.</param>
 /// <param name="TrackName">Finaler Trackname für GUI und mkvmerge-Metadaten.</param>
-/// <param name="IsDefaultTrack">Kennzeichnet die Standard-Tonspur des finalen Containers.</param>
+/// <param name="IsDefaultTrack">
+/// Setzt das Matroska-Default-Flag. Bei normalen Audiospuren bedeutet das "für automatische
+/// Auswahl geeignet"; mehrere normale Spuren dürfen deshalb gleichzeitig <see langword="true"/> sein.
+/// </param>
 /// <param name="LanguageCode">Projektweit normalisierter Sprachcode der Spur.</param>
 public sealed record AudioSourcePlan(
     string FilePath,

@@ -260,20 +260,22 @@ public sealed partial class SeriesArchiveService
                 expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
         }
 
-        foreach (var entry in retainedNormalAudioTracks.Select((track, index) => new { Track = track, Index = index }))
+        // Matroska "Default" bedeutet bei Audio "für automatische Auswahl geeignet", nicht
+        // "einzige Standardspur". Spezialspuren wie AD werden separat bewusst ausgeschlossen.
+        foreach (var track in retainedNormalAudioTracks)
         {
             TryAppendTrackHeaderEdit(
                 operations,
                 selectorByTrackId,
-                entry.Track,
-                BuildExpectedAudioTrackName(entry.Track),
-                $"Audio {entry.Track.TrackId}",
-                expectedLanguageCode: entry.Track.Language,
-                expectedDefaultFlag: entry.Index == 0,
+                track,
+                BuildExpectedAudioTrackName(track),
+                $"Audio {track.TrackId}",
+                expectedLanguageCode: track.Language,
+                expectedDefaultFlag: true,
                 expectedVisualImpairedFlag: false,
                 expectedHearingImpairedFlag: null,
                 expectedForcedFlag: null,
-                expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
+                expectedOriginalFlag: BuildExpectedOriginalFlag(track.Language, originalLanguage));
         }
 
         foreach (var existingAudioDescription in existingAudioDescriptions)

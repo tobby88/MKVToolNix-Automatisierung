@@ -673,7 +673,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
 
         return audioSources
-            .Select((source, index) => source with { IsDefaultTrack = index == 0 })
+            .Select(source => source with { IsDefaultTrack = true })
             .ToList();
     }
 
