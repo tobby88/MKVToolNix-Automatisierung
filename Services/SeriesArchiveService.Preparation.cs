@@ -324,7 +324,7 @@ public sealed partial class SeriesArchiveService
                     entry.Track.Language)
                 with
                 {
-                    Accessibility = IsHearingImpairedSubtitleTrack(entry.Track)
+                    Accessibility = ArchiveHeaderNormalizationService.IsHearingImpairedSubtitleTrack(entry.Track)
                         ? SubtitleAccessibility.HearingImpaired
                         : SubtitleAccessibility.Standard,
                     IsForced = entry.Track.IsForcedTrack
@@ -480,25 +480,6 @@ public sealed partial class SeriesArchiveService
     private readonly record struct AudioDescriptionDurationProbeResult(
         TimeSpan? Duration,
         bool IsPrecise);
-
-    private static bool IsHearingImpairedSubtitleTrack(ContainerTrackMetadata track)
-    {
-        return track.IsHearingImpaired
-            || ContainsHearingImpairedSubtitleMarker(track.TrackName);
-    }
-
-    private static bool ContainsHearingImpairedSubtitleMarker(string? trackName)
-    {
-        if (string.IsNullOrWhiteSpace(trackName))
-        {
-            return false;
-        }
-
-        return trackName.Contains("hörgesch", StringComparison.OrdinalIgnoreCase)
-            || trackName.Contains("hoergesch", StringComparison.OrdinalIgnoreCase)
-            || trackName.Contains("hearing impaired", StringComparison.OrdinalIgnoreCase)
-            || trackName.Contains("sdh", StringComparison.OrdinalIgnoreCase);
-    }
 
     private ArchiveIntegrationDecision BuildDecisionUsingExistingPrimary(
         string outputPath,
