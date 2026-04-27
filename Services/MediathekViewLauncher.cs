@@ -144,6 +144,7 @@ internal sealed record MediathekViewLaunchResult(
 internal static class MediathekViewPathResolver
 {
     private const string MediathekViewExecutableName = "MediathekView.exe";
+    private const string MediathekViewPortableExecutableName = "MediathekView_Portable.exe";
 
     public static ResolvedToolPath? TryResolve(AppToolPathSettings settings)
     {
@@ -189,13 +190,15 @@ internal static class MediathekViewPathResolver
             return null;
         }
 
-        var directCandidate = Path.Combine(configuredPath, MediathekViewExecutableName);
-        if (File.Exists(directCandidate))
+        foreach (var directCandidate in EnumerateExecutableCandidates(configuredPath, preferPortable: true))
         {
-            return directCandidate;
+            if (File.Exists(directCandidate))
+            {
+                return directCandidate;
+            }
         }
 
-        return TryFindExecutableUnderRoot(configuredPath);
+        return TryFindExecutableUnderRoot(configuredPath, preferPortable: true);
     }
 
     private static string? TryFindInPath()
@@ -210,10 +213,12 @@ internal static class MediathekViewPathResolver
         {
             try
             {
-                var candidate = Path.Combine(rawPath, MediathekViewExecutableName);
-                if (File.Exists(candidate))
+                foreach (var candidate in EnumerateExecutableCandidates(rawPath, preferPortable: false))
                 {
-                    return candidate;
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
                 }
             }
             catch
@@ -229,7 +234,7 @@ internal static class MediathekViewPathResolver
     {
         foreach (var root in EnumerateKnownInstallRoots())
         {
-            if (TryFindExecutableUnderRoot(root) is { } candidate)
+            if (TryFindExecutableUnderRoot(root, preferPortable: false) is { } candidate)
             {
                 return candidate;
             }
@@ -268,7 +273,7 @@ internal static class MediathekViewPathResolver
                          .Select(path => new DirectoryInfo(path))
                          .OrderByDescending(directory => directory.LastWriteTimeUtc))
             {
-                if (TryFindExecutableUnderRoot(directory.FullName) is { } candidate)
+                if (TryFindExecutableUnderRoot(directory.FullName, preferPortable: true) is { } candidate)
                 {
                     return candidate;
                 }
@@ -282,7 +287,7 @@ internal static class MediathekViewPathResolver
         return null;
     }
 
-    private static string? TryFindExecutableUnderRoot(string rootDirectory)
+    private static string? TryFindExecutableUnderRoot(string rootDirectory, bool preferPortable)
     {
         if (!Directory.Exists(rootDirectory))
         {
@@ -291,22 +296,55 @@ internal static class MediathekViewPathResolver
 
         try
         {
-            var directCandidate = Path.Combine(rootDirectory, MediathekViewExecutableName);
-            if (File.Exists(directCandidate))
+            foreach (var directCandidate in EnumerateExecutableCandidates(rootDirectory, preferPortable))
             {
-                return directCandidate;
+                if (File.Exists(directCandidate))
+                {
+                    return directCandidate;
+                }
             }
 
-            return Directory
-                .EnumerateFiles(rootDirectory, MediathekViewExecutableName, SearchOption.AllDirectories)
-                .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))
-                .ThenBy(path => path.Length)
-                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
+            foreach (var executableName in EnumerateExecutableNames(preferPortable))
+            {
+                var candidate = Directory
+                    .EnumerateFiles(rootDirectory, executableName, SearchOption.AllDirectories)
+                    .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))
+                    .ThenBy(path => path.Length)
+                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (candidate is not null)
+                {
+                    return candidate;
+                }
+            }
         }
         catch
         {
             return null;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateExecutableCandidates(string directory, bool preferPortable)
+    {
+        foreach (var executableName in EnumerateExecutableNames(preferPortable))
+        {
+            yield return Path.Combine(directory, executableName);
+        }
+    }
+
+    private static IEnumerable<string> EnumerateExecutableNames(bool preferPortable)
+    {
+        if (preferPortable)
+        {
+            yield return MediathekViewPortableExecutableName;
+            yield return MediathekViewExecutableName;
+        }
+        else
+        {
+            yield return MediathekViewExecutableName;
+            yield return MediathekViewPortableExecutableName;
         }
     }
 }

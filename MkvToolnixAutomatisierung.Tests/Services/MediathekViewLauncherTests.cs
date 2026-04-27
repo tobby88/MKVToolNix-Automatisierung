@@ -19,6 +19,7 @@ public sealed class MediathekViewLauncherTests : IDisposable
     public void PathResolver_UsesConfiguredExecutable()
     {
         var executablePath = CreateFile(Path.Combine("portable", "MediathekView.exe"));
+        CreateFile(Path.Combine("portable", "MediathekView_Portable.exe"));
 
         var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings
         {
@@ -31,13 +32,32 @@ public sealed class MediathekViewLauncherTests : IDisposable
     }
 
     [Fact]
+    public void PathResolver_PrefersPortableExecutableWhenConfiguredPathIsDirectory()
+    {
+        var portableDirectory = CreateDirectory("portable");
+        CreateFile(Path.Combine("portable", "MediathekView.exe"));
+        var portableExecutablePath = CreateFile(Path.Combine("portable", "MediathekView_Portable.exe"));
+
+        var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings
+        {
+            MediathekViewPath = portableDirectory
+        });
+
+        Assert.NotNull(resolved);
+        Assert.Equal(portableExecutablePath, resolved.Path);
+        Assert.Equal(ToolPathResolutionSource.ManualOverride, resolved.Source);
+    }
+
+    [Fact]
     public void PathResolver_UsesPortableDownloadFallback()
     {
         var userProfileDirectory = CreateDirectory("profile");
         var portableDirectory = Path.Combine(userProfileDirectory, "Downloads", "MediathekView-latest-win");
         Directory.CreateDirectory(portableDirectory);
-        var executablePath = Path.Combine(portableDirectory, "MediathekView.exe");
-        File.WriteAllText(executablePath, "tool");
+        var standardExecutablePath = Path.Combine(portableDirectory, "MediathekView.exe");
+        File.WriteAllText(standardExecutablePath, "tool");
+        var portableExecutablePath = Path.Combine(portableDirectory, "MediathekView_Portable.exe");
+        File.WriteAllText(portableExecutablePath, "tool");
         var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
         var originalHome = Environment.GetEnvironmentVariable("HOME");
 
@@ -49,7 +69,7 @@ public sealed class MediathekViewLauncherTests : IDisposable
             var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings());
 
             Assert.NotNull(resolved);
-            Assert.Equal(executablePath, resolved.Path);
+            Assert.Equal(portableExecutablePath, resolved.Path);
             Assert.Equal(ToolPathResolutionSource.DownloadsFallback, resolved.Source);
         }
         finally
