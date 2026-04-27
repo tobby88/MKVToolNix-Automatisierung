@@ -309,3 +309,32 @@ internal sealed class DemoEmbyItem
     public string StatusTooltip { get; init; } = string.Empty;
     public string Note { get; init; } = string.Empty;
 }
+
+internal sealed class DemoArchiveMaintenanceViewModel
+{
+    public bool IsInteractive { get; init; }
+    public string RootDirectory { get; init; } = string.Empty;
+    public ObservableCollection<DemoArchiveMaintenanceItem> Items { get; init; } = [];
+    public DemoArchiveMaintenanceItem? SelectedItem { get; set; }
+    public string SelectedDetailText { get; init; } = string.Empty;
+    public string SummaryText { get; init; } = string.Empty;
+    public string LogText { get; init; } = string.Empty;
+    public string StatusText { get; init; } = string.Empty;
+    public int ProgressValue { get; init; }
+    public ICommand SelectRootDirectoryCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand ScanCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand SelectAllWritableCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand DeselectAllCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenSelectedFileCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand ApplySelectedCommand { get; init; } = new NoOpRelayCommand();
+}
+
+internal sealed class DemoArchiveMaintenanceItem
+{
+    public bool IsSelected { get; set; }
+    public string FileName { get; init; } = string.Empty;
+    public string DirectoryPath { get; init; } = string.Empty;
+    public string StatusText { get; init; } = string.Empty;
+    public string StatusTone { get; init; } = string.Empty;
+    public string ChangeSummary { get; init; } = string.Empty;
+}
