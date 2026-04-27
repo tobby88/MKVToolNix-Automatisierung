@@ -101,7 +101,7 @@ internal static class UiCompositionModule
                     provider.GetRequiredService<DownloadSortViewModel>()),
                 new ModuleNavigationItem(
                     "Muxen",
-                    "Einzel- und Batch-Mux in einem gemeinsamen Schritt",
+                    "Erkennen, Archiv vergleichen und MKV-Dateien bauen",
                     provider.GetRequiredService<MuxModuleViewModel>()),
                 new ModuleNavigationItem(
                     "Emby-Abgleich",

@@ -30,7 +30,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 - `Download`: zum Starten der installierten oder portablen MediathekView-Variante als erstem Workflow-Schritt
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
-- `Muxen`: fasst `Einzel-Mux` und `Batch-Mux` in Tabs zusammen
+- `Muxen`: gemeinsamer Arbeitsbereich für Einzel- und Batch-Mux mit derselben Erkennungs-, Planungs- und Archivvergleichslogik
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 
 ## Screenshots
@@ -83,6 +83,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
+   - optional IMDb-Abgleichmodus für den Emby-Dialog
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
 4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich`.
@@ -94,30 +95,50 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 3. Sendungen wie gewohnt in MediathekView herunterladen.
 4. Danach im Modul `Einsortieren` mit den erzeugten Download-Dateien weiterarbeiten.
 
-## Typischer Workflow: Muxen, Einzel-Mux-Tab
+## Typischer Workflow: Muxen
+
+Das Modul `Muxen` bündelt zwei Arbeitsweisen, die fachlich möglichst gleich laufen sollen:
+
+- `Einzel-Mux` ist für eine gezielt ausgewählte Episode gedacht, wenn man bewusst Datei für Datei prüfen oder nacharbeiten möchte.
+- `Batch-Mux` verarbeitet einen ganzen Quellordner, zeigt alle erkannten Episoden tabellarisch an und arbeitet danach die ausgewählten Einträge nacheinander ab.
+
+Beide Tabs verwenden dieselbe zentrale Mux-Planung. Das betrifft insbesondere lokale Dateierkennung, TVDB-Abgleich, Archivtreffer, Spurenauswahl, AD-/Untertitel-Logik, TXT-Anhänge, Header-Normalisierung und die Ausgabe der Emby-Metadatenreports. Unterschiede sollen nur dort bestehen, wo sie durch die Bedienung nötig sind: Einzel-Mux arbeitet direkt an einer Episode, Batch-Mux verwaltet mehrere Einträge mit Auswahl, Sortierung und Sammelaktionen.
+
+Die Vorschau zeigt nicht nur den `mkvmerge`-Aufruf, sondern fasst auch zusammen, was mit vorhandenen Archivspuren, neuen Quellen und direkten Header-Anpassungen passieren soll. Wenn eine bestehende Archiv-MKV bereits alle benötigten Inhalte enthält, kann die App statt eines kompletten Remux auch nur relevante Matroska-Headerdaten direkt aktualisieren.
+
+### Einzel-Mux-Tab
 
 1. `Hauptvideo wählen`.
 2. Automatische Erkennung für Quelle, Begleitdateien und Metadaten prüfen.
 3. Falls angezeigt, `Quelle prüfen / freigeben` und/oder `TVDB prüfen`.
-4. Bei Bedarf im Bereich `Korrekturen und Ausgabe` manuell nachbessern.
-5. `Vorschau erzeugen`, um den geplanten `mkvmerge`-Aufruf zu kontrollieren.
-6. `Muxen`, um die MKV tatsächlich zu erstellen.
+4. Bei Bedarf im Bereich `Korrekturen und Ausgabe` manuell nachbessern, etwa Sprache, Originalsprache, AD, Untertitel, Anhänge oder Ausgabepfad.
+5. Mit den `Öffnen`-Aktionen bei Bedarf Hauptvideo, AD, Untertitel, Anhänge oder vorhandene Archivdateien vorab in der Standardanwendung prüfen.
+6. `Vorschau erzeugen`, um den geplanten Mux- oder Header-Edit-Vorgang zu kontrollieren.
+7. `Muxen`, um die MKV zu erstellen oder die vorhandene MKV direkt zu aktualisieren.
 
-## Typischer Workflow: Muxen, Batch-Mux-Tab
+### Batch-Mux-Tab
 
 1. Quellordner wählen.
 2. Scan abwarten und gefundene Episoden prüfen.
-3. Bei Bedarf Einträge auswählen oder abwählen.
+3. Bei Bedarf Einträge auswählen, abwählen, sortieren oder im Detailbereich korrigieren.
 4. Offene Pflichtprüfungen mit `Pflichtchecks starten` oder einzeln im Detailbereich erledigen.
-5. `Batch starten`.
-6. Danach Protokoll, neue Bibliotheksdateien und den optionalen `done`-Ordner prüfen.
+5. Mit den `Öffnen`-Aktionen bei Bedarf alle zugehörigen Videos, AD-Dateien, Untertitel, Anhänge oder Archivdateien eines Eintrags prüfen.
+6. `Batch starten`.
+7. Danach Protokoll, neue Bibliotheksdateien und den optionalen `done`-Ordner prüfen.
 
-Nach jedem Batch-Lauf:
+Nach jedem Mux-Lauf:
 
-- bleibt das Batch-Protokoll in der GUI sichtbar
+- bleibt das Protokoll in der GUI sichtbar
 - wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
-- wird dort auch eine TXT-Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend schnell geprüft werden können
+- wird eine TXT-Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend schnell geprüft werden können
 - wird zusätzlich ein strukturierter JSON-Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` geschrieben, den das Tool für den Emby-Abgleich importieren kann
+- öffnet die App den Report mit neu erzeugten Dateien automatisch, wenn neue Ausgabedateien entstanden sind
+- räumt die App erfolgreich verarbeitete Quelldateien auf und entfernt im Einzel-Mux auch leere Quellordner
+
+Zusätzlich beim Batch-Lauf:
+
+- bleibt das Batch-Protokoll im Batch-Tab sichtbar
+- können fertig verarbeitete Quellen in einen `done`-Ordner verschoben werden
 
 ## Typischer Workflow: Einsortieren
 
@@ -130,14 +151,18 @@ Nach jedem Batch-Lauf:
 ## Typischer Workflow: Emby-Abgleich
 
 1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
-2. Den nach einem Batch- oder Einzel-Lauf erzeugten Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` laden.
+2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
 3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
-4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
-5. Fehlende oder falsche TVDB-IDs bei Bedarf je Zeile über den `TVDB`-Button korrigieren.
-6. Fehlende oder falsche IMDB-IDs bei Bedarf je Zeile über den `IMDb`-Button ergänzen oder korrigieren.
-7. `Änderungen in Emby schreiben`, um geänderte TVDB-/IMDB-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
+4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
+5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft; IMDb wird für jede NFO-fähige Episode bewusst bestätigt, korrigiert oder als nicht vorhanden markiert.
+6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist.
+7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
-Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs.
+Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs. Dateien in Emby-Asset-Ordnern wie `trailers` oder `backdrops` bekommen normalerweise keine Episoden-NFO; solche Einträge werden erkannt und beim Provider-ID-Sync übersprungen.
+
+Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
+
+Für IMDb nutzt der Dialog je nach Einstellung bevorzugt `imdbapi.dev`, ausschließlich `imdbapi.dev` oder ausschließlich die Browserhilfe. Im Automatikmodus fällt der Dialog nur dann auf die Browserhilfe zurück, wenn der freie API-Dienst insgesamt nicht erreichbar ist.
 
 ## Unterstützte Dateien
 
@@ -147,6 +172,7 @@ Im aktuellen Serien-Modul werden verwendet:
 - optionale Audiodeskription: `.mp4`
 - optionale Untertitel: `.srt`, `.ass`, `.vtt`
 - optionale TXT-Begleitdatei: `.txt`
+- vorhandene Archivdateien zum Vergleich und zur Wiederverwendung: `.mkv`
 
 `.ttml` wird nicht gemuxt, aber als Begleitdatei für Cleanup und Aufräumen berücksichtigt.
 
@@ -164,6 +190,14 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 - Innerhalb derselben Sprache steht `H.264` vor `H.265`.
 - Wenn zu einer Sprache sowohl `H.264` als auch `H.265` vorhanden sind, können beide erhalten bleiben. `H.265` ersetzt also nicht pauschal `H.264`.
 - Im Archivabgleich kann eine vorhandene Videospur desselben Slots durch eine neue ersetzt werden, wenn die neue fachlich besser ist, insbesondere bei höherer Auflösung.
+
+### Archivabgleich und Sonderfolgen
+
+- Wenn das geplante Ziel bereits im Archiv existiert, liest die App die vorhandene MKV ein und entscheidet, ob Inhalte wiederverwendet, ersetzt, ergänzt oder nur Headerdaten korrigiert werden müssen.
+- Vorhandene Archivspuren werden nicht blind verworfen. Besonders normale Audiospuren und bereits vorhandene AD-/Untertitelspuren werden weiterverwendet, wenn sie den fachlichen Slot bereits abdecken.
+- Bei nicht eindeutig TVDB-zuordenbaren Sonder- oder Bonusfolgen sucht die App zusätzlich in typischen Sonderordnern der Serie, etwa `Specials`, `Season 0`, `Trailers` und `Backdrops`.
+- Wenn dort eine passende Archivdatei gefunden wird, kann sie als Ziel und Metadatenquelle dienen. Das spart manuelle Nacharbeit bei Bonusmaterial ohne sauberen TVDB- oder IMDb-Eintrag.
+- Hinweise wie Mehrfachfolge, Archivtreffer oder ungewöhnliche Quellen müssen vor dem Muxen bewusst geprüft werden, wenn sie als Pflichtprüfung angezeigt werden.
 
 ### Audio und Audiodeskription
 
@@ -194,6 +228,13 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 - Ein eingebetteter TXT-Anhang wird nur dann automatisch entfernt, wenn seine Zuordnung zu einer ersetzten alten Videospur wirklich eindeutig ist.
 - Wenn die Zuordnung nicht sicher ist, bleibt der TXT-Anhang erhalten.
 - Zusätzlich bleibt der alte explizit sichere Fallback aktiv: `genau eine vorhandene Videospur + genau eine TXT`, wenn diese Videospur ersetzt wird.
+
+### Direkte Header-Anpassungen
+
+- Wenn am Ziel bereits alle benötigten Inhalte vorhanden sind, kann die App statt eines Remux nur die Matroska-Header aktualisieren.
+- Verglichen und bei Bedarf angepasst werden Tracknamen, Sprachen, Standard-Flags, Originalsprache, Forced-Flags, Accessibility-Flags und der MKV-Titel.
+- Die Vorschau zeigt nur relevante Änderungen an, damit sichtbar bleibt, was vorher falsch war und was geändert wird.
+- Normale Hauptspuren, also nicht AD und nicht hörgeschädigte Untertitel, sollen als Standard geeignet markiert sein. Spezialspuren werden bewusst getrennt behandelt.
 
 ### Sender-Priorität und manuelle Prüfung
 

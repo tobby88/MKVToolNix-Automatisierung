@@ -444,7 +444,7 @@ internal static class DemoData
         [
             new DemoChoice("Download", "MediathekView starten und Sendungen laden."),
             new DemoChoice("Einsortieren", "Lose Mediathek-Downloads in Serienordner verschieben."),
-            new DemoChoice("Muxen", "Einzel- und Batch-Mux in Tabs."),
+            new DemoChoice("Muxen", "Erkennen, Archiv vergleichen und MKV-Dateien bauen."),
             new DemoChoice("Emby-Abgleich", "NFO-Provider-IDs gegen Emby und Reports abgleichen.")
         ];
     }
