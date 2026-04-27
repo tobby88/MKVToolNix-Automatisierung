@@ -63,6 +63,9 @@ internal static class UiCompositionModule
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
             provider.GetRequiredService<ImdbLookupService>(),
             provider.GetRequiredService<IAppSettingsDialogService>()));
+        services.AddSingleton<ArchiveMaintenanceModuleServices>(provider => new ArchiveMaintenanceModuleServices(
+            provider.GetRequiredService<ArchiveMaintenanceService>(),
+            provider.GetRequiredService<AppArchiveSettingsStore>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),
@@ -89,6 +92,9 @@ internal static class UiCompositionModule
         services.AddSingleton<EmbySyncViewModel>(provider => new EmbySyncViewModel(
             provider.GetRequiredService<EmbyModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
+        services.AddSingleton<ArchiveMaintenanceViewModel>(provider => new ArchiveMaintenanceViewModel(
+            provider.GetRequiredService<ArchiveMaintenanceModuleServices>(),
+            provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(
@@ -103,6 +109,10 @@ internal static class UiCompositionModule
                     "Muxen",
                     "Erkennen, Archiv vergleichen und MKV-Dateien bauen",
                     provider.GetRequiredService<MuxModuleViewModel>()),
+                new ModuleNavigationItem(
+                    "Archivpflege",
+                    "Bestehende MKV-Dateien prüfen und Header korrigieren",
+                    provider.GetRequiredService<ArchiveMaintenanceViewModel>()),
                 new ModuleNavigationItem(
                     "Emby-Abgleich",
                     "Neue MKV-Dateien scannen und NFO-IDs abgleichen",
