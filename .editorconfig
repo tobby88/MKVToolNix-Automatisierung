@@ -10,3 +10,29 @@ indent_size = 4
 
 [*.md]
 trim_trailing_whitespace = false
+
+[.editorconfig]
+end_of_line = lf
+
+[.gitattributes]
+end_of_line = lf
+
+# GitHub automation and Dependabot commonly rewrite these files on Linux.
+# Keep them LF-only so dependency PRs do not become line-ending-only diffs.
+[*.csproj]
+end_of_line = lf
+
+[*.props]
+end_of_line = lf
+
+[*.targets]
+end_of_line = lf
+
+[*.yml]
+end_of_line = lf
+
+[*.yaml]
+end_of_line = lf
+
+[.config/dotnet-tools.json]
+end_of_line = lf
