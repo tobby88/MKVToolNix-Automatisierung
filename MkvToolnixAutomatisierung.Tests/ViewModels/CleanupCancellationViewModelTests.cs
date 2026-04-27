@@ -76,6 +76,31 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
         var warning = Assert.Single(dialogService.WarningMessages);
         Assert.Contains("vorzeitig abgebrochen", warning, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(Path.GetFileName(pendingSubtitle), warning, StringComparison.Ordinal);
+        Assert.Empty(cleanup.DeletedEmptyDirectories);
+    }
+
+    [Fact]
+    public async Task OfferSingleEpisodeCleanupAsync_DeletesEmptySourceDirectory_WhenRecycleSucceeded()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "single-source-clean");
+        Directory.CreateDirectory(sourceDirectory);
+        var sourceFile = CreateFile(sourceDirectory, "Pilot.mp4");
+        var subtitleFile = CreateFile(sourceDirectory, "Pilot.srt");
+        var outputPath = Path.Combine(_tempDirectory, "Pilot.mkv");
+        var cleanup = new StubCleanupService(
+            recycleResult: new FileRecycleResult([sourceFile, subtitleFile], [], [], WasCanceled: false));
+        var dialogService = new CapturingDialogService
+        {
+            ConfirmSingleEpisodeCleanupResult = true
+        };
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(cleanup: cleanup),
+            dialogService);
+        var plan = CreatePlan(sourceFile, subtitleFile, outputPath);
+
+        await InvokeOfferSingleEpisodeCleanupAsync(viewModel, plan);
+
+        Assert.Contains(sourceDirectory, cleanup.DeletedEmptyDirectories);
     }
 
     public void Dispose()
@@ -155,6 +180,8 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
 
     private sealed class StubCleanupService(FileRecycleResult recycleResult) : IEpisodeCleanupService
     {
+        public List<string> DeletedEmptyDirectories { get; } = [];
+
         public Task<FileMoveResult> MoveFilesToDirectoryAsync(
             IReadOnlyList<string> sourceFilePaths,
             string targetDirectory,
@@ -178,6 +205,10 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
 
         public void DeleteDirectoryIfEmpty(string? directoryPath)
         {
+            if (!string.IsNullOrWhiteSpace(directoryPath))
+            {
+                DeletedEmptyDirectories.Add(directoryPath);
+            }
         }
 
         public void DeleteEmptyParentDirectories(IEnumerable<string> sourceFilePaths, string? stopAtRoot)

@@ -572,6 +572,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
             return;
         }
+
+        DeleteEmptySingleEpisodeSourceDirectories(cleanupFiles);
     }
 
     private static string BuildCanceledSourceRecycleWarningMessage(FileRecycleResult recycleResult)
@@ -593,6 +595,22 @@ internal sealed partial class SingleEpisodeMuxViewModel
             plan.OutputFilePath,
             plan.WorkingCopy?.DestinationFilePath,
             excludedSourcePaths: ExcludedSourcePaths);
+    }
+
+    private void DeleteEmptySingleEpisodeSourceDirectories(IEnumerable<string> cleanupFiles)
+    {
+        var sourceDirectories = cleanupFiles
+            .Select(Path.GetDirectoryName)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(path => path.Length)
+            .ToList();
+
+        foreach (var sourceDirectory in sourceDirectories)
+        {
+            _services.Cleanup.DeleteDirectoryIfEmpty(sourceDirectory);
+        }
     }
 
     private sealed record SingleEpisodeCleanupCandidate(
