@@ -881,7 +881,10 @@ public sealed class ManagedToolInstallerServiceTests
 
         Assert.Empty(handler.RequestedUris);
         Assert.Equal(string.Empty, toolPathStore.Load().ManagedFfprobe.InstalledPath);
-        Assert.True(!result.HasWarning || result.WarningMessage!.Contains("SHA-256-Prüfsumme", StringComparison.Ordinal));
+        // Developer machines can already have ffprobe on PATH; then the installer suppresses the startup warning.
+        // CI usually has no fallback tool, so the surfaced warning must still explain the rejected checksum metadata.
+        Assert.True(!result.HasWarning || result.Warnings.Any(warning =>
+            warning.Contains("Prüfsumme", StringComparison.Ordinal)));
     }
 
     [Fact]
