@@ -31,6 +31,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `Download`: zum Starten der installierten oder portablen MediathekView-Variante als erstem Workflow-Schritt
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
 - `Muxen`: gemeinsamer Arbeitsbereich für Einzel- und Batch-Mux mit derselben Erkennungs-, Planungs- und Archivvergleichslogik
+- `Archivpflege`: für bestehende Archiv-MKVs, deren Header oder Dateinamen nachträglich vereinheitlicht werden sollen
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 
 ## Screenshots
@@ -54,6 +55,10 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 ### Emby-Abgleich
 
 ![Emby-Abgleich](docs/images/readme/emby-sync.png)
+
+### Archivpflege
+
+![Archivpflege](docs/images/readme/archive-maintenance.png)
 
 ## Voraussetzungen
 
@@ -86,7 +91,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional IMDb-Abgleichmodus für den Emby-Dialog
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
-4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich`.
+4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, optional `Archivpflege`, danach `Emby-Abgleich`.
 
 ## Typischer Workflow: Download
 
@@ -140,6 +145,18 @@ Zusätzlich beim Batch-Lauf:
 - bleibt das Batch-Protokoll im Batch-Tab sichtbar
 - können fertig verarbeitete Quellen in einen `done`-Ordner verschoben werden
 
+## Typischer Workflow: Archivpflege
+
+Die `Archivpflege` ist der nachgelagerte Kontrollschritt für bereits vorhandene MKV-Dateien im Serienarchiv. Sie verwendet dieselben Header-Regeln wie der Mux-Archivvergleich, führt aber keinen automatischen Voll-Remux aus.
+
+1. Serienarchiv oder einen Serienunterordner wählen.
+2. `Scannen`, um alle `.mkv`-Dateien rekursiv zu prüfen.
+3. In der Tabelle kontrollieren, ob ein Eintrag nur direkte Header-/Dateinamenänderungen braucht oder ob ein manueller Remux-Hinweis vorliegt.
+4. Im Detailbereich die konkreten Änderungen prüfen.
+5. Nur freigegebene Zeilen auswählen und `Ausgewählte Änderungen anwenden`.
+
+Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/Forced-/Original-/Accessibility-Flags sowie sichere Dateinamen-Normalisierungen inklusive gleichnamiger Emby-Begleitdateien. Fehlende AD- oder Untertitelspuren werden bewusst nicht als Problem gemeldet: das Archivpflege-Modul bewertet den vorhandenen Bestand und fordert keine Inhalte an, die nie gemuxt wurden. Doppelte AD-Spuren oder doppelte Untertitel-Slots werden dagegen als Remux-Hinweis markiert, weil diese Fälle nicht sauber per Header-Edit aufzulösen sind.
+
 ## Typischer Workflow: Einsortieren
 
 1. MediathekView-Downloadordner wählen oder den vorgeschlagenen Standardordner nutzen.
@@ -173,6 +190,7 @@ Im aktuellen Serien-Modul werden verwendet:
 - optionale Untertitel: `.srt`, `.ass`, `.vtt`
 - optionale TXT-Begleitdatei: `.txt`
 - vorhandene Archivdateien zum Vergleich und zur Wiederverwendung: `.mkv`
+- vorhandene Archivdateien zur nachgelagerten Pflege: `.mkv` plus gleichnamige `.nfo`-/Bild-Begleitdateien bei sicheren Umbenennungen
 
 `.ttml` wird nicht gemuxt, aber als Begleitdatei für Cleanup und Aufräumen berücksichtigt.
 
@@ -235,6 +253,7 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 - Verglichen und bei Bedarf angepasst werden Tracknamen, Sprachen, Standard-Flags, Originalsprache, Forced-Flags, Accessibility-Flags und der MKV-Titel.
 - Die Vorschau zeigt nur relevante Änderungen an, damit sichtbar bleibt, was vorher falsch war und was geändert wird.
 - Normale Hauptspuren, also nicht AD und nicht hörgeschädigte Untertitel, sollen als Standard geeignet markiert sein. Spezialspuren werden bewusst getrennt behandelt.
+- Die Archivpflege nutzt dieselbe Header-Regelbasis nachträglich für vorhandene Archivdateien. Sie ergänzt keine fehlenden Spuren, meldet aber doppelte AD- oder Untertitel-Slots als Remux-Fall.
 
 ### Sender-Priorität und manuelle Prüfung
 

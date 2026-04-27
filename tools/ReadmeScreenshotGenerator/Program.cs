@@ -81,6 +81,17 @@ internal static class Program
                 1440,
                 860);
 
+            RenderScreenshot(
+                outputDirectory,
+                "archive-maintenance.png",
+                "Archivpflege",
+                new ArchiveMaintenanceView
+                {
+                    DataContext = DemoData.CreateArchiveMaintenanceViewModel()
+                },
+                1460,
+                900);
+
             return 0;
         }
         finally

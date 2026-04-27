@@ -438,6 +438,66 @@ internal static class DemoData
         };
     }
 
+    public static DemoArchiveMaintenanceViewModel CreateArchiveMaintenanceViewModel()
+    {
+        var items = new ObservableCollection<DemoArchiveMaintenanceItem>
+        {
+            new()
+            {
+                IsSelected = true,
+                FileName = "Neues aus Büttenwarder - S2014E05 - Rififi (1).mkv",
+                DirectoryPath = @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014",
+                StatusText = "Ändern",
+                StatusTone = "Ready",
+                ChangeSummary = "MKV-Titel: Rififi alt -> Rififi (1); Deutsch - HD - H.264: Standard: nein -> ja"
+            },
+            new()
+            {
+                IsSelected = false,
+                FileName = "Die Heiland - S00E15 - Auf der Tastatur schreiben.mkv",
+                DirectoryPath = @"Z:\Videos\Serien\Die Heiland\Specials",
+                StatusText = "Remux nötig",
+                StatusTone = "Warning",
+                ChangeSummary = "Doppelte AD-Spuren für Deutsch: 2, 3."
+            },
+            new()
+            {
+                IsSelected = false,
+                FileName = "Pettersson und Findus - S00E04 - Kleiner Quälgeist, große Freundschaft.mkv",
+                DirectoryPath = @"Z:\Videos\Serien\Pettersson und Findus\Specials",
+                StatusText = "OK",
+                StatusTone = "Done",
+                ChangeSummary = "Keine Änderung nötig."
+            }
+        };
+
+        return new DemoArchiveMaintenanceViewModel
+        {
+            IsInteractive = true,
+            RootDirectory = @"Z:\Videos\Serien",
+            Items = items,
+            SelectedItem = items[0],
+            SelectedDetailText = string.Join(
+                Environment.NewLine,
+                @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014\Neues aus Büttenwarder - S2014E05 - Rififi (1).mkv",
+                "",
+                "Schreibbare Änderungen:",
+                "- MKV-Titel: Rififi alt -> Rififi (1)",
+                "- Deutsch - HD - H.264: Standard: nein -> ja",
+                "- Deutsch - AAC: Originalsprache: nein -> ja"),
+            SummaryText = "3 Datei(en), 1 mit direkt schreibbaren Änderungen, 1 mit Remux-Hinweis, 1 ausgewählt.",
+            LogText = "[12:31:02] Scan gestartet\r\n[12:31:16] 3 Archivdateien geprüft\r\n[12:31:16] 1 direkte Headerkorrektur gefunden",
+            StatusText = "Scan abgeschlossen: 3 Datei(en).",
+            ProgressValue = 0,
+            SelectRootDirectoryCommand = NoOpCommand,
+            ScanCommand = NoOpCommand,
+            SelectAllWritableCommand = NoOpCommand,
+            DeselectAllCommand = NoOpCommand,
+            OpenSelectedFileCommand = NoOpCommand,
+            ApplySelectedCommand = NoOpCommand
+        };
+    }
+
     public static IReadOnlyList<DemoChoice> GetModuleCards()
     {
         return
@@ -445,6 +505,7 @@ internal static class DemoData
             new DemoChoice("Download", "MediathekView starten und Sendungen laden."),
             new DemoChoice("Einsortieren", "Lose Mediathek-Downloads in Serienordner verschieben."),
             new DemoChoice("Muxen", "Erkennen, Archiv vergleichen und MKV-Dateien bauen."),
+            new DemoChoice("Archivpflege", "Vorhandene MKV-Dateien prüfen und Header korrigieren."),
             new DemoChoice("Emby-Abgleich", "NFO-Provider-IDs gegen Emby und Reports abgleichen.")
         ];
     }
