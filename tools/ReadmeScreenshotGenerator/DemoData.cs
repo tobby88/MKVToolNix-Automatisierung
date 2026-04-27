@@ -449,7 +449,35 @@ internal static class DemoData
                 DirectoryPath = @"Z:\Videos\Serien\Neues aus Büttenwarder\Season 2014",
                 StatusText = "Ändern",
                 StatusTone = "Ready",
-                ChangeSummary = "MKV-Titel: Rififi alt -> Rififi (1); Deutsch - HD - H.264: Standard: nein -> ja"
+                ChangeSummary = "MKV-Titel: Rififi alt -> Rififi (1); Deutsch - HD - H.264: Standard: nein -> ja",
+                TargetFileName = "Neues aus Büttenwarder - S2014E05 - Rififi (1).mkv",
+                TargetContainerTitle = "Rififi (1)",
+                HeaderCorrections =
+                [
+                    new DemoArchiveMaintenanceHeaderCorrection
+                    {
+                        DisplayLabel = "Deutsch - HD - H.264",
+                        DisplayName = "Standard",
+                        CurrentDisplayValue = "nein",
+                        TargetValue = "ja",
+                        IsFlag = true
+                    },
+                    new DemoArchiveMaintenanceHeaderCorrection
+                    {
+                        DisplayLabel = "Deutsch - AAC",
+                        DisplayName = "Originalsprache",
+                        CurrentDisplayValue = "nein",
+                        TargetValue = "ja",
+                        IsFlag = true
+                    },
+                    new DemoArchiveMaintenanceHeaderCorrection
+                    {
+                        DisplayLabel = "Alter Videoname",
+                        DisplayName = "Name",
+                        CurrentDisplayValue = "Alter Videoname",
+                        TargetValue = "Deutsch - HD - H.264"
+                    }
+                ]
             },
             new()
             {
@@ -458,7 +486,9 @@ internal static class DemoData
                 DirectoryPath = @"Z:\Videos\Serien\Die Heiland\Specials",
                 StatusText = "Remux nötig",
                 StatusTone = "Warning",
-                ChangeSummary = "Doppelte AD-Spuren für Deutsch: 2, 3."
+                ChangeSummary = "Doppelte AD-Spuren für Deutsch: 2, 3.",
+                TargetFileName = "Die Heiland - S00E15 - Auf der Tastatur schreiben.mkv",
+                TargetContainerTitle = "Auf der Tastatur schreiben"
             },
             new()
             {
@@ -467,7 +497,9 @@ internal static class DemoData
                 DirectoryPath = @"Z:\Videos\Serien\Pettersson und Findus\Specials",
                 StatusText = "OK",
                 StatusTone = "Done",
-                ChangeSummary = "Keine Änderung nötig."
+                ChangeSummary = "Keine Änderung nötig.",
+                TargetFileName = "Pettersson und Findus - S00E04 - Kleiner Quälgeist, große Freundschaft.mkv",
+                TargetContainerTitle = "Kleiner Quälgeist, große Freundschaft"
             }
         };
 

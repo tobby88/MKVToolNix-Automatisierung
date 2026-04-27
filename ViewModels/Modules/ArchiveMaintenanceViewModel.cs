@@ -331,7 +331,19 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 
     private void Item_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ArchiveMaintenanceItemViewModel.IsSelected) or nameof(ArchiveMaintenanceItemViewModel.StatusText))
+        if (ReferenceEquals(sender, SelectedItem)
+            && e.PropertyName is nameof(ArchiveMaintenanceItemViewModel.DetailText)
+                or nameof(ArchiveMaintenanceItemViewModel.ChangeSummary)
+                or nameof(ArchiveMaintenanceItemViewModel.ManualValidationMessage))
+        {
+            OnPropertyChanged(nameof(SelectedDetailText));
+        }
+
+        if (e.PropertyName is nameof(ArchiveMaintenanceItemViewModel.IsSelected)
+            or nameof(ArchiveMaintenanceItemViewModel.StatusText)
+            or nameof(ArchiveMaintenanceItemViewModel.HasWritableChanges)
+            or nameof(ArchiveMaintenanceItemViewModel.CanSelect)
+            or nameof(ArchiveMaintenanceItemViewModel.ManualValidationMessage))
         {
             RefreshCounts();
             RefreshCommandStates();

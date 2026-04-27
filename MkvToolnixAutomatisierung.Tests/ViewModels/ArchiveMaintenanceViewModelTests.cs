@@ -50,9 +50,11 @@ public sealed class ArchiveMaintenanceViewModelTests
         var remuxOnly = new ArchiveMaintenanceItemViewModel(new ArchiveMaintenanceItemAnalysis(
             @"C:\Archiv\Serie\Season 1\Serie - S01E02 - Folge 2.mkv",
             "Folge 2",
+            ContainerTitle: "Folge 2",
             RenameOperation: null,
             ContainerTitleEdit: null,
             TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates: [],
             Issues: [new ArchiveMaintenanceIssue(ArchiveMaintenanceIssueKind.RemuxRequired, "Doppelte AD-Spuren.")],
             ChangeNotes: [],
             ErrorMessage: null));
@@ -66,16 +68,108 @@ public sealed class ArchiveMaintenanceViewModelTests
         Assert.False(remuxOnly.IsSelected);
     }
 
+    [Fact]
+    public void CreateApplyRequest_UsesManualContainerTitleAndFileName()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());
+
+        item.TargetContainerTitle = "Manuell korrigierter Titel";
+        item.TargetFileName = "Serie - S01E01 - Manuell korrigierter Titel.mkv";
+        var request = item.CreateApplyRequest();
+
+        Assert.Equal("Alter Titel", request.ContainerTitleEdit?.CurrentTitle);
+        Assert.Equal("Manuell korrigierter Titel", request.ContainerTitleEdit?.ExpectedTitle);
+        Assert.EndsWith(
+            "Serie - S01E01 - Manuell korrigierter Titel.mkv",
+            request.RenameOperation?.TargetPath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CreateApplyRequest_UsesManualTrackHeaderTargetValue()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateAnalysisWithTrackCorrectionCandidate());
+        var defaultFlagCorrection = Assert.Single(item.HeaderCorrections);
+
+        defaultFlagCorrection.TargetValue = "ja";
+        var request = item.CreateApplyRequest();
+        var valueEdit = Assert.Single(Assert.Single(request.TrackHeaderEdits).ValueEdits!);
+
+        Assert.Equal("flag-default", valueEdit.PropertyName);
+        Assert.Equal("ja", valueEdit.ExpectedDisplayValue);
+        Assert.Equal("1", valueEdit.ExpectedMkvPropEditValue);
+    }
+
+    [Fact]
+    public void InvalidManualFileName_DisablesWritableSelection()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis());
+        Assert.True(item.IsSelected);
+
+        item.TargetFileName = "ungueltig.txt";
+
+        Assert.False(item.CanSelect);
+        Assert.False(item.IsSelected);
+        Assert.Contains(".mkv", item.ManualValidationMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ArchiveMaintenanceItemAnalysis CreateWritableAnalysis()
     {
         return new ArchiveMaintenanceItemAnalysis(
             @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
             "Pilot",
+            ContainerTitle: "Alt",
             RenameOperation: null,
             ContainerTitleEdit: new ContainerTitleEditOperation("Alt", "Pilot"),
             TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates: [],
             Issues: [],
             ChangeNotes: ["MKV-Titel: Alt -> Pilot"],
+            ErrorMessage: null);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateNeutralAnalysis()
+    {
+        return new ArchiveMaintenanceItemAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alter Titel.mkv",
+            "Alter Titel",
+            ContainerTitle: "Alter Titel",
+            RenameOperation: null,
+            ContainerTitleEdit: null,
+            TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates: [],
+            Issues: [],
+            ChangeNotes: [],
+            ErrorMessage: null);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateAnalysisWithTrackCorrectionCandidate()
+    {
+        return new ArchiveMaintenanceItemAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            "Pilot",
+            ContainerTitle: "Pilot",
+            RenameOperation: null,
+            ContainerTitleEdit: null,
+            TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates:
+            [
+                new ArchiveTrackHeaderCorrectionCandidate(
+                    "track:1",
+                    "Deutsch - AAC",
+                    "Deutsch - AAC",
+                    [
+                        new ArchiveTrackHeaderValueCandidate(
+                            "flag-default",
+                            "Standard",
+                            "nein",
+                            "nein",
+                            "0",
+                            IsFlag: true)
+                    ])
+            ],
+            Issues: [],
+            ChangeNotes: [],
             ErrorMessage: null);
     }
 

@@ -160,9 +160,11 @@ internal sealed class ArchiveMaintenanceService
             return new ArchiveMaintenanceItemAnalysis(
                 filePath,
                 Path.GetFileNameWithoutExtension(filePath),
+                ContainerTitle: Path.GetFileNameWithoutExtension(filePath),
                 RenameOperation: null,
                 ContainerTitleEdit: null,
                 TrackHeaderEdits: [],
+                TrackHeaderCorrectionCandidates: [],
                 Issues: [],
                 ChangeNotes: [],
                 ErrorMessage: ex.Message);
@@ -197,9 +199,11 @@ internal sealed class ArchiveMaintenanceService
         return new ArchiveMaintenanceItemAnalysis(
             filePath,
             expectedTitle,
+            container.Title,
             renameOperation,
             normalization.ContainerTitleEdit,
             normalization.TrackHeaderEdits,
+            BuildTrackHeaderCorrectionCandidates(container, normalization.TrackHeaderEdits),
             issues,
             changeNotes,
             ErrorMessage: null);
@@ -307,6 +311,145 @@ internal sealed class ArchiveMaintenanceService
             .ToList();
     }
 
+    /// <summary>
+    /// Baut eine sichere Umbenennungsoperation für einen manuell gesetzten Ziel-Dateinamen.
+    /// Begleitdateien werden dabei nach denselben Regeln wie bei automatischen TVDB-Korrekturen mitgeführt.
+    /// </summary>
+    internal static ArchiveRenameOperation? BuildManualRenameOperation(string sourceMediaPath, string targetFileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceMediaPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetFileName);
+
+        var targetPath = Path.Combine(
+            Path.GetDirectoryName(sourceMediaPath) ?? string.Empty,
+            targetFileName.Trim());
+        return PathComparisonHelper.AreSamePath(sourceMediaPath, targetPath)
+            ? null
+            : new ArchiveRenameOperation(sourceMediaPath, targetPath, BuildSidecarRenameOperations(sourceMediaPath, targetPath));
+    }
+
+    private static IReadOnlyList<ArchiveTrackHeaderCorrectionCandidate> BuildTrackHeaderCorrectionCandidates(
+        ContainerMetadata container,
+        IReadOnlyList<TrackHeaderEditOperation> automaticEdits)
+    {
+        var automaticValueEdits = automaticEdits
+            .SelectMany(edit => ResolveCorrectionValueEdits(edit).Select(value => new
+            {
+                edit.Selector,
+                Value = value
+            }))
+            .ToDictionary(entry => (entry.Selector, entry.Value.PropertyName), entry => entry.Value);
+
+        return container.Tracks
+            .Select((track, index) =>
+            {
+                var selector = $"track:{index + 1}";
+                return new ArchiveTrackHeaderCorrectionCandidate(
+                    selector,
+                    BuildTrackCorrectionDisplayLabel(track),
+                    track.TrackName,
+                    BuildTrackHeaderValueCandidates(selector, track, automaticValueEdits));
+            })
+            .ToList();
+    }
+
+    private static IReadOnlyList<TrackHeaderValueEdit> ResolveCorrectionValueEdits(TrackHeaderEditOperation edit)
+    {
+        return edit.ValueEdits is { Count: > 0 }
+            ? edit.ValueEdits
+            :
+            [
+                new TrackHeaderValueEdit(
+                    "name",
+                    "Name",
+                    edit.CurrentTrackName,
+                    edit.ExpectedTrackName,
+                    edit.ExpectedTrackName)
+            ];
+    }
+
+    private static IReadOnlyList<ArchiveTrackHeaderValueCandidate> BuildTrackHeaderValueCandidates(
+        string selector,
+        ContainerTrackMetadata track,
+        IReadOnlyDictionary<(string Selector, string PropertyName), TrackHeaderValueEdit> automaticValueEdits)
+    {
+        return
+        [
+            BuildTextCorrectionValue(selector, "name", "Name", track.TrackName, automaticValueEdits),
+            BuildTextCorrectionValue(selector, "language", "Sprache", MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language), automaticValueEdits),
+            BuildFlagCorrectionValue(selector, "flag-default", "Standard", track.IsDefaultTrack, automaticValueEdits),
+            BuildFlagCorrectionValue(selector, "flag-visual-impaired", "Sehbehindert", track.IsVisualImpaired, automaticValueEdits),
+            BuildFlagCorrectionValue(selector, "flag-hearing-impaired", "Hörgeschädigt", track.IsHearingImpaired, automaticValueEdits),
+            BuildFlagCorrectionValue(selector, "flag-forced", "Forced", track.IsForcedTrack, automaticValueEdits),
+            BuildFlagCorrectionValue(selector, "flag-original", "Originalsprache", track.IsOriginalLanguage, automaticValueEdits)
+        ];
+    }
+
+    private static ArchiveTrackHeaderValueCandidate BuildTextCorrectionValue(
+        string selector,
+        string propertyName,
+        string displayName,
+        string currentValue,
+        IReadOnlyDictionary<(string Selector, string PropertyName), TrackHeaderValueEdit> automaticValueEdits)
+    {
+        return automaticValueEdits.TryGetValue((selector, propertyName), out var automaticEdit)
+            ? new ArchiveTrackHeaderValueCandidate(
+                propertyName,
+                displayName,
+                automaticEdit.CurrentDisplayValue,
+                automaticEdit.ExpectedDisplayValue,
+                automaticEdit.ExpectedMkvPropEditValue,
+                IsFlag: false)
+            : new ArchiveTrackHeaderValueCandidate(
+                propertyName,
+                displayName,
+                currentValue,
+                currentValue,
+                currentValue,
+                IsFlag: false);
+    }
+
+    private static ArchiveTrackHeaderValueCandidate BuildFlagCorrectionValue(
+        string selector,
+        string propertyName,
+        string displayName,
+        bool currentValue,
+        IReadOnlyDictionary<(string Selector, string PropertyName), TrackHeaderValueEdit> automaticValueEdits)
+    {
+        return automaticValueEdits.TryGetValue((selector, propertyName), out var automaticEdit)
+            ? new ArchiveTrackHeaderValueCandidate(
+                propertyName,
+                displayName,
+                automaticEdit.CurrentDisplayValue,
+                automaticEdit.ExpectedDisplayValue,
+                automaticEdit.ExpectedMkvPropEditValue,
+                IsFlag: true)
+            : new ArchiveTrackHeaderValueCandidate(
+                propertyName,
+                displayName,
+                FormatBooleanHeaderValue(currentValue),
+                FormatBooleanHeaderValue(currentValue),
+                currentValue ? "1" : "0",
+                IsFlag: true);
+    }
+
+    private static string BuildTrackCorrectionDisplayLabel(ContainerTrackMetadata track)
+    {
+        if (!string.IsNullOrWhiteSpace(track.TrackName))
+        {
+            return track.TrackName.Trim();
+        }
+
+        var typeLabel = track.Type.ToLowerInvariant() switch
+        {
+            "video" => "Video",
+            "audio" => "Audio",
+            "subtitles" => "Untertitel",
+            _ => "Track"
+        };
+        return $"{typeLabel} {track.TrackId}";
+    }
+
     private static IReadOnlyList<ArchiveMaintenanceIssue> BuildRemuxIssues(ContainerMetadata container)
     {
         var issues = new List<ArchiveMaintenanceIssue>();
@@ -357,6 +500,11 @@ internal sealed class ArchiveMaintenanceService
         return $"{MediaLanguageHelper.GetLanguageDisplayName(track.Language)} {kind.DisplayName}, {accessibility}{forced}";
     }
 
+    private static string FormatBooleanHeaderValue(bool value)
+    {
+        return value ? "ja" : "nein";
+    }
+
     private static string ApplyRename(ArchiveRenameOperation renameOperation)
     {
         if (!File.Exists(renameOperation.SourcePath))
@@ -396,9 +544,11 @@ internal sealed record ArchiveMaintenanceScanResult(
 internal sealed record ArchiveMaintenanceItemAnalysis(
     string FilePath,
     string ExpectedTitle,
+    string ContainerTitle,
     ArchiveRenameOperation? RenameOperation,
     ContainerTitleEditOperation? ContainerTitleEdit,
     IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits,
+    IReadOnlyList<ArchiveTrackHeaderCorrectionCandidate> TrackHeaderCorrectionCandidates,
     IReadOnlyList<ArchiveMaintenanceIssue> Issues,
     IReadOnlyList<string> ChangeNotes,
     string? ErrorMessage)
@@ -434,6 +584,20 @@ internal enum ArchiveMaintenanceIssueKind
 {
     RemuxRequired
 }
+
+internal sealed record ArchiveTrackHeaderCorrectionCandidate(
+    string Selector,
+    string DisplayLabel,
+    string CurrentTrackName,
+    IReadOnlyList<ArchiveTrackHeaderValueCandidate> Values);
+
+internal sealed record ArchiveTrackHeaderValueCandidate(
+    string PropertyName,
+    string DisplayName,
+    string CurrentDisplayValue,
+    string ExpectedDisplayValue,
+    string ExpectedMkvPropEditValue,
+    bool IsFlag);
 
 internal sealed record ArchiveRenameOperation(
     string SourcePath,
