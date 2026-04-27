@@ -104,6 +104,29 @@ public sealed class ManagedToolPackageSourceTests
     }
 
     [Fact]
+    public void ParseLatestPackageFromDownloadsPage_PicksHighestMediathekViewWindowsZipAndSha512()
+    {
+        const string downloadsHtml = """
+            <html><body>
+            <a href="/stabil/MediathekView-14.4.2-win.zip">old</a>
+            <a href="/stabil/MediathekView-14.5.0-win-arm64.zip">arm</a>
+            <a href="/stabil/MediathekView-14.5.0-win.zip">new</a>
+            <a href="/stabil/MediathekView-latest-win.zip">latest</a>
+            </body></html>
+            """;
+        var sha512 = new string('A', 128);
+
+        var package = MediathekViewPackageSource.ParseLatestPackageFromDownloadsPage(downloadsHtml, sha512);
+
+        Assert.Equal(ManagedToolKind.MediathekView, package.Kind);
+        Assert.Equal("14.5.0", package.VersionToken);
+        Assert.Equal("14.5.0", package.DisplayVersion);
+        Assert.Equal("MediathekView-14.5.0-win.zip", package.ArchiveFileName);
+        Assert.Equal(sha512, package.ExpectedSha512);
+        Assert.Equal("https://download.mediathekview.de/stabil/MediathekView-14.5.0-win.zip", package.DownloadUri.ToString());
+    }
+
+    [Fact]
     public void ParseLatestPackageFromReleaseJson_FallsBackToChecksumFile()
     {
         const string releaseJson = """
@@ -145,5 +168,7 @@ public sealed class ManagedToolPackageSourceTests
         Assert.Null(checksum);
         Assert.True(ManagedToolParsing.IsValidSha256(new string('a', 64)));
         Assert.False(ManagedToolParsing.IsValidSha256("xyz"));
+        Assert.True(ManagedToolParsing.IsValidSha512(new string('a', 128)));
+        Assert.False(ManagedToolParsing.IsValidSha512("xyz"));
     }
 }

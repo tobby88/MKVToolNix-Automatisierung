@@ -68,6 +68,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="180" />
@@ -92,7 +93,15 @@
                                     Click="SelectMediathekViewButton_Click"
                                     Content="Datei wählen" />
 
-                            <TextBlock Grid.Row="1"
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="1"
+                                      Grid.ColumnSpan="2"
+                                      Margin="0,2,0,6"
+                                      Content="Portable MediathekView automatisch herunterladen und aktuell halten"
+                                      ToolTip="Optional. Bei aktiviertem Haken wird die stabile Windows-ZIP-Version beim App-Start unter .\Tools bereitgestellt."
+                                      IsChecked="{Binding AutoManageMediathekView}" />
+
+                            <TextBlock Grid.Row="2"
                                        Grid.Column="1"
                                        Foreground="#4D5B68"
                                        Text="{Binding MediathekViewStatusText}"

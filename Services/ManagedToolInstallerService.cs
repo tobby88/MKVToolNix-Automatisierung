@@ -4,7 +4,7 @@ using System.Net.Http;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Lädt MKVToolNix und ffprobe beim Start selbst nach und hält die verwalteten Toolversionen aktuell.
+/// Lädt verwaltete externe Werkzeuge beim Start selbst nach und hält deren portable Versionen aktuell.
 /// </summary>
 internal sealed class ManagedToolInstallerService
 {
@@ -50,8 +50,9 @@ internal sealed class ManagedToolInstallerService
         var settings = _toolPathStore.Load();
         var warnings = new List<string>();
         var hasChanges = false;
-        var mkvProgress = new ToolStartupProgressReporter(progress, 0d, 50d);
-        var ffprobeProgress = new ToolStartupProgressReporter(progress, 50d, 100d);
+        var mkvProgress = new ToolStartupProgressReporter(progress, 0d, 40d);
+        var ffprobeProgress = new ToolStartupProgressReporter(progress, 40d, 70d);
+        var mediathekViewProgress = new ToolStartupProgressReporter(progress, 70d, 100d);
 
         hasChanges |= await EnsureManagedToolAsync(
             settings,
@@ -66,6 +67,13 @@ internal sealed class ManagedToolInstallerService
             ManagedToolKind.Ffprobe,
             warnings,
             ffprobeProgress,
+            cancellationToken);
+        hasChanges |= await EnsureManagedToolAsync(
+            settings,
+            settings.ManagedMediathekView,
+            ManagedToolKind.MediathekView,
+            warnings,
+            mediathekViewProgress,
             cancellationToken);
 
         if (hasChanges)
@@ -290,8 +298,13 @@ internal sealed class ManagedToolInstallerService
             "Prüfsumme wird berechnet.",
             ChecksumVerificationProgressPercent,
             false);
-        var actualHash = await ComputeSha256Async(archivePath, cancellationToken);
-        if (!string.Equals(actualHash, package.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+        var actualHash = !string.IsNullOrWhiteSpace(package.ExpectedSha256)
+            ? await ComputeSha256Async(archivePath, cancellationToken)
+            : await ComputeSha512Async(archivePath, cancellationToken);
+        var expectedHash = !string.IsNullOrWhiteSpace(package.ExpectedSha256)
+            ? package.ExpectedSha256
+            : package.ExpectedSha512;
+        if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 $"{GetToolDisplayName(package.Kind)} wurde heruntergeladen, aber die Prüfsumme stimmt nicht.");
@@ -302,6 +315,13 @@ internal sealed class ManagedToolInstallerService
     {
         await using var fileStream = File.OpenRead(filePath);
         var hash = await SHA256.HashDataAsync(fileStream, cancellationToken);
+        return Convert.ToHexString(hash);
+    }
+
+    private static async Task<string> ComputeSha512Async(string filePath, CancellationToken cancellationToken)
+    {
+        await using var fileStream = File.OpenRead(filePath);
+        var hash = await SHA512.HashDataAsync(fileStream, cancellationToken);
         return Convert.ToHexString(hash);
     }
 
@@ -351,6 +371,7 @@ internal sealed class ManagedToolInstallerService
             ManagedToolKind.MkvToolNix => File.Exists(Path.Combine(installedPath, "mkvmerge.exe"))
                                           && File.Exists(Path.Combine(installedPath, "mkvpropedit.exe")),
             ManagedToolKind.Ffprobe => File.Exists(installedPath),
+            ManagedToolKind.MediathekView => File.Exists(installedPath),
             _ => false
         };
     }
@@ -361,6 +382,7 @@ internal sealed class ManagedToolInstallerService
         {
             ManagedToolKind.MkvToolNix => ManagedToolResolution.TryResolveMkvToolNix(settings) is not null,
             ManagedToolKind.Ffprobe => ManagedToolResolution.TryResolveFfprobe(settings) is not null,
+            ManagedToolKind.MediathekView => ManagedToolResolution.TryResolveMediathekView(settings) is not null,
             _ => false
         };
     }
@@ -371,6 +393,7 @@ internal sealed class ManagedToolInstallerService
         {
             ManagedToolKind.MkvToolNix => ManagedToolResolution.TryResolveMkvToolNix(settings)?.Source ?? ToolPathResolutionSource.None,
             ManagedToolKind.Ffprobe => ManagedToolResolution.TryResolveFfprobe(settings)?.Source ?? ToolPathResolutionSource.None,
+            ManagedToolKind.MediathekView => ManagedToolResolution.TryResolveMediathekView(settings)?.Source ?? ToolPathResolutionSource.None,
             _ => ToolPathResolutionSource.None
         };
     }
@@ -431,16 +454,25 @@ internal sealed class ManagedToolInstallerService
 
     private static void ValidatePackageIntegrityMetadata(ManagedToolPackage package)
     {
-        if (string.IsNullOrWhiteSpace(package.ExpectedSha256))
+        if (string.IsNullOrWhiteSpace(package.ExpectedSha256)
+            && string.IsNullOrWhiteSpace(package.ExpectedSha512))
         {
             throw new InvalidOperationException(
-                $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil keine SHA-256-Prüfsumme verfügbar ist.");
+                $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil keine Prüfsumme verfügbar ist.");
         }
 
-        if (!ManagedToolParsing.IsValidSha256(package.ExpectedSha256))
+        if (!string.IsNullOrWhiteSpace(package.ExpectedSha256)
+            && !ManagedToolParsing.IsValidSha256(package.ExpectedSha256))
         {
             throw new InvalidOperationException(
                 $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil die gelieferte SHA-256-Prüfsumme ungültig ist.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(package.ExpectedSha512)
+            && !ManagedToolParsing.IsValidSha512(package.ExpectedSha512))
+        {
+            throw new InvalidOperationException(
+                $"{GetToolDisplayName(package.Kind)} kann nicht automatisch installiert werden, weil die gelieferte SHA-512-Prüfsumme ungültig ist.");
         }
     }
 
@@ -450,6 +482,7 @@ internal sealed class ManagedToolInstallerService
         {
             ManagedToolKind.MkvToolNix => ResolveMkvToolNixDirectory(extractedDirectory),
             ManagedToolKind.Ffprobe => ResolveFfprobePath(extractedDirectory),
+            ManagedToolKind.MediathekView => ResolveMediathekViewPath(extractedDirectory),
             _ => throw new ArgumentOutOfRangeException(nameof(toolKind), toolKind, null)
         };
     }
@@ -496,11 +529,44 @@ internal sealed class ManagedToolInstallerService
         return ffprobePath;
     }
 
+    private static string ResolveMediathekViewPath(string extractedDirectory)
+    {
+        var portablePath = Directory
+            .EnumerateFiles(extractedDirectory, "MediathekView_Portable.exe", SearchOption.AllDirectories)
+            .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))
+            .ThenBy(path => path.Length)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(portablePath))
+        {
+            return portablePath;
+        }
+
+        var standardPath = Directory
+            .EnumerateFiles(extractedDirectory, "MediathekView.exe", SearchOption.AllDirectories)
+            .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))
+            .ThenBy(path => path.Length)
+            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(standardPath))
+        {
+            throw new InvalidOperationException("Die entpackte MediathekView-Version enthält keine startbare Windows-Executable.");
+        }
+
+        return standardPath;
+    }
+
     private static string GetToolRootDirectory(ManagedToolKind toolKind)
     {
         return Path.Combine(
             PortableAppStorage.ToolsDirectory,
-            toolKind == ManagedToolKind.MkvToolNix ? "mkvtoolnix" : "ffprobe");
+            toolKind switch
+            {
+                ManagedToolKind.MkvToolNix => "mkvtoolnix",
+                ManagedToolKind.Ffprobe => "ffprobe",
+                ManagedToolKind.MediathekView => "mediathekview",
+                _ => throw new ArgumentOutOfRangeException(nameof(toolKind), toolKind, null)
+            });
     }
 
     private static string MapStagingInstalledPathToVersionDirectory(
@@ -564,7 +630,13 @@ internal sealed class ManagedToolInstallerService
 
     private static string GetToolDisplayName(ManagedToolKind toolKind)
     {
-        return toolKind == ManagedToolKind.MkvToolNix ? "MKVToolNix" : "ffprobe";
+        return toolKind switch
+        {
+            ManagedToolKind.MkvToolNix => "MKVToolNix",
+            ManagedToolKind.Ffprobe => "ffprobe",
+            ManagedToolKind.MediathekView => "MediathekView",
+            _ => toolKind.ToString()
+        };
     }
 
     private static void Report(

@@ -155,6 +155,11 @@ internal static class MediathekViewPathResolver
             return new ResolvedToolPath(manualPath, ToolPathResolutionSource.ManualOverride);
         }
 
+        if (TryResolveConfiguredPath(settings.ManagedMediathekView.InstalledPath) is { } managedPath)
+        {
+            return new ResolvedToolPath(managedPath, ToolPathResolutionSource.ManagedSettings);
+        }
+
         if (TryFindInDownloads() is { } downloadsHit)
         {
             return new ResolvedToolPath(downloadsHit, ToolPathResolutionSource.DownloadsFallback);

@@ -58,7 +58,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 ## Voraussetzungen
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
-- MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten.
+- MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten; optional kann sie die portable Windows-ZIP-Version auch selbst unter `.\Tools` herunterladen und aktuell halten.
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
@@ -80,7 +80,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 1. App starten.
 2. Über `Einstellungen` die selten geänderten Dinge zentral hinterlegen:
    - Standard-Archivpfad
-   - optional MediathekView-Pfad, falls die automatische Suche die portable Variante nicht findet
+   - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
    - optional Emby-Server und API-Key
@@ -90,7 +90,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 ## Typischer Workflow: Download
 
 1. Im Modul `Download` `MediathekView starten` ausführen.
-2. Falls die App nicht gefunden wird, in `Einstellungen` den Pfad zur installierten oder portablen `MediathekView.exe` bzw. `MediathekView_Portable.exe` setzen.
+2. Falls die App nicht gefunden wird, in `Einstellungen` den Pfad zur installierten oder portablen `MediathekView.exe` bzw. `MediathekView_Portable.exe` setzen oder die automatische portable MediathekView-Verwaltung aktivieren.
 3. Sendungen wie gewohnt in MediathekView herunterladen.
 4. Danach im Modul `Einsortieren` mit den erzeugten Download-Dateien weiterarbeiten.
 
@@ -220,7 +220,7 @@ Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
 
 ## Hinweise für die Nutzung
 
-- MKVToolNix und `ffprobe` werden standardmäßig automatisch im portablen `.\Tools`-Ordner verwaltet.
+- MKVToolNix und `ffprobe` werden standardmäßig automatisch im portablen `.\Tools`-Ordner verwaltet; MediathekView kann dort optional ebenfalls automatisch verwaltet werden.
 - Manuelle Toolpfad-Overrides in den Einstellungen haben Vorrang vor den automatisch verwalteten Tools.
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
@@ -272,7 +272,7 @@ Die PNGs landen danach unter `.\docs\images\readme\`.
 
 Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt Release-Notes, setzt danach das Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
 
-Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet.
+Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet, MediathekView optional bei aktivierter Einstellung.
 
 Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und erstellt das GitHub-Prerelease nur dann automatisch neu, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
 

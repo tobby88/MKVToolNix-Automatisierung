@@ -10,6 +10,7 @@ Die Anwendung verwendet bewusst portable Laufzeitordner relativ zur EXE:
   - Batch-Logs und Listen neu erzeugter Ausgabedateien
 - `.\Tools`
   - automatisch bereitgestellte MKVToolNix- und ffprobe-Versionen
+  - optional automatisch bereitgestellte portable MediathekView-Versionen
 
 Ein persistenter Dateisystem-`Cache` ist absichtlich nicht mehr Teil des Projekts. Kurzlebige Performance-Caches bleiben ausschließlich im Speicher.
 

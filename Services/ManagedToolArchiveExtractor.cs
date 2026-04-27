@@ -41,6 +41,11 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
             [ManagedToolKind.Ffprobe] = new(StringComparer.OrdinalIgnoreCase)
             {
                 "ffprobe.exe"
+            },
+            [ManagedToolKind.MediathekView] = new(StringComparer.OrdinalIgnoreCase)
+            {
+                "MediathekView_Portable.exe",
+                "MediathekView.exe"
             }
         };
 
@@ -107,6 +112,11 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         IReadOnlyList<IArchiveEntry> entries)
     {
         if (toolKind is null || !RequiredToolExecutables.TryGetValue(toolKind.Value, out var requiredExecutables))
+        {
+            return entries;
+        }
+
+        if (toolKind == ManagedToolKind.MediathekView)
         {
             return entries;
         }

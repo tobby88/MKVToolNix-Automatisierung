@@ -65,6 +65,14 @@ public sealed class AppToolPathSettings
     public ManagedToolSettings ManagedFfprobe { get; set; } = new();
 
     /// <summary>
+    /// Persistenter Zustand der optional automatisch verwalteten MediathekView-Installation.
+    /// </summary>
+    public ManagedToolSettings ManagedMediathekView { get; set; } = new()
+    {
+        AutoManageEnabled = false
+    };
+
+    /// <summary>
     /// Optionaler manueller Override-Pfad zur ffprobe-Executable.
     /// </summary>
     public string FfprobePath { get; set; } = string.Empty;
@@ -89,6 +97,7 @@ public sealed class AppToolPathSettings
         {
             ManagedMkvToolNix = ManagedMkvToolNix.Clone(),
             ManagedFfprobe = ManagedFfprobe.Clone(),
+            ManagedMediathekView = ManagedMediathekView.Clone(),
             FfprobePath = FfprobePath,
             MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
             MediathekViewPath = MediathekViewPath

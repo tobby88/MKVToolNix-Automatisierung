@@ -49,6 +49,12 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
                     AutoManageEnabled = true,
                     InstalledPath = @"C:\managed\ffprobe.exe",
                     InstalledVersion = "2026-04-18T13-04-00Z"
+                },
+                ManagedMediathekView = new ManagedToolSettings
+                {
+                    AutoManageEnabled = true,
+                    InstalledPath = @"C:\managed\MediathekView_Portable.exe",
+                    InstalledVersion = "14.5.0"
                 }
             }
         });
@@ -60,6 +66,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.MediathekViewPath = $"  {mediathekViewPath}  ";
         viewModel.AutoManageMkvToolNix = false;
         viewModel.AutoManageFfprobe = false;
+        viewModel.AutoManageMediathekView = false;
         viewModel.TvdbApiKey = "  tvdb-key  ";
         viewModel.TvdbPin = "  1234  ";
         viewModel.SelectedImdbLookupMode = ImdbLookupMode.BrowserOnly;
@@ -76,10 +83,13 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal(mediathekViewPath, savedSettings.ToolPaths?.MediathekViewPath);
         Assert.False(savedSettings.ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
         Assert.False(savedSettings.ToolPaths?.ManagedFfprobe.AutoManageEnabled);
+        Assert.False(savedSettings.ToolPaths?.ManagedMediathekView.AutoManageEnabled);
         Assert.Equal(@"C:\managed\mkvtoolnix", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledPath);
         Assert.Equal("98.0", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledVersion);
         Assert.Equal(@"C:\managed\ffprobe.exe", savedSettings.ToolPaths?.ManagedFfprobe.InstalledPath);
         Assert.Equal("2026-04-18T13-04-00Z", savedSettings.ToolPaths?.ManagedFfprobe.InstalledVersion);
+        Assert.Equal(@"C:\managed\MediathekView_Portable.exe", savedSettings.ToolPaths?.ManagedMediathekView.InstalledPath);
+        Assert.Equal("14.5.0", savedSettings.ToolPaths?.ManagedMediathekView.InstalledVersion);
         Assert.Equal("tvdb-key", savedSettings.Metadata?.TvdbApiKey);
         Assert.Equal("1234", savedSettings.Metadata?.TvdbPin);
         Assert.Equal(ImdbLookupMode.BrowserOnly, savedSettings.Metadata?.ImdbLookupMode);
@@ -230,7 +240,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
             Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
             Directory.CreateDirectory(portableDirectory);
-            var mediathekViewPath = Path.Combine(portableDirectory, "MediathekView.exe");
+            var mediathekViewPath = Path.Combine(portableDirectory, "MediathekView_Portable.exe");
             File.WriteAllText(mediathekViewPath, "tool");
 
             var viewModel = CreateViewModel();

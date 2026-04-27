@@ -147,6 +147,34 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task ExtractArchive_ForMediathekView_PreservesCompletePortablePayload()
+    {
+        var sourceDirectory = CreateDirectory("source-mediathekview");
+        var archiveRoot = Path.Combine(sourceDirectory, "MediathekView");
+        var portableDirectory = Path.Combine(archiveRoot, "Portable");
+        var javaDirectory = Path.Combine(archiveRoot, "jre", "bin");
+        Directory.CreateDirectory(portableDirectory);
+        Directory.CreateDirectory(javaDirectory);
+        File.WriteAllText(Path.Combine(archiveRoot, "MediathekView.exe"), "standard");
+        File.WriteAllText(Path.Combine(portableDirectory, "MediathekView_Portable.exe"), "portable");
+        File.WriteAllText(Path.Combine(javaDirectory, "java.exe"), "java");
+        File.WriteAllText(Path.Combine(archiveRoot, "lib.jar"), "library");
+
+        var archivePath = Path.Combine(_tempDirectory, "mediathekview.zip");
+        ZipFile.CreateFromDirectory(sourceDirectory, archivePath);
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "mediathekview-extracted");
+        var extractor = new ManagedToolArchiveExtractor();
+
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory, toolKind: ManagedToolKind.MediathekView);
+
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "MediathekView", "MediathekView.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "MediathekView", "Portable", "MediathekView_Portable.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "MediathekView", "jre", "bin", "java.exe")));
+        Assert.True(File.Exists(Path.Combine(destinationDirectory, "MediathekView", "lib.jar")));
+    }
+
+    [Fact]
     public async Task ExtractArchive_ThrowsWhenArchiveIsCorrupt()
     {
         var archivePath = Path.Combine(_tempDirectory, "broken.zip");

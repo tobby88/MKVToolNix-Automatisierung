@@ -98,6 +98,49 @@ public sealed class ManagedToolInstallerServiceTests
     }
 
     [Fact]
+    public async Task EnsureManagedToolsAsync_InstallsOptionalMediathekViewWhenEnabled()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = false;
+        settings.ManagedMediathekView.AutoManageEnabled = true;
+        toolPathStore.Save(settings);
+
+        var archiveBytes = CreateMediathekViewZipArchive();
+        var archiveHash = Convert.ToHexString(SHA512.HashData(archiveBytes));
+        var downloadUri = new Uri("https://example.invalid/MediathekView-14.5.0-win.zip");
+        var handler = new FakeHttpMessageHandler((downloadUri, archiveBytes));
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.MediathekView,
+                "14.5.0",
+                "14.5.0",
+                downloadUri,
+                "MediathekView-14.5.0-win.zip",
+                ExpectedSha512: archiveHash))],
+            new ManagedToolArchiveExtractor(),
+            new HttpClient(handler));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+
+        Assert.False(result.HasWarning);
+        Assert.Equal("14.5.0", savedSettings.ManagedMediathekView.InstalledVersion);
+        Assert.EndsWith("MediathekView_Portable.exe", savedSettings.ManagedMediathekView.InstalledPath, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("portable", File.ReadAllText(savedSettings.ManagedMediathekView.InstalledPath));
+        Assert.True(File.Exists(Path.Combine(
+            Path.GetDirectoryName(savedSettings.ManagedMediathekView.InstalledPath)!,
+            "..",
+            "jre",
+            "bin",
+            "java.exe")));
+        Assert.Single(handler.RequestedUris);
+    }
+
+    [Fact]
     public async Task EnsureManagedToolsAsync_SkipsDownloadWhenManagedFfprobeAlreadyMatchesLatestVersion()
     {
         var settingsStore = new AppSettingsStore();
@@ -880,6 +923,20 @@ public sealed class ManagedToolInstallerServiceTests
             WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/bin/ffprobe.exe", "tool");
             WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/bin/avcodec-61.dll", "dependency");
             WriteZipEntry(archive, "ffmpeg-master-latest-win64-gpl-shared/doc/readme.txt", "docs");
+        }
+
+        return stream.ToArray();
+    }
+
+    private static byte[] CreateMediathekViewZipArchive()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(archive, "MediathekView/MediathekView.exe", "standard");
+            WriteZipEntry(archive, "MediathekView/Portable/MediathekView_Portable.exe", "portable");
+            WriteZipEntry(archive, "MediathekView/jre/bin/java.exe", "java");
+            WriteZipEntry(archive, "MediathekView/lib/app.jar", "jar");
         }
 
         return stream.ToArray();

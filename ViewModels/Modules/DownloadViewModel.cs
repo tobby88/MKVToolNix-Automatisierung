@@ -38,6 +38,8 @@ internal sealed class DownloadViewModel : INotifyPropertyChanged, IGlobalSetting
     public string MediathekViewStatusText => _resolvedMediathekView?.Source switch
     {
         ToolPathResolutionSource.ManualOverride => "MediathekView bereit (Override)",
+        ToolPathResolutionSource.ManagedSettings => "MediathekView bereit (verwaltet)",
+        ToolPathResolutionSource.PortableToolsFallback => "MediathekView bereit (Tools)",
         ToolPathResolutionSource.SystemPath => "MediathekView bereit (PATH)",
         ToolPathResolutionSource.InstalledApplication => "MediathekView bereit (installiert)",
         ToolPathResolutionSource.DownloadsFallback => "MediathekView bereit (portable)",

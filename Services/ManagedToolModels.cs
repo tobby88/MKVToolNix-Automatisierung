@@ -1,7 +1,7 @@
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Kennzeichnet die beiden von der App automatisch verwaltbaren Werkzeuge.
+/// Kennzeichnet die von der App automatisch verwaltbaren Werkzeuge.
 /// </summary>
 internal enum ManagedToolKind
 {
@@ -13,7 +13,12 @@ internal enum ManagedToolKind
     /// <summary>
     /// Optionales <c>ffprobe.exe</c> für zuverlässigere Laufzeitmessungen.
     /// </summary>
-    Ffprobe
+    Ffprobe,
+
+    /// <summary>
+    /// Optionales MediathekView-Downloadwerkzeug im portablen Modus.
+    /// </summary>
+    MediathekView
 }
 
 /// <summary>
@@ -25,13 +30,15 @@ internal enum ManagedToolKind
 /// <param name="DownloadUri">Direkter Downloadlink zum Archiv.</param>
 /// <param name="ArchiveFileName">Dateiname des herunterzuladenden Archivs.</param>
 /// <param name="ExpectedSha256">Optional erwartete SHA-256-Prüfsumme.</param>
+/// <param name="ExpectedSha512">Optional erwartete SHA-512-Prüfsumme.</param>
 internal sealed record ManagedToolPackage(
     ManagedToolKind Kind,
     string VersionToken,
     string DisplayVersion,
     Uri DownloadUri,
     string ArchiveFileName,
-    string? ExpectedSha256 = null);
+    string? ExpectedSha256 = null,
+    string? ExpectedSha512 = null);
 
 /// <summary>
 /// Ergebnis des Start-Upgrades für automatisch verwaltete Werkzeuge.
@@ -223,6 +230,14 @@ internal static class ManagedToolResolution
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Versucht, die aktuell startbare MediathekView-Executable anhand der gemeinsamen Prioritätsreihenfolge zu finden.
+    /// </summary>
+    internal static ResolvedToolPath? TryResolveMediathekView(AppToolPathSettings settings)
+    {
+        return MediathekViewPathResolver.TryResolve(settings);
     }
 
     /// <summary>

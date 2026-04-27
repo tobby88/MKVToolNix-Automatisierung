@@ -272,6 +272,79 @@ internal sealed class FfprobePackageSource : IManagedToolPackageSource
 }
 
 /// <summary>
+/// Löst die aktuelle stabile portable Windows-Version von MediathekView aus dem offiziellen Downloadverzeichnis auf.
+/// </summary>
+internal sealed class MediathekViewPackageSource : IManagedToolPackageSource
+{
+    private static readonly Uri StableDownloadsUri = new("https://download.mediathekview.de/stabil/");
+    private static readonly Regex WindowsZipRegex = new(
+        @"href=""(?<url>/stabil/MediathekView-(?<version>\d+(?:\.\d+)+)-win\.zip)""",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private readonly HttpClient _httpClient;
+
+    public MediathekViewPackageSource(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+    }
+
+    /// <inheritdoc />
+    public ManagedToolKind Kind => ManagedToolKind.MediathekView;
+
+    /// <inheritdoc />
+    public async Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
+    {
+        using var downloadsResponse = await _httpClient.GetAsync(StableDownloadsUri, cancellationToken);
+        downloadsResponse.EnsureSuccessStatusCode();
+        var downloadsHtml = await downloadsResponse.Content.ReadAsStringAsync(cancellationToken);
+        var packageWithoutChecksum = ParseLatestPackageFromDownloadsPage(downloadsHtml);
+
+        using var checksumResponse = await _httpClient.GetAsync(new Uri(packageWithoutChecksum.DownloadUri.ToString() + ".SHA-512"), cancellationToken);
+        checksumResponse.EnsureSuccessStatusCode();
+        var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
+
+        return ParseLatestPackageFromDownloadsPage(downloadsHtml, checksumText);
+    }
+
+    /// <summary>
+    /// Parst das aktuelle Windows-ZIP aus dem offiziellen stabilen Downloadverzeichnis.
+    /// </summary>
+    /// <param name="downloadsHtml">HTML-Listing von <c>download.mediathekview.de/stabil</c>.</param>
+    /// <param name="checksumText">Optional geladener Inhalt der zugehörigen <c>.SHA-512</c>-Datei.</param>
+    /// <returns>Paketmetadaten für die aktuelle stabile Windows-ZIP-Version.</returns>
+    internal static ManagedToolPackage ParseLatestPackageFromDownloadsPage(string downloadsHtml, string? checksumText = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(downloadsHtml);
+
+        var candidates = WindowsZipRegex.Matches(downloadsHtml)
+            .Select(match => new
+            {
+                Url = match.Groups["url"].Value,
+                Version = match.Groups["version"].Value
+            })
+            .DistinctBy(candidate => candidate.Url, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            throw new InvalidOperationException("Im MediathekView-Downloadverzeichnis wurde kein stabiles Windows-ZIP gefunden.");
+        }
+
+        var selected = candidates
+            .OrderByDescending(candidate => ManagedToolParsing.ParseVersionParts(candidate.Version), ManagedToolParsing.VersionPartsComparer)
+            .First();
+        var downloadUri = new Uri(StableDownloadsUri, selected.Url);
+        var archiveFileName = Path.GetFileName(downloadUri.LocalPath);
+
+        return new ManagedToolPackage(
+            ManagedToolKind.MediathekView,
+            selected.Version,
+            selected.Version,
+            downloadUri,
+            archiveFileName,
+            ExpectedSha512: ManagedToolParsing.TryReadSha512FromChecksumText(checksumText));
+    }
+}
+
+/// <summary>
 /// Bündelt parser- und checksum-spezifische Hilfsfunktionen der Toolquellen.
 /// </summary>
 internal static class ManagedToolParsing
@@ -336,11 +409,45 @@ internal static class ManagedToolParsing
     }
 
     /// <summary>
+    /// Liest eine reine SHA-512-Prüfsumme aus einer Checksummendatei.
+    /// </summary>
+    internal static string? TryReadSha512FromChecksumText(string? checksumText)
+    {
+        if (string.IsNullOrWhiteSpace(checksumText))
+        {
+            return null;
+        }
+
+        foreach (var token in checksumText.Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (IsValidSha512(token))
+            {
+                return token;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Prüft, ob ein Text eine formal gültige hexadezimale SHA-256-Prüfsumme darstellt.
     /// </summary>
     internal static bool IsValidSha256(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length != 64)
+        {
+            return false;
+        }
+
+        return value.All(Uri.IsHexDigit);
+    }
+
+    /// <summary>
+    /// Prüft, ob ein Text eine formal gültige hexadezimale SHA-512-Prüfsumme darstellt.
+    /// </summary>
+    internal static bool IsValidSha512(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length != 128)
         {
             return false;
         }

@@ -49,6 +49,25 @@ public sealed class MediathekViewLauncherTests : IDisposable
     }
 
     [Fact]
+    public void PathResolver_UsesManagedInstallationAfterManualOverride()
+    {
+        var managedExecutablePath = CreateFile(Path.Combine("tools", "mediathekview", "14.5.0", "MediathekView", "Portable", "MediathekView_Portable.exe"));
+
+        var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings
+        {
+            ManagedMediathekView = new ManagedToolSettings
+            {
+                InstalledPath = managedExecutablePath,
+                InstalledVersion = "14.5.0"
+            }
+        });
+
+        Assert.NotNull(resolved);
+        Assert.Equal(managedExecutablePath, resolved.Path);
+        Assert.Equal(ToolPathResolutionSource.ManagedSettings, resolved.Source);
+    }
+
+    [Fact]
     public void PathResolver_UsesPortableDownloadFallback()
     {
         var userProfileDirectory = CreateDirectory("profile");
