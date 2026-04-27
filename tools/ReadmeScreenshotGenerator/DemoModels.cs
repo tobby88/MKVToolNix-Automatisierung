@@ -334,7 +334,31 @@ internal sealed class DemoArchiveMaintenanceItem
     public bool IsSelected { get; set; }
     public string FileName { get; init; } = string.Empty;
     public string DirectoryPath { get; init; } = string.Empty;
+    public bool CanEditManualCorrections { get; init; } = true;
+    public string TargetFileName { get; set; } = string.Empty;
+    public string TargetContainerTitle { get; set; } = string.Empty;
+    public string ManualValidationMessage { get; init; } = string.Empty;
+    public ObservableCollection<DemoArchiveMaintenanceHeaderCorrection> HeaderCorrections { get; init; } = [];
     public string StatusText { get; init; } = string.Empty;
     public string StatusTone { get; init; } = string.Empty;
     public string ChangeSummary { get; init; } = string.Empty;
+}
+
+internal sealed class DemoArchiveMaintenanceHeaderCorrection
+{
+    public static IReadOnlyList<string> FlagOptions { get; } = ["ja", "nein"];
+
+    public IReadOnlyList<string> AvailableFlagValues => FlagOptions;
+
+    public string DisplayLabel { get; init; } = string.Empty;
+
+    public string DisplayName { get; init; } = string.Empty;
+
+    public string CurrentDisplayValue { get; init; } = string.Empty;
+
+    public string TargetValue { get; set; } = string.Empty;
+
+    public bool IsFlag { get; init; }
+
+    public bool IsTextValue => !IsFlag;
 }
