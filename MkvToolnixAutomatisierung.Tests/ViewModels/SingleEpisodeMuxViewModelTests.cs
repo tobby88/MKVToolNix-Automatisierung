@@ -281,6 +281,30 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void ApprovePlanReviewCommand_ReraisesCanExecute_WhenChangedPlanNeedsReviewAgain()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.SetPlanNotes([
+            "Mehrfachfolge erkannt. Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+
+        Assert.True(viewModel.ApprovePlanReviewCommand.CanExecute(null));
+        viewModel.ApprovePlanReviewCommand.Execute(null);
+        Assert.False(viewModel.ApprovePlanReviewCommand.CanExecute(null));
+
+        var canExecuteChangedCount = 0;
+        viewModel.ApprovePlanReviewCommand.CanExecuteChanged += (_, _) => canExecuteChangedCount++;
+
+        viewModel.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich ein Archivtreffer mit anderer Laufzeit. Bitte prüfen, ob die aktuelle Quelle dieses Ziel ersetzen soll."
+        ]);
+
+        Assert.True(viewModel.HasPendingPlanReview);
+        Assert.True(viewModel.ApprovePlanReviewCommand.CanExecute(null));
+        Assert.True(canExecuteChangedCount > 0);
+    }
+
+    [Fact]
     public async Task BuildFreshPlanAsync_SubtitleOnlyWithoutPrimary_DoesNotRequireAudioDescription()
     {
         var viewModel = CreateViewModel();

@@ -411,6 +411,10 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             case nameof(PlanSummaryText):
                 base.OnPropertyChanged(nameof(HasPlanSummary));
                 break;
+            case nameof(HasPendingPlanReview):
+            case nameof(IsPlanReviewApproved):
+                ApprovePlanReviewCommand.RaiseCanExecuteChanged();
+                break;
         }
 
         if (_isApplyingSharedState)
