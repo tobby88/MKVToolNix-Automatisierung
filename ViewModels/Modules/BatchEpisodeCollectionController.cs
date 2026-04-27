@@ -47,6 +47,7 @@ internal sealed record BatchEpisodeSortOption(BatchEpisodeSortMode Key, string D
 internal sealed class BatchEpisodeCollectionController : IDisposable
 {
     private readonly ObservableCollection<BatchEpisodeItemViewModel> _items = [];
+    private readonly HashSet<BatchEpisodeItemViewModel> _observedItems = [];
     private readonly ICollectionView _view;
     private bool _deferCollectionNotifications;
     private bool _viewRefreshPending;
@@ -189,16 +190,12 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
         _deferCollectionNotifications = true;
         try
         {
-            foreach (var item in _items)
-            {
-                item.PropertyChanged -= EpisodeItem_PropertyChanged;
-            }
-
+            DetachAllEpisodeItems();
             _items.Clear();
 
             foreach (var item in items)
             {
-                item.PropertyChanged += EpisodeItem_PropertyChanged;
+                AttachEpisodeItem(item);
                 _items.Add(item);
             }
         }
@@ -291,10 +288,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     public void Dispose()
     {
         _items.CollectionChanged -= Items_CollectionChanged;
-        foreach (var item in _items)
-        {
-            item.PropertyChanged -= EpisodeItem_PropertyChanged;
-        }
+        DetachAllEpisodeItems();
     }
 
     /// <summary>
@@ -363,25 +357,78 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
             return;
         }
 
-        if (e.OldItems is not null)
+        if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            foreach (BatchEpisodeItemViewModel item in e.OldItems)
+            SynchronizeEpisodeItemSubscriptions();
+        }
+        else
+        {
+            if (e.OldItems is not null)
             {
-                item.PropertyChanged -= EpisodeItem_PropertyChanged;
+                foreach (BatchEpisodeItemViewModel item in e.OldItems)
+                {
+                    DetachEpisodeItem(item);
+                }
+            }
+
+            if (e.NewItems is not null)
+            {
+                foreach (BatchEpisodeItemViewModel item in e.NewItems)
+                {
+                    AttachEpisodeItem(item);
+                }
             }
         }
 
-        if (e.NewItems is not null)
+        if (SelectedItem is not null && !_items.Contains(SelectedItem))
         {
-            foreach (BatchEpisodeItemViewModel item in e.NewItems)
-            {
-                item.PropertyChanged -= EpisodeItem_PropertyChanged;
-                item.PropertyChanged += EpisodeItem_PropertyChanged;
-            }
+            SelectedItem = null;
         }
 
         CommandsChanged?.Invoke();
         OverviewChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Verknüpft einen Eintrag genau einmal mit den zentralen UI-Refresh-Events.
+    /// Direkte Collection-Änderungen in Tests oder zukünftigen Aufrufern laufen damit
+    /// denselben Pfad wie der reguläre Scan-Reset.
+    /// </summary>
+    private void AttachEpisodeItem(BatchEpisodeItemViewModel item)
+    {
+        if (_observedItems.Add(item))
+        {
+            item.PropertyChanged += EpisodeItem_PropertyChanged;
+        }
+    }
+
+    private void DetachEpisodeItem(BatchEpisodeItemViewModel item)
+    {
+        if (_observedItems.Remove(item))
+        {
+            item.PropertyChanged -= EpisodeItem_PropertyChanged;
+        }
+    }
+
+    private void DetachAllEpisodeItems()
+    {
+        foreach (var item in _observedItems.ToList())
+        {
+            DetachEpisodeItem(item);
+        }
+    }
+
+    private void SynchronizeEpisodeItemSubscriptions()
+    {
+        foreach (var item in _observedItems.Where(item => !_items.Contains(item)).ToList())
+        {
+            DetachEpisodeItem(item);
+        }
+
+        foreach (var item in _items)
+        {
+            AttachEpisodeItem(item);
+        }
     }
 
     /// <summary>
