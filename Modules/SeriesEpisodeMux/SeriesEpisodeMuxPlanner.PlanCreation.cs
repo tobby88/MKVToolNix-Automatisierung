@@ -98,7 +98,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 videoSelection.FilePath,
                 videoSelection.TrackId,
                 BuildVideoTrackName(videoSelection.LanguageCode, videoSelection.VideoWidth, videoSelection.CodecLabel),
-                IsDefaultTrack: index == 0,
+                IsDefaultTrack: true,
                 LanguageCode: videoSelection.LanguageCode))
             .ToList();
         var retainedAudioDescriptionSources = archiveDecision.AudioDescriptionSources;

@@ -253,7 +253,7 @@ public sealed partial class SeriesArchiveService
                 BuildExpectedVideoTrackName(entry.Track),
                 $"Video {entry.Track.TrackId}",
                 expectedLanguageCode: entry.Track.Language,
-                expectedDefaultFlag: entry.Index == 0,
+                expectedDefaultFlag: true,
                 expectedVisualImpairedFlag: null,
                 expectedHearingImpairedFlag: null,
                 expectedForcedFlag: null,

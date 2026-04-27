@@ -133,7 +133,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--track-name",
                 $"{trackId}:{videoSource.TrackName}",
                 "--default-track-flag",
-                $"{trackId}:no",
+                videoSource.IsDefaultTrack ? $"{trackId}:yes" : $"{trackId}:no",
                 "--stereo-mode",
                 $"{trackId}:mono",
                 "--original-flag",

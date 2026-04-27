@@ -91,6 +91,44 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
         Assert.All(flagValues, value => Assert.Equal("yes", value));
     }
 
+    [Fact]
+    public void Build_AdditionalVideo_UsesConfiguredDefaultTrackFlag()
+    {
+        var plan = new SeriesEpisodeMuxPlan(
+            mkvMergePath: @"C:\Tools\mkvmerge.exe",
+            outputFilePath: @"C:\Temp\output.mkv",
+            title: "Pilot",
+            videoSources:
+            [
+                new VideoSourcePlan(@"C:\Temp\primary.mkv", 0, "Deutsch - FHD - H.264", IsDefaultTrack: true),
+                new VideoSourcePlan(@"C:\Temp\additional.mkv", 2, "Plattdüütsch - FHD - H.264", IsDefaultTrack: true, LanguageCode: "nds")
+            ],
+            audioSources:
+            [
+                new AudioSourcePlan(@"C:\Temp\primary.mkv", 1, "Deutsch - AC-3", IsDefaultTrack: true)
+            ],
+            primarySourceAudioTrackIds: [1],
+            primarySourceSubtitleTrackIds: [],
+            primarySourceAttachmentIds: null,
+            includePrimarySourceAttachments: false,
+            attachmentSourcePath: null,
+            attachmentSourceAttachmentIds: null,
+            audioDescriptionFilePath: null,
+            audioDescriptionTrackId: null,
+            audioDescriptionTrackName: null,
+            audioDescriptionLanguageCode: null,
+            subtitleFiles: [],
+            attachmentFilePaths: [],
+            preservedAttachmentNames: [],
+            usageComparison: ArchiveUsageComparison.Empty,
+            workingCopy: null);
+
+        var arguments = plan.BuildArguments();
+
+        AssertContainsSequence(arguments, "--video-tracks", "2", "--language", "2:nds");
+        AssertContainsSequence(arguments, "--track-name", "2:Plattdüütsch - FHD - H.264", "--default-track-flag", "2:yes");
+    }
+
     // ── Hilfsmethoden ───────────────────────────────────────────────────────
 
     private static SeriesEpisodeMuxPlan CreateMinimalPlan(string? originalLanguage, string trackLanguageCode)
@@ -142,5 +180,28 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
         }
 
         return values;
+    }
+
+    private static void AssertContainsSequence(IReadOnlyList<string> values, params string[] expectedSequence)
+    {
+        for (var index = 0; index <= values.Count - expectedSequence.Length; index++)
+        {
+            var matches = true;
+            for (var offset = 0; offset < expectedSequence.Length; offset++)
+            {
+                if (!string.Equals(values[index + offset], expectedSequence[offset], StringComparison.Ordinal))
+                {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches)
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"Sequenz '{string.Join("', '", expectedSequence)}' wurde nicht gefunden.");
     }
 }

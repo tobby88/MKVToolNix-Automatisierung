@@ -335,6 +335,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Equal(
             [outputPath, freshEnglishVideoPath],
             plan.VideoSources.Select(source => source.FilePath).ToList());
+        Assert.All(plan.VideoSources, source => Assert.True(source.IsDefaultTrack));
         Assert.NotNull(plan.PrimarySourceAudioTrackIds);
         Assert.Empty(plan.PrimarySourceAudioTrackIds!);
         Assert.All(plan.AudioSources, source => Assert.Equal(freshEnglishVideoPath, source.FilePath));
@@ -344,6 +345,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Equal(
             [1, 2],
             plan.AudioSources.Select(source => source.TrackId).ToList());
+        AssertContainsSequence(plan.BuildArguments(), "--track-name", "0:English - FHD - H.264", "--default-track-flag", "0:yes");
     }
 
     [Fact]
@@ -562,6 +564,48 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.True(plan.SkipMux);
         Assert.False(plan.HasTrackHeaderEdits);
         Assert.Empty(plan.TrackHeaderEdits);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_KeepingArchivePrimary_SetsMissingDefaultFlagOnRetainedAdditionalVideo()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-archive-video-defaults");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-archive-video-defaults");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie - Pilot (S01_E02).txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S01_E02)\r\nDauer: 00:42:00");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", language: "de"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Pilot",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", language: "de", isDefaultTrack: true),
+            CreateVideoTrack(1, "AVC/H.264", "1920x1080", trackName: "Plattdüütsch - FHD - H.264", language: "nds", isDefaultTrack: false),
+            CreateAudioTrack(2, "E-AC-3", trackName: "Deutsch - E-AC-3", isDefaultTrack: true));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        Assert.False(plan.SkipMux);
+        Assert.True(plan.HasTrackHeaderEdits);
+        AssertContainsSequence(plan.BuildArguments(), "--edit", "track:2", "--set", "flag-default=1");
     }
 
     [Fact]

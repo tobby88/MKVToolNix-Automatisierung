@@ -246,6 +246,14 @@ public sealed record ArchiveUsageComparison(
 /// <summary>
 /// Beschreibt eine einzubindende Videospur im finalen Mux-Plan.
 /// </summary>
+/// <param name="FilePath">Quelldatei, aus der die Videospur stammt.</param>
+/// <param name="TrackId">Track-ID innerhalb von <paramref name="FilePath"/>.</param>
+/// <param name="TrackName">Finaler Trackname für GUI und mkvmerge-Metadaten.</param>
+/// <param name="IsDefaultTrack">
+/// Setzt das Matroska-Default-Flag. Bei normalen Videospuren bedeutet das "für automatische
+/// Auswahl geeignet"; mehrere relevante Videospuren dürfen deshalb gleichzeitig <see langword="true"/> sein.
+/// </param>
+/// <param name="LanguageCode">Projektweit normalisierter Sprachcode der Spur.</param>
 public sealed record VideoSourcePlan(
     string FilePath,
     int TrackId,
