@@ -43,10 +43,11 @@ public sealed partial class SeriesArchiveService
             plannedVideos,
             preferredExistingVideoTracks,
             existingArchive.VideoTracks);
-        // Eine im Request gesetzte AD-Quelle ist eine bewusste Auswahl der Planebene.
-        // Ohne getrenntes "nur automatisch erkannt"-Signal darf der Archivabgleich sie nicht
-        // wegen ähnlicher Dauer/Codec still durch eine vorhandene Archiv-AD ersetzen.
-        var effectiveRequest = request;
+        var effectiveRequest = await BuildEffectiveAudioDescriptionRequestAsync(
+            mkvMergePath,
+            request,
+            existingAudioDescriptions,
+            cancellationToken);
         var containerTitleEdit = BuildRelevantContainerTitleEdit(existingArchive.Container.Title, request.Title);
         var attachmentReusePlan = await BuildAttachmentReusePlanAsync(
             mkvMergePath,
@@ -365,6 +366,77 @@ public sealed partial class SeriesArchiveService
             .OrderBy(track => MediaLanguageHelper.GetLanguageSortRank(track.Language))
             .ThenBy(track => track.TrackId)
             .ToList();
+    }
+
+    private async Task<SeriesEpisodeMuxRequest> BuildEffectiveAudioDescriptionRequestAsync(
+        string mkvMergePath,
+        SeriesEpisodeMuxRequest request,
+        IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.AudioDescriptionPath)
+            || existingAudioDescriptions.Count == 0
+            || string.Equals(request.AudioDescriptionPath, request.OutputFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return request;
+        }
+
+        // Eine im Request gesetzte AD-Quelle ist weiterhin eine bewusste Planebene-Auswahl.
+        // Unterdrückt wird sie nur, wenn die vorhandene Archiv-AD nach Codec, Sprache und Dauer
+        // belastbar denselben fachlichen Slot abdeckt. So verschwinden Dubletten wie bei
+        // Doppelfolgen nicht erst im UI, ohne echte Ersatzfälle mit abweichender Dauer zu verlieren.
+        var requestedAudioDescription = await ReadRequestedAudioDescriptionTrackAsync(
+            mkvMergePath,
+            request.AudioDescriptionPath,
+            cancellationToken);
+        var requestedTextDuration = CompanionTextMetadataReader
+            .ReadForMediaFile(request.AudioDescriptionPath)
+            .Duration;
+        return existingAudioDescriptions.Any(existingAudioDescription =>
+            DoesExistingAudioDescriptionCoverRequest(
+                requestedAudioDescription,
+                requestedTextDuration,
+                existingAudioDescription))
+            ? request with { AudioDescriptionPath = null }
+            : request;
+    }
+
+    private async Task<ContainerTrackMetadata> ReadRequestedAudioDescriptionTrackAsync(
+        string mkvMergePath,
+        string audioDescriptionPath,
+        CancellationToken cancellationToken)
+    {
+        var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
+        return container.Tracks.FirstOrDefault(track => string.Equals(track.Type, "audio", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"In der AD-Datei wurde keine Audiospur gefunden: {audioDescriptionPath}");
+    }
+
+    private static bool DoesExistingAudioDescriptionCoverRequest(
+        ContainerTrackMetadata requestedAudioDescription,
+        TimeSpan? requestedTextDuration,
+        ContainerTrackMetadata existingAudioDescription)
+    {
+        return string.Equals(requestedAudioDescription.CodecLabel, existingAudioDescription.CodecLabel, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                MediaLanguageHelper.NormalizeMuxLanguageCode(requestedAudioDescription.Language),
+                MediaLanguageHelper.NormalizeMuxLanguageCode(existingAudioDescription.Language),
+                StringComparison.OrdinalIgnoreCase)
+            && AreAudioDescriptionDurationsCompatible(
+                requestedAudioDescription.Duration ?? requestedTextDuration,
+                existingAudioDescription.Duration);
+    }
+
+    private static bool AreAudioDescriptionDurationsCompatible(TimeSpan? requestedDuration, TimeSpan? existingDuration)
+    {
+        if (requestedDuration is null || existingDuration is null)
+        {
+            return false;
+        }
+
+        var differenceSeconds = Math.Abs((requestedDuration.Value - existingDuration.Value).TotalSeconds);
+        var referenceSeconds = Math.Max(requestedDuration.Value.TotalSeconds, existingDuration.Value.TotalSeconds);
+        var toleranceSeconds = Math.Max(10d, Math.Round(referenceSeconds * 0.01d));
+        return differenceSeconds <= toleranceSeconds;
     }
 
     private static bool IsHearingImpairedSubtitleTrack(ContainerTrackMetadata track)

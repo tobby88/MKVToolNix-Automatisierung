@@ -295,7 +295,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdMatchesArchiveAd_StillUsesSelectedAd()
+    public async Task CreatePlanAsync_AudioDescriptionOnly_WhenSelectedAdMatchesArchiveAd_RetainsExistingAd()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-reuse");
         var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-reuse");
@@ -337,11 +337,121 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 
         Assert.Equal(outputPath, plan.OutputFilePath);
         Assert.False(plan.SkipMux);
-        Assert.False(plan.HasHeaderEdits);
-        Assert.Equal(audioDescriptionPath, plan.AudioDescriptionFilePath);
-        Assert.Equal(1, plan.AudioDescriptionTrackId);
-        Assert.Contains(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
-        Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsAdded);
+        Assert.True(plan.HasHeaderEdits);
+        Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(2, plan.AudioDescriptionTrackId);
+        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsExisting);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_WithFreshVideoAndMatchingArchiveAd_DoesNotMuxDuplicateAd()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-fresh-video-with-existing-ad");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-fresh-video-with-existing-ad");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder - Rififi (S2014_E05-E06).mp4");
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder - Rififi (S2014_E05-E06) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder - Rififi (S2014_E05-E06) Audiodeskription.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Rififi (S2014_E05-E06) (Audiodeskription)\r\nDauer: 00:50:35");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "Deutsch - HD - H.264"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, tagDuration: "00:50:35.413000000"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season 2014",
+            "Neues aus Büttenwarder - S2014E05-E06 - Rififi.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Rififi",
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264", language: "de", isDefaultTrack: true),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de", tagDuration: "00:50:35.413000000", isDefaultTrack: true),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, language: "de", tagDuration: "00:50:35.413000000"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: mainVideoPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Rififi",
+            PlannedVideoPaths: [mainVideoPath]));
+
+        Assert.True(plan.SkipMux);
+        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsExisting);
+        Assert.Contains("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_WithBetterFreshVideoAndMatchingArchiveAd_RetainsArchiveAd()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-fresh-video-retains-existing-ad");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-fresh-video-retains-existing-ad");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder - Rififi (S2014_E05-E06).mp4");
+        var audioDescriptionPath = CreateFile(sourceDirectory, "Neues aus Büttenwarder - Rififi (S2014_E05-E06) Audiodeskription.mp4");
+        CreateFile(
+            sourceDirectory,
+            "Neues aus Büttenwarder - Rififi (S2014_E05-E06) Audiodeskription.txt",
+            "Sender: NDR\r\nThema: Neues aus Büttenwarder\r\nTitel: Rififi (S2014_E05-E06) (Audiodeskription)\r\nDauer: 00:50:35");
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", trackName: "Deutsch - FHD - H.264"),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            audioDescriptionPath,
+            CreateAudioTrack(0, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, tagDuration: "00:50:35.413000000"));
+
+        var outputPath = Path.Combine(
+            archiveDirectory,
+            "Neues aus Büttenwarder",
+            "Season 2014",
+            "Neues aus Büttenwarder - S2014E05-E06 - Rififi.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+        FakeMkvMergeTestHelper.WriteProbeFileWithContainerTitle(
+            outputPath,
+            "Rififi",
+            CreateVideoTrack(0, "AVC/H.264", "1280x720", trackName: "Deutsch - HD - H.264", language: "de", isDefaultTrack: true),
+            CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de", tagDuration: "00:50:35.413000000", isDefaultTrack: true),
+            CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, language: "de", tagDuration: "00:50:35.413000000"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            MainVideoPath: mainVideoPath,
+            AudioDescriptionPath: audioDescriptionPath,
+            SubtitlePaths: [],
+            AttachmentPaths: [],
+            OutputFilePath: outputPath,
+            Title: "Rififi",
+            PlannedVideoPaths: [mainVideoPath]));
+
+        Assert.False(plan.SkipMux);
+        Assert.NotNull(plan.WorkingCopy);
+        Assert.Equal(outputPath, plan.AudioDescriptionFilePath);
+        Assert.Equal(2, plan.AudioDescriptionTrackId);
+        Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
+
+        var summary = plan.BuildUsageSummary();
+        Assert.False(summary.AudioDescription.HasRemoved);
+        Assert.Contains(summary.AudioDescription.CurrentItems, item => item.IsExisting);
+        Assert.Contains("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", summary.AudioDescription.CurrentText, StringComparison.Ordinal);
     }
 
     [Fact]

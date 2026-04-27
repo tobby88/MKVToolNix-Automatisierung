@@ -179,56 +179,49 @@ public sealed partial class SeriesArchiveService
         return new EpisodeUsageSummary(
             ArchiveAction: "Zieldatei bereits aktuell",
             ArchiveDetails: "Alle benötigten Inhalte und relevanten Spurnamen sind bereits vorhanden. Kein erneutes Muxen nötig.",
-            MainVideo: new EpisodeUsageEntry(
-                bestExistingVideo is null
-                    ? BuildExistingTargetDisplayText(Path.GetFileName(outputPath))
-                    : BuildExistingTargetDisplayText(GetExistingVideoDisplayLabel(bestExistingVideo)),
-                null,
-                null),
-            AdditionalVideos: new EpisodeUsageEntry(
-                additionalVideoTracks.Count == 0
-                    ? "(keine)"
-                    : string.Join(
-                        Environment.NewLine,
-                        additionalVideoTracks.Select(track => BuildExistingTargetDisplayText(GetExistingVideoDisplayLabel(track)))),
-                null,
-                null),
-            Audio: new EpisodeUsageEntry(
-                retainedNormalAudioTracks.Count == 0
-                    ? "(keine)"
-                    : string.Join(
-                        Environment.NewLine,
-                        retainedNormalAudioTracks.Select(track => BuildExistingTargetDisplayText(BuildExpectedAudioTrackName(track)))),
-                null,
-                null),
-            AudioDescription: new EpisodeUsageEntry(
-                existingAudioDescriptions.Count == 0
-                    ? "(keine)"
-                    : string.Join(
-                        Environment.NewLine,
-                        BuildRetainedAudioDescriptionSources(
-                                outputPath,
-                                existingAudioDescriptions,
-                                retainedNormalAudioTracks.FirstOrDefault()?.Language)
-                            .Select(source => BuildExistingTargetDisplayText(source.TrackName))),
-                null,
-                null),
-            Subtitles: new EpisodeUsageEntry(
-                subtitlePlan.EmbeddedPlans.Count == 0
-                    ? "(keine)"
-                    : string.Join(
-                        Environment.NewLine,
-                        subtitlePlan.EmbeddedPlans.Select(subtitle => BuildExistingTargetDisplayText(subtitle.TrackName))),
-                null,
-                null),
-            Attachments: new EpisodeUsageEntry(
-                preservedAttachmentNames.Count == 0
-                    ? "keine"
-                    : string.Join(
-                        ", ",
-                        preservedAttachmentNames.Select(BuildExistingTargetDisplayText)),
-                null,
-                null));
+            MainVideo: BuildExistingUsageEntry(
+                [
+                    bestExistingVideo is null
+                        ? Path.GetFileName(outputPath)
+                        : GetExistingVideoDisplayLabel(bestExistingVideo)
+                ]),
+            AdditionalVideos: BuildExistingUsageEntry(
+                additionalVideoTracks.Select(GetExistingVideoDisplayLabel).ToList()),
+            Audio: BuildExistingUsageEntry(
+                retainedNormalAudioTracks.Select(BuildExpectedAudioTrackName).ToList()),
+            AudioDescription: BuildExistingUsageEntry(
+                BuildRetainedAudioDescriptionSources(
+                        outputPath,
+                        existingAudioDescriptions,
+                        retainedNormalAudioTracks.FirstOrDefault()?.Language)
+                    .Select(source => source.TrackName)
+                    .ToList()),
+            Subtitles: BuildExistingUsageEntry(
+                subtitlePlan.EmbeddedPlans.Select(subtitle => subtitle.TrackName).ToList()),
+            Attachments: BuildExistingUsageEntry(
+                preservedAttachmentNames,
+                noneText: "keine",
+                separator: ", "));
+    }
+
+    private static EpisodeUsageEntry BuildExistingUsageEntry(
+        IReadOnlyList<string> existingItems,
+        string noneText = "(keine)",
+        string? separator = null)
+    {
+        if (existingItems.Count == 0)
+        {
+            return new EpisodeUsageEntry(noneText, null, null);
+        }
+
+        var items = existingItems
+            .Select(item => new EpisodeUsageItem(BuildExistingTargetDisplayText(item), EpisodeUsageItemKind.Existing))
+            .ToList();
+        return new EpisodeUsageEntry(
+            string.Join(separator ?? Environment.NewLine, items.Select(item => item.Text)),
+            null,
+            null,
+            items);
     }
 
     /// <summary>
