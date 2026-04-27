@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.Composition;
@@ -24,7 +25,9 @@ internal static class MuxCompositionModule
         services.AddSingleton<ArchiveMaintenanceService>(provider => new ArchiveMaintenanceService(
             provider.GetRequiredService<MkvMergeProbeService>(),
             provider.GetRequiredService<IMkvToolNixLocator>(),
-            provider.GetRequiredService<MuxExecutionService>()));
+            provider.GetRequiredService<MuxExecutionService>(),
+            provider.GetRequiredService<EpisodeMetadataLookupService>(),
+            provider.GetRequiredService<EmbyNfoProviderIdService>()));
         services.AddSingleton<EpisodeOutputPathService>(provider => new EpisodeOutputPathService(provider.GetRequiredService<SeriesArchiveService>()));
         services.AddSingleton<FfprobeDurationProbe>(provider => new FfprobeDurationProbe(provider.GetRequiredService<FfprobeLocator>()));
         services.AddSingleton<IMediaDurationProbe>(provider => new PreferredMediaDurationProbe(

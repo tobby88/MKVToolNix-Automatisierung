@@ -72,6 +72,26 @@ public sealed class ArchiveMaintenanceServiceTests
         Assert.EndsWith("Serie - S01E01 - Pilot - Start.mkv", analysis.RenameOperation!.TargetPath, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void AnalyzeContainer_UsesResolvedTvdbTitle_WhenMetadataIsAvailable()
+    {
+        var analysis = ArchiveMaintenanceService.AnalyzeContainer(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alter Titel.mkv",
+            new ContainerMetadata(
+                "Alter Titel",
+                [CreateVideoTrack(0), CreateAudioTrack(1, "Deutsch - AAC")],
+                Attachments: []),
+            new ArchiveExpectedEpisodeMetadata(
+                "TVDB-Titel",
+                "01",
+                "01",
+                "de"));
+
+        Assert.Equal("TVDB-Titel", analysis.ExpectedTitle);
+        Assert.Equal("TVDB-Titel", analysis.ContainerTitleEdit?.ExpectedTitle);
+        Assert.EndsWith("Serie - S01E01 - TVDB-Titel.mkv", analysis.RenameOperation?.TargetPath, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)
     {
         return new ContainerTrackMetadata(
