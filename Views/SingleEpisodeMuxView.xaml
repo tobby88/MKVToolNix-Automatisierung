@@ -164,16 +164,6 @@
                                         BorderBrush="{Binding OutputTargetBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding OutputTargetBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding OutputTargetBadgeText, Mode=OneWay}" />
                                 </Border>
 
@@ -184,16 +174,6 @@
                                         BorderBrush="{Binding ManualCheckBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding ManualCheckBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding ManualCheckBadgeText, Mode=OneWay}" />
                                 </Border>
 
@@ -204,22 +184,12 @@
                                         BorderBrush="{Binding MetadataBadgeBorderBrush, Mode=OneWay}"
                                         ToolTip="{Binding MetadataBadgeTooltip, Mode=OneWay}"
                                         BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
                                     <TextBlock FontWeight="SemiBold" Text="{Binding MetadataBadgeText, Mode=OneWay}" />
                                 </Border>
                             </WrapPanel>
-                            <views:EpisodeUsageSummaryView DataContext="{Binding UsageSummary, Mode=OneWay}">
-                                <views:EpisodeUsageSummaryView.Style>
-                                    <Style TargetType="{x:Type views:EpisodeUsageSummaryView}">
+                            <Grid>
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
                                         <Setter Property="Visibility" Value="Collapsed" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding HasPlanSummary}" Value="True">
@@ -227,8 +197,9 @@
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </views:EpisodeUsageSummaryView.Style>
-                            </views:EpisodeUsageSummaryView>
+                                </Grid.Style>
+                                <views:EpisodeUsageSummaryView DataContext="{Binding UsageSummary, Mode=OneWay}" />
+                            </Grid>
                         </StackPanel>
                     </Border>
 
