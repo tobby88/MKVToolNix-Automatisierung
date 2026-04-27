@@ -133,32 +133,40 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 var finalStatusText = _currentPlan.HasHeaderEdits
                     ? "Header-Metadaten erfolgreich aktualisiert"
                     : "Muxing erfolgreich abgeschlossen";
+                var completedPlan = _currentPlan ?? throw new InvalidOperationException("Der abgeschlossene Mux-Plan fehlt.");
+                var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
                 SetStatus(finalStatusText, 100);
+                PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: false);
+                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Success);
                 _dialogService.ShowInfo(
                     "Erfolg",
-                    _currentPlan.HasHeaderEdits
-                        ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{_currentPlan.OutputFilePath}"
-                        : $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
-                PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: false);
-                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
-                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Success);
+                    completedPlan.HasHeaderEdits
+                        ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{completedPlan.OutputFilePath}"
+                        : $"MKV erfolgreich erstellt:\n{completedPlan.OutputFilePath}");
+                await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
+                SetStatus(finalStatusText, 100);
             }
             else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
             {
                 var finalStatusText = _currentPlan.HasHeaderEdits
                     ? "Header-Metadaten mit Warnungen aktualisiert"
                     : "Muxing mit Warnungen abgeschlossen";
+                var completedPlan = _currentPlan ?? throw new InvalidOperationException("Der abgeschlossene Mux-Plan fehlt.");
+                var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus(finalStatusText, 100);
+                PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: true);
+                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Warning);
                 _dialogService.ShowWarning(
                     "Warnung",
-                    _currentPlan.HasHeaderEdits
-                        ? $"Die Header-Metadaten wurden aktualisiert, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}"
-                        : $"Die MKV wurde erstellt, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
-                PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: true);
-                await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
-                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Warning);
+                    completedPlan.HasHeaderEdits
+                        ? $"Die Header-Metadaten wurden aktualisiert, aber {completedPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{completedPlan.OutputFilePath}"
+                        : $"Die MKV wurde erstellt, aber {completedPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{completedPlan.OutputFilePath}");
+                await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
+                SetStatus(finalStatusText, 100);
             }
             else
             {
@@ -502,24 +510,36 @@ internal sealed partial class SingleEpisodeMuxViewModel
         SeriesEpisodeMuxPlan plan,
         CancellationToken cancellationToken)
     {
+        await OfferSingleEpisodeCleanupCandidateAsync(BuildSingleEpisodeCleanupCandidate(plan), cancellationToken);
+    }
+
+    private SingleEpisodeCleanupCandidate BuildSingleEpisodeCleanupCandidate(SeriesEpisodeMuxPlan plan)
+    {
         var usedFiles = BuildCleanupFileList(plan.GetReferencedInputFiles(), plan);
         var relatedFiles = BuildCleanupFileList(RelatedEpisodeFilePaths, plan);
         var unusedFiles = relatedFiles
             .Where(path => !usedFiles.Contains(path, StringComparer.OrdinalIgnoreCase))
             .ToList();
 
-        if (usedFiles.Count == 0 && unusedFiles.Count == 0)
+        return new SingleEpisodeCleanupCandidate(usedFiles, unusedFiles);
+    }
+
+    private async Task OfferSingleEpisodeCleanupCandidateAsync(
+        SingleEpisodeCleanupCandidate cleanupCandidate,
+        CancellationToken cancellationToken)
+    {
+        if (cleanupCandidate.UsedFiles.Count == 0 && cleanupCandidate.UnusedFiles.Count == 0)
         {
             return;
         }
 
-        if (!_dialogService.ConfirmSingleEpisodeCleanup(usedFiles, unusedFiles))
+        if (!_dialogService.ConfirmSingleEpisodeCleanup(cleanupCandidate.UsedFiles, cleanupCandidate.UnusedFiles))
         {
             return;
         }
 
-        var cleanupFiles = usedFiles
-            .Concat(unusedFiles)
+        var cleanupFiles = cleanupCandidate.UsedFiles
+            .Concat(cleanupCandidate.UnusedFiles)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -574,6 +594,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
             plan.WorkingCopy?.DestinationFilePath,
             excludedSourcePaths: ExcludedSourcePaths);
     }
+
+    private sealed record SingleEpisodeCleanupCandidate(
+        IReadOnlyList<string> UsedFiles,
+        IReadOnlyList<string> UnusedFiles);
 
     private static string GetPreferredVideoDirectory()
     {
