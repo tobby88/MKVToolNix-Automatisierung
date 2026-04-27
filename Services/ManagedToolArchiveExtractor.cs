@@ -1,4 +1,5 @@
 using SharpCompress.Archives;
+using SharpCompress.Readers;
 
 namespace MkvToolnixAutomatisierung.Services;
 
@@ -56,7 +57,7 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 
         Directory.CreateDirectory(destinationDirectory);
 
-        using var archive = ArchiveFactory.Open(archivePath);
+        using var archive = ArchiveFactory.OpenArchive(archivePath, ReaderOptions.ForFilePath);
         var allEntries = archive.Entries
             .Where(entry => !entry.IsDirectory)
             .ToList();
