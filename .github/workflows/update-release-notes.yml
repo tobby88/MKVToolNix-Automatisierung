@@ -33,28 +33,40 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_SHA: ${{ github.sha }}
         shell: pwsh
         run: |
           if ($env:EVENT_NAME -eq 'workflow_dispatch') {
-            $version = $env:INPUT_VERSION
+            $versions = @($env:INPUT_VERSION)
           } else {
-            $version = (git diff-tree --no-commit-id --name-only -r HEAD |
+            if (-not [string]::IsNullOrWhiteSpace($env:EVENT_BEFORE) -and $env:EVENT_BEFORE -notmatch '^0+$') {
+              $changedFiles = git diff --name-only $env:EVENT_BEFORE $env:EVENT_SHA
+            } else {
+              $changedFiles = git diff-tree --no-commit-id --name-only -r $env:EVENT_SHA
+            }
+
+            $versions = @($changedFiles |
               Where-Object { $_ -match '^docs/releases/(\d+\.\d+\.\d+)\.md$' } |
               ForEach-Object { [regex]::Match($_, '^docs/releases/(\d+\.\d+\.\d+)\.md$').Groups[1].Value } |
-              Select-Object -First 1)
+              Sort-Object -Unique)
           }
 
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            Write-Host 'Keine konkrete Release-Notes-Datei im letzten Commit gefunden.'
+          if ($versions.Count -eq 0) {
+            Write-Host 'Keine konkrete Release-Notes-Datei im Push gefunden.'
             return
           }
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "Version muss im Format Major.Minor.Patch angegeben werden, z. B. 1.0.0."
-          }
 
-          $notesPath = "docs/releases/$version.md"
-          if (-not (Test-Path -LiteralPath $notesPath)) {
-            throw "Release-Notes-Datei nicht gefunden: $notesPath"
-          }
+          foreach ($version in $versions) {
+            if ($version -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Version muss im Format Major.Minor.Patch angegeben werden, z. B. 1.0.0."
+            }
 
-          & gh release edit "v$version" --notes-file $notesPath
+            $notesPath = "docs/releases/$version.md"
+            if (-not (Test-Path -LiteralPath $notesPath)) {
+              throw "Release-Notes-Datei nicht gefunden: $notesPath"
+            }
+
+            Write-Host "Aktualisiere GitHub-Release v$version aus $notesPath"
+            & gh release edit "v$version" --notes-file $notesPath
+          }
