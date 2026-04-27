@@ -75,6 +75,11 @@ public sealed class AppToolPathSettings
     public string MkvToolNixDirectoryPath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Optionaler manueller Pfad zur installierten oder portablen MediathekView-Executable.
+    /// </summary>
+    public string MediathekViewPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Erzeugt eine Kopie der Toolpfad-Einstellungen.
     /// </summary>
     /// <returns>Geklonter Einstellungssatz.</returns>
@@ -85,7 +90,8 @@ public sealed class AppToolPathSettings
             ManagedMkvToolNix = ManagedMkvToolNix.Clone(),
             ManagedFfprobe = ManagedFfprobe.Clone(),
             FfprobePath = FfprobePath,
-            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath
+            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
+            MediathekViewPath = MediathekViewPath
         };
     }
 }

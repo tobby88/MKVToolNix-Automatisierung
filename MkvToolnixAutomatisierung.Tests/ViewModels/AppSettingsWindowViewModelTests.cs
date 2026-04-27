@@ -32,6 +32,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         _ = CreateFile(Path.Combine("mkvtoolnix", "mkvmerge.exe"));
         _ = CreateFile(Path.Combine("mkvtoolnix", "mkvpropedit.exe"));
         var ffprobePath = CreateFile(Path.Combine("ffmpeg", "ffprobe.exe"));
+        var mediathekViewPath = CreateFile(Path.Combine("mediathekview", "MediathekView.exe"));
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
         {
@@ -56,6 +57,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.ArchiveRootDirectory = $"  {archiveRoot}  ";
         viewModel.MkvToolNixDirectoryPath = $"  {mkvToolNixDirectory}  ";
         viewModel.FfprobePath = $"  {ffprobePath}  ";
+        viewModel.MediathekViewPath = $"  {mediathekViewPath}  ";
         viewModel.AutoManageMkvToolNix = false;
         viewModel.AutoManageFfprobe = false;
         viewModel.TvdbApiKey = "  tvdb-key  ";
@@ -71,6 +73,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal(archiveRoot, savedSettings.Archive?.DefaultSeriesArchiveRootPath);
         Assert.Equal(mkvToolNixDirectory, savedSettings.ToolPaths?.MkvToolNixDirectoryPath);
         Assert.Equal(ffprobePath, savedSettings.ToolPaths?.FfprobePath);
+        Assert.Equal(mediathekViewPath, savedSettings.ToolPaths?.MediathekViewPath);
         Assert.False(savedSettings.ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
         Assert.False(savedSettings.ToolPaths?.ManagedFfprobe.AutoManageEnabled);
         Assert.Equal(@"C:\managed\mkvtoolnix", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledPath);
@@ -86,6 +89,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.True(viewModel.IsArchiveAvailable);
         Assert.True(viewModel.IsFfprobeAvailable);
         Assert.True(viewModel.IsMkvToolNixAvailable);
+        Assert.True(viewModel.IsMediathekViewAvailable);
         Assert.Contains("Einstellungen gespeichert", viewModel.StatusText, StringComparison.Ordinal);
     }
 
@@ -209,6 +213,36 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             {
                 Directory.Delete(fallbackRoot, recursive: true);
             }
+        }
+    }
+
+    [Fact]
+    public void ToolStatus_ShowsPortableDownloadsFallbackForMediathekView()
+    {
+        var userProfileDirectory = CreateDirectory("sandbox-profile-mediathekview");
+        var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
+        var portableDirectory = Path.Combine(downloadsDirectory, "MediathekView-latest-win");
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+            Directory.CreateDirectory(portableDirectory);
+            var mediathekViewPath = Path.Combine(portableDirectory, "MediathekView.exe");
+            File.WriteAllText(mediathekViewPath, "tool");
+
+            var viewModel = CreateViewModel();
+
+            Assert.True(viewModel.IsMediathekViewAvailable);
+            Assert.Equal("MediathekView bereit (portable)", viewModel.MediathekViewStatusText);
+            Assert.Contains(mediathekViewPath, viewModel.MediathekViewStatusTooltip, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
         }
     }
 

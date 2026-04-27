@@ -57,12 +57,50 @@
                 <Grid Margin="12" IsEnabled="{Binding IsInteractive}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="16" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <GroupBox Grid.Row="0" Header="MKVToolNix">
+                    <GroupBox Grid.Row="0" Header="MediathekView">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       Margin="0,2,12,8"
+                                       VerticalAlignment="Center"
+                                       Text="Portable/EXE" />
+                            <TextBox Grid.Row="0"
+                                     Grid.Column="1"
+                                     Margin="0,0,12,6"
+                                     ToolTip="Optionaler Pfad zur MediathekView.exe. Ohne Override sucht die App nach installierten Versionen, PATH-Einträgen und portablen Downloads."
+                                     Text="{Binding MediathekViewPath}" />
+                            <Button Grid.Row="0"
+                                    Grid.Column="2"
+                                    Margin="0,0,0,4"
+                                    Padding="10,6"
+                                    Click="SelectMediathekViewButton_Click"
+                                    Content="Datei wählen" />
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="1"
+                                       Foreground="#4D5B68"
+                                       Text="{Binding MediathekViewStatusText}"
+                                       ToolTip="{Binding MediathekViewStatusTooltip}" />
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="2" Header="MKVToolNix">
                         <Grid Margin="12">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -107,7 +145,7 @@
                         </Grid>
                     </GroupBox>
 
-                    <GroupBox Grid.Row="3" Header="ffprobe">
+                    <GroupBox Grid.Row="4" Header="ffprobe">
                         <Grid Margin="12">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />

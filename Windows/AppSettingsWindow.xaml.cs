@@ -59,6 +59,11 @@ public partial class AppSettingsWindow : Window
         _viewModel.SelectFfprobePath();
     }
 
+    private void SelectMediathekViewButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.SelectMediathekViewPath();
+    }
+
     private async void TestEmbyConnectionButton_Click(object sender, RoutedEventArgs e)
     {
         try

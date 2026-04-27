@@ -19,6 +19,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private string _archiveRootDirectory;
     private string _ffprobePath;
     private string _mkvToolNixDirectoryPath;
+    private string _mediathekViewPath;
     private bool _autoManageMkvToolNix;
     private bool _autoManageFfprobe;
     private string _tvdbApiKey;
@@ -31,6 +32,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private ResolvedToolPath? _resolvedFfprobePath;
     private ResolvedMkvToolNixPaths? _resolvedMkvToolNixPaths;
+    private ResolvedToolPath? _resolvedMediathekViewPath;
 
     public AppSettingsWindowViewModel(
         AppSettingsModuleServices services,
@@ -50,6 +52,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         _archiveRootDirectory = archiveSettings;
         _ffprobePath = toolSettings.FfprobePath;
         _mkvToolNixDirectoryPath = toolSettings.MkvToolNixDirectoryPath;
+        _mediathekViewPath = toolSettings.MediathekViewPath;
         _autoManageMkvToolNix = _managedMkvToolNixSettings.AutoManageEnabled;
         _autoManageFfprobe = _managedFfprobeSettings.AutoManageEnabled;
         _tvdbApiKey = metadataSettings.TvdbApiKey;
@@ -148,6 +151,26 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsMkvToolNixAvailable));
             OnPropertyChanged(nameof(MkvToolNixStatusText));
             OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
+        }
+    }
+
+    public string MediathekViewPath
+    {
+        get => _mediathekViewPath;
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (_mediathekViewPath == normalized)
+            {
+                return;
+            }
+
+            _mediathekViewPath = normalized;
+            RefreshToolResolutionState();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsMediathekViewAvailable));
+            OnPropertyChanged(nameof(MediathekViewStatusText));
+            OnPropertyChanged(nameof(MediathekViewStatusTooltip));
         }
     }
 
@@ -332,6 +355,19 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public string MkvToolNixStatusTooltip => BuildMkvToolNixTooltip();
 
+    public bool IsMediathekViewAvailable => _resolvedMediathekViewPath is not null;
+
+    public string MediathekViewStatusText => _resolvedMediathekViewPath?.Source switch
+    {
+        ToolPathResolutionSource.ManualOverride => "MediathekView bereit (Override)",
+        ToolPathResolutionSource.SystemPath => "MediathekView bereit (PATH)",
+        ToolPathResolutionSource.InstalledApplication => "MediathekView bereit (installiert)",
+        ToolPathResolutionSource.DownloadsFallback => "MediathekView bereit (portable)",
+        _ => "MediathekView fehlt"
+    };
+
+    public string MediathekViewStatusTooltip => BuildMediathekViewTooltip();
+
     public string SettingsFilePath => PortableAppStorage.SettingsFilePath;
 
     public void SelectArchiveRootDirectory()
@@ -365,6 +401,18 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         if (!string.IsNullOrWhiteSpace(selectedDirectory))
         {
             MkvToolNixDirectoryPath = selectedDirectory;
+        }
+    }
+
+    public void SelectMediathekViewPath()
+    {
+        var selectedPath = _dialogService.SelectExecutable(
+            "MediathekView.exe auswählen",
+            "MediathekView.exe|MediathekView.exe|Ausführbare Dateien (*.exe)|*.exe",
+            ResolveInitialDirectory(MediathekViewPath));
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+        {
+            MediathekViewPath = selectedPath;
         }
     }
 
@@ -409,6 +457,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
             settings.ToolPaths ??= new AppToolPathSettings();
             settings.ToolPaths.FfprobePath = FfprobePath;
             settings.ToolPaths.MkvToolNixDirectoryPath = MkvToolNixDirectoryPath;
+            settings.ToolPaths.MediathekViewPath = MediathekViewPath;
             settings.ToolPaths.ManagedFfprobe = _managedFfprobeSettings.Clone();
             settings.ToolPaths.ManagedFfprobe.AutoManageEnabled = AutoManageFfprobe;
             settings.ToolPaths.ManagedMkvToolNix = _managedMkvToolNixSettings.Clone();
@@ -439,6 +488,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsMkvToolNixAvailable));
         OnPropertyChanged(nameof(MkvToolNixStatusText));
         OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
+        OnPropertyChanged(nameof(IsMediathekViewAvailable));
+        OnPropertyChanged(nameof(MediathekViewStatusText));
+        OnPropertyChanged(nameof(MediathekViewStatusTooltip));
         OnPropertyChanged(nameof(SettingsFilePath));
     }
 
@@ -465,6 +517,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         {
             FfprobePath = FfprobePath,
             MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
+            MediathekViewPath = MediathekViewPath,
             ManagedFfprobe = _managedFfprobeSettings.Clone(),
             ManagedMkvToolNix = _managedMkvToolNixSettings.Clone()
         };
@@ -475,6 +528,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         var currentSettings = BuildCurrentToolSettings();
         _resolvedFfprobePath = ManagedToolResolution.TryResolveFfprobe(currentSettings);
         _resolvedMkvToolNixPaths = ManagedToolResolution.TryResolveMkvToolNix(currentSettings);
+        _resolvedMediathekViewPath = MediathekViewPathResolver.TryResolve(currentSettings);
     }
 
     private string BuildFfprobeTooltip()
@@ -532,6 +586,29 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         return string.IsNullOrWhiteSpace(MkvToolNixDirectoryPath)
             ? "Auto-Verwaltung deaktiviert. Optional kann hier ein manueller Override gesetzt werden."
             : $"Aus dem manuellen Override fehlen mkvmerge.exe und/oder mkvpropedit.exe:{Environment.NewLine}{MkvToolNixDirectoryPath}";
+    }
+
+    private string BuildMediathekViewTooltip()
+    {
+        if (_resolvedMediathekViewPath is not null)
+        {
+            return _resolvedMediathekViewPath.Source switch
+            {
+                ToolPathResolutionSource.ManualOverride
+                    => $"Manueller MediathekView-Pfad:{Environment.NewLine}{_resolvedMediathekViewPath.Path}",
+                ToolPathResolutionSource.SystemPath
+                    => $"MediathekView wurde im Windows-PATH gefunden:{Environment.NewLine}{_resolvedMediathekViewPath.Path}",
+                ToolPathResolutionSource.InstalledApplication
+                    => $"Installierte MediathekView-Version gefunden:{Environment.NewLine}{_resolvedMediathekViewPath.Path}",
+                ToolPathResolutionSource.DownloadsFallback
+                    => $"Portable MediathekView-Version im Downloadordner gefunden:{Environment.NewLine}{_resolvedMediathekViewPath.Path}",
+                _ => $"MediathekView wurde gefunden:{Environment.NewLine}{_resolvedMediathekViewPath.Path}"
+            };
+        }
+
+        return string.IsNullOrWhiteSpace(MediathekViewPath)
+            ? "Optional. Die App sucht zusätzlich nach installierten Versionen, PATH-Einträgen und portablen MediathekView-Ordnern im Downloadverzeichnis."
+            : $"Der manuelle MediathekView-Pfad ist aktuell nicht verwendbar:{Environment.NewLine}{MediathekViewPath}";
     }
 
     private static string BuildManagedToolTooltip(

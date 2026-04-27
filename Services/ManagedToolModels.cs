@@ -108,7 +108,8 @@ internal enum ToolPathResolutionSource
     ManagedSettings,
     PortableToolsFallback,
     SystemPath,
-    DownloadsFallback
+    DownloadsFallback,
+    InstalledApplication
 }
 
 /// <summary>

@@ -118,6 +118,15 @@ internal sealed record DownloadSortModuleServices(
     DownloadSortService DownloadSort);
 
 /// <summary>
+/// Bündelt den ersten Workflow-Schritt rund um MediathekView-Downloads.
+/// </summary>
+/// <param name="MediathekView">Starter für die installierte oder portable MediathekView-Anwendung.</param>
+/// <param name="SettingsDialog">Zentraler Einstellungsdialog für den optionalen MediathekView-Pfad.</param>
+internal sealed record DownloadModuleServices(
+    IMediathekViewLauncher MediathekView,
+    IAppSettingsDialogService SettingsDialog);
+
+/// <summary>
 /// Bündelt nur die Services für den nachgelagerten Emby-/NFO-Abgleich.
 /// </summary>
 /// <param name="Settings">Persistenter Store für Emby-Adresse und API-Key.</param>
