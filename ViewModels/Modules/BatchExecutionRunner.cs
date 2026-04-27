@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -360,31 +359,15 @@ internal sealed class BatchExecutionRunner
 
     private static BatchOutputMetadataEntry CreateNewOutputMetadata(BatchEpisodeItemViewModel item)
     {
-        var tvdbEpisodeId = item.TvdbEpisodeId?.ToString(CultureInfo.InvariantCulture);
-        return new BatchOutputMetadataEntry
-        {
-            OutputPath = item.OutputPath,
-            NfoPath = Path.ChangeExtension(item.OutputPath, ".nfo"),
-            SeriesName = item.SeriesName,
-            SeasonNumber = item.SeasonNumber,
-            EpisodeNumber = item.EpisodeNumber,
-            EpisodeTitle = item.Title,
-            TvdbEpisodeId = tvdbEpisodeId,
-            ProviderIds = string.IsNullOrWhiteSpace(tvdbEpisodeId)
-                ? null
-                : new BatchOutputProviderIds
-                {
-                    Tvdb = tvdbEpisodeId
-                },
-            Tvdb = item.TvdbEpisodeId is null && item.TvdbSeriesId is null && string.IsNullOrWhiteSpace(item.TvdbSeriesName)
-                ? null
-                : new BatchOutputTvdbMetadata
-                {
-                    SeriesId = item.TvdbSeriesId,
-                    SeriesName = item.TvdbSeriesName,
-                    EpisodeId = item.TvdbEpisodeId
-                }
-        };
+        return BatchOutputMetadataEntryFactory.Create(
+            item.OutputPath,
+            item.SeriesName,
+            item.SeasonNumber,
+            item.EpisodeNumber,
+            item.Title,
+            item.TvdbEpisodeId,
+            item.TvdbSeriesId,
+            item.TvdbSeriesName);
     }
 }
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Threading;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
@@ -203,31 +202,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private BatchOutputMetadataEntry CreateSingleEpisodeOutputMetadata(string outputPath)
     {
-        var tvdbEpisodeId = TvdbEpisodeId?.ToString(CultureInfo.InvariantCulture);
-        return new BatchOutputMetadataEntry
-        {
-            OutputPath = outputPath,
-            NfoPath = Path.ChangeExtension(outputPath, ".nfo"),
-            SeriesName = SeriesName,
-            SeasonNumber = SeasonNumber,
-            EpisodeNumber = EpisodeNumber,
-            EpisodeTitle = Title,
-            TvdbEpisodeId = tvdbEpisodeId,
-            ProviderIds = string.IsNullOrWhiteSpace(tvdbEpisodeId)
-                ? null
-                : new BatchOutputProviderIds
-                {
-                    Tvdb = tvdbEpisodeId
-                },
-            Tvdb = TvdbEpisodeId is null && TvdbSeriesId is null && string.IsNullOrWhiteSpace(TvdbSeriesName)
-                ? null
-                : new BatchOutputTvdbMetadata
-                {
-                    SeriesId = TvdbSeriesId,
-                    SeriesName = TvdbSeriesName,
-                    EpisodeId = TvdbEpisodeId
-                }
-        };
+        return BatchOutputMetadataEntryFactory.Create(
+            outputPath,
+            SeriesName,
+            SeasonNumber,
+            EpisodeNumber,
+            Title,
+            TvdbEpisodeId,
+            TvdbSeriesId,
+            TvdbSeriesName);
     }
 
     private async Task<SeriesEpisodeMuxPlan> GetOrBuildPlanAsync(
