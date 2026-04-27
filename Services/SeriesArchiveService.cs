@@ -12,8 +12,10 @@ public sealed partial class SeriesArchiveService
     /// </summary>
     public const string DefaultArchiveRootDirectory = @"Z:\Videos\Serien";
 
+    private static readonly TimeSpan AudioDescriptionDurationProbeTimeout = TimeSpan.FromSeconds(5);
     private readonly MkvMergeProbeService _probeService;
     private readonly AppArchiveSettingsStore _archiveSettingsStore;
+    private readonly FfprobeDurationProbe? _ffprobeDurationProbe;
     private bool _hasValidArchiveRootConfiguration;
 
     /// <summary>
@@ -21,10 +23,15 @@ public sealed partial class SeriesArchiveService
     /// </summary>
     /// <param name="probeService">Liest Track- und Container-Metadaten vorhandener Archivdateien.</param>
     /// <param name="archiveSettingsStore">Persistenter Store für den konfigurierten Archivwurzelpfad.</param>
-    public SeriesArchiveService(MkvMergeProbeService probeService, AppArchiveSettingsStore archiveSettingsStore)
+    /// <param name="ffprobeDurationProbe">Optionaler präziser Laufzeit-Fallback für Quellen, deren Trackdauer <c>mkvmerge</c> nicht meldet.</param>
+    public SeriesArchiveService(
+        MkvMergeProbeService probeService,
+        AppArchiveSettingsStore archiveSettingsStore,
+        FfprobeDurationProbe? ffprobeDurationProbe = null)
     {
         _probeService = probeService;
         _archiveSettingsStore = archiveSettingsStore;
+        _ffprobeDurationProbe = ffprobeDurationProbe;
         var archiveRootState = ResolveLoadedArchiveRootDirectory(_archiveSettingsStore.Load().DefaultSeriesArchiveRootPath);
         ArchiveRootDirectory = archiveRootState.Path;
         _hasValidArchiveRootConfiguration = archiveRootState.IsValid;

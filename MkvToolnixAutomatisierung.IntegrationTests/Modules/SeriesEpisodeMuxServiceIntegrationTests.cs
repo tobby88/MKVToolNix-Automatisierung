@@ -440,11 +440,16 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         }
     }
 
-    private SeriesEpisodeMuxService CreateMuxService(string archiveDirectory)
+    private SeriesEpisodeMuxService CreateMuxService(
+        string archiveDirectory,
+        FfprobeDurationProbe? ffprobeDurationProbe = null)
     {
         var settingsStore = CreateSettingsStore();
         var probeService = new MkvMergeProbeService();
-        var archiveService = new SeriesArchiveService(probeService, new AppArchiveSettingsStore(settingsStore));
+        var archiveService = new SeriesArchiveService(
+            probeService,
+            new AppArchiveSettingsStore(settingsStore),
+            ffprobeDurationProbe);
         archiveService.ConfigureArchiveRootDirectory(archiveDirectory);
 
         return new SeriesEpisodeMuxService(
@@ -617,6 +622,14 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         public TimeSpan? TryReadDuration(string filePath)
         {
             return null;
+        }
+    }
+
+    private sealed class StubFfprobeLocator(string resolvedPath) : IFfprobeLocator
+    {
+        public string? TryFindFfprobePath()
+        {
+            return resolvedPath;
         }
     }
 

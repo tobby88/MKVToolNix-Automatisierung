@@ -389,16 +389,15 @@ public sealed partial class SeriesArchiveService
             mkvMergePath,
             request.AudioDescriptionPath,
             cancellationToken);
-        var requestedTextDuration = CompanionTextMetadataReader
-            .ReadForMediaFile(request.AudioDescriptionPath)
-            .Duration;
-        var hasRequestedContainerDuration = requestedAudioDescription.Duration is not null;
-        var requestedComparisonDuration = requestedAudioDescription.Duration ?? requestedTextDuration;
+        var requestedDuration = await ResolveRequestedAudioDescriptionDurationAsync(
+            request.AudioDescriptionPath,
+            requestedAudioDescription,
+            cancellationToken);
         return existingAudioDescriptions.Any(existingAudioDescription =>
             DoesExistingAudioDescriptionCoverRequest(
                 requestedAudioDescription,
-                requestedComparisonDuration,
-                hasRequestedContainerDuration,
+                requestedDuration.Duration,
+                requestedDuration.IsPrecise,
                 existingAudioDescription))
             ? request with { AudioDescriptionPath = null }
             : request;
@@ -414,10 +413,37 @@ public sealed partial class SeriesArchiveService
             ?? throw new InvalidOperationException($"In der AD-Datei wurde keine Audiospur gefunden: {audioDescriptionPath}");
     }
 
+    private async Task<AudioDescriptionDurationProbeResult> ResolveRequestedAudioDescriptionDurationAsync(
+        string audioDescriptionPath,
+        ContainerTrackMetadata requestedAudioDescription,
+        CancellationToken cancellationToken)
+    {
+        if (requestedAudioDescription.Duration is { } containerDuration)
+        {
+            return new AudioDescriptionDurationProbeResult(containerDuration, IsPrecise: true);
+        }
+
+        var ffprobeDuration = _ffprobeDurationProbe is null
+            ? null
+            : await _ffprobeDurationProbe.TryReadDurationAsync(
+                audioDescriptionPath,
+                AudioDescriptionDurationProbeTimeout,
+                cancellationToken);
+        if (ffprobeDuration is not null)
+        {
+            return new AudioDescriptionDurationProbeResult(ffprobeDuration, IsPrecise: true);
+        }
+
+        var requestedTextDuration = CompanionTextMetadataReader
+            .ReadForMediaFile(audioDescriptionPath)
+            .Duration;
+        return new AudioDescriptionDurationProbeResult(requestedTextDuration, IsPrecise: false);
+    }
+
     private static bool DoesExistingAudioDescriptionCoverRequest(
         ContainerTrackMetadata requestedAudioDescription,
         TimeSpan? requestedComparisonDuration,
-        bool hasRequestedContainerDuration,
+        bool hasPreciseRequestedDuration,
         ContainerTrackMetadata existingAudioDescription)
     {
         return string.Equals(requestedAudioDescription.CodecLabel, existingAudioDescription.CodecLabel, StringComparison.OrdinalIgnoreCase)
@@ -428,13 +454,13 @@ public sealed partial class SeriesArchiveService
             && AreAudioDescriptionDurationsCompatible(
                 requestedComparisonDuration,
                 existingAudioDescription.Duration,
-                hasRequestedContainerDuration);
+                hasPreciseRequestedDuration);
     }
 
     private static bool AreAudioDescriptionDurationsCompatible(
         TimeSpan? requestedDuration,
         TimeSpan? existingDuration,
-        bool hasRequestedContainerDuration)
+        bool hasPreciseRequestedDuration)
     {
         if (requestedDuration is null || existingDuration is null)
         {
@@ -443,14 +469,17 @@ public sealed partial class SeriesArchiveService
 
         var differenceSeconds = Math.Abs((requestedDuration.Value - existingDuration.Value).TotalSeconds);
         var referenceSeconds = Math.Max(requestedDuration.Value.TotalSeconds, existingDuration.Value.TotalSeconds);
-        // mkvmerge liefert bei MP4-AD-Quellen nicht immer eine Trackdauer. Dann bleibt nur die
-        // Mediathek-TXT-Dauer, die haeufig auf volle Minuten gerundet ist. Diese Fallback-Werte
-        // brauchen mehr Toleranz als echte Containerdauern, duerfen aber keine minutenlangen
-        // Ersatzfaelle verdecken.
-        var minimumToleranceSeconds = hasRequestedContainerDuration ? 10d : 30d;
+        // Echte Container- oder ffprobe-Dauern sind präzise genug für eine enge Toleranz.
+        // Nur der letzte TXT-Fallback bekommt mehr Spielraum, weil Mediathek-TXT-Dateien
+        // haeufig auf volle Minuten gerundet sind.
+        var minimumToleranceSeconds = hasPreciseRequestedDuration ? 10d : 30d;
         var toleranceSeconds = Math.Max(minimumToleranceSeconds, Math.Round(referenceSeconds * 0.01d));
         return differenceSeconds <= toleranceSeconds;
     }
+
+    private readonly record struct AudioDescriptionDurationProbeResult(
+        TimeSpan? Duration,
+        bool IsPrecise);
 
     private static bool IsHearingImpairedSubtitleTrack(ContainerTrackMetadata track)
     {

@@ -18,7 +18,8 @@ internal static class MuxCompositionModule
     {
         services.AddSingleton<SeriesArchiveService>(provider => new SeriesArchiveService(
             provider.GetRequiredService<MkvMergeProbeService>(),
-            provider.GetRequiredService<AppArchiveSettingsStore>()));
+            provider.GetRequiredService<AppArchiveSettingsStore>(),
+            provider.GetRequiredService<FfprobeDurationProbe>()));
         services.AddSingleton<EpisodeOutputPathService>(provider => new EpisodeOutputPathService(provider.GetRequiredService<SeriesArchiveService>()));
         services.AddSingleton<FfprobeDurationProbe>(provider => new FfprobeDurationProbe(provider.GetRequiredService<FfprobeLocator>()));
         services.AddSingleton<IMediaDurationProbe>(provider => new PreferredMediaDurationProbe(

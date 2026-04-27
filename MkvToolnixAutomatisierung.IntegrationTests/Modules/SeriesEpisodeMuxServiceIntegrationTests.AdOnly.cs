@@ -1,6 +1,7 @@
 using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.IntegrationTests.TestInfrastructure;
+using MkvToolnixAutomatisierung.Services;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.IntegrationTests.Modules;
@@ -397,10 +398,10 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
-    public async Task CreatePlanAsync_AudioDescriptionOnly_WithRoundedTextDuration_RetainsExistingAd()
+    public async Task CreatePlanAsync_AudioDescriptionOnly_UsesFfprobeDuration_WhenMkvmergeTrackDurationIsMissing()
     {
-        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-rounded-text-duration");
-        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-rounded-text-duration");
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-ad-only-ffprobe-duration");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-ad-only-ffprobe-duration");
         Directory.CreateDirectory(sourceDirectory);
         Directory.CreateDirectory(archiveDirectory);
 
@@ -408,11 +409,22 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         CreateFile(
             sourceDirectory,
             "Neues aus Büttenwarder-Rififi (1) - Hörfassung-1056764341.txt",
-            "Sender: ARD\r\nThema: Neues aus Büttenwarder\r\nTitel: Rififi (1) - Hörfassung\r\nDauer: 00:27:00");
+            "Sender: ARD\r\nThema: Neues aus Büttenwarder\r\nTitel: Rififi (1) - Hörfassung\r\nDauer: 00:28:00");
         FakeMkvMergeTestHelper.WriteProbeFile(
             audioDescriptionPath,
             CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
             CreateAudioTrack(1, "AAC", language: "de"));
+        var ffprobePath = CreateFile(Path.Combine(_tempDirectory, "ffprobe-duration-tool"), "ffprobe.exe");
+        var ffprobeInvocationCount = 0;
+        var ffprobeDurationProbe = new FfprobeDurationProbe(
+            new StubFfprobeLocator(ffprobePath),
+            (filePath, _resolvedFfprobePath, _timeout, _cancellationToken) =>
+            {
+                ffprobeInvocationCount++;
+                return Task.FromResult<TimeSpan?>(string.Equals(filePath, audioDescriptionPath, StringComparison.OrdinalIgnoreCase)
+                    ? TimeSpan.FromSeconds(1596.352)
+                    : null);
+            });
 
         var outputPath = Path.Combine(
             archiveDirectory,
@@ -427,7 +439,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             CreateAudioTrack(1, "AAC", trackName: "Deutsch - AAC", language: "de", tagDuration: "00:26:34.965000000", isDefaultTrack: true),
             CreateAudioTrack(2, "AAC", trackName: "Deutsch (sehbehinderte) - AAC", isVisualImpaired: true, language: "de", tagDuration: "00:26:34.965000000"));
 
-        var service = CreateMuxService(archiveDirectory);
+        var service = CreateMuxService(archiveDirectory, ffprobeDurationProbe);
 
         var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
             MainVideoPath: audioDescriptionPath,
@@ -439,6 +451,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             HasPrimaryVideoSource: false));
 
         Assert.True(plan.SkipMux);
+        Assert.Equal(1, ffprobeInvocationCount);
         Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
         Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsExisting);
         Assert.Contains("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText, StringComparison.Ordinal);
