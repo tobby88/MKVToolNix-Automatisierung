@@ -336,6 +336,73 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         {
             yield return ResolveMediathekViewStateBaseDirectory(resolvedExecutablePath);
         }
+
+        foreach (var existingVersionDirectory in EnumerateExistingManagedToolVersionDirectories(ManagedToolKind.MediathekView))
+        {
+            yield return existingVersionDirectory;
+        }
+
+        foreach (var downloadsDirectory in EnumerateMediathekViewDownloadBaseDirectories())
+        {
+            yield return downloadsDirectory;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateExistingManagedToolVersionDirectories(ManagedToolKind toolKind)
+    {
+        var toolRootDirectory = GetToolRootDirectory(toolKind);
+        if (!Directory.Exists(toolRootDirectory))
+        {
+            yield break;
+        }
+
+        IEnumerable<DirectoryInfo> versionDirectories;
+        try
+        {
+            versionDirectories = Directory
+                .EnumerateDirectories(toolRootDirectory)
+                .Select(directory => new DirectoryInfo(directory))
+                .Where(directory => !directory.Name.StartsWith(".", StringComparison.Ordinal))
+                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .ToArray();
+        }
+        catch
+        {
+            yield break;
+        }
+
+        foreach (var versionDirectory in versionDirectories)
+        {
+            yield return versionDirectory.FullName;
+        }
+    }
+
+    private static IEnumerable<string> EnumerateMediathekViewDownloadBaseDirectories()
+    {
+        var downloadsDirectory = PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory();
+        if (string.IsNullOrWhiteSpace(downloadsDirectory) || !Directory.Exists(downloadsDirectory))
+        {
+            yield break;
+        }
+
+        IEnumerable<DirectoryInfo> candidates;
+        try
+        {
+            candidates = Directory
+                .EnumerateDirectories(downloadsDirectory, "*MediathekView*", SearchOption.TopDirectoryOnly)
+                .Select(directory => new DirectoryInfo(directory))
+                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .ToArray();
+        }
+        catch
+        {
+            yield break;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            yield return candidate.FullName;
+        }
     }
 
     private static string? TryGetExistingMediathekViewExecutablePath(string? executablePath)

@@ -188,6 +188,107 @@ public sealed class ManagedToolInstallerServiceTests
     }
 
     [Fact]
+    public async Task EnsureManagedToolsAsync_MigratesUnreferencedManagedMediathekViewSettingsDirectory()
+    {
+        var settingsStore = new AppSettingsStore();
+        var toolPathStore = new AppToolPathStore(settingsStore);
+        var oldSettingsDirectory = Path.Combine(
+            PortableAppStorage.ToolsDirectory,
+            "mediathekview",
+            "14.4.0",
+            "MediathekView",
+            "Einstellungen");
+        Directory.CreateDirectory(oldSettingsDirectory);
+        File.WriteAllText(Path.Combine(oldSettingsDirectory, "settings.xml"), "orphaned-managed-settings");
+
+        var settings = toolPathStore.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = false;
+        settings.ManagedMediathekView.AutoManageEnabled = true;
+        toolPathStore.Save(settings);
+
+        var archiveBytes = CreateMediathekViewZipArchive();
+        var archiveHash = Convert.ToHexString(SHA512.HashData(archiveBytes));
+        var downloadUri = new Uri("https://example.invalid/MediathekView-14.5.0-win.zip");
+        var service = new ManagedToolInstallerService(
+            toolPathStore,
+            [new StubPackageSource(new ManagedToolPackage(
+                ManagedToolKind.MediathekView,
+                "14.5.0",
+                "14.5.0",
+                downloadUri,
+                "MediathekView-14.5.0-win.zip",
+                ExpectedSha512: archiveHash))],
+            new ManagedToolArchiveExtractor(),
+            new HttpClient(new FakeHttpMessageHandler((downloadUri, archiveBytes))));
+
+        var result = await service.EnsureManagedToolsAsync();
+        var savedSettings = toolPathStore.Load();
+        var newBaseDirectory = Directory.GetParent(Path.GetDirectoryName(savedSettings.ManagedMediathekView.InstalledPath)!)!.FullName;
+
+        Assert.False(result.HasWarning);
+        Assert.Equal("orphaned-managed-settings", File.ReadAllText(Path.Combine(newBaseDirectory, "Einstellungen", "settings.xml")));
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_MigratesPortableDownloadMediathekViewSettingsDirectory()
+    {
+        var userProfileDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-mediathekview-downloads", Guid.NewGuid().ToString("N"));
+        var portableDirectory = Path.Combine(userProfileDirectory, "Downloads", "MediathekView");
+        var settingsDirectory = Path.Combine(portableDirectory, "Einstellungen");
+        var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
+        var originalHome = Environment.GetEnvironmentVariable("HOME");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", userProfileDirectory);
+            Environment.SetEnvironmentVariable("HOME", userProfileDirectory);
+            Directory.CreateDirectory(settingsDirectory);
+            File.WriteAllText(Path.Combine(portableDirectory, "MediathekView_Portable.exe"), "old-portable");
+            File.WriteAllText(Path.Combine(settingsDirectory, "settings.xml"), "download-settings");
+
+            var settingsStore = new AppSettingsStore();
+            var toolPathStore = new AppToolPathStore(settingsStore);
+            var settings = toolPathStore.Load();
+            settings.ManagedMkvToolNix.AutoManageEnabled = false;
+            settings.ManagedFfprobe.AutoManageEnabled = false;
+            settings.ManagedMediathekView.AutoManageEnabled = true;
+            toolPathStore.Save(settings);
+
+            var archiveBytes = CreateMediathekViewZipArchive();
+            var archiveHash = Convert.ToHexString(SHA512.HashData(archiveBytes));
+            var downloadUri = new Uri("https://example.invalid/MediathekView-14.5.0-win.zip");
+            var service = new ManagedToolInstallerService(
+                toolPathStore,
+                [new StubPackageSource(new ManagedToolPackage(
+                    ManagedToolKind.MediathekView,
+                    "14.5.0",
+                    "14.5.0",
+                    downloadUri,
+                    "MediathekView-14.5.0-win.zip",
+                    ExpectedSha512: archiveHash))],
+                new ManagedToolArchiveExtractor(),
+                new HttpClient(new FakeHttpMessageHandler((downloadUri, archiveBytes))));
+
+            var result = await service.EnsureManagedToolsAsync();
+            var savedSettings = toolPathStore.Load();
+            var newBaseDirectory = Directory.GetParent(Path.GetDirectoryName(savedSettings.ManagedMediathekView.InstalledPath)!)!.FullName;
+
+            Assert.False(result.HasWarning);
+            Assert.Equal("download-settings", File.ReadAllText(Path.Combine(newBaseDirectory, "Einstellungen", "settings.xml")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("USERPROFILE", originalUserProfile);
+            Environment.SetEnvironmentVariable("HOME", originalHome);
+            if (Directory.Exists(userProfileDirectory))
+            {
+                Directory.Delete(userProfileDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task EnsureManagedToolsAsync_KeepsOldMediathekViewVersionDirectoryWhenItContainsDownloads()
     {
         var settingsStore = new AppSettingsStore();
