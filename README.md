@@ -28,24 +28,28 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 ## Module
 
-- `Einzel-Mux`: für einen einzelnen Fall mit Vorschau, manueller Korrektur und anschließendem Mux
-- `Batch-Mux`: für einen kompletten Ordner mit Scan, Pflichtchecks, Ausführung, Cleanup und Protokoll
+- `Download`: zum Starten der installierten oder portablen MediathekView-Variante als erstem Workflow-Schritt
 - `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
+- `Muxen`: fasst `Einzel-Mux` und `Batch-Mux` in Tabs zusammen
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 
 ## Screenshots
 
-### Einzel-Mux
+### Download
 
-![Einzel-Mux](docs/images/readme/single-mux.png)
-
-### Batch-Mux
-
-![Batch-Mux](docs/images/readme/batch-mux.png)
+![Download](docs/images/readme/download.png)
 
 ### Einsortieren
 
 ![Einsortieren](docs/images/readme/download-sort.png)
+
+### Muxen: Einzel-Mux
+
+![Muxen: Einzel-Mux](docs/images/readme/mux-single.png)
+
+### Muxen: Batch-Mux
+
+![Muxen: Batch-Mux](docs/images/readme/mux-batch.png)
 
 ### Emby-Abgleich
 
@@ -54,6 +58,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 ## Voraussetzungen
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
+- MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten.
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
@@ -75,13 +80,21 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 1. App starten.
 2. Über `Einstellungen` die selten geänderten Dinge zentral hinterlegen:
    - Standard-Archivpfad
+   - optional MediathekView-Pfad, falls die automatische Suche die portable Variante nicht findet
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
-4. Danach mit `Einzel-Mux`, `Batch-Mux`, `Einsortieren` oder `Emby-Abgleich` arbeiten.
+4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich`.
 
-## Typischer Workflow: Einzel-Mux
+## Typischer Workflow: Download
+
+1. Im Modul `Download` `MediathekView starten` ausführen.
+2. Falls die App nicht gefunden wird, in `Einstellungen` den Pfad zur installierten oder portablen `MediathekView.exe` bzw. `MediathekView_Portable.exe` setzen.
+3. Sendungen wie gewohnt in MediathekView herunterladen.
+4. Danach im Modul `Einsortieren` mit den erzeugten Download-Dateien weiterarbeiten.
+
+## Typischer Workflow: Muxen, Einzel-Mux-Tab
 
 1. `Hauptvideo wählen`.
 2. Automatische Erkennung für Quelle, Begleitdateien und Metadaten prüfen.
@@ -90,7 +103,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 5. `Vorschau erzeugen`, um den geplanten `mkvmerge`-Aufruf zu kontrollieren.
 6. `Muxen`, um die MKV tatsächlich zu erstellen.
 
-## Typischer Workflow: Batch-Mux
+## Typischer Workflow: Muxen, Batch-Mux-Tab
 
 1. Quellordner wählen.
 2. Scan abwarten und gefundene Episoden prüfen.

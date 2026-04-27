@@ -16,6 +16,30 @@ internal static class DemoData
         return (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
     }
 
+    public static DemoDownloadViewModel CreateDownloadViewModel()
+    {
+        return new DemoDownloadViewModel
+        {
+            IsMediathekViewAvailable = true,
+            MediathekViewStatusText = "MediathekView bereit (portable)",
+            MediathekViewPathText = @"C:\Users\tobby\Downloads\MediathekView\MediathekView_Portable.exe",
+            StatusText = "MediathekView kann gestartet werden. Nach dem Download geht es mit Einsortieren weiter.",
+            StartMediathekViewCommand = NoOpCommand,
+            OpenToolSettingsCommand = NoOpCommand,
+            RefreshCommand = NoOpCommand
+        };
+    }
+
+    public static DemoMuxModuleViewModel CreateMuxModuleViewModel(int selectedTabIndex)
+    {
+        return new DemoMuxModuleViewModel
+        {
+            SingleMux = CreateSingleViewModel(),
+            BatchMux = CreateBatchViewModel(),
+            SelectedTabIndex = selectedTabIndex
+        };
+    }
+
     public static DemoSingleViewModel CreateSingleViewModel()
     {
         var languageOptions = new ObservableCollection<DemoLanguageOption>
@@ -414,9 +438,9 @@ internal static class DemoData
     {
         return
         [
-            new DemoChoice("Einzel-Mux", "Einzelne Episode prüfen, korrigieren und muxen."),
-            new DemoChoice("Batch-Mux", "Komplette Ordner scannen, prüfen und gesammelt muxen."),
+            new DemoChoice("Download", "MediathekView starten und Sendungen laden."),
             new DemoChoice("Einsortieren", "Lose Mediathek-Downloads in Serienordner verschieben."),
+            new DemoChoice("Muxen", "Einzel- und Batch-Mux in Tabs."),
             new DemoChoice("Emby-Abgleich", "NFO-Provider-IDs gegen Emby und Reports abgleichen.")
         ];
     }

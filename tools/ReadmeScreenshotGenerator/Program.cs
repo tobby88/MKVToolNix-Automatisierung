@@ -28,25 +28,14 @@ internal static class Program
         {
             RenderScreenshot(
                 outputDirectory,
-                "single-mux.png",
-                "Einzel-Mux",
-                new SingleEpisodeMuxView
+                "download.png",
+                "Download",
+                new DownloadView
                 {
-                    DataContext = DemoData.CreateSingleViewModel()
+                    DataContext = DemoData.CreateDownloadViewModel()
                 },
-                1420,
-                900);
-
-            RenderScreenshot(
-                outputDirectory,
-                "batch-mux.png",
-                "Batch-Mux",
-                new BatchMuxView
-                {
-                    DataContext = DemoData.CreateBatchViewModel()
-                },
-                1480,
-                940);
+                1320,
+                820);
 
             RenderScreenshot(
                 outputDirectory,
@@ -58,6 +47,28 @@ internal static class Program
                 },
                 1380,
                 860);
+
+            RenderScreenshot(
+                outputDirectory,
+                "mux-single.png",
+                "Muxen",
+                new MuxModuleView
+                {
+                    DataContext = DemoData.CreateMuxModuleViewModel(selectedTabIndex: 0)
+                },
+                1480,
+                940);
+
+            RenderScreenshot(
+                outputDirectory,
+                "mux-batch.png",
+                "Muxen",
+                new MuxModuleView
+                {
+                    DataContext = DemoData.CreateMuxModuleViewModel(selectedTabIndex: 1)
+                },
+                1480,
+                980);
 
             RenderScreenshot(
                 outputDirectory,
@@ -212,7 +223,7 @@ internal static class Program
                 "Archiv: bereit",
                 "MKVToolNix: bereit",
                 "Laufzeiten: ffprobe",
-                @"Daten: .\Data"
+                "Daten: portable"
             ],
             "#F8FAFC",
             "#D5DEE8",

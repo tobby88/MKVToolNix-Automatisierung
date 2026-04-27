@@ -1,3 +1,6 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
 /// <summary>
@@ -7,8 +10,10 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// Die fachlichen ViewModels bleiben absichtlich getrennt. Der Wrapper ist nur die Shell-Schicht,
 /// damit globale Archivänderungen weiterhin beide Mux-Tabs erreichen.
 /// </remarks>
-internal sealed class MuxModuleViewModel : IArchiveConfigurationAwareModule
+internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
 {
+    private int _selectedTabIndex;
+
     public MuxModuleViewModel(
         SingleEpisodeMuxViewModel singleMux,
         BatchMuxViewModel batchMux)
@@ -16,6 +21,9 @@ internal sealed class MuxModuleViewModel : IArchiveConfigurationAwareModule
         SingleMux = singleMux;
         BatchMux = batchMux;
     }
+
+    /// <inheritdoc />
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>
     /// ViewModel für den Einzel-Mux-Tab.
@@ -27,10 +35,33 @@ internal sealed class MuxModuleViewModel : IArchiveConfigurationAwareModule
     /// </summary>
     public BatchMuxViewModel BatchMux { get; }
 
+    /// <summary>
+    /// Aktuell sichtbarer Mux-Tab. Die Auswahl bleibt erhalten, solange das Hauptfenster läuft.
+    /// </summary>
+    public int SelectedTabIndex
+    {
+        get => _selectedTabIndex;
+        set
+        {
+            if (_selectedTabIndex == value)
+            {
+                return;
+            }
+
+            _selectedTabIndex = value;
+            OnPropertyChanged();
+        }
+    }
+
     /// <inheritdoc />
     public void HandleArchiveConfigurationChanged()
     {
         SingleMux.HandleArchiveConfigurationChanged();
         BatchMux.HandleArchiveConfigurationChanged();
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

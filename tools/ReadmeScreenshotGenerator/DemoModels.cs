@@ -26,6 +26,24 @@ internal sealed record DemoChoice(string Title, string Description = "")
 
 internal sealed record DemoLanguageOption(string Code, string DisplayName);
 
+internal sealed class DemoDownloadViewModel
+{
+    public bool IsMediathekViewAvailable { get; init; }
+    public string MediathekViewStatusText { get; init; } = string.Empty;
+    public string MediathekViewPathText { get; init; } = string.Empty;
+    public string StatusText { get; init; } = string.Empty;
+    public ICommand StartMediathekViewCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand OpenToolSettingsCommand { get; init; } = new NoOpRelayCommand();
+    public ICommand RefreshCommand { get; init; } = new NoOpRelayCommand();
+}
+
+internal sealed class DemoMuxModuleViewModel
+{
+    public DemoSingleViewModel SingleMux { get; init; } = new();
+    public DemoBatchViewModel BatchMux { get; init; } = new();
+    public int SelectedTabIndex { get; set; }
+}
+
 internal sealed class DemoSingleViewModel
 {
     public string MainVideoPath { get; init; } = string.Empty;
