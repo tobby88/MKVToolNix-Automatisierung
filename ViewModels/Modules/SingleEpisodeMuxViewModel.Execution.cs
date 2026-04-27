@@ -137,13 +137,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
                 SetStatus(finalStatusText, 100);
-                PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: false);
+                var logSaveResult = PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: false);
                 ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Success);
                 _dialogService.ShowInfo(
                     "Erfolg",
                     completedPlan.HasHeaderEdits
                         ? $"Die relevanten Header-Metadaten wurden direkt aktualisiert:\n{completedPlan.OutputFilePath}"
                         : $"MKV erfolgreich erstellt:\n{completedPlan.OutputFilePath}");
+                OpenSingleEpisodeRunArtifactIfAvailable(logSaveResult);
                 await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
                 SetStatus(finalStatusText, 100);
@@ -157,13 +158,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus(finalStatusText, 100);
-                PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: true);
+                var logSaveResult = PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: true);
                 ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Warning);
                 _dialogService.ShowWarning(
                     "Warnung",
                     completedPlan.HasHeaderEdits
                         ? $"Die Header-Metadaten wurden aktualisiert, aber {completedPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{completedPlan.OutputFilePath}"
                         : $"Die MKV wurde erstellt, aber {completedPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{completedPlan.OutputFilePath}");
+                OpenSingleEpisodeRunArtifactIfAvailable(logSaveResult);
                 await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus(finalStatusText, 100);
@@ -197,19 +199,19 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
     }
 
-    private void PersistSingleEpisodeArtifactsIfNeeded(
+    private BatchRunLogSaveResult? PersistSingleEpisodeArtifactsIfNeeded(
         SeriesEpisodeMuxPlan plan,
         bool outputExistedBeforeRun,
         bool hasWarning)
     {
         if (outputExistedBeforeRun || !File.Exists(plan.OutputFilePath))
         {
-            return;
+            return null;
         }
 
         try
         {
-            _ = _services.BatchLogs.SaveBatchRunArtifacts(
+            return _services.BatchLogs.SaveBatchRunArtifacts(
                 Path.GetDirectoryName(DetectionSeedPath ?? MainVideoPath ?? plan.OutputFilePath) ?? string.Empty,
                 Path.GetDirectoryName(plan.OutputFilePath) ?? string.Empty,
                 _previewOutputBuffer.GetTextSnapshot(),
@@ -226,6 +228,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 "Warnung",
                 "Der Mux-Lauf war erfolgreich, aber Log- oder Metadatenartefakte konnten nicht gespeichert werden:\n"
                 + ex.Message);
+            return null;
+        }
+    }
+
+    private void OpenSingleEpisodeRunArtifactIfAvailable(BatchRunLogSaveResult? logSaveResult)
+    {
+        if (!string.IsNullOrWhiteSpace(logSaveResult?.PreferredOpenPath))
+        {
+            _dialogService.OpenPathWithDefaultApp(logSaveResult.PreferredOpenPath);
         }
     }
 

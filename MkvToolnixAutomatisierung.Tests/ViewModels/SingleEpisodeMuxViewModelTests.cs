@@ -471,6 +471,25 @@ public sealed class SingleEpisodeMuxViewModelTests
         }
     }
 
+    [Fact]
+    public void OpenSingleEpisodeRunArtifactIfAvailable_OpensPreferredNewOutputList()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(),
+            dialogService);
+        var listPath = Path.Combine(Path.GetTempPath(), "single-new-files.txt");
+        var result = new BatchRunLogSaveResult(
+            BatchLogPath: Path.Combine(Path.GetTempPath(), "single.log.txt"),
+            NewOutputListPath: listPath,
+            NewOutputMetadataReportPath: null,
+            NewOutputFiles: [@"C:\Temp\Pilot.mkv"]);
+
+        InvokeOpenSingleEpisodeRunArtifactIfAvailable(viewModel, result);
+
+        Assert.Equal([listPath], dialogService.OpenedPaths);
+    }
+
     private static SingleEpisodeMuxViewModel CreateViewModel()
     {
         return new SingleEpisodeMuxViewModel(
@@ -520,6 +539,17 @@ public sealed class SingleEpisodeMuxViewModelTests
         method!.Invoke(viewModel, [finalStatusText, finalStatusKind]);
     }
 
+    private static void InvokeOpenSingleEpisodeRunArtifactIfAvailable(
+        SingleEpisodeMuxViewModel viewModel,
+        BatchRunLogSaveResult result)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "OpenSingleEpisodeRunArtifactIfAvailable",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, [result]);
+    }
+
     private static void SetNonPublicProperty(object target, string propertyName, object? value)
     {
         var property = target.GetType().GetProperty(
@@ -547,6 +577,8 @@ public sealed class SingleEpisodeMuxViewModelTests
         public string? LastOutputFileName { get; private set; }
 
         public List<string> OpenedFilePaths { get; } = [];
+
+        public List<string> OpenedPaths { get; } = [];
 
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
 
@@ -599,7 +631,7 @@ public sealed class SingleEpisodeMuxViewModelTests
             return true;
         }
 
-        public void OpenPathWithDefaultApp(string path) => throw new NotSupportedException();
+        public void OpenPathWithDefaultApp(string path) => OpenedPaths.Add(path);
 
         public MessageBoxResult AskSourceReviewResult(string fileName, bool canTryAlternative) => throw new NotSupportedException();
 
