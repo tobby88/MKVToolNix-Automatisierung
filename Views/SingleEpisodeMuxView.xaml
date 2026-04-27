@@ -516,7 +516,24 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Margin="0,0,0,6" Text="{Binding StatusText, Mode=OneWay}" />
+                <DockPanel Grid.Row="0" Margin="0,0,0,6" LastChildFill="True">
+                    <Border DockPanel.Dock="Left"
+                            MinWidth="96"
+                            Margin="0,0,10,0"
+                            Padding="8,3"
+                            CornerRadius="10"
+                            Background="{Binding ExecutionStatusBadgeBackground, Mode=OneWay}"
+                            BorderBrush="{Binding ExecutionStatusBadgeBorderBrush, Mode=OneWay}"
+                            BorderThickness="1"
+                            ToolTip="{Binding ExecutionStatusTooltip, Mode=OneWay}">
+                        <TextBlock HorizontalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding ExecutionStatusBadgeText, Mode=OneWay}" />
+                    </Border>
+                    <TextBlock VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="{Binding StatusText, Mode=OneWay}" />
+                </DockPanel>
                 <ProgressBar Grid.Row="1" Margin="0,0,0,8" Height="18" Minimum="0" Maximum="100" Value="{Binding ProgressValue, Mode=OneWay}" />
 
                 <Expander Grid.Row="2"

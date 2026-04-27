@@ -69,6 +69,21 @@ internal enum OutputTargetBadgeState
 }
 
 /// <summary>
+/// Kompakter Laufstatus des Einzelmodus. Der Status ist bewusst getrennt vom
+/// Ausgabepfad-Badge, damit "Ziel aktuell" und Werkzeugergebnisse sichtbar bleiben.
+/// </summary>
+internal enum SingleEpisodeExecutionStatusKind
+{
+    Error = 0,
+    Warning = 1,
+    Running = 2,
+    Cancelled = 3,
+    Ready = 4,
+    UpToDate = 5,
+    Success = 6
+}
+
+/// <summary>
 /// Sortier- und Darstellungszustände einzelner Batch-Zeilen.
 /// </summary>
 internal enum BatchEpisodeStatusKind

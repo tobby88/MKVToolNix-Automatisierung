@@ -214,6 +214,43 @@ internal static class EpisodeEditTextBuilder
         };
     }
 
+    public static string BuildSingleExecutionStatusText(SingleEpisodeExecutionStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            SingleEpisodeExecutionStatusKind.Warning => "Warnung",
+            SingleEpisodeExecutionStatusKind.Running => "Läuft",
+            SingleEpisodeExecutionStatusKind.Cancelled => "Abgebrochen",
+            SingleEpisodeExecutionStatusKind.Ready => "Bereit",
+            SingleEpisodeExecutionStatusKind.UpToDate => "Ziel aktuell",
+            SingleEpisodeExecutionStatusKind.Success => "Erfolgreich",
+            _ => "Fehler"
+        };
+    }
+
+    public static string BuildSingleExecutionStatusTooltip(SingleEpisodeExecutionStatusKind statusKind, string statusText)
+    {
+        var explanation = statusKind switch
+        {
+            SingleEpisodeExecutionStatusKind.Warning => "Der Einzellauf wurde verarbeitet, aber es gab Warnungen oder eine benötigte Freigabe fehlt.",
+            SingleEpisodeExecutionStatusKind.Running => "Im Einzelmodus läuft gerade Erkennung, Vorschau, Kopieren oder Muxing.",
+            SingleEpisodeExecutionStatusKind.Cancelled => "Die letzte Einzelaktion wurde abgebrochen.",
+            SingleEpisodeExecutionStatusKind.Ready => "Der Einzelmodus ist bereit für Vorschau oder Mux.",
+            SingleEpisodeExecutionStatusKind.UpToDate => "Die Zieldatei ist bereits vollständig vorhanden. Ein neuer Mux ist normalerweise nicht nötig.",
+            SingleEpisodeExecutionStatusKind.Success => "Der letzte Einzellauf wurde erfolgreich verarbeitet.",
+            _ => "Bei der letzten Einzelaktion ist ein Fehler aufgetreten."
+        };
+
+        var normalizedStatus = string.IsNullOrWhiteSpace(statusText)
+            ? string.Empty
+            : statusText.Trim();
+
+        return string.IsNullOrWhiteSpace(normalizedStatus)
+            || string.Equals(normalizedStatus, BuildSingleExecutionStatusText(statusKind), StringComparison.Ordinal)
+            ? explanation
+            : $"{explanation}{Environment.NewLine}Status: {normalizedStatus}";
+    }
+
     public static string BuildBatchStatusTooltip(BatchEpisodeStatusKind statusKind, string statusText)
     {
         var explanation = statusKind switch

@@ -110,4 +110,28 @@ internal static class EpisodeUiStyleBuilder
             _ => "#8CB4D8"
         };
     }
+
+    public static string BuildSingleExecutionStatusBadgeBackground(SingleEpisodeExecutionStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            SingleEpisodeExecutionStatusKind.Error => "#FCE8E8",
+            SingleEpisodeExecutionStatusKind.Warning or SingleEpisodeExecutionStatusKind.Running => "#FFF4D6",
+            SingleEpisodeExecutionStatusKind.Cancelled => "#F3F6FA",
+            SingleEpisodeExecutionStatusKind.Ready or SingleEpisodeExecutionStatusKind.UpToDate or SingleEpisodeExecutionStatusKind.Success => "#EEF6E8",
+            _ => "#F3F6FA"
+        };
+    }
+
+    public static string BuildSingleExecutionStatusBadgeBorderBrush(SingleEpisodeExecutionStatusKind statusKind)
+    {
+        return statusKind switch
+        {
+            SingleEpisodeExecutionStatusKind.Error => "#D28A8A",
+            SingleEpisodeExecutionStatusKind.Warning or SingleEpisodeExecutionStatusKind.Running => "#D8B46A",
+            SingleEpisodeExecutionStatusKind.Cancelled => "#C7D1DC",
+            SingleEpisodeExecutionStatusKind.Ready or SingleEpisodeExecutionStatusKind.UpToDate or SingleEpisodeExecutionStatusKind.Success => "#88B06E",
+            _ => "#C7D1DC"
+        };
+    }
 }

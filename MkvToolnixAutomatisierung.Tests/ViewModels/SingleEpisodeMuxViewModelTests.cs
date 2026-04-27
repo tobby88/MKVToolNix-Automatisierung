@@ -348,6 +348,69 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void ApplyPlanPresentation_ShowsProminentUpToDateStatus_ForSkipPlan()
+    {
+        var viewModel = CreateViewModel();
+        var plan = SeriesEpisodeMuxPlan.CreateSkip(
+            "mkvmerge.exe",
+            Path.Combine(Path.GetTempPath(), "single-skip", "Pilot.mkv"),
+            "Pilot",
+            "Die Zieldatei ist bereits vollständig.");
+
+        InvokeApplyPlanPresentation(viewModel, plan);
+
+        Assert.Equal(SingleEpisodeExecutionStatusKind.UpToDate, viewModel.ExecutionStatusKind);
+        Assert.Equal("Ziel aktuell", viewModel.ExecutionStatusBadgeText);
+        Assert.Equal("#EEF6E8", viewModel.ExecutionStatusBadgeBackground);
+        Assert.Equal("Die Zieldatei ist bereits vollständig.", viewModel.OutputTargetStatusText);
+    }
+
+    [Fact]
+    public void ClearCompletedSingleEpisodeInput_ClearsDialogButKeepsFinalRunStatus()
+    {
+        var viewModel = CreateViewModel();
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.HasPrimaryVideoSource), true);
+        SetNonPublicProperty(viewModel, nameof(EpisodeEditModel.MainVideoPath), @"C:\Temp\haupt.mp4");
+        InvokeSetAdditionalVideoPaths(viewModel, [@"C:\Temp\zweite-spur.mp4"]);
+        viewModel.SetAudioDescription(@"C:\Temp\ad.mp4");
+        viewModel.SetSubtitles([@"C:\Temp\untertitel.srt"]);
+        viewModel.SetAttachments([@"C:\Temp\info.txt"]);
+        viewModel.SetOutputPath(@"C:\Temp\ziel.mkv");
+        viewModel.SeriesName = "Beispielserie";
+        viewModel.SeasonNumber = "01";
+        viewModel.EpisodeNumber = "02";
+        viewModel.Title = "Pilot";
+        viewModel.SetPlanSummary("Alter Plan");
+        viewModel.SetUsageSummary(EpisodeUsageSummary.CreatePending("Alt", "Veraltete Nutzung"));
+        viewModel.SetPlanNotes(["Veralteter Hinweis"]);
+        SetNonPublicProperty(viewModel, nameof(SingleEpisodeMuxViewModel.PreviewText), "Alter mkvmerge-Output");
+
+        InvokeClearCompletedSingleEpisodeInput(
+            viewModel,
+            "Muxing erfolgreich abgeschlossen",
+            SingleEpisodeExecutionStatusKind.Success);
+
+        Assert.Equal(string.Empty, viewModel.MainVideoPath);
+        Assert.Empty(viewModel.AdditionalVideoPaths);
+        Assert.Equal(string.Empty, viewModel.AudioDescriptionPath);
+        Assert.Empty(viewModel.SubtitlePaths);
+        Assert.Empty(viewModel.AttachmentPaths);
+        Assert.Equal(string.Empty, viewModel.OutputPath);
+        Assert.Equal(string.Empty, viewModel.SeriesName);
+        Assert.Equal("xx", viewModel.SeasonNumber);
+        Assert.Equal("xx", viewModel.EpisodeNumber);
+        Assert.Equal(string.Empty, viewModel.Title);
+        Assert.False(viewModel.HasPlanSummary);
+        Assert.Null(viewModel.UsageSummary);
+        Assert.False(viewModel.HasOutputTargetStatus);
+        Assert.Equal(string.Empty, viewModel.PreviewText);
+        Assert.Equal("Muxing erfolgreich abgeschlossen", viewModel.StatusText);
+        Assert.Equal(100, viewModel.ProgressValue);
+        Assert.Equal(SingleEpisodeExecutionStatusKind.Success, viewModel.ExecutionStatusKind);
+        Assert.Equal("Erfolgreich", viewModel.ExecutionStatusBadgeText);
+    }
+
+    [Fact]
     public void PersistSingleEpisodeArtifactsIfNeeded_WritesEinzelLogAndMetadataReport_ForNewOutput()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), "single-artifact-tests", Guid.NewGuid().ToString("N"));
@@ -421,6 +484,27 @@ public sealed class SingleEpisodeMuxViewModelTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         return Assert.IsType<Task<bool>>(method!.Invoke(viewModel, [CancellationToken.None]));
+    }
+
+    private static void InvokeApplyPlanPresentation(SingleEpisodeMuxViewModel viewModel, SeriesEpisodeMuxPlan plan)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "ApplyPlanPresentation",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, [plan]);
+    }
+
+    private static void InvokeClearCompletedSingleEpisodeInput(
+        SingleEpisodeMuxViewModel viewModel,
+        string finalStatusText,
+        SingleEpisodeExecutionStatusKind finalStatusKind)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "ClearCompletedSingleEpisodeInput",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, [finalStatusText, finalStatusKind]);
     }
 
     private static void SetNonPublicProperty(object target, string propertyName, object? value)

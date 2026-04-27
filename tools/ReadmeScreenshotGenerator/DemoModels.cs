@@ -88,6 +88,10 @@ internal sealed class DemoSingleViewModel
     public string? OriginalLanguageOverride { get; set; }
     public bool HasOutputTargetStatus { get; init; }
     public string OutputTargetStatusText { get; init; } = string.Empty;
+    public Brush ExecutionStatusBadgeBackground { get; init; } = Brushes.Transparent;
+    public Brush ExecutionStatusBadgeBorderBrush { get; init; } = Brushes.Transparent;
+    public string ExecutionStatusBadgeText { get; init; } = string.Empty;
+    public string ExecutionStatusTooltip { get; init; } = string.Empty;
     public string StatusText { get; init; } = string.Empty;
     public int ProgressValue { get; init; }
     public string PreviewText { get; init; } = string.Empty;

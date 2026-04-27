@@ -35,6 +35,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private bool _isApplyingSharedState;
     private string _outputTargetStatusText = string.Empty;
     private string _planRefreshProblemText = string.Empty;
+    private SingleEpisodeExecutionStatusKind _executionStatusKind = SingleEpisodeExecutionStatusKind.Ready;
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _detectionProgressVersion;
 
@@ -212,6 +213,36 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 
     public string OutputTargetBadgeTooltip => EpisodeEditTextBuilder.BuildOutputTargetBadgeTooltip(OutputTargetBadgeState);
 
+    /// <summary>
+    /// Kompakter Laufstatus für den Einzelmodus; entspricht funktional dem Status-Badge im Batch.
+    /// </summary>
+    public SingleEpisodeExecutionStatusKind ExecutionStatusKind
+    {
+        get => _executionStatusKind;
+        private set
+        {
+            if (_executionStatusKind == value)
+            {
+                return;
+            }
+
+            _executionStatusKind = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ExecutionStatusBadgeText));
+            OnPropertyChanged(nameof(ExecutionStatusBadgeBackground));
+            OnPropertyChanged(nameof(ExecutionStatusBadgeBorderBrush));
+            OnPropertyChanged(nameof(ExecutionStatusTooltip));
+        }
+    }
+
+    public string ExecutionStatusBadgeText => EpisodeEditTextBuilder.BuildSingleExecutionStatusText(ExecutionStatusKind);
+
+    public string ExecutionStatusBadgeBackground => EpisodeUiStyleBuilder.BuildSingleExecutionStatusBadgeBackground(ExecutionStatusKind);
+
+    public string ExecutionStatusBadgeBorderBrush => EpisodeUiStyleBuilder.BuildSingleExecutionStatusBadgeBorderBrush(ExecutionStatusKind);
+
+    public string ExecutionStatusTooltip => EpisodeEditTextBuilder.BuildSingleExecutionStatusTooltip(ExecutionStatusKind, StatusText);
+
     public bool HasPlanSummary => !string.IsNullOrWhiteSpace(PlanSummaryText);
 
     public string PlanRefreshProblemText
@@ -316,6 +347,12 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     {
         StatusText = text;
         ProgressValue = Math.Clamp(progressValue, 0, 100);
+        OnPropertyChanged(nameof(ExecutionStatusTooltip));
+    }
+
+    private void SetExecutionStatus(SingleEpisodeExecutionStatusKind statusKind)
+    {
+        ExecutionStatusKind = statusKind;
     }
 
     private int BeginDetectionProgressSession()

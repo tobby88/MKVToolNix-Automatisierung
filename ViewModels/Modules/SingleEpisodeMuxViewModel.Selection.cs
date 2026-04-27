@@ -146,6 +146,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         try
         {
             SetBusy(true);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             SetStatus("Dateien werden erkannt...", 0);
             PreviewText = "Erkennung läuft...";
 
@@ -199,6 +200,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Error);
             SetStatus("Fehler", 0);
             return false;
         }

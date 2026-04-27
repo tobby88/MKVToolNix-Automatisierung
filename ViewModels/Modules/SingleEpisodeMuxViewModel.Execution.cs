@@ -17,6 +17,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         {
             var cancellationToken = operationSource.Token;
             SetBusy(true);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             PlanRefreshProblemText = string.Empty;
@@ -26,11 +27,13 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
             SetStatus("Abgebrochen", 0);
         }
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Error);
             SetStatus("Fehler", 0);
         }
         finally
@@ -47,6 +50,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         {
             var cancellationToken = operationSource.Token;
             SetBusy(true);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
             var outputSnapshotBeforeRun = FileStateSnapshot.TryCreate(_currentPlan.OutputFilePath);
             var outputExistedBeforeRun = outputSnapshotBeforeRun is not null;
@@ -62,6 +66,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             if (RequiresManualCheck && !IsManualCheckApproved)
             {
                 _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine prüfpflichtige Quelle. Bitte zuerst 'Quelle prüfen' ausführen und die Quelle freigeben.");
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus("Freigabe der Quelle fehlt", 0);
                 return;
             }
@@ -69,6 +74,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             if (RequiresMetadataReview && !IsMetadataReviewApproved)
             {
                 _dialogService.ShowWarning("Hinweis", "Die TVDB-Zuordnung ist noch nicht freigegeben. Bitte zuerst 'TVDB prüfen' ausführen oder die Metadaten manuell korrigieren.");
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus("Freigabe der TVDB-Metadaten fehlt", 0);
                 return;
             }
@@ -78,12 +84,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 _dialogService.ShowWarning(
                     "Hinweis",
                     "Vor dem Muxen ist noch ein offener Archiv-/Mehrfachfolgenhinweis zu prüfen. Bitte bestätige den Hinweis zuerst explizit.");
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
                 SetStatus("Hinweisprüfung fehlt", 0);
                 return;
             }
 
             if (_currentPlan.SkipMux)
             {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.UpToDate);
                 SetStatus("Zieldatei bereits aktuell", 100);
                 _dialogService.ShowInfo("Hinweis", _currentPlan.SkipReason ?? "Die Zieldatei ist bereits vollständig.");
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
@@ -92,15 +100,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
             if (!_dialogService.ConfirmMuxStart())
             {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
                 SetStatus("Abgebrochen", 0);
                 return;
             }
 
             if (!await PrepareWorkingCopyAsync(_currentPlan, cancellationToken))
             {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
                 return;
             }
 
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             SetStatus(
                 _currentPlan.HasHeaderEdits
                     ? "Header-Metadaten werden aktualisiert..."
@@ -119,11 +130,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
             if (outcomeKind == MuxExecutionOutcomeKind.Success)
             {
-                SetStatus(
-                    _currentPlan.HasHeaderEdits
-                        ? "Header-Metadaten erfolgreich aktualisiert"
-                        : "Muxing erfolgreich abgeschlossen",
-                    100);
+                var finalStatusText = _currentPlan.HasHeaderEdits
+                    ? "Header-Metadaten erfolgreich aktualisiert"
+                    : "Muxing erfolgreich abgeschlossen";
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
+                SetStatus(finalStatusText, 100);
                 _dialogService.ShowInfo(
                     "Erfolg",
                     _currentPlan.HasHeaderEdits
@@ -131,14 +142,15 @@ internal sealed partial class SingleEpisodeMuxViewModel
                         : $"MKV erfolgreich erstellt:\n{_currentPlan.OutputFilePath}");
                 PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: false);
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
+                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Success);
             }
             else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
             {
-                SetStatus(
-                    _currentPlan.HasHeaderEdits
-                        ? "Header-Metadaten mit Warnungen aktualisiert"
-                        : "Muxing mit Warnungen abgeschlossen",
-                    100);
+                var finalStatusText = _currentPlan.HasHeaderEdits
+                    ? "Header-Metadaten mit Warnungen aktualisiert"
+                    : "Muxing mit Warnungen abgeschlossen";
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
+                SetStatus(finalStatusText, 100);
                 _dialogService.ShowWarning(
                     "Warnung",
                     _currentPlan.HasHeaderEdits
@@ -146,9 +158,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
                         : $"Die MKV wurde erstellt, aber {_currentPlan.ExecutionToolDisplayName} hat Warnungen gemeldet.\n\n{_currentPlan.OutputFilePath}");
                 PersistSingleEpisodeArtifactsIfNeeded(_currentPlan, outputExistedBeforeRun, hasWarning: true);
                 await OfferSingleEpisodeCleanupAsync(_currentPlan, cancellationToken);
+                ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Warning);
             }
             else
             {
+                SetExecutionStatus(SingleEpisodeExecutionStatusKind.Error);
                 SetStatus(
                     _currentPlan.HasHeaderEdits
                         ? $"Header-Aktualisierung fehlgeschlagen (Exit-Code {result.ExitCode})"
@@ -159,11 +173,13 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
             SetStatus("Abgebrochen", 0);
         }
         catch (Exception ex)
         {
             _dialogService.ShowError(ex.Message);
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Error);
             SetStatus("Fehler", 0);
         }
         finally
@@ -308,6 +324,9 @@ internal sealed partial class SingleEpisodeMuxViewModel
         SetPlanNotes(plan.Notes);
         PlanSummaryText = plan.BuildCompactSummaryText();
         UsageSummary = plan.BuildUsageSummary();
+        SetExecutionStatus(plan.SkipMux
+            ? SingleEpisodeExecutionStatusKind.UpToDate
+            : SingleEpisodeExecutionStatusKind.Ready);
     }
 
     /// <summary>
@@ -325,6 +344,61 @@ internal sealed partial class SingleEpisodeMuxViewModel
         SetPlanNotes([]);
         UsageSummary = null;
         RefreshOutputTargetStatus();
+    }
+
+    /// <summary>
+    /// Setzt den Einzelmodus nach einem abgeschlossenen Werkzeuglauf auf eine neue leere Eingabe zurück,
+    /// lässt aber das Ergebnis des gerade beendeten Laufs in Statuszeile und Badge sichtbar.
+    /// </summary>
+    private void ClearCompletedSingleEpisodeInput(
+        string finalStatusText,
+        SingleEpisodeExecutionStatusKind finalStatusKind)
+    {
+        ApplySharedState(() =>
+        {
+            SetRequestedMainVideoPath(string.Empty);
+            SetDetectionSeedPath(string.Empty);
+            SetRequestedSourcePaths([]);
+            SetLocalMetadataGuess(new EpisodeMetadataGuess(string.Empty, "xx", "xx", string.Empty));
+            HasPrimaryVideoSource = true;
+            MainVideoPath = string.Empty;
+            SeriesName = string.Empty;
+            SeasonNumber = "xx";
+            EpisodeNumber = "xx";
+            Title = string.Empty;
+            SetAdditionalVideoPaths([]);
+            AudioDescriptionPath = string.Empty;
+            SetSubtitles([]);
+            SetAttachments([]);
+            SetRelatedEpisodeFilePaths([]);
+            SetMetadataOriginalLanguage(null);
+            ClearTvdbSelection();
+            MetadataStatusText = string.Empty;
+            RequiresMetadataReview = false;
+            IsMetadataReviewApproved = true;
+            SetManualCheckFiles(requiresManualCheck: false, []);
+            ReplaceExcludedSourcePaths([]);
+            MarkOutputPathAsAutomatic();
+            OutputPath = string.Empty;
+            SetVideoLanguageOverride(null);
+            SetAudioLanguageOverride(null);
+            SetOriginalLanguageOverride(null);
+            SetNotes([]);
+            SetPlanNotes([]);
+        });
+
+        _lastSuggestedTitle = string.Empty;
+        _planCache.Invalidate(this);
+        _currentPlan = null;
+        PlanRefreshProblemText = string.Empty;
+        OutputTargetStatusText = string.Empty;
+        PlanSummaryText = string.Empty;
+        UsageSummary = null;
+        PreviewText = string.Empty;
+        ResetPreviewOutputBuffer(string.Empty);
+        SetExecutionStatus(finalStatusKind);
+        SetStatus(finalStatusText, 100);
+        RefreshCommands();
     }
 
     private void RefreshOutputTargetStatusFromPlan(SeriesEpisodeMuxPlan plan)
