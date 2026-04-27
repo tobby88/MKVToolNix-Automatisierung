@@ -99,8 +99,20 @@ public sealed class AppSettingsWindowTests
             new AppToolPathStore(settingsStore),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()));
+            new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()),
+            new NoOpManagedToolInstaller());
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Emby);
+    }
+
+    private sealed class NoOpManagedToolInstaller : IManagedToolInstallerService
+    {
+        public Task<ManagedToolStartupResult> EnsureManagedToolsAsync(
+            IProgress<ManagedToolStartupProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new ManagedToolStartupResult([]));
+        }
     }
 
     private sealed class PendingEmbyClient(Task<EmbyServerInfo> probeTask) : IEmbyClient

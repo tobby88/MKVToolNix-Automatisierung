@@ -76,11 +76,11 @@ public partial class AppSettingsWindow : Window
         }
     }
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    private async void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            _viewModel.SaveAndClose();
+            await _viewModel.SaveAndCloseAsync();
         }
         catch (Exception ex)
         {

@@ -76,30 +76,30 @@
                                 <ColumnDefinition Width="150" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Row="0"
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="0"
+                                      Grid.ColumnSpan="3"
+                                      Margin="0,0,0,8"
+                                      Content="Automatisch verwalten"
+                                      ToolTip="Optional. Bei aktiviertem Haken wird die stabile portable Windows-ZIP-Version nach dem Speichern und beim App-Start unter .\Tools bereitgestellt."
+                                      IsChecked="{Binding AutoManageMediathekView}" />
+
+                            <TextBlock Grid.Row="1"
                                        Grid.Column="0"
                                        Margin="0,2,12,8"
                                        VerticalAlignment="Center"
-                                       Text="Portable/EXE" />
-                            <TextBox Grid.Row="0"
+                                       Text="Override (Vorrang)" />
+                            <TextBox Grid.Row="1"
                                      Grid.Column="1"
                                      Margin="0,0,12,6"
-                                     ToolTip="Optionaler Pfad zur MediathekView.exe. Ohne Override sucht die App nach installierten Versionen, PATH-Einträgen und portablen Downloads."
+                                     ToolTip="Optionaler manueller Pfad. Wenn gesetzt, hat er Vorrang vor der automatischen Verwaltung und der installierten MediathekView-Version."
                                      Text="{Binding MediathekViewPath}" />
-                            <Button Grid.Row="0"
+                            <Button Grid.Row="1"
                                     Grid.Column="2"
                                     Margin="0,0,0,4"
                                     Padding="10,6"
                                     Click="SelectMediathekViewButton_Click"
                                     Content="Datei wählen" />
-
-                            <CheckBox Grid.Row="1"
-                                      Grid.Column="1"
-                                      Grid.ColumnSpan="2"
-                                      Margin="0,2,0,6"
-                                      Content="Portable MediathekView automatisch herunterladen und aktuell halten"
-                                      ToolTip="Optional. Bei aktiviertem Haken wird die stabile Windows-ZIP-Version beim App-Start unter .\Tools bereitgestellt."
-                                      IsChecked="{Binding AutoManageMediathekView}" />
 
                             <TextBlock Grid.Row="2"
                                        Grid.Column="1"

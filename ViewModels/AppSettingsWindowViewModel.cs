@@ -461,9 +461,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    public void SaveAndClose()
+    public async Task SaveAndCloseAsync(CancellationToken cancellationToken = default)
     {
-        SaveSettings();
+        await SaveSettingsAndEnsureManagedToolsAsync(cancellationToken);
         CloseRequested?.Invoke(this, true);
     }
 
@@ -502,6 +502,52 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
         RefreshDerivedState();
         StatusText = $"Einstellungen gespeichert: {SettingsFilePath}";
+    }
+
+    /// <summary>
+    /// Speichert die Dialogwerte und startet danach direkt die automatische Tool-Bereitstellung.
+    /// </summary>
+    /// <remarks>
+    /// Dadurch ist nach dem Aktivieren von MKVToolNix, ffprobe oder MediathekView kein App-Neustart mehr
+    /// nötig. Der Dialog bleibt währenddessen offen, damit Download- und Entpackstatus sichtbar bleiben.
+    /// </remarks>
+    public async Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
+    {
+        var settingsWereSaved = false;
+
+        try
+        {
+            SetBusy(true, "Einstellungen werden gespeichert...");
+            SaveSettings();
+            settingsWereSaved = true;
+            StatusText = "Werkzeuge werden geprüft...";
+
+            var result = await _services.ManagedTools.EnsureManagedToolsAsync(
+                new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
+                cancellationToken);
+            RefreshDerivedState();
+
+            if (result.HasWarning)
+            {
+                StatusText = "Einstellungen gespeichert; Werkzeugprüfung mit Warnungen.";
+                _dialogService.ShowWarning("Werkzeugverwaltung", result.WarningMessage!);
+            }
+            else
+            {
+                StatusText = "Einstellungen gespeichert; Werkzeuge bereit.";
+            }
+        }
+        catch
+        {
+            StatusText = settingsWereSaved
+                ? "Einstellungen gespeichert; Werkzeugprüfung fehlgeschlagen."
+                : "Einstellungen konnten nicht gespeichert werden.";
+            throw;
+        }
+        finally
+        {
+            SetBusy(false, StatusText);
+        }
     }
 
     private void RefreshDerivedState()
@@ -717,7 +763,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     {
         var lines = new List<string>
         {
-            $"{toolName} wird beim Start automatisch heruntergeladen und aktualisiert."
+            $"{toolName} wird nach dem Speichern sowie beim Start automatisch heruntergeladen und aktualisiert."
         };
 
         if (!string.IsNullOrWhiteSpace(settings.InstalledPath))
@@ -779,6 +825,13 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         _isBusy = isBusy;
         StatusText = statusText;
         OnPropertyChanged(nameof(IsInteractive));
+    }
+
+    private void UpdateManagedToolProgress(ManagedToolStartupProgress progress)
+    {
+        StatusText = string.IsNullOrWhiteSpace(progress.DetailText)
+            ? progress.StatusText
+            : $"{progress.StatusText} {progress.DetailText}";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

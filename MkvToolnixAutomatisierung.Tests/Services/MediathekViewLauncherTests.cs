@@ -71,7 +71,7 @@ public sealed class MediathekViewLauncherTests : IDisposable
     public void PathResolver_UsesPortableDownloadFallback()
     {
         var userProfileDirectory = CreateDirectory("profile");
-        var portableDirectory = Path.Combine(userProfileDirectory, "Downloads", "MediathekView-latest-win");
+        var portableDirectory = Path.Combine(userProfileDirectory, "Downloads", "MediathekView");
         Directory.CreateDirectory(portableDirectory);
         var standardExecutablePath = Path.Combine(portableDirectory, "MediathekView.exe");
         File.WriteAllText(standardExecutablePath, "tool");

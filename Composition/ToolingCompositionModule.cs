@@ -32,6 +32,7 @@ internal static class ToolingCompositionModule
         services.AddSingleton<IManagedToolPackageSource, FfprobePackageSource>();
         services.AddSingleton<IManagedToolPackageSource, MediathekViewPackageSource>();
         services.AddSingleton<ManagedToolInstallerService>();
+        services.AddSingleton<IManagedToolInstallerService>(provider => provider.GetRequiredService<ManagedToolInstallerService>());
         services.AddSingleton<MkvToolNixLocator>(provider => new MkvToolNixLocator(provider.GetRequiredService<AppToolPathStore>()));
         services.AddSingleton<IMkvToolNixLocator>(provider => provider.GetRequiredService<MkvToolNixLocator>());
         services.AddSingleton<FfprobeLocator>(provider => new FfprobeLocator(provider.GetRequiredService<AppToolPathStore>()));

@@ -5,7 +5,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal static class PreferredDownloadDirectoryHelper
 {
-    private static readonly string[] PreferredDownloadsSubPath = ["MediathekView-latest-win", "Downloads"];
+    private static readonly string[] PreferredDownloadsSubPath = ["MediathekView", "Downloads"];
 
     /// <summary>
     /// Liefert das aktuell bevorzugte Benutzerprofil für downloadbezogene Fallback-Suchen.

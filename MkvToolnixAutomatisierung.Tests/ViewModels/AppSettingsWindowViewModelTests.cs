@@ -129,6 +129,25 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAndCloseAsync_SavesSettingsAndEnsuresManagedTools()
+    {
+        var installer = new RecordingManagedToolInstaller();
+        var settingsStore = new AppSettingsStore();
+        var viewModel = CreateViewModel(settingsStore: settingsStore, managedToolInstaller: installer);
+        var closedWithAcceptedResult = false;
+        viewModel.CloseRequested += (_, accepted) => closedWithAcceptedResult = accepted;
+
+        viewModel.AutoManageMkvToolNix = true;
+        await viewModel.SaveAndCloseAsync();
+
+        Assert.Equal(1, installer.CallCount);
+        Assert.True(closedWithAcceptedResult);
+        Assert.True(viewModel.IsInteractive);
+        Assert.True(settingsStore.Load().ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
+        Assert.Contains("Werkzeuge bereit", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ToolStatus_ShowsManagedInstallationEvenWhenAutoManageIsDisabled()
     {
         var mkvToolNixDirectory = CreateDirectory("managed-mkvtoolnix");
@@ -231,7 +250,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     {
         var userProfileDirectory = CreateDirectory("sandbox-profile-mediathekview");
         var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
-        var portableDirectory = Path.Combine(downloadsDirectory, "MediathekView-latest-win");
+        var portableDirectory = Path.Combine(downloadsDirectory, "MediathekView");
         var originalUserProfile = Environment.GetEnvironmentVariable("USERPROFILE");
         var originalHome = Environment.GetEnvironmentVariable("HOME");
 
@@ -352,7 +371,10 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         }
     }
 
-    private AppSettingsWindowViewModel CreateViewModel(IEmbyClient? embyClient = null, AppSettingsStore? settingsStore = null)
+    private AppSettingsWindowViewModel CreateViewModel(
+        IEmbyClient? embyClient = null,
+        AppSettingsStore? settingsStore = null,
+        IManagedToolInstallerService? managedToolInstaller = null)
     {
         settingsStore ??= new AppSettingsStore();
         var services = new AppSettingsModuleServices(
@@ -361,7 +383,8 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             new AppToolPathStore(settingsStore),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
-            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()));
+            new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()),
+            managedToolInstaller ?? new RecordingManagedToolInstaller());
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Archive);
     }
 
@@ -378,6 +401,21 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private sealed class RecordingManagedToolInstaller : IManagedToolInstallerService
+    {
+        public int CallCount { get; private set; }
+
+        public Task<ManagedToolStartupResult> EnsureManagedToolsAsync(
+            IProgress<ManagedToolStartupProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CallCount++;
+            progress?.Report(new ManagedToolStartupProgress("Werkzeuge bereit", "Test", 100d, false));
+            return Task.FromResult(new ManagedToolStartupResult([]));
+        }
     }
 
     private sealed class StubEmbyClient(EmbyServerInfo serverInfo) : IEmbyClient

@@ -222,7 +222,7 @@ Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
 
 - MKVToolNix und `ffprobe` werden standardmäßig automatisch im portablen `.\Tools`-Ordner verwaltet; MediathekView kann dort optional ebenfalls automatisch verwaltet werden.
 - Manuelle Toolpfad-Overrides in den Einstellungen haben Vorrang vor den automatisch verwalteten Tools.
-- Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView-latest-win\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
+- Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
 
