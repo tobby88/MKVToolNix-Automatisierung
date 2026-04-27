@@ -415,12 +415,12 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
             CreateAudioTrack(1, "AAC", language: "de"));
         var ffprobePath = CreateFile(Path.Combine(_tempDirectory, "ffprobe-duration-tool"), "ffprobe.exe");
-        var ffprobeInvocationCount = 0;
+        var ffprobeInvocations = new List<string>();
         var ffprobeDurationProbe = new FfprobeDurationProbe(
             new StubFfprobeLocator(ffprobePath),
             (filePath, _resolvedFfprobePath, _timeout, _cancellationToken) =>
             {
-                ffprobeInvocationCount++;
+                ffprobeInvocations.Add(filePath);
                 return Task.FromResult<TimeSpan?>(string.Equals(filePath, audioDescriptionPath, StringComparison.OrdinalIgnoreCase)
                     ? TimeSpan.FromSeconds(1596.352)
                     : null);
@@ -451,7 +451,7 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             HasPrimaryVideoSource: false));
 
         Assert.True(plan.SkipMux);
-        Assert.Equal(1, ffprobeInvocationCount);
+        Assert.Equal(1, ffprobeInvocations.Count(path => string.Equals(path, audioDescriptionPath, StringComparison.OrdinalIgnoreCase)));
         Assert.DoesNotContain(audioDescriptionPath, plan.GetReferencedInputFiles(), StringComparer.OrdinalIgnoreCase);
         Assert.Contains(plan.BuildUsageSummary().AudioDescription.CurrentItems, item => item.IsExisting);
         Assert.Contains("Aus Zieldatei: Deutsch (sehbehinderte) - AAC", plan.BuildUsageSummary().AudioDescription.CurrentText, StringComparison.Ordinal);

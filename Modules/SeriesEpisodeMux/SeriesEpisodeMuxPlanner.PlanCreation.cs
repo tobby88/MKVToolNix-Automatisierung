@@ -237,9 +237,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
     /// Ergänzt bei bestehender Bibliotheksdatei einen konservativen Hinweis, wenn Quelle und Archivdatei
     /// ungefähr ein ganzzahliges Laufzeitvielfaches voneinander abweichen. Genau dieses Muster tritt
     /// typischerweise bei zusammengefassten Doppelfolgen oder Mehrfachfolgen auf.
-    /// Die Heuristik arbeitet bewusst nur mit bereits vorhandenen Begleitmetadaten aus TXT-Dateien
-    /// oder eindeutigem eingebettetem TXT-Anhang. Sie soll helfen, darf aber die eigentliche
-    /// Planerstellung nicht mit zusätzlichen Medienprobes ausbremsen.
+    /// Für den eigentlichen Medienvergleich wird <c>ffprobe</c> bevorzugt, weil Begleit-TXT-Dateien
+    /// gerade bei Mediathekquellen gerundete, wiederverwendete oder redaktionell abweichende Laufzeiten
+    /// enthalten können. TXT- und eingebettete TXT-Dauern bleiben nur Fallback und Plausibilitätssignal.
     /// </summary>
     private async Task<string?> TryBuildArchiveDurationMismatchHintAsync(
         string mkvMergePath,
@@ -264,17 +264,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
             archiveOutputPath,
             primaryLanguageCode,
             cancellationToken);
-        var sourceDuration = sourceTextDuration;
-        var archiveDuration = archiveTextDuration;
-        if (sourceDuration is null)
-        {
-            sourceDuration = await TryReadDurationForHintAsync(sourceFilePath, cancellationToken);
-        }
-
-        if (archiveDuration is null)
-        {
-            archiveDuration = await TryReadDurationForHintAsync(archiveOutputPath, cancellationToken);
-        }
+        var sourceProbeDuration = await TryReadDurationForHintAsync(sourceFilePath, cancellationToken);
+        var archiveProbeDuration = await TryReadDurationForHintAsync(archiveOutputPath, cancellationToken);
+        var sourceDuration = sourceProbeDuration ?? sourceTextDuration;
+        var archiveDuration = archiveProbeDuration ?? archiveTextDuration;
 
         int? sourceSeconds = sourceDuration is null
             ? null
@@ -293,27 +286,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
-        var hasConflictingDurationEvidence = false;
-        if (sourceDuration is not null
-            && sourceTextDuration is TimeSpan resolvedSourceTextDuration)
-        {
-            hasConflictingDurationEvidence = await HasConflictingDurationEvidenceAsync(
-                sourceFilePath,
-                resolvedSourceTextDuration,
-                cancellationToken);
-        }
-
-        if (!hasConflictingDurationEvidence
-            && archiveDuration is not null
-            && archiveTextDuration is TimeSpan resolvedArchiveTextDuration)
-        {
-            hasConflictingDurationEvidence = await HasConflictingDurationEvidenceAsync(
-                archiveOutputPath,
-                resolvedArchiveTextDuration,
-                cancellationToken);
-        }
-
-        if (hasConflictingDurationEvidence)
+        if (HasConflictingDurationEvidence(sourceTextDuration, sourceProbeDuration)
+            || HasConflictingDurationEvidence(archiveTextDuration, archiveProbeDuration))
         {
             return "Begleit-TXT und ermittelte Dateilaufzeit widersprechen sich deutlich. Bitte Archivtreffer und Episodencode manuell prüfen.";
         }
@@ -538,18 +512,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             || archiveDuration.Value < MinimumDurationForMultipartHint;
     }
 
-    private async Task<bool> HasConflictingDurationEvidenceAsync(
-        string filePath,
-        TimeSpan textDuration,
-        CancellationToken cancellationToken)
+    private static bool HasConflictingDurationEvidence(TimeSpan? textDuration, TimeSpan? probedDuration)
     {
-        var probedDuration = await TryReadDurationForHintAsync(filePath, cancellationToken);
-        if (probedDuration is null)
+        if (textDuration is null || probedDuration is null)
         {
             return false;
         }
 
-        return !AreDurationsApproximatelyEqual(textDuration, probedDuration.Value);
+        return !AreDurationsApproximatelyEqual(textDuration.Value, probedDuration.Value);
     }
 
     private static bool AreDurationsApproximatelyEqual(TimeSpan left, TimeSpan right)

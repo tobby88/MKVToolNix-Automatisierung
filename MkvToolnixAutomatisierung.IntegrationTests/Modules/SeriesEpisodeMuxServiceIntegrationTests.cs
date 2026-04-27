@@ -457,7 +457,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
                 new MkvToolNixLocator(new AppToolPathStore(settingsStore)),
                 probeService,
                 archiveService,
-                new NullDurationProbe()),
+                new NullDurationProbe(),
+                ffprobeDurationProbe),
             new MuxExecutionService(),
             new MkvMergeOutputParser());
     }
