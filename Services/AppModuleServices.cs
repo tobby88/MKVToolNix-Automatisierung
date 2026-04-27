@@ -111,6 +111,15 @@ internal sealed record BatchModuleServices(
 }
 
 /// <summary>
+/// Bündelt die Services für die nachgelagerte Pflege bereits vorhandener Archiv-MKV-Dateien.
+/// </summary>
+/// <param name="ArchiveMaintenance">Fachservice für Scan, Headeranalyse und freigegebene Korrekturen.</param>
+/// <param name="ArchiveSettings">Persistenter Store für die Serienbibliothek als Startordner.</param>
+internal sealed record ArchiveMaintenanceModuleServices(
+    ArchiveMaintenanceService ArchiveMaintenance,
+    AppArchiveSettingsStore ArchiveSettings);
+
+/// <summary>
 /// Bündelt nur die für das Einsortieren loser MediathekView-Downloads benötigten Services.
 /// </summary>
 /// <param name="DownloadSort">Fachservice für Scan, Ordnervereinheitlichung und Verschiebungen.</param>

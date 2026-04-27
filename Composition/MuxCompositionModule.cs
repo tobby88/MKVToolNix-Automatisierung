@@ -16,10 +16,15 @@ internal static class MuxCompositionModule
     /// <param name="services">DI-Sammlung für Planner-, Archiv- und Batch-Scan-Services.</param>
     public static void Register(IServiceCollection services)
     {
+        services.AddSingleton<MuxExecutionService>();
         services.AddSingleton<SeriesArchiveService>(provider => new SeriesArchiveService(
             provider.GetRequiredService<MkvMergeProbeService>(),
             provider.GetRequiredService<AppArchiveSettingsStore>(),
             provider.GetRequiredService<FfprobeDurationProbe>()));
+        services.AddSingleton<ArchiveMaintenanceService>(provider => new ArchiveMaintenanceService(
+            provider.GetRequiredService<MkvMergeProbeService>(),
+            provider.GetRequiredService<IMkvToolNixLocator>(),
+            provider.GetRequiredService<MuxExecutionService>()));
         services.AddSingleton<EpisodeOutputPathService>(provider => new EpisodeOutputPathService(provider.GetRequiredService<SeriesArchiveService>()));
         services.AddSingleton<FfprobeDurationProbe>(provider => new FfprobeDurationProbe(provider.GetRequiredService<FfprobeLocator>()));
         services.AddSingleton<IMediaDurationProbe>(provider => new PreferredMediaDurationProbe(
@@ -33,7 +38,7 @@ internal static class MuxCompositionModule
             provider.GetRequiredService<FfprobeDurationProbe>()));
         services.AddSingleton<SeriesEpisodeMuxService>(provider => new SeriesEpisodeMuxService(
             provider.GetRequiredService<SeriesEpisodeMuxPlanner>(),
-            new MuxExecutionService(),
+            provider.GetRequiredService<MuxExecutionService>(),
             new MkvMergeOutputParser()));
         services.AddSingleton<EpisodePlanCoordinator>(provider => new EpisodePlanCoordinator(provider.GetRequiredService<SeriesEpisodeMuxService>()));
         services.AddSingleton<EpisodeDetectionWorkflow>(provider => new EpisodeDetectionWorkflow(
