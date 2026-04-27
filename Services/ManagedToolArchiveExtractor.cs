@@ -15,8 +15,8 @@ internal interface IManagedToolArchiveExtractor
     /// <param name="destinationDirectory">Leeres oder neu anzulegendes Zielverzeichnis.</param>
     /// <param name="progress">Optionaler Fortschrittskanal für die Dateieinträge des Archivs.</param>
     /// <param name="toolKind">Optionales Werkzeug, damit unnötige Archivteile übersprungen werden können.</param>
-    /// <param name="cancellationToken">Abbruchsignal zwischen Archiveinträgen.</param>
-    void ExtractArchive(
+    /// <param name="cancellationToken">Abbruchsignal für Archiveinträge und laufende Datei-I/O-Operationen.</param>
+    Task ExtractArchiveAsync(
         string archivePath,
         string destinationDirectory,
         IProgress<ManagedToolExtractionProgress>? progress = null,
@@ -45,7 +45,7 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         };
 
     /// <inheritdoc />
-    public void ExtractArchive(
+    public async Task ExtractArchiveAsync(
         string archivePath,
         string destinationDirectory,
         IProgress<ManagedToolExtractionProgress>? progress = null,
@@ -57,10 +57,19 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 
         Directory.CreateDirectory(destinationDirectory);
 
-        using var archive = ArchiveFactory.OpenArchive(archivePath, ReaderOptions.ForFilePath);
-        var allEntries = archive.Entries
-            .Where(entry => !entry.IsDirectory)
-            .ToList();
+        await using var archive = await ArchiveFactory.OpenAsyncArchive(
+            archivePath,
+            ReaderOptions.ForFilePath,
+            cancellationToken);
+        var allEntries = new List<IArchiveEntry>();
+        await foreach (var entry in archive.EntriesAsync.WithCancellation(cancellationToken))
+        {
+            if (!entry.IsDirectory)
+            {
+                allEntries.Add(entry);
+            }
+        }
+
         var entries = SelectEntriesForTool(toolKind, allEntries);
         var totalEntryCount = entries.Count;
         var totalByteCount = entries.Sum(entry => GetEntrySize(entry));
@@ -72,7 +81,15 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             var targetPath = GetArchiveEntryDestinationPath(destinationDirectory, entry.Key);
-            ExtractEntry(entry, targetPath, cancellationToken);
+            await ExtractEntryAsync(
+                entry,
+                targetPath,
+                extractedEntryCount,
+                totalEntryCount,
+                extractedByteCount,
+                totalByteCount,
+                progress,
+                cancellationToken);
 
             extractedEntryCount++;
             extractedByteCount += GetEntrySize(entry);
@@ -151,30 +168,63 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         return targetPath;
     }
 
-    private static void ExtractEntry(IArchiveEntry entry, string targetPath, CancellationToken cancellationToken)
+    private static async Task ExtractEntryAsync(
+        IArchiveEntry entry,
+        string targetPath,
+        int completedEntryCount,
+        int totalEntryCount,
+        long completedByteCount,
+        long totalByteCount,
+        IProgress<ManagedToolExtractionProgress>? progress,
+        CancellationToken cancellationToken)
     {
         var targetDirectory = Path.GetDirectoryName(targetPath)
                               ?? throw new InvalidOperationException($"Der Zielpfad für '{entry.Key}' ist ungültig.");
         Directory.CreateDirectory(targetDirectory);
 
-        using var input = entry.OpenEntryStream();
-        using var output = File.Create(targetPath);
+        await using var input = await entry.OpenEntryStreamAsync(cancellationToken);
+        await using var output = new FileStream(
+            targetPath,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            bufferSize: 81920,
+            useAsync: true);
         var buffer = new byte[81920];
+        long entryByteCount = 0;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var bytesRead = input.Read(buffer, 0, buffer.Length);
+            var bytesRead = await input.ReadAsync(buffer, cancellationToken);
             if (bytesRead == 0)
             {
                 break;
             }
 
-            output.Write(buffer, 0, bytesRead);
+            await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+            entryByteCount += bytesRead;
+            progress?.Report(new ManagedToolExtractionProgress(
+                completedEntryCount,
+                totalEntryCount,
+                entry.Key,
+                CalculateInProgressByteCount(completedByteCount, entryByteCount, totalByteCount),
+                totalByteCount));
         }
     }
 
     private static long GetEntrySize(IArchiveEntry entry)
     {
         return Math.Max(0, entry.Size);
+    }
+
+    private static long CalculateInProgressByteCount(
+        long completedByteCount,
+        long currentEntryByteCount,
+        long totalByteCount)
+    {
+        var extractedByteCount = completedByteCount + currentEntryByteCount;
+        return totalByteCount > 0
+            ? Math.Min(extractedByteCount, totalByteCount)
+            : extractedByteCount;
     }
 }

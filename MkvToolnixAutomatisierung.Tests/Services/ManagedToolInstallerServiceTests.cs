@@ -817,7 +817,7 @@ public sealed class ManagedToolInstallerServiceTests
 
     private sealed class StubArchiveExtractor(Action<string> onExtract) : IManagedToolArchiveExtractor
     {
-        public void ExtractArchive(
+        public Task ExtractArchiveAsync(
             string archivePath,
             string destinationDirectory,
             IProgress<ManagedToolExtractionProgress>? progress = null,
@@ -829,6 +829,7 @@ public sealed class ManagedToolInstallerServiceTests
             progress?.Report(new ManagedToolExtractionProgress(0, 1, "start", 0, 4));
             onExtract(destinationDirectory);
             progress?.Report(new ManagedToolExtractionProgress(1, 1, "done", 4, 4));
+            return Task.CompletedTask;
         }
     }
 

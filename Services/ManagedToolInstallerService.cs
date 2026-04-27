@@ -206,12 +206,12 @@ internal sealed class ManagedToolInstallerService
                 $"{package.DisplayVersion} – Vorbereitung läuft...",
                 ExtractionStartProgressPercent,
                 false);
-            await Task.Run(() => _archiveExtractor.ExtractArchive(
+            await _archiveExtractor.ExtractArchiveAsync(
                 archivePath,
                 stagingDirectory,
                 progress?.CreateExtractionProgressAdapter(package.Kind),
                 package.Kind,
-                cancellationToken), cancellationToken);
+                cancellationToken);
 
             var installedPathInStaging = ResolveInstalledPath(package.Kind, stagingDirectory);
             var installedPathInVersionDirectory = MapStagingInstalledPathToVersionDirectory(

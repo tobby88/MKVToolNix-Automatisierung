@@ -19,7 +19,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
-    public void ExtractArchive_ExtractsZipEntriesAndReportsProgress()
+    public async Task ExtractArchive_ExtractsZipEntriesAndReportsProgress()
     {
         var sourceDirectory = CreateDirectory("source");
         File.WriteAllText(Path.Combine(sourceDirectory, "ffprobe.exe"), "tool");
@@ -33,7 +33,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var progressEvents = new List<ManagedToolExtractionProgress>();
         var extractor = new ManagedToolArchiveExtractor();
 
-        extractor.ExtractArchive(archivePath, destinationDirectory, new CollectingProgress(progressEvents));
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory, new CollectingProgress(progressEvents));
 
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffprobe.exe")));
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "nested", "readme.txt")));
@@ -47,7 +47,32 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
-    public void ExtractArchive_ForMkvToolNix_SkipsDocumentationAndLocalePayload()
+    public async Task ExtractArchive_ReportsByteProgressWhileWritingLargeEntry()
+    {
+        var sourceDirectory = CreateDirectory("large-source");
+        var largePayload = new byte[220_000];
+        new Random(42).NextBytes(largePayload);
+        File.WriteAllBytes(Path.Combine(sourceDirectory, "ffprobe.exe"), largePayload);
+
+        var archivePath = Path.Combine(_tempDirectory, "large.zip");
+        ZipFile.CreateFromDirectory(sourceDirectory, archivePath);
+
+        var destinationDirectory = Path.Combine(_tempDirectory, "large-extracted");
+        var progressEvents = new List<ManagedToolExtractionProgress>();
+        var extractor = new ManagedToolArchiveExtractor();
+
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory, new CollectingProgress(progressEvents));
+
+        Assert.Contains(
+            progressEvents,
+            entry => entry.ExtractedEntryCount == 0
+                     && entry.ExtractedByteCount is > 0
+                     && entry.ExtractedByteCount < entry.TotalByteCount);
+        Assert.Equal(largePayload.Length, new FileInfo(Path.Combine(destinationDirectory, "ffprobe.exe")).Length);
+    }
+
+    [Fact]
+    public async Task ExtractArchive_ForMkvToolNix_SkipsDocumentationAndLocalePayload()
     {
         var sourceDirectory = CreateDirectory("source");
         var toolDirectory = Path.Combine(sourceDirectory, "mkvtoolnix");
@@ -67,7 +92,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var destinationDirectory = Path.Combine(_tempDirectory, "mkvtoolnix-extracted");
         var extractor = new ManagedToolArchiveExtractor();
 
-        extractor.ExtractArchive(archivePath, destinationDirectory, toolKind: ManagedToolKind.MkvToolNix);
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory, toolKind: ManagedToolKind.MkvToolNix);
 
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "mkvmerge.exe")));
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "mkvtoolnix", "mkvpropedit.exe")));
@@ -78,7 +103,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
-    public void ExtractArchive_ReadsSevenZipArchives()
+    public async Task ExtractArchive_ReadsSevenZipArchives()
     {
         var archivePath = Path.Combine(_tempDirectory, "fixture.7z");
         WriteEmbeddedSevenZipFixture(archivePath);
@@ -86,13 +111,13 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var destinationDirectory = Path.Combine(_tempDirectory, "mkvtoolnix-7z-extracted");
         var extractor = new ManagedToolArchiveExtractor();
 
-        extractor.ExtractArchive(archivePath, destinationDirectory);
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory);
 
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "7Zip.Tar.tar")));
     }
 
     [Fact]
-    public void ExtractArchive_ForFfprobe_SkipsDocumentationAndPreservesBinPayload()
+    public async Task ExtractArchive_ForFfprobe_SkipsDocumentationAndPreservesBinPayload()
     {
         var sourceDirectory = CreateDirectory("source");
         var archiveRoot = Path.Combine(sourceDirectory, "ffmpeg-master-latest-win64-gpl-shared");
@@ -112,7 +137,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var destinationDirectory = Path.Combine(_tempDirectory, "ffprobe-extracted");
         var extractor = new ManagedToolArchiveExtractor();
 
-        extractor.ExtractArchive(archivePath, destinationDirectory, toolKind: ManagedToolKind.Ffprobe);
+        await extractor.ExtractArchiveAsync(archivePath, destinationDirectory, toolKind: ManagedToolKind.Ffprobe);
 
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin", "ffprobe.exe")));
         Assert.True(File.Exists(Path.Combine(destinationDirectory, "ffmpeg-master-latest-win64-gpl-shared", "bin", "avcodec-61.dll")));
@@ -122,21 +147,21 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
     }
 
     [Fact]
-    public void ExtractArchive_ThrowsWhenArchiveIsCorrupt()
+    public async Task ExtractArchive_ThrowsWhenArchiveIsCorrupt()
     {
         var archivePath = Path.Combine(_tempDirectory, "broken.zip");
         File.WriteAllText(archivePath, "not-a-real-archive");
         var destinationDirectory = Path.Combine(_tempDirectory, "broken-extracted");
         var extractor = new ManagedToolArchiveExtractor();
 
-        var exception = Record.Exception(() => extractor.ExtractArchive(archivePath, destinationDirectory));
+        var exception = await Record.ExceptionAsync(() => extractor.ExtractArchiveAsync(archivePath, destinationDirectory));
 
         Assert.NotNull(exception);
         Assert.Empty(Directory.EnumerateFileSystemEntries(destinationDirectory));
     }
 
     [Fact]
-    public void ExtractArchive_RejectsEntriesOutsideDestinationDirectory()
+    public async Task ExtractArchive_RejectsEntriesOutsideDestinationDirectory()
     {
         var archivePath = Path.Combine(_tempDirectory, "zip-slip.zip");
         using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
@@ -149,15 +174,15 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         var destinationDirectory = Path.Combine(_tempDirectory, "zip-slip-extracted");
         var extractor = new ManagedToolArchiveExtractor();
 
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            extractor.ExtractArchive(archivePath, destinationDirectory));
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            extractor.ExtractArchiveAsync(archivePath, destinationDirectory));
 
         Assert.Contains("unsicheren relativen Pfad", exception.Message, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(_tempDirectory, "evil.txt")));
     }
 
     [Fact]
-    public void ExtractArchive_ObservesCancellationBeforeWritingNextEntry()
+    public async Task ExtractArchive_ObservesCancellationBeforeWritingNextEntry()
     {
         var sourceDirectory = CreateDirectory("cancel-source");
         File.WriteAllText(Path.Combine(sourceDirectory, "ffprobe.exe"), "tool");
@@ -168,8 +193,8 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         cancellationSource.Cancel();
         var extractor = new ManagedToolArchiveExtractor();
 
-        Assert.Throws<OperationCanceledException>(() =>
-            extractor.ExtractArchive(archivePath, destinationDirectory, cancellationToken: cancellationSource.Token));
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            extractor.ExtractArchiveAsync(archivePath, destinationDirectory, cancellationToken: cancellationSource.Token));
 
         Assert.Empty(Directory.EnumerateFileSystemEntries(destinationDirectory));
     }

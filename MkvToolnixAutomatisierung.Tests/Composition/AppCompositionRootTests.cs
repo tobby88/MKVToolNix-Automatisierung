@@ -126,7 +126,7 @@ public sealed class AppCompositionRootTests
 
     private sealed class StubManagedToolArchiveExtractor : IManagedToolArchiveExtractor
     {
-        public void ExtractArchive(
+        public Task ExtractArchiveAsync(
             string archivePath,
             string destinationDirectory,
             IProgress<ManagedToolExtractionProgress>? progress = null,
