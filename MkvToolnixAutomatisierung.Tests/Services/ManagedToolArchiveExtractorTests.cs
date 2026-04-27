@@ -191,8 +191,9 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
 
     private static void WriteEmbeddedSevenZipFixture(string archivePath)
     {
-        // SharpCompress 0.44 kann 7z lesen, aber noch nicht schreiben. Dieses winzige LZMA-Fixture
-        // stammt aus den MIT-lizenzierten SharpCompress-Testdaten und hält den Test unabhängig von 7z.exe.
+        // Dieses winzige LZMA-7z-Fixture stammt aus den MIT-lizenzierten SharpCompress-Testdaten.
+        // Es hält den Lesetest deterministisch und unabhängig von externen Werkzeugen oder der
+        // separaten 7z-Schreib-API von SharpCompress.
         const string sevenZipTarArchiveBase64 =
             "N3q8ryccAAROQeMgjgAAAAAAAABiAAAAAAAAAPuVhFTgJ/8Ahl0AG5aJJwF8"
             + "i4Hohbo/g3l1MhrPDLofTBbHVI8Pdh5jx6VLFVj6aObpjQsRguRsba+9Od+7"
