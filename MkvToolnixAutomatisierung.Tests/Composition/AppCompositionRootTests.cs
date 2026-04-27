@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Threading;
 using System.Net.Http;
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
@@ -6,6 +7,7 @@ using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels;
+using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Composition;
@@ -51,6 +53,43 @@ public sealed class AppCompositionRootTests
         Assert.NotNull(composition.DialogService);
         Assert.NotNull(composition.SettingsLoadResult);
         Assert.NotNull(composition.MainWindowViewModel);
+    }
+
+    [Fact]
+    public async Task CreateAsync_CreatesBatchCollectionView_OnCallingDispatcherAfterToolStartupThreadSwitch()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var uiDispatcher = Dispatcher.CurrentDispatcher;
+
+            using var composition = await new AppCompositionRoot().CreateAsync(
+                progress: null,
+                cancellationToken: CancellationToken.None,
+                ensureManagedToolsAsync: async (_, _, cancellationToken) =>
+                {
+                    await Task.Run(
+                            () => cancellationToken.ThrowIfCancellationRequested(),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    return new ManagedToolStartupResult([]);
+                });
+
+            var batchModule = composition.MainWindowViewModel.Modules
+                .Single(module => module.ContentViewModel is BatchMuxViewModel)
+                .ContentViewModel;
+            var batchViewModel = Assert.IsType<BatchMuxViewModel>(batchModule);
+            var collectionViewDispatcher = Assert
+                .IsAssignableFrom<DispatcherObject>(batchViewModel.EpisodeItemsView)
+                .Dispatcher;
+
+            Assert.Same(uiDispatcher, collectionViewDispatcher);
+            var collectionChangeException = Record.Exception(() =>
+                batchViewModel.EpisodeItems.Add(BatchEpisodeItemViewModel.CreateErrorItem(
+                    @"C:\Temp\episode.mp4",
+                    "Testfehler")));
+
+            Assert.Null(collectionChangeException);
+        });
     }
 
     [Fact]

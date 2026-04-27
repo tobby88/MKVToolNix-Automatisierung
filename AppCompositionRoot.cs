@@ -33,6 +33,30 @@ internal sealed class AppCompositionRoot
         IProgress<ManagedToolStartupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        return await CreateAsync(
+            progress,
+            cancellationToken,
+            static (provider, startupProgress, startupCancellationToken) => provider
+                .GetRequiredService<ManagedToolInstallerService>()
+                .EnsureManagedToolsAsync(startupProgress, startupCancellationToken));
+    }
+
+    /// <summary>
+    /// Erstellt die Komposition mit austauschbarer Werkzeugprüfung, damit Tests einen echten
+    /// asynchronen Threadwechsel erzwingen können, ohne Netzwerk- oder Downloadpfade zu starten.
+    /// </summary>
+    /// <remarks>
+    /// Nach der Werkzeugprüfung darf hier bewusst kein <c>ConfigureAwait(false)</c> verwendet werden:
+    /// die anschließend aufgelösten ViewModels erzeugen WPF-CollectionViews und müssen deshalb auf
+    /// dem aufrufenden UI-Dispatcher entstehen.
+    /// </remarks>
+    internal async Task<AppComposition> CreateAsync(
+        IProgress<ManagedToolStartupProgress>? progress,
+        CancellationToken cancellationToken,
+        Func<ServiceProvider, IProgress<ManagedToolStartupProgress>?, CancellationToken, Task<ManagedToolStartupResult>> ensureManagedToolsAsync)
+    {
+        ArgumentNullException.ThrowIfNull(ensureManagedToolsAsync);
+
         var services = new ServiceCollection();
         AppCompositionModuleCatalog.RegisterAll(services);
         var serviceProvider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -43,10 +67,7 @@ internal sealed class AppCompositionRoot
 
         try
         {
-            var managedToolStartupResult = await serviceProvider
-                .GetRequiredService<ManagedToolInstallerService>()
-                .EnsureManagedToolsAsync(progress, cancellationToken)
-                .ConfigureAwait(false);
+            var managedToolStartupResult = await ensureManagedToolsAsync(serviceProvider, progress, cancellationToken);
 
             return CreateComposition(serviceProvider, managedToolStartupResult);
         }
