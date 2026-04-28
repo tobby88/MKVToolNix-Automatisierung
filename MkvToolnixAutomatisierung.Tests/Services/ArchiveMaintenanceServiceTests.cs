@@ -142,6 +142,20 @@ public sealed class ArchiveMaintenanceServiceTests
     }
 
     [Fact]
+    public void BuildManualRenameOperation_DetectsCaseOnlyFileNameChange()
+    {
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+            @"C:\Archiv\Serie\Season 1\serie - s01e01 - pilot.mkv",
+            "Serie - S01E01 - Pilot.mkv");
+
+        Assert.NotNull(operation);
+        Assert.Equal(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            operation!.TargetPath,
+            StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void BuildManualRenameOperation_RenamesNfoAndThumbsSidecars()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "archive-sidecars-" + Guid.NewGuid().ToString("N"));
@@ -164,6 +178,49 @@ public sealed class ArchiveMaintenanceServiceTests
                 && sidecar.TargetPath.EndsWith(Path.Combine("Season 2", "Serie - S02E01 - Neu.nfo"), StringComparison.OrdinalIgnoreCase));
             Assert.Contains(operation.Sidecars, sidecar => sidecar.SourcePath.EndsWith("-thumb.jpg", StringComparison.OrdinalIgnoreCase)
                 && sidecar.TargetPath.EndsWith(Path.Combine("Season 2", "Serie - S02E01 - Neu-thumb.jpg"), StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RenamesCaseOnlyMediaAndSidecars()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-case-rename-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "serie - s01e01 - pilot.mkv");
+            var nfoPath = Path.Combine(tempRoot, "serie - s01e01 - pilot.nfo");
+            File.WriteAllText(mediaPath, "mkv");
+            File.WriteAllText(nfoPath, "nfo");
+            var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+                mediaPath,
+                "Serie - S01E01 - Pilot.mkv");
+            var service = new ArchiveMaintenanceService(
+                new MkvMergeProbeService(),
+                new StubMkvToolNixLocator(),
+                new MuxExecutionService(),
+                nfoProviderIds: new EmbyNfoProviderIdService());
+
+            var result = await service.ApplyAsync(new ArchiveMaintenanceApplyRequest(
+                mediaPath,
+                operation,
+                ContainerTitleEdit: null,
+                TrackHeaderEdits: [],
+                ProviderIdEdit: null));
+
+            var fileNames = Directory.EnumerateFiles(tempRoot)
+                .Select(Path.GetFileName)
+                .ToList();
+            Assert.True(result.Success);
+            Assert.Equal("Serie - S01E01 - Pilot.mkv", Path.GetFileName(result.CurrentFilePath), StringComparer.Ordinal);
+            Assert.Contains("Serie - S01E01 - Pilot.mkv", fileNames);
+            Assert.Contains("Serie - S01E01 - Pilot.nfo", fileNames);
+            Assert.DoesNotContain("serie - s01e01 - pilot.mkv", fileNames);
+            Assert.DoesNotContain("serie - s01e01 - pilot.nfo", fileNames);
         }
         finally
         {

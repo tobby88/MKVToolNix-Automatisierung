@@ -309,6 +309,21 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void CreateApplyRequest_UsesCaseOnlyManualFileNameChange()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(
+            @"C:\Archiv\Serie\Season 1\serie - s01e01 - pilot.mkv"));
+
+        item.TargetFileName = "Serie - S01E01 - Pilot.mkv";
+        var request = item.CreateApplyRequest();
+
+        Assert.True(item.CanSelect);
+        Assert.True(item.IsSelected);
+        Assert.NotNull(request.RenameOperation);
+        Assert.Equal("Serie - S01E01 - Pilot.mkv", Path.GetFileName(request.RenameOperation!.TargetPath), StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void ManualChange_SelectsPreviouslyOkItemUntilUserClearsSelection()
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());

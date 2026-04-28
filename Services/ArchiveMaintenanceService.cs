@@ -400,9 +400,79 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             expectedMetadata?.EpisodeNumber ?? parsedName.EpisodeNumber,
             expectedMetadata?.Title ?? parsedName.Title);
         var targetPath = BuildTargetMediaPath(filePath, expectedFileName);
-        return PathComparisonHelper.AreSamePath(filePath, targetPath)
-            ? null
-            : new ArchiveRenameOperation(filePath, targetPath, BuildSidecarRenameOperations(filePath, targetPath));
+        return CreateRenameOperation(filePath, targetPath);
+    }
+
+    private static bool ShouldRenamePath(string sourcePath, string targetPath)
+    {
+        return !string.Equals(
+            NormalizePathForExactComparison(sourcePath),
+            NormalizePathForExactComparison(targetPath),
+            StringComparison.Ordinal);
+    }
+
+    private static string NormalizePathForExactComparison(string path)
+    {
+        return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static bool IsCaseOnlyRename(string sourcePath, string targetPath)
+    {
+        return PathComparisonHelper.AreSamePath(sourcePath, targetPath)
+            && ShouldRenamePath(sourcePath, targetPath);
+    }
+
+    private static bool TargetExistsAsDifferentFile(string sourcePath, string targetPath)
+    {
+        return File.Exists(targetPath) && !PathComparisonHelper.AreSamePath(sourcePath, targetPath);
+    }
+
+    private static string CreateTemporaryCaseRenamePath(string directory)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            var candidate = Path.Combine(directory, $".case-rename-{Guid.NewGuid():N}.tmp");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new IOException("Es konnte kein temporärer Dateiname für die Groß-/Kleinschreibungs-Umbenennung erzeugt werden.");
+    }
+
+    private static void MoveFileWithCaseRenameSupport(string sourcePath, string targetPath)
+    {
+        if (!IsCaseOnlyRename(sourcePath, targetPath))
+        {
+            File.Move(sourcePath, targetPath);
+            return;
+        }
+
+        // Windows-Dateisysteme behandeln den Zielpfad bei reinen Case-Renames oft als bereits vorhanden.
+        // Der Zwischenschritt erzwingt deshalb eine echte Verzeichnisaktualisierung.
+        var temporaryPath = CreateTemporaryCaseRenamePath(Path.GetDirectoryName(targetPath) ?? ".");
+        File.Move(sourcePath, temporaryPath);
+        try
+        {
+            File.Move(temporaryPath, targetPath);
+        }
+        catch
+        {
+            if (File.Exists(temporaryPath) && !File.Exists(sourcePath))
+            {
+                File.Move(temporaryPath, sourcePath);
+            }
+
+            throw;
+        }
+    }
+
+    private static ArchiveRenameOperation? CreateRenameOperation(string sourcePath, string targetPath)
+    {
+        return ShouldRenamePath(sourcePath, targetPath)
+            ? new ArchiveRenameOperation(sourcePath, targetPath, BuildSidecarRenameOperations(sourcePath, targetPath))
+            : null;
     }
 
     private static IReadOnlyList<ArchiveSidecarRenameOperation> BuildSidecarRenameOperations(string sourceMediaPath, string targetMediaPath)
@@ -429,9 +499,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         ArgumentException.ThrowIfNullOrWhiteSpace(targetFileName);
 
         var targetPath = BuildTargetMediaPath(sourceMediaPath, targetFileName.Trim());
-        return PathComparisonHelper.AreSamePath(sourceMediaPath, targetPath)
-            ? null
-            : new ArchiveRenameOperation(sourceMediaPath, targetPath, BuildSidecarRenameOperations(sourceMediaPath, targetPath));
+        return CreateRenameOperation(sourceMediaPath, targetPath);
     }
 
     private static string BuildTargetMediaPath(string sourceMediaPath, string targetFileName)
@@ -670,14 +738,14 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             throw new FileNotFoundException("Die umzubenennende MKV wurde nicht gefunden.", renameOperation.SourcePath);
         }
 
-        if (File.Exists(renameOperation.TargetPath))
+        if (TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
         {
             throw new IOException($"Die Ziel-MKV existiert bereits: {renameOperation.TargetPath}");
         }
 
         foreach (var sidecar in renameOperation.Sidecars)
         {
-            if (File.Exists(sidecar.TargetPath))
+            if (TargetExistsAsDifferentFile(sidecar.SourcePath, sidecar.TargetPath))
             {
                 throw new IOException($"Eine Ziel-Begleitdatei existiert bereits: {sidecar.TargetPath}");
             }
@@ -692,10 +760,10 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             Directory.CreateDirectory(sidecarDirectory!);
         }
 
-        File.Move(renameOperation.SourcePath, renameOperation.TargetPath);
+        MoveFileWithCaseRenameSupport(renameOperation.SourcePath, renameOperation.TargetPath);
         foreach (var sidecar in renameOperation.Sidecars)
         {
-            File.Move(sidecar.SourcePath, sidecar.TargetPath);
+            MoveFileWithCaseRenameSupport(sidecar.SourcePath, sidecar.TargetPath);
         }
 
         return renameOperation.TargetPath;
