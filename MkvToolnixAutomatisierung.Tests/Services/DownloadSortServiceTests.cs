@@ -509,6 +509,58 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Apply_SkipsMoveRequest_WhenSourceIsOutsideDownloadRoot()
+    {
+        var parentDirectory = Directory.GetParent(_rootDirectory)!.FullName;
+        var externalDirectory = Path.Combine(parentDirectory, "mkv-auto-download-sort-external-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(externalDirectory);
+        var externalPath = Path.Combine(externalDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(externalPath);
+        try
+        {
+            var applyResult = _service.Apply(
+                _rootDirectory,
+                [new DownloadSortMoveRequest("Serie-Folge", [externalPath], "Serie")],
+                []);
+
+            Assert.Equal(0, applyResult.MovedGroupCount);
+            Assert.Equal(0, applyResult.MovedFileCount);
+            Assert.Equal(1, applyResult.SkippedGroupCount);
+            Assert.True(File.Exists(externalPath));
+            Assert.False(File.Exists(Path.Combine(_rootDirectory, "Serie", Path.GetFileName(externalPath))));
+            Assert.Contains(applyResult.LogLines, line => line.Contains("nicht direkt im gewaehlten Download-Ordner", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(externalDirectory))
+            {
+                Directory.Delete(externalDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Apply_SkipsMoveRequest_WhenSourceIsNestedBelowDownloadRoot()
+    {
+        var nestedDirectory = Path.Combine(_rootDirectory, "Schon einsortiert");
+        Directory.CreateDirectory(nestedDirectory);
+        var nestedPath = Path.Combine(nestedDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(nestedPath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Serie-Folge", [nestedPath], "Serie")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(nestedPath));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "Serie", Path.GetFileName(nestedPath))));
+        Assert.Contains(applyResult.LogLines, line => line.Contains("nicht direkt im gewaehlten Download-Ordner", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Apply_OverwritesExistingTargetFile_WhenLooseVersionIsComparableOrLarger()
     {
         var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");

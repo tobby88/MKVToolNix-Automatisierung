@@ -333,8 +333,15 @@ internal sealed class DownloadSortService
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            if (!TryNormalizeDirectRootFilePaths(rootDirectory, request.FilePaths, out var safeFilePaths, out var unsafeFilePath))
+            {
+                skippedGroupCount++;
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Quelldatei '{Path.GetFileName(unsafeFilePath)}' liegt nicht direkt im gewaehlten Download-Ordner.");
+                continue;
+            }
+
             var defectiveFilePathSet = CreateDefectiveFilePathSet(request.DefectiveFilePaths);
-            var regularFilePaths = request.FilePaths
+            var regularFilePaths = safeFilePaths
                 .Where(path => !defectiveFilePathSet.Contains(path))
                 .ToList();
             var targetFolderName = NormalizeTargetFolderName(request.TargetFolderName);
@@ -1244,6 +1251,62 @@ internal sealed class DownloadSortService
     }
 
     /// <summary>
+    /// Begrenzung für Apply-Aufrufe aus der UI: Einsortieren verschiebt nur lose Dateien direkt
+    /// aus dem gewählten Downloadordner, nicht aus fremden oder bereits einsortierten Ordnern.
+    /// </summary>
+    private static bool TryNormalizeDirectRootFilePaths(
+        string rootDirectory,
+        IReadOnlyList<string> filePaths,
+        out List<string> normalizedFilePaths,
+        out string unsafeFilePath)
+    {
+        normalizedFilePaths = [];
+        unsafeFilePath = string.Empty;
+        var rootPath = Path.GetFullPath(rootDirectory);
+        foreach (var filePath in filePaths)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                unsafeFilePath = filePath ?? string.Empty;
+                return false;
+            }
+
+            if (!TryGetFullPath(filePath, out var fullPath))
+            {
+                unsafeFilePath = filePath;
+                return false;
+            }
+
+            if (!PathComparisonHelper.IsPathWithinRoot(fullPath, rootPath)
+                || Path.GetDirectoryName(fullPath) is not { } parentPath
+                || !PathComparisonHelper.AreSamePath(parentPath, rootPath)
+                || string.IsNullOrWhiteSpace(Path.GetFileName(fullPath)))
+            {
+                unsafeFilePath = filePath;
+                return false;
+            }
+
+            normalizedFilePaths.Add(fullPath);
+        }
+
+        return true;
+    }
+
+    private static bool TryGetFullPath(string filePath, out string fullPath)
+    {
+        try
+        {
+            fullPath = Path.GetFullPath(filePath);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            fullPath = string.Empty;
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Normalisiert die optionale Defekt-Teilmengenliste in ein case-insensitives Lookup, damit
     /// Bewertung und Ausführung reguläre und defekte Dateien konsistent voneinander trennen.
     /// </summary>
@@ -1251,6 +1314,7 @@ internal sealed class DownloadSortService
     {
         return (defectiveFilePaths ?? [])
             .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => TryGetFullPath(path, out var fullPath) ? fullPath : path)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
