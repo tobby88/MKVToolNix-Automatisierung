@@ -10,6 +10,9 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class ArchiveMaintenanceView : UserControl
 {
+    private static readonly GridLength DefaultManualCorrectionHeight = new(0.9, GridUnitType.Star);
+    private GridLength _manualCorrectionExpandedHeight = DefaultManualCorrectionHeight;
+
     /// <summary>
     /// Initialisiert die Ansicht samt XAML-Komponenten.
     /// </summary>
@@ -48,5 +51,26 @@ public partial class ArchiveMaintenanceView : UserControl
     private void LogExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
         ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(LogTextBox);
+    }
+
+    private void ManualCorrectionExpander_OnExpanded(object sender, RoutedEventArgs e)
+    {
+        ManualCorrectionSplitter.Visibility = Visibility.Visible;
+        ManualCorrectionRow.MinHeight = 180;
+        ManualCorrectionRow.Height = _manualCorrectionExpandedHeight.GridUnitType == GridUnitType.Auto
+            ? DefaultManualCorrectionHeight
+            : _manualCorrectionExpandedHeight;
+    }
+
+    private void ManualCorrectionExpander_OnCollapsed(object sender, RoutedEventArgs e)
+    {
+        if (ManualCorrectionRow.Height.GridUnitType != GridUnitType.Auto)
+        {
+            _manualCorrectionExpandedHeight = ManualCorrectionRow.Height;
+        }
+
+        ManualCorrectionSplitter.Visibility = Visibility.Collapsed;
+        ManualCorrectionRow.MinHeight = 0;
+        ManualCorrectionRow.Height = GridLength.Auto;
     }
 }

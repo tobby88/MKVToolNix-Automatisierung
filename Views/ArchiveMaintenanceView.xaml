@@ -126,6 +126,7 @@
             <RowDefinition Height="6" />
             <RowDefinition Height="0.95*" MinHeight="150" />
             <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="ManualCorrectionRow" Height="Auto" MinHeight="0" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -391,17 +392,37 @@
             </Grid>
         </GroupBox>
 
-        <Expander Grid.Row="5"
+        <GridSplitter x:Name="ManualCorrectionSplitter"
+                      Grid.Row="5"
+                      Height="6"
+                      Margin="0,10,0,0"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Background="#FFD6D6D6"
+                      ResizeBehavior="PreviousAndNext"
+                      ResizeDirection="Rows"
+                      ShowsPreview="True"
+                      Visibility="Collapsed" />
+
+        <Expander x:Name="ManualCorrectionExpander"
+                  Grid.Row="6"
                   Margin="0,10,0,0"
                   Header="{Binding SelectedItem.ManualCorrectionHeaderText, Mode=OneWay, TargetNullValue=Manuelle Korrektur, FallbackValue=Manuelle Korrektur}"
-                  IsExpanded="False">
+                  IsExpanded="False"
+                  Collapsed="ManualCorrectionExpander_OnCollapsed"
+                  Expanded="ManualCorrectionExpander_OnExpanded">
             <Border Padding="8"
                     DataContext="{Binding SelectedItem}"
                     Background="#FFF8FAFC"
                     BorderBrush="#FFD8DEE6"
                     BorderThickness="1">
-                <StackPanel MaxHeight="410"
-                      IsEnabled="{Binding CanEditManualCorrections, Mode=OneWay}">
+                <Grid IsEnabled="{Binding CanEditManualCorrections, Mode=OneWay}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" MinHeight="120" />
+                    </Grid.RowDefinitions>
+
                     <GroupBox Header="Datei und Container"
                               Margin="0,0,0,8">
                         <Grid Margin="8">
@@ -436,12 +457,13 @@
                         </Grid>
                     </GroupBox>
 
-                    <TextBlock Margin="0,0,0,8"
+                    <TextBlock Grid.Row="1"
+                               Margin="0,0,0,8"
                                Foreground="#FFAA2E34"
                                TextWrapping="Wrap"
                                Text="{Binding ManualValidationMessage, Mode=OneWay}" />
 
-                    <GroupBox Header="Track-Header">
+                    <GroupBox Grid.Row="2" Header="Track-Header">
                         <DockPanel Margin="8">
                             <DockPanel DockPanel.Dock="Top"
                                        Margin="0,0,0,8">
@@ -472,8 +494,7 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <ScrollViewer MaxHeight="210"
-                                          VerticalScrollBarVisibility="Auto"
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled">
                                 <ItemsControl ItemsSource="{Binding VisibleHeaderCorrectionGroups, Mode=OneWay}">
                                     <ItemsControl.ItemTemplate>
@@ -526,11 +547,11 @@
                             </ScrollViewer>
                         </DockPanel>
                     </GroupBox>
-                </StackPanel>
+                </Grid>
             </Border>
         </Expander>
 
-        <StackPanel Grid.Row="6"
+        <StackPanel Grid.Row="7"
                     Margin="0,10,0,10"
                     Orientation="Horizontal"
                     IsEnabled="{Binding IsInteractive, Mode=OneWay}">
@@ -552,7 +573,7 @@
                     Content="Ausgewählte Änderungen anwenden" />
         </StackPanel>
 
-        <Expander Grid.Row="7"
+        <Expander Grid.Row="8"
                   Header="Protokoll"
                   IsExpanded="False"
                   Expanded="LogExpander_OnExpanded">
@@ -569,7 +590,7 @@
                      TextChanged="LogTextBox_OnTextChanged" />
         </Expander>
 
-        <Grid Grid.Row="8" Margin="0,10,0,0">
+        <Grid Grid.Row="9" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="180" />
