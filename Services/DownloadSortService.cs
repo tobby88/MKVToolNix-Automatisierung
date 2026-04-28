@@ -16,6 +16,13 @@ internal sealed class DownloadSortService
 {
     private const double SignificantlyLargerExistingVideoRatio = 1.2;
     private const string DefectiveFolderName = "defekt";
+    private const string DoneFolderName = "done";
+
+    private static readonly HashSet<string> ReservedTargetFolderNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        DefectiveFolderName,
+        DoneFolderName
+    };
 
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -188,10 +195,7 @@ internal sealed class DownloadSortService
     /// <returns><see langword="true"/>, wenn der Name für normale Einsortierziele gesperrt ist.</returns>
     internal static bool IsReservedTargetFolderName(string? targetFolderName)
     {
-        return string.Equals(
-            NormalizeTargetFolderName(targetFolderName),
-            DefectiveFolderName,
-            StringComparison.OrdinalIgnoreCase);
+        return ReservedTargetFolderNames.Contains(NormalizeTargetFolderName(targetFolderName));
     }
 
     /// <summary>
@@ -216,7 +220,7 @@ internal sealed class DownloadSortService
         {
             return new DownloadSortTargetEvaluation(
                 DownloadSortItemState.NeedsReview,
-                $"Der Ordner '{DefectiveFolderName}' ist fuer defekte Dateien reserviert. Bitte einen normalen Serienordner waehlen.");
+                $"Der Ordner '{normalizedFolderName}' ist fuer interne Workflow-Dateien reserviert. Bitte einen normalen Serienordner waehlen.");
         }
 
         var renamePlan = folderRenames.FirstOrDefault(plan =>
@@ -344,7 +348,7 @@ internal sealed class DownloadSortService
             if (regularFilePaths.Count > 0 && IsReservedTargetFolderName(targetFolderName))
             {
                 skippedGroupCount++;
-                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Ordner '{DefectiveFolderName}' ist fuer defekte Dateien reserviert.");
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Ordner '{targetFolderName}' ist fuer interne Workflow-Dateien reserviert.");
                 continue;
             }
 
@@ -462,8 +466,10 @@ internal sealed class DownloadSortService
 
             try
             {
-                File.Move(filePath, destinationPath, overwrite: true);
-                movedCount++;
+                if (MoveFileSafely(filePath, destinationPath, targetFolderName, logLines))
+                {
+                    movedCount++;
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -472,6 +478,98 @@ internal sealed class DownloadSortService
         }
 
         return movedCount;
+    }
+
+    /// <summary>
+    /// Verschiebt eine einzelne Datei und ersetzt gleichnamige Zieldateien nur, wenn deren
+    /// Snapshot zwischen Konfliktprüfung und eigentlichem Ersetzen unverändert geblieben ist.
+    /// </summary>
+    private static bool MoveFileSafely(
+        string sourcePath,
+        string destinationPath,
+        string targetFolderName,
+        ICollection<string> logLines)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            logLines.Add($"UEBERSPRUNGEN: '{Path.GetFileName(sourcePath)}' existiert nicht mehr. Bitte neu scannen.");
+            return false;
+        }
+
+        if (!File.Exists(destinationPath))
+        {
+            File.Move(sourcePath, destinationPath, overwrite: false);
+            return true;
+        }
+
+        var initialTargetSnapshot = FileStateSnapshot.TryCreate(destinationPath);
+        if (initialTargetSnapshot is null)
+        {
+            File.Move(sourcePath, destinationPath, overwrite: false);
+            return true;
+        }
+
+        if (!TryGetFileLength(sourcePath, out var sourceLengthBytes))
+        {
+            logLines.Add($"UEBERSPRUNGEN: '{Path.GetFileName(sourcePath)}' existiert nicht mehr. Bitte neu scannen.");
+            return false;
+        }
+
+        var conflict = new DownloadSortTargetFileConflict(
+            sourcePath,
+            destinationPath,
+            sourceLengthBytes,
+            initialTargetSnapshot.Value.Length);
+        if (ShouldKeepExistingTargetFile(conflict))
+        {
+            logLines.Add($"KONFLIKT: '{Path.GetFileName(sourcePath)}' wurde nicht nach '{targetFolderName}' verschoben: {BuildBlockingConflictNote(conflict)}");
+            return false;
+        }
+
+        var temporaryPath = CreateTemporaryReplacementPath(destinationPath);
+        File.Move(sourcePath, temporaryPath, overwrite: false);
+        try
+        {
+            var latestTargetSnapshot = FileStateSnapshot.TryCreate(destinationPath);
+            if (!initialTargetSnapshot.Equals(latestTargetSnapshot))
+            {
+                File.Move(temporaryPath, sourcePath, overwrite: false);
+                logLines.Add($"KONFLIKT: '{Path.GetFileName(sourcePath)}' wurde nicht nach '{targetFolderName}' verschoben, weil sich die Zieldatei während des Sortierens geändert hat.");
+                return false;
+            }
+
+            File.Move(temporaryPath, destinationPath, overwrite: true);
+            return true;
+        }
+        catch
+        {
+            if (File.Exists(temporaryPath) && !File.Exists(sourcePath))
+            {
+                File.Move(temporaryPath, sourcePath, overwrite: false);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Erzeugt einen versteckten temporären Pfad direkt im Zielordner, damit das spätere
+    /// Ersetzen auf demselben Volume bleibt und nicht durch Cross-Volume-Moves überrascht wird.
+    /// </summary>
+    private static string CreateTemporaryReplacementPath(string destinationPath)
+    {
+        var targetDirectory = Path.GetDirectoryName(destinationPath) ?? ".";
+        var targetFileName = Path.GetFileName(destinationPath);
+        for (var index = 0; index < 10_000; index++)
+        {
+            var candidate = Path.Combine(targetDirectory, $".{targetFileName}.replace-{Guid.NewGuid():N}.tmp");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new IOException($"Es konnte kein temporärer Ersatzpfad für '{targetFileName}' erzeugt werden.");
     }
 
     private static string? FindExistingTargetFile(IReadOnlyList<string> filePaths, string targetDirectory)
@@ -714,7 +812,7 @@ internal sealed class DownloadSortService
                 $"Pruefe Serienordner {index + 1}/{directoryPaths.Length}: {currentFolderName}",
                 InterpolateProgress(8, 28, index, Math.Max(1, directoryPaths.Length)));
 
-            if (string.Equals(currentFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase))
+            if (IsReservedTargetFolderName(currentFolderName))
             {
                 continue;
             }
@@ -1172,11 +1270,28 @@ internal sealed class DownloadSortService
             if (File.Exists(destinationPath)
                 && !Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
             {
+                if (!TryGetFileLength(destinationPath, out var targetLengthBytes))
+                {
+                    continue;
+                }
+
+                if (!TryGetFileLength(filePath, out var sourceLengthBytes))
+                {
+                    return new DownloadSortReplacementDecision(
+                        replaceableConflicts,
+                        new DownloadSortTargetFileConflict(
+                            filePath,
+                            destinationPath,
+                            SourceLengthBytes: 0,
+                            targetLengthBytes,
+                            SourceMissing: true));
+                }
+
                 var conflict = new DownloadSortTargetFileConflict(
                     filePath,
                     destinationPath,
-                    new FileInfo(filePath).Length,
-                    new FileInfo(destinationPath).Length);
+                    sourceLengthBytes,
+                    targetLengthBytes);
 
                 if (ShouldKeepExistingTargetFile(conflict))
                 {
@@ -1190,6 +1305,20 @@ internal sealed class DownloadSortService
         return new DownloadSortReplacementDecision(replaceableConflicts, null);
     }
 
+    private static bool TryGetFileLength(string filePath, out long lengthBytes)
+    {
+        try
+        {
+            lengthBytes = new FileInfo(filePath).Length;
+            return true;
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException or IOException)
+        {
+            lengthBytes = 0;
+            return false;
+        }
+    }
+
     /// <summary>
     /// Schützt vorhandene Zielvideos nur dann vor dem Standard-Overwrite, wenn ein billiges,
     /// lokales Signal klar gegen die neue Datei spricht. Eine echte Auflösungsprüfung wäre hier
@@ -1198,6 +1327,11 @@ internal sealed class DownloadSortService
     /// </summary>
     private static bool ShouldKeepExistingTargetFile(DownloadSortTargetFileConflict conflict)
     {
+        if (conflict.SourceMissing)
+        {
+            return true;
+        }
+
         if (!VideoExtensions.Contains(Path.GetExtension(conflict.SourcePath)))
         {
             return false;
@@ -1225,6 +1359,11 @@ internal sealed class DownloadSortService
 
     private static string BuildBlockingConflictNote(DownloadSortTargetFileConflict conflict)
     {
+        if (conflict.SourceMissing)
+        {
+            return $"Quelldatei '{Path.GetFileName(conflict.SourcePath)}' existiert nicht mehr. Bitte neu scannen.";
+        }
+
         return $"Vorhandene Zieldatei '{Path.GetFileName(conflict.TargetPath)}' ist deutlich größer ({FormatFileSize(conflict.TargetLengthBytes)} statt {FormatFileSize(conflict.SourceLengthBytes)}). Bitte prüfen.";
     }
 
@@ -1306,7 +1445,8 @@ internal sealed class DownloadSortService
         string SourcePath,
         string TargetPath,
         long SourceLengthBytes,
-        long TargetLengthBytes);
+        long TargetLengthBytes,
+        bool SourceMissing = false);
 }
 
 /// <summary>

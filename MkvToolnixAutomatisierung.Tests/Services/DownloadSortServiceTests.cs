@@ -430,6 +430,23 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_DoesNotPlanRenameForDoneFolder()
+    {
+        var doneDirectory = Path.Combine(_rootDirectory, "done");
+        Directory.CreateDirectory(doneDirectory);
+        CreateEmptyFile(Path.Combine(doneDirectory, "SOKO Leipzig-Take Me Out-1234.mp4"));
+        CreateCompanionText(
+            Path.Combine(doneDirectory, "SOKO Leipzig-Take Me Out-1234.txt"),
+            topic: "SOKO Leipzig",
+            title: "Take Me Out");
+
+        var result = _service.Scan(_rootDirectory);
+
+        Assert.Empty(result.FolderRenames);
+        Assert.Empty(result.Items);
+    }
+
+    [Fact]
     public void Apply_RenamesLegacyFolder_AndMovesLooseFilesIntoCanonicalDirectory()
     {
         var legacyDirectory = Path.Combine(_rootDirectory, "Der Kommissar und");
@@ -542,6 +559,30 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(targetPath));
         Assert.Equal(121, new FileInfo(targetPath).Length);
         Assert.Contains(applyResult.LogLines, line => line.StartsWith("KONFLIKT:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Apply_SkipsStaleSourceInsteadOfThrowing_WhenTargetConflictExists()
+    {
+        var targetDirectory = Path.Combine(_rootDirectory, "Ostfriesenkrimis");
+        var fileName = "Ostfriesenkrimis-Ostfriesensturm (S02_E05)-1759523164.mp4";
+        var targetPath = Path.Combine(targetDirectory, fileName);
+        var loosePath = Path.Combine(_rootDirectory, fileName);
+        Directory.CreateDirectory(targetDirectory);
+        CreateFileWithByteLength(targetPath, length: 100, value: 1);
+        CreateFileWithByteLength(loosePath, length: 100, value: 2);
+        File.Delete(loosePath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Ostfriesensturm", [loosePath], "Ostfriesenkrimis")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(targetPath));
+        Assert.Contains(applyResult.LogLines, line => line.Contains("existiert nicht mehr", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -725,6 +766,25 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Equal(1, applyResult.SkippedGroupCount);
         Assert.True(File.Exists(videoPath));
         Assert.False(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(videoPath))));
+        Assert.Contains(applyResult.LogLines, line => line.Contains("reserviert", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Apply_SkipsRegularFiles_WhenTargetFolderIsReservedDone()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(videoPath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Serie-Folge", [videoPath], "done")],
+            []);
+
+        Assert.Equal(0, applyResult.MovedGroupCount);
+        Assert.Equal(0, applyResult.MovedFileCount);
+        Assert.Equal(1, applyResult.SkippedGroupCount);
+        Assert.True(File.Exists(videoPath));
+        Assert.False(File.Exists(Path.Combine(_rootDirectory, "done", Path.GetFileName(videoPath))));
         Assert.Contains(applyResult.LogLines, line => line.Contains("reserviert", StringComparison.Ordinal));
     }
 
