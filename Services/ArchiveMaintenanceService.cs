@@ -15,7 +15,17 @@ internal sealed class ArchiveMaintenanceService
     private static readonly Regex EpisodeFileNamePattern = new(
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly string[] SidecarExtensions = [".nfo", ".jpg", ".jpeg", ".png", ".webp"];
+    private static readonly Regex SeasonFolderPattern = new(@"^Season\s+(?:\d+|xx)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly string[] SidecarSuffixes =
+    [
+        ".nfo",
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        "-thumb.jpg",
+        "-poster.jpg"
+    ];
 
     private readonly MkvMergeProbeService _probeService;
     private readonly IMkvToolNixLocator _toolLocator;
@@ -289,9 +299,7 @@ internal sealed class ArchiveMaintenanceService
             expectedMetadata?.SeasonNumber ?? parsedName.SeasonNumber,
             expectedMetadata?.EpisodeNumber ?? parsedName.EpisodeNumber,
             expectedMetadata?.Title ?? parsedName.Title);
-        var targetPath = Path.Combine(
-            Path.GetDirectoryName(filePath) ?? string.Empty,
-            expectedFileName);
+        var targetPath = BuildTargetMediaPath(filePath, expectedFileName);
         return PathComparisonHelper.AreSamePath(filePath, targetPath)
             ? null
             : new ArchiveRenameOperation(filePath, targetPath, BuildSidecarRenameOperations(filePath, targetPath));
@@ -305,8 +313,8 @@ internal sealed class ArchiveMaintenanceService
         var targetBasePath = Path.Combine(
             Path.GetDirectoryName(targetMediaPath) ?? string.Empty,
             Path.GetFileNameWithoutExtension(targetMediaPath));
-        return SidecarExtensions
-            .Select(extension => new ArchiveSidecarRenameOperation(sourceBasePath + extension, targetBasePath + extension))
+        return SidecarSuffixes
+            .Select(suffix => new ArchiveSidecarRenameOperation(sourceBasePath + suffix, targetBasePath + suffix))
             .Where(operation => File.Exists(operation.SourcePath))
             .ToList();
     }
@@ -320,12 +328,62 @@ internal sealed class ArchiveMaintenanceService
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceMediaPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetFileName);
 
-        var targetPath = Path.Combine(
-            Path.GetDirectoryName(sourceMediaPath) ?? string.Empty,
-            targetFileName.Trim());
+        var targetPath = BuildTargetMediaPath(sourceMediaPath, targetFileName.Trim());
         return PathComparisonHelper.AreSamePath(sourceMediaPath, targetPath)
             ? null
             : new ArchiveRenameOperation(sourceMediaPath, targetPath, BuildSidecarRenameOperations(sourceMediaPath, targetPath));
+    }
+
+    private static string BuildTargetMediaPath(string sourceMediaPath, string targetFileName)
+    {
+        var sourceDirectory = Path.GetDirectoryName(sourceMediaPath) ?? string.Empty;
+        var targetDirectory = ResolveTargetDirectoryForEpisodeFileName(sourceDirectory, targetFileName);
+        return Path.Combine(targetDirectory, targetFileName);
+    }
+
+    private static string ResolveTargetDirectoryForEpisodeFileName(string sourceDirectory, string targetFileName)
+    {
+        var targetParts = TryParseEpisodeFileName(targetFileName);
+        if (targetParts is null)
+        {
+            return sourceDirectory;
+        }
+
+        var currentDirectoryName = Path.GetFileName(sourceDirectory);
+        var parentDirectory = Path.GetDirectoryName(sourceDirectory);
+        var seriesDirectory = IsSeasonDirectoryName(currentDirectoryName)
+            ? parentDirectory
+            : string.Equals(
+                currentDirectoryName,
+                EpisodeFileNameHelper.SanitizePathSegment(targetParts.SeriesName),
+                StringComparison.OrdinalIgnoreCase)
+                ? sourceDirectory
+                : null;
+        if (string.IsNullOrWhiteSpace(seriesDirectory))
+        {
+            return sourceDirectory;
+        }
+
+        return Path.Combine(seriesDirectory, BuildSeasonFolderName(targetParts.SeasonNumber));
+    }
+
+    private static bool IsSeasonDirectoryName(string directoryName)
+    {
+        return string.Equals(directoryName, "Specials", StringComparison.OrdinalIgnoreCase)
+               || SeasonFolderPattern.IsMatch(directoryName);
+    }
+
+    private static string BuildSeasonFolderName(string seasonNumber)
+    {
+        var normalizedSeasonNumber = EpisodeFileNameHelper.NormalizeSeasonNumber(seasonNumber);
+        if (normalizedSeasonNumber == "00")
+        {
+            return "Specials";
+        }
+
+        return int.TryParse(normalizedSeasonNumber, out var parsedSeason) && parsedSeason > 0
+            ? $"Season {parsedSeason}"
+            : "Season xx";
     }
 
     private static IReadOnlyList<ArchiveTrackHeaderCorrectionCandidate> BuildTrackHeaderCorrectionCandidates(
@@ -523,6 +581,15 @@ internal sealed class ArchiveMaintenanceService
             {
                 throw new IOException($"Eine Ziel-Begleitdatei existiert bereits: {sidecar.TargetPath}");
             }
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(renameOperation.TargetPath) ?? ".");
+        foreach (var sidecarDirectory in renameOperation.Sidecars
+                     .Select(sidecar => Path.GetDirectoryName(sidecar.TargetPath))
+                     .Where(directory => !string.IsNullOrWhiteSpace(directory))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            Directory.CreateDirectory(sidecarDirectory!);
         }
 
         File.Move(renameOperation.SourcePath, renameOperation.TargetPath);

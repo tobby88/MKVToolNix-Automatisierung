@@ -126,7 +126,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="1.35*" MinHeight="170" />
+            <RowDefinition x:Name="ArchiveItemsRow" Height="1.35*" MinHeight="110" />
             <RowDefinition Height="6" />
             <RowDefinition x:Name="PlannedMaintenanceRow" Height="0.95*" MinHeight="150" />
             <RowDefinition Height="Auto" />
@@ -178,6 +178,16 @@
         </Border>
 
         <GroupBox Grid.Row="2" Header="Archivdateien">
+            <GroupBox.Style>
+                <Style TargetType="GroupBox">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsExpanded, ElementName=ManualCorrectionExpander}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </GroupBox.Style>
             <DataGrid x:Name="ArchiveItemsGrid"
                       ItemsSource="{Binding Items}"
                       AutoGenerateColumns="False"
@@ -188,12 +198,13 @@
                       IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                       IsReadOnly="False"
                       ColumnWidth="*"
+                      VerticalScrollBarVisibility="Auto"
                       KeyboardNavigation.DirectionalNavigation="Contained"
                       PreviewKeyDown="ArchiveItemsGrid_OnPreviewKeyDown"
                       PreviewMouseLeftButtonDown="ArchiveItemsGrid_OnPreviewMouseLeftButtonDown"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                       Margin="8"
-                      MinHeight="230">
+                      MinHeight="90">
                 <DataGrid.Columns>
                     <DataGridTemplateColumn Header="Auswahl"
                                             Width="SizeToHeader"
@@ -240,6 +251,53 @@
                 </DataGrid.Columns>
             </DataGrid>
         </GroupBox>
+
+        <Border Grid.Row="2"
+                Margin="0,2,0,2"
+                Padding="10,8"
+                Background="#FFF8FAFC"
+                BorderBrush="#FFD8DEE6"
+                BorderThickness="1"
+                CornerRadius="6">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsExpanded, ElementName=ManualCorrectionExpander}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="2.2*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="3*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Margin="0,4,10,4"
+                           VerticalAlignment="Center"
+                           Text="Archivdatei" />
+                <ComboBox Grid.Column="1"
+                          Margin="0,0,12,0"
+                          DisplayMemberPath="FileName"
+                          ItemsSource="{Binding Items}"
+                          SelectedItem="{Binding SelectedItem, Mode=TwoWay}" />
+                <Border Grid.Column="2"
+                        Margin="0,0,12,0"
+                        DataContext="{Binding SelectedItem}"
+                        Style="{StaticResource StatusBadgeBorderStyle}">
+                    <TextBlock Style="{StaticResource StatusBadgeTextStyle}"
+                               Text="{Binding StatusText, TargetNullValue=-}" />
+                </Border>
+                <TextBlock Grid.Column="3"
+                           VerticalAlignment="Center"
+                           Text="{Binding SelectedItem.ChangeSummary, Mode=OneWay}"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
 
         <GridSplitter Grid.Row="3"
                       Height="6"

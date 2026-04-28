@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using Xunit;
@@ -90,6 +92,64 @@ public sealed class ArchiveMaintenanceServiceTests
         Assert.Equal("TVDB-Titel", analysis.ExpectedTitle);
         Assert.Equal("TVDB-Titel", analysis.ContainerTitleEdit?.ExpectedTitle);
         Assert.EndsWith("Serie - S01E01 - TVDB-Titel.mkv", analysis.RenameOperation?.TargetPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildManualRenameOperation_MovesEpisodeToMatchingSeasonFolder()
+    {
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            "Serie - S02E01 - Pilot.mkv");
+
+        Assert.NotNull(operation);
+        Assert.Equal(
+            @"C:\Archiv\Serie\Season 2\Serie - S02E01 - Pilot.mkv",
+            operation!.TargetPath,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildManualRenameOperation_MovesSeasonZeroToSpecialsFolder()
+    {
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Bonus.mkv",
+            "Serie - S00E01 - Bonus.mkv");
+
+        Assert.NotNull(operation);
+        Assert.Equal(
+            @"C:\Archiv\Serie\Specials\Serie - S00E01 - Bonus.mkv",
+            operation!.TargetPath,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildManualRenameOperation_RenamesNfoAndThumbsSidecars()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-sidecars-" + Guid.NewGuid().ToString("N"));
+        var seasonDirectory = Path.Combine(tempRoot, "Serie", "Season 1");
+        Directory.CreateDirectory(seasonDirectory);
+        try
+        {
+            var sourcePath = Path.Combine(seasonDirectory, "Serie - S01E01 - Alt.mkv");
+            var sourceBase = Path.Combine(seasonDirectory, "Serie - S01E01 - Alt");
+            File.WriteAllText(sourcePath, "mkv");
+            File.WriteAllText(sourceBase + ".nfo", "nfo");
+            File.WriteAllText(sourceBase + "-thumb.jpg", "jpg");
+
+            var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+                sourcePath,
+                "Serie - S02E01 - Neu.mkv");
+
+            Assert.NotNull(operation);
+            Assert.Contains(operation!.Sidecars, sidecar => sidecar.SourcePath.EndsWith(".nfo", StringComparison.OrdinalIgnoreCase)
+                && sidecar.TargetPath.EndsWith(Path.Combine("Season 2", "Serie - S02E01 - Neu.nfo"), StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(operation.Sidecars, sidecar => sidecar.SourcePath.EndsWith("-thumb.jpg", StringComparison.OrdinalIgnoreCase)
+                && sidecar.TargetPath.EndsWith(Path.Combine("Season 2", "Serie - S02E01 - Neu-thumb.jpg"), StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
     }
 
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)

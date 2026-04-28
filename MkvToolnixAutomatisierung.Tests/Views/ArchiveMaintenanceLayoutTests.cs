@@ -31,9 +31,11 @@ public sealed class ArchiveMaintenanceLayoutTests
 
                 var expander = Assert.IsType<Expander>(view.FindName("ManualCorrectionExpander"));
                 var splitter = Assert.IsType<GridSplitter>(view.FindName("ManualCorrectionSplitter"));
+                var archiveRow = Assert.IsType<RowDefinition>(view.FindName("ArchiveItemsRow"));
                 var manualRow = Assert.IsType<RowDefinition>(view.FindName("ManualCorrectionRow"));
                 var plannedRow = Assert.IsType<RowDefinition>(view.FindName("PlannedMaintenanceRow"));
 
+                Assert.Equal(GridUnitType.Star, archiveRow.Height.GridUnitType);
                 Assert.Equal(GridUnitType.Auto, manualRow.Height.GridUnitType);
                 Assert.Equal(Visibility.Collapsed, splitter.Visibility);
 
@@ -41,6 +43,8 @@ public sealed class ArchiveMaintenanceLayoutTests
                 await WpfTestHost.WaitForIdleAsync();
 
                 Assert.Equal(Visibility.Visible, splitter.Visibility);
+                Assert.Equal(GridUnitType.Auto, archiveRow.Height.GridUnitType);
+                Assert.Equal(0d, archiveRow.MinHeight);
                 Assert.Equal(GridUnitType.Star, manualRow.Height.GridUnitType);
                 Assert.True(manualRow.Height.Value >= 1.6d, $"Manual row height was {manualRow.Height}.");
                 Assert.Equal(GridUnitType.Star, plannedRow.Height.GridUnitType);
@@ -51,6 +55,8 @@ public sealed class ArchiveMaintenanceLayoutTests
 
                 Assert.Equal(GridUnitType.Auto, manualRow.Height.GridUnitType);
                 Assert.Equal(Visibility.Collapsed, splitter.Visibility);
+                Assert.Equal(GridUnitType.Star, archiveRow.Height.GridUnitType);
+                Assert.True(archiveRow.MinHeight >= 100d, $"Archive row min height was {archiveRow.MinHeight}.");
                 Assert.True(plannedRow.MinHeight >= 150d, $"Planned row min height was {plannedRow.MinHeight}.");
             }
             finally

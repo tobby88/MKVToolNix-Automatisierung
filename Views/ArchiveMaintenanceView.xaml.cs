@@ -10,6 +10,7 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class ArchiveMaintenanceView : UserControl
 {
+    private static readonly GridLength DefaultArchiveItemsHeight = new(1.35, GridUnitType.Star);
     private static readonly GridLength CompactPlannedMaintenanceHeight = new(0.25, GridUnitType.Star);
     private static readonly GridLength DefaultManualCorrectionHeight = new(1.65, GridUnitType.Star);
     private GridLength _manualCorrectionExpandedHeight = DefaultManualCorrectionHeight;
@@ -59,6 +60,8 @@ public partial class ArchiveMaintenanceView : UserControl
     private void ManualCorrectionExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
         ManualCorrectionSplitter.Visibility = Visibility.Visible;
+        ArchiveItemsRow.MinHeight = 0;
+        ArchiveItemsRow.Height = GridLength.Auto;
         _plannedMaintenanceHeightBeforeManualExpansion = PlannedMaintenanceRow.Height;
         PlannedMaintenanceRow.MinHeight = 64;
         PlannedMaintenanceRow.Height = CompactPlannedMaintenanceHeight;
@@ -76,6 +79,8 @@ public partial class ArchiveMaintenanceView : UserControl
         }
 
         ManualCorrectionSplitter.Visibility = Visibility.Collapsed;
+        ArchiveItemsRow.MinHeight = 110;
+        ArchiveItemsRow.Height = DefaultArchiveItemsHeight;
         PlannedMaintenanceRow.MinHeight = 150;
         PlannedMaintenanceRow.Height = _plannedMaintenanceHeightBeforeManualExpansion;
         ManualCorrectionRow.MinHeight = 0;

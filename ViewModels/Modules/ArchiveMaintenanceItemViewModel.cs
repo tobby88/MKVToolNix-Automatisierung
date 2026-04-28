@@ -470,13 +470,12 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             return "Der Ziel-Dateiname muss auf .mkv enden.";
         }
 
-        var targetPath = Path.Combine(DirectoryPath, fileName);
-        if (!PathComparisonHelper.AreSamePath(FilePath, targetPath) && File.Exists(targetPath))
+        var renameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
+        if (renameOperation is not null && File.Exists(renameOperation.TargetPath))
         {
             return "Die Ziel-MKV existiert bereits.";
         }
 
-        var renameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
         var existingSidecarTarget = renameOperation?.Sidecars.FirstOrDefault(sidecar => File.Exists(sidecar.TargetPath));
         return existingSidecarTarget is null
             ? null
