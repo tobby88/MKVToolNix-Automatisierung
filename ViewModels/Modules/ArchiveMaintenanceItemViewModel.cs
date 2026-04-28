@@ -1055,9 +1055,15 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private void NotifyManualCorrectionChanged()
     {
-        if (!CanSelect && _isSelected)
+        var canSelect = CanSelect;
+        if (!canSelect && _isSelected)
         {
             _isSelected = false;
+            OnPropertyChanged(nameof(IsSelected));
+        }
+        else if (canSelect && !_isSelected)
+        {
+            _isSelected = true;
             OnPropertyChanged(nameof(IsSelected));
         }
 

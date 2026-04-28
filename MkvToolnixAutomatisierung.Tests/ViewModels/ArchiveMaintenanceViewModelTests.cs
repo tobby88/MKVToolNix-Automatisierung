@@ -292,16 +292,35 @@ public sealed class ArchiveMaintenanceViewModelTests
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());
 
+        Assert.False(item.IsSelected);
+
         item.TargetContainerTitle = "Manuell korrigierter Titel";
         item.TargetFileName = "Serie - S01E01 - Manuell korrigierter Titel.mkv";
         var request = item.CreateApplyRequest();
 
+        Assert.True(item.CanSelect);
+        Assert.True(item.IsSelected);
         Assert.Equal("Alter Titel", request.ContainerTitleEdit?.CurrentTitle);
         Assert.Equal("Manuell korrigierter Titel", request.ContainerTitleEdit?.ExpectedTitle);
         Assert.EndsWith(
             "Serie - S01E01 - Manuell korrigierter Titel.mkv",
             request.RenameOperation?.TargetPath,
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ManualChange_SelectsPreviouslyOkItemUntilUserClearsSelection()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());
+
+        item.TargetContainerTitle = "Manuell korrigierter Titel";
+
+        Assert.True(item.IsSelected);
+
+        item.IsSelected = false;
+
+        Assert.False(item.IsSelected);
+        Assert.True(item.CanSelect);
     }
 
     [Fact]
