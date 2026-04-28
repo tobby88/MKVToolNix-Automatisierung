@@ -42,9 +42,9 @@ public sealed class ArchiveMaintenanceLayoutTests
 
                 Assert.Equal(Visibility.Visible, splitter.Visibility);
                 Assert.Equal(GridUnitType.Star, manualRow.Height.GridUnitType);
-                Assert.True(manualRow.Height.Value >= 1.4d, $"Manual row height was {manualRow.Height}.");
+                Assert.True(manualRow.Height.Value >= 1.6d, $"Manual row height was {manualRow.Height}.");
                 Assert.Equal(GridUnitType.Star, plannedRow.Height.GridUnitType);
-                Assert.True(plannedRow.Height.Value <= 0.5d, $"Planned row height was {plannedRow.Height}.");
+                Assert.True(plannedRow.Height.Value <= 0.3d, $"Planned row height was {plannedRow.Height}.");
 
                 expander.IsExpanded = false;
                 await WpfTestHost.WaitForIdleAsync();

@@ -12,6 +12,10 @@
             <Setter Property="Padding" Value="8,6" />
         </Style>
 
+        <Style x:Key="CompactDisplaySurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
+            <Setter Property="Padding" Value="6,3" />
+        </Style>
+
         <Style x:Key="DisplaySurfaceTextStyle" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Top" />
@@ -270,6 +274,42 @@
                                Text="Noch keine Archivdatei ausgewählt" />
                 </Border>
 
+                <Border Padding="8,6"
+                        DataContext="{Binding SelectedItem}"
+                        Background="#FFF8FAFC"
+                        BorderBrush="#FFD8DEE6"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsExpanded, ElementName=ManualCorrectionExpander}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding DataContext.SelectedItem, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Text="{Binding FileName, Mode=OneWay}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1"
+                                   Margin="16,0,0,0"
+                                   Foreground="#FF5F6B76"
+                                   Text="{Binding DetailSummaryText, Mode=OneWay}" />
+                    </Grid>
+                </Border>
+
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                     <ScrollViewer.Style>
@@ -277,6 +317,9 @@
                             <Setter Property="Visibility" Value="Visible" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding SelectedItem}" Value="{x:Null}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsExpanded, ElementName=ManualCorrectionExpander}" Value="True">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                 </DataTrigger>
                             </Style.Triggers>
@@ -507,37 +550,77 @@
                                 </TextBlock.Style>
                             </TextBlock>
 
+                            <Grid DockPanel.Dock="Top"
+                                  Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Foreground="#FF5F6B76"
+                                           FontWeight="SemiBold"
+                                           Text="Spur" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="#FF5F6B76"
+                                           FontWeight="SemiBold"
+                                           Text="Wert" />
+                                <TextBlock Grid.Column="2"
+                                           Foreground="#FF5F6B76"
+                                           FontWeight="SemiBold"
+                                           Text="Ist" />
+                                <TextBlock Grid.Column="3"
+                                           Foreground="#FF5F6B76"
+                                           FontWeight="SemiBold"
+                                           Text="Soll" />
+                            </Grid>
+
                             <ScrollViewer VerticalScrollBarVisibility="Auto"
                                           HorizontalScrollBarVisibility="Disabled">
                                 <ItemsControl ItemsSource="{Binding VisibleHeaderCorrectionGroups, Mode=OneWay}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <Border Margin="0,0,0,6"
-                                                    Padding="6"
+                                                    Padding="0"
                                                     Background="#FFF8FAFC"
                                                     BorderBrush="#FFD8DEE6"
                                                     BorderThickness="1"
                                                     CornerRadius="4">
-                                                <StackPanel>
-                                                    <TextBlock Margin="0,0,0,4"
-                                                               FontWeight="SemiBold"
-                                                               Text="{Binding DisplayLabel, Mode=OneWay}" />
-                                                    <ItemsControl ItemsSource="{Binding Values, Mode=OneWay}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="160" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <Border Grid.Column="0"
+                                                            Padding="8,6"
+                                                            Background="#FFEFF6FF"
+                                                            BorderBrush="#FFD8DEE6"
+                                                            BorderThickness="0,0,1,0">
+                                                        <TextBlock FontWeight="SemiBold"
+                                                                   Text="{Binding DisplayLabel, Mode=OneWay}"
+                                                                   TextWrapping="Wrap" />
+                                                    </Border>
+
+                                                    <ItemsControl Grid.Column="1"
+                                                                  Margin="6,4"
+                                                                  ItemsSource="{Binding Values, Mode=OneWay}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <Grid Margin="0,0,0,4">
+                                                                <Grid Margin="0,0,0,3">
                                                                     <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="120" />
+                                                                        <ColumnDefinition Width="104" />
                                                                         <ColumnDefinition Width="*" />
                                                                         <ColumnDefinition Width="*" />
                                                                     </Grid.ColumnDefinitions>
                                                                     <TextBlock Grid.Column="0"
-                                                                               Margin="0,5,10,5"
+                                                                               Margin="0,4,8,4"
                                                                                VerticalAlignment="Center"
                                                                                Text="{Binding DisplayName, Mode=OneWay}" />
                                                                     <Border Grid.Column="1"
-                                                                            Margin="0,0,10,0"
-                                                                            Style="{StaticResource DisplaySurfaceBorderStyle}">
+                                                                            Margin="0,0,8,0"
+                                                                            Style="{StaticResource CompactDisplaySurfaceBorderStyle}">
                                                                         <TextBlock Text="{Binding CurrentDisplayValue, Mode=OneWay}"
                                                                                    TextWrapping="Wrap" />
                                                                     </Border>
@@ -552,7 +635,7 @@
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
-                                                </StackPanel>
+                                                </Grid>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
