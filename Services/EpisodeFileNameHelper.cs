@@ -156,6 +156,13 @@ internal static class EpisodeFileNameHelper
             .Replace('\u2032', '\'')
             .Replace('\u00B4', '\'')
             .Replace('\u0060', '\'')
+            .Replace('\u0022', '\'')
+            .Replace('\u201C', '\'')
+            .Replace('\u201D', '\'')
+            .Replace('\u201E', '\'')
+            .Replace('\u201F', '\'')
+            .Replace('\u00AB', '\'')
+            .Replace('\u00BB', '\'')
             .Replace("\u2026", "...");
     }
 

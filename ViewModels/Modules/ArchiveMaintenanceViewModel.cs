@@ -305,6 +305,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             for (var index = 0; index < selectedItems.Count; index++)
             {
                 var item = selectedItems[index];
+                SelectedItem = item;
                 StatusText = $"Wende Änderungen an {index + 1}/{selectedItems.Count}: {item.FileName}";
                 ProgressValue = index * 100 / selectedItems.Count;
                 var result = await _services.ArchiveMaintenance.ApplyAsync(

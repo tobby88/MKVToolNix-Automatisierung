@@ -84,6 +84,27 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ApplySelectedCommand_SelectsCurrentItemDuringProcessing()
+    {
+        var archiveMaintenance = new RecordingArchiveMaintenanceService();
+        var viewModel = CreateViewModel(archiveMaintenance: archiveMaintenance);
+        var firstItem = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis(@"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv"));
+        var secondItem = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis(@"C:\Archiv\Serie\Season 1\Serie - S01E02 - Folge 2.mkv"));
+        viewModel.Items.Add(firstItem);
+        viewModel.Items.Add(secondItem);
+
+        await viewModel.ApplySelectedCommand.ExecuteAsync();
+
+        Assert.Equal(
+            [
+                firstItem.FilePath,
+                secondItem.FilePath
+            ],
+            archiveMaintenance.AppliedFilePaths);
+        Assert.Same(secondItem, viewModel.SelectedItem);
+    }
+
+    [Fact]
     public void ToggleSelectedItemSelectionCommand_TogglesWritableItem()
     {
         var viewModel = CreateViewModel();
@@ -253,11 +274,12 @@ public sealed class ArchiveMaintenanceViewModelTests
         Assert.Contains(".mkv", item.ManualValidationMessage, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ArchiveMaintenanceItemAnalysis CreateWritableAnalysis()
+    private static ArchiveMaintenanceItemAnalysis CreateWritableAnalysis(
+        string filePath = @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv")
     {
         return new ArchiveMaintenanceItemAnalysis(
-            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
-            "Pilot",
+            filePath,
+            Path.GetFileNameWithoutExtension(filePath).Split(" - ").LastOrDefault() ?? "Pilot",
             ContainerTitle: "Alt",
             RenameOperation: null,
             ContainerTitleEdit: new ContainerTitleEditOperation("Alt", "Pilot"),
@@ -427,6 +449,33 @@ public sealed class ArchiveMaintenanceViewModelTests
             CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class RecordingArchiveMaintenanceService : IArchiveMaintenanceService
+    {
+        public List<string> AppliedFilePaths { get; } = [];
+
+        public Task<ArchiveMaintenanceScanResult> ScanAsync(
+            string rootDirectory,
+            IProgress<ArchiveMaintenanceProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ArchiveMaintenanceApplyResult> ApplyAsync(
+            ArchiveMaintenanceApplyRequest request,
+            IProgress<string>? output = null,
+            CancellationToken cancellationToken = default)
+        {
+            AppliedFilePaths.Add(request.FilePath);
+            return Task.FromResult(new ArchiveMaintenanceApplyResult(
+                request.FilePath,
+                request.FilePath,
+                Success: true,
+                Message: "OK",
+                OutputLines: []));
         }
     }
 

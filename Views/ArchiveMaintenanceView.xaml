@@ -206,6 +206,7 @@
                       ColumnWidth="*"
                       VerticalScrollBarVisibility="Auto"
                       KeyboardNavigation.DirectionalNavigation="Contained"
+                      SelectionChanged="ArchiveItemsGrid_OnSelectionChanged"
                       PreviewKeyDown="ArchiveItemsGrid_OnPreviewKeyDown"
                       PreviewMouseLeftButtonDown="ArchiveItemsGrid_OnPreviewMouseLeftButtonDown"
                       SelectedItem="{Binding SelectedItem, Mode=TwoWay}"

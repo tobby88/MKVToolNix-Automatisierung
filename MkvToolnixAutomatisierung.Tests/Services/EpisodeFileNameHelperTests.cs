@@ -63,6 +63,17 @@ public sealed class EpisodeFileNameHelperTests
         Assert.Equal("München Mord - S01E02 - D'Welt ... bleibt.mkv", fileName);
     }
 
+    [Theory]
+    [InlineData("\"Ich werde dich töten\"")]
+    [InlineData("„Ich werde dich töten“")]
+    [InlineData("«Ich werde dich töten»")]
+    public void BuildEpisodeFileName_NormalizesDoubleQuotesToApostrophes(string title)
+    {
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Der Alte", "06", "09", title);
+
+        Assert.Equal("Der Alte - S06E09 - 'Ich werde dich töten'.mkv", fileName);
+    }
+
     [Fact]
     public void BuildEpisodeFileName_ReplacesTitleColonWithReadableSeparator()
     {

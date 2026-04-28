@@ -96,6 +96,24 @@ public sealed class ArchiveMaintenanceServiceTests
     }
 
     [Fact]
+    public void AnalyzeContainer_NormalizesMetadataQuotes_WhenComparingFileName()
+    {
+        var analysis = ArchiveMaintenanceService.AnalyzeContainer(
+            @"C:\Archiv\Der Alte\Season 6\Der Alte - S06E09 - 'Ich werde dich töten'.mkv",
+            new ContainerMetadata(
+                "\"Ich werde dich töten\"",
+                [CreateVideoTrack(0), CreateAudioTrack(1, "Deutsch - AAC")],
+                Attachments: []),
+            new ArchiveExpectedEpisodeMetadata(
+                "\"Ich werde dich töten\"",
+                "06",
+                "09",
+                "de"));
+
+        Assert.Null(analysis.RenameOperation);
+    }
+
+    [Fact]
     public void BuildManualRenameOperation_MovesEpisodeToMatchingSeasonFolder()
     {
         var operation = ArchiveMaintenanceService.BuildManualRenameOperation(

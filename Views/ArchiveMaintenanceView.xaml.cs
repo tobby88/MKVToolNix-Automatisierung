@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 
 namespace MkvToolnixAutomatisierung.Views;
@@ -44,6 +45,29 @@ public partial class ArchiveMaintenanceView : UserControl
                 e,
                 viewModel.ToggleSelectedItemSelectionCommand);
         }
+    }
+
+    /// <summary>
+    /// Hält beim Anwenden mehrerer Archivpflege-Änderungen den gerade geschriebenen
+    /// Eintrag sichtbar. Im interaktiven Zustand bleibt die Tabelle dagegen in Ruhe.
+    /// </summary>
+    private void ArchiveItemsGrid_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not DataGrid dataGrid
+            || dataGrid.SelectedItem is null
+            || DataContext is not ArchiveMaintenanceViewModel viewModel
+            || viewModel.IsInteractive)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (dataGrid.SelectedItem is not null)
+            {
+                dataGrid.ScrollIntoView(dataGrid.SelectedItem);
+            }
+        }));
     }
 
     private void LogTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
