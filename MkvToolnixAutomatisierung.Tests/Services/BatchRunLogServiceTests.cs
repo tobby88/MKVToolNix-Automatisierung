@@ -193,6 +193,21 @@ public sealed class BatchRunLogServiceTests
         Assert.Contains("MKVToolNix-Automatisierung - Einzel-Log", batchLogText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void CreateUniqueArtifactPaths_UsesSharedSuffixWhenAnyArtifactAlreadyExists()
+    {
+        var fileStamp = "2026-04-29 08-15-00";
+        var first = BatchRunLogService.CreateUniqueArtifactPaths(fileStamp, "Batch", includeNewFileReports: true);
+        Directory.CreateDirectory(Path.GetDirectoryName(first.NewOutputMetadataReportPath!)!);
+        File.WriteAllText(first.NewOutputMetadataReportPath!, "{}");
+
+        var second = BatchRunLogService.CreateUniqueArtifactPaths(fileStamp, "Batch", includeNewFileReports: true);
+
+        Assert.EndsWith("Batch - 2026-04-29 08-15-00 (2).log.txt", second.BatchLogPath, StringComparison.Ordinal);
+        Assert.EndsWith("Neu erzeugte Ausgabedateien - 2026-04-29 08-15-00 (2).txt", second.NewOutputListPath, StringComparison.Ordinal);
+        Assert.EndsWith("Neu erzeugte Ausgabedateien - 2026-04-29 08-15-00 (2).metadata.json", second.NewOutputMetadataReportPath, StringComparison.Ordinal);
+    }
+
     private static string CreateDirectory(string name)
     {
         var path = Path.Combine(Path.GetTempPath(), "mkv-auto-tests", Guid.NewGuid().ToString("N"), name);

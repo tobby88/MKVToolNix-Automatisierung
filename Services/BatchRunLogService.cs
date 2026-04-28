@@ -46,16 +46,10 @@ public sealed class BatchRunLogService
             .ToList();
         var normalizedMetadata = BuildNormalizedMetadataEntries(normalizedNewFiles, newOutputMetadata);
 
-        var batchLogPath = Path.Combine(PortableAppStorage.LogsDirectory, $"{normalizedRunLabel} - {fileStamp}.log.txt");
-        var newFilesListPath = normalizedNewFiles.Count > 0
-            ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.txt")
-            : null;
-        var newFilesMetadataReportPath = normalizedNewFiles.Count > 0
-            ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}.metadata.json")
-            : null;
+        var artifactPaths = CreateUniqueArtifactPaths(fileStamp, normalizedRunLabel, normalizedNewFiles.Count > 0);
 
         File.WriteAllText(
-            batchLogPath,
+            artifactPaths.BatchLogPath,
             BuildBatchLogText(
                 now,
                 sourceDirectory,
@@ -63,22 +57,22 @@ public sealed class BatchRunLogService
                 logText,
                 normalizedNewFiles,
                 normalizedMetadata,
-                newFilesMetadataReportPath,
+                artifactPaths.NewOutputMetadataReportPath,
                 normalizedRunLabel,
                 successCount,
                 warningCount,
                 errorCount),
             Utf8Encoding);
 
-        if (newFilesListPath is not null)
+        if (artifactPaths.NewOutputListPath is not null)
         {
             File.WriteAllLines(
-                newFilesListPath,
+                artifactPaths.NewOutputListPath,
                 BuildNewOutputFileReportLines(now, sourceDirectory, outputDirectory, normalizedNewFiles),
                 Utf8Encoding);
         }
 
-        if (newFilesMetadataReportPath is not null)
+        if (artifactPaths.NewOutputMetadataReportPath is not null)
         {
             var metadataReport = new BatchOutputMetadataReport
             {
@@ -89,12 +83,61 @@ public sealed class BatchRunLogService
             };
 
             File.WriteAllText(
-                newFilesMetadataReportPath,
+                artifactPaths.NewOutputMetadataReportPath,
                 BatchOutputMetadataReportJson.Serialize(metadataReport),
                 Utf8Encoding);
         }
 
-        return new BatchRunLogSaveResult(batchLogPath, newFilesListPath, newFilesMetadataReportPath, normalizedNewFiles);
+        return new BatchRunLogSaveResult(
+            artifactPaths.BatchLogPath,
+            artifactPaths.NewOutputListPath,
+            artifactPaths.NewOutputMetadataReportPath,
+            normalizedNewFiles);
+    }
+
+    internal static BatchRunArtifactPathSet CreateUniqueArtifactPaths(
+        string fileStamp,
+        string runLabel,
+        bool includeNewFileReports)
+    {
+        var safeRunLabel = NormalizeFileNameSegment(runLabel, fallback: "Batch");
+        for (var index = 1; index < 10_000; index++)
+        {
+            var suffix = index == 1 ? string.Empty : $" ({index})";
+            var paths = new BatchRunArtifactPathSet(
+                Path.Combine(PortableAppStorage.LogsDirectory, $"{safeRunLabel} - {fileStamp}{suffix}.log.txt"),
+                includeNewFileReports
+                    ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}{suffix}.txt")
+                    : null,
+                includeNewFileReports
+                    ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp}{suffix}.metadata.json")
+                    : null);
+            if (!paths.AllPaths.Any(File.Exists))
+            {
+                return paths;
+            }
+        }
+
+        var uniqueSuffix = Guid.NewGuid().ToString("N");
+        return new BatchRunArtifactPathSet(
+            Path.Combine(PortableAppStorage.LogsDirectory, $"{safeRunLabel} - {fileStamp} - {uniqueSuffix}.log.txt"),
+            includeNewFileReports
+                ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp} - {uniqueSuffix}.txt")
+                : null,
+            includeNewFileReports
+                ? Path.Combine(PortableAppStorage.LogsDirectory, $"Neu erzeugte Ausgabedateien - {fileStamp} - {uniqueSuffix}.metadata.json")
+                : null);
+    }
+
+    private static string NormalizeFileNameSegment(string value, string fallback)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
+        {
+            normalized = normalized.Replace(invalidCharacter, '_');
+        }
+
+        return normalized;
     }
 
     private static string BuildBatchLogText(
@@ -281,4 +324,27 @@ public sealed record BatchRunLogSaveResult(
     /// Batch-Protokoll bleibt zwar gespeichert, wird aber nicht als Fallback geöffnet.
     /// </summary>
     public string? PreferredOpenPath => NewOutputListPath;
+}
+
+internal sealed record BatchRunArtifactPathSet(
+    string BatchLogPath,
+    string? NewOutputListPath,
+    string? NewOutputMetadataReportPath)
+{
+    public IEnumerable<string> AllPaths
+    {
+        get
+        {
+            yield return BatchLogPath;
+            if (NewOutputListPath is not null)
+            {
+                yield return NewOutputListPath;
+            }
+
+            if (NewOutputMetadataReportPath is not null)
+            {
+                yield return NewOutputMetadataReportPath;
+            }
+        }
+    }
 }

@@ -11,7 +11,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 ## Download, Einsortieren und Dateioperationen
 
-- [ ] Batch-Artefaktnamen kollisionssicher machen.
+- [x] Batch-Artefaktnamen kollisionssicher machen.
 - [ ] `done` beim Einsortieren als reservierten Ordner behandeln.
 - [ ] Stale Quellen in der DownloadSort-Konfliktprüfung robust überspringen.
 - [ ] DownloadSort-Overwrite zwischen Prüfung und Move TOCTOU-sicherer machen.
