@@ -259,7 +259,7 @@ internal static class ArchiveHeaderNormalizationService
             }
 
             var changes = edit.ValueEdits
-                .Select(valueEdit => $"{valueEdit.DisplayName}: {FormatHeaderValue(valueEdit.CurrentDisplayValue)} -> {FormatHeaderValue(valueEdit.ExpectedDisplayValue)}")
+                .Select(valueEdit => $"{FormatHeaderValueDisplayName(valueEdit)}: {FormatHeaderValue(valueEdit.CurrentDisplayValue)} -> {FormatHeaderValue(valueEdit.ExpectedDisplayValue)}")
                 .ToList();
             return $"{FormatHeaderValue(edit.DisplayLabel)}: {string.Join("; ", changes)}";
         }
@@ -274,6 +274,13 @@ internal static class ArchiveHeaderNormalizationService
         return string.Equals(FormatHeaderValue(edit.DisplayLabel), currentValue, StringComparison.Ordinal)
             ? $"{currentValue} -> {expectedValue}"
             : $"{FormatHeaderValue(edit.DisplayLabel)}: {currentValue} -> {expectedValue}";
+    }
+
+    private static string FormatHeaderValueDisplayName(TrackHeaderValueEdit valueEdit)
+    {
+        return string.Equals(valueEdit.PropertyName, "name", StringComparison.Ordinal)
+            ? "Spurname"
+            : valueEdit.DisplayName;
     }
 
     private static string? ResolveAudioDescriptionLanguage(ContainerTrackMetadata track, string? fallbackLanguage)

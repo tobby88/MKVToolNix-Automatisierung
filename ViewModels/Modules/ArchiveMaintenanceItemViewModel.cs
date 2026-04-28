@@ -82,7 +82,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public int HiddenHeaderCorrectionCount => Math.Max(0, HeaderCorrections.Count - VisibleHeaderCorrectionCount);
 
     public string ManualCorrectionHeaderText => HasWritableChanges
-        ? $"Manuelle Korrektur ({BuildCurrentChangeNotes().Count} Änderung(en))"
+        ? $"Manuelle Korrektur ({BuildDetailedCurrentChangeNotes().Count} Änderung(en))"
         : "Manuelle Korrektur (optional)";
 
     public string HeaderCorrectionModeText
@@ -323,7 +323,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
                 lines.Add("- " + ManualValidationMessage);
             }
 
-            var changeNotes = BuildCurrentChangeNotes();
+            var changeNotes = BuildDetailedCurrentChangeNotes();
             if (changeNotes.Count > 0)
             {
                 lines.Add(string.Empty);
@@ -352,7 +352,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public string DetailFilePath => FilePath;
 
-    public IReadOnlyList<string> WritableChangeNotes => BuildCurrentChangeNotes();
+    public IReadOnlyList<string> WritableChangeNotes => BuildDetailedCurrentChangeNotes();
 
     public bool HasWritableDetailChanges => WritableChangeNotes.Count > 0;
 
@@ -485,6 +485,55 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
                 : [])
             .Concat(BuildProviderIdChangeNotes())
             .ToList();
+    }
+
+    private IReadOnlyList<string> BuildDetailedCurrentChangeNotes()
+    {
+        return BuildContainerTitleChangeNotes(CreateCurrentContainerTitleEdit())
+            .Concat(BuildTrackHeaderDetailChangeNotes(CreateCurrentTrackHeaderEdits()))
+            .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
+                ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
+                : [])
+            .Concat(BuildProviderIdChangeNotes())
+            .ToList();
+    }
+
+    private static IEnumerable<string> BuildContainerTitleChangeNotes(ContainerTitleEditOperation? containerTitleEdit)
+    {
+        if (containerTitleEdit is not null)
+        {
+            yield return $"MKV-Titel: {ArchiveHeaderNormalizationService.FormatHeaderValue(containerTitleEdit.CurrentTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(containerTitleEdit.ExpectedTitle)}";
+        }
+    }
+
+    private static IEnumerable<string> BuildTrackHeaderDetailChangeNotes(IReadOnlyList<TrackHeaderEditOperation> trackHeaderEdits)
+    {
+        foreach (var edit in trackHeaderEdits)
+        {
+            if (edit.ValueEdits is not { Count: > 0 } valueEdits)
+            {
+                yield return BuildTrackNameDetailChangeNote(edit);
+                continue;
+            }
+
+            foreach (var valueEdit in valueEdits)
+            {
+                yield return string.Equals(valueEdit.PropertyName, "name", StringComparison.Ordinal)
+                    ? BuildTrackNameDetailChangeNote(edit, valueEdit)
+                    : $"{ArchiveHeaderNormalizationService.FormatHeaderValue(edit.DisplayLabel)}: {valueEdit.DisplayName}: {ArchiveHeaderNormalizationService.FormatHeaderValue(valueEdit.CurrentDisplayValue)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(valueEdit.ExpectedDisplayValue)}";
+            }
+        }
+    }
+
+    private static string BuildTrackNameDetailChangeNote(
+        TrackHeaderEditOperation edit,
+        TrackHeaderValueEdit? valueEdit = null)
+    {
+        var currentValue = ArchiveHeaderNormalizationService.FormatHeaderValue(valueEdit?.CurrentDisplayValue ?? edit.CurrentTrackName);
+        var expectedValue = ArchiveHeaderNormalizationService.FormatHeaderValue(valueEdit?.ExpectedDisplayValue ?? edit.ExpectedTrackName);
+        return string.Equals(ArchiveHeaderNormalizationService.FormatHeaderValue(edit.DisplayLabel), currentValue, StringComparison.Ordinal)
+            ? $"{currentValue} -> {expectedValue}"
+            : $"{ArchiveHeaderNormalizationService.FormatHeaderValue(edit.DisplayLabel)}: {currentValue} -> {expectedValue}";
     }
 
     private ArchiveRenameOperation? CreateCurrentRenameOperation()

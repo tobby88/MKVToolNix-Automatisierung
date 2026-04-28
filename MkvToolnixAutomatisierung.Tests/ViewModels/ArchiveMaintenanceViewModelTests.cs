@@ -127,6 +127,19 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void WritableChangeNotes_ExpandsMultipleTrackHeaderValues()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateAnalysisWithMultipleTrackCorrections());
+
+        Assert.Equal(2, item.WritableChangeNotes.Count);
+        Assert.Contains("HD - H.264 -> Deutsch - HD - H.264", item.WritableChangeNotes);
+        Assert.Contains("HD - H.264: Originalsprache: nein -> ja", item.WritableChangeNotes);
+        Assert.Equal("Manuelle Korrektur (2 Änderung(en))", item.ManualCorrectionHeaderText);
+        Assert.DoesNotContain(item.WritableChangeNotes, note => note.Contains("Name:", StringComparison.Ordinal));
+        Assert.Contains("Spurname:", item.ChangeSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CreateApplyRequest_UsesManualProviderIdTargets()
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateProviderIdAnalysis());
@@ -264,6 +277,45 @@ public sealed class ArchiveMaintenanceViewModelTests
                             "nein",
                             "nein",
                             "0",
+                            IsFlag: true)
+                    ])
+            ],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: false,
+            Issues: [],
+            ChangeNotes: [],
+            ErrorMessage: null);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateAnalysisWithMultipleTrackCorrections()
+    {
+        return new ArchiveMaintenanceItemAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            "Pilot",
+            ContainerTitle: "Pilot",
+            RenameOperation: null,
+            ContainerTitleEdit: null,
+            TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates:
+            [
+                new ArchiveTrackHeaderCorrectionCandidate(
+                    "track:1",
+                    "HD - H.264",
+                    "HD - H.264",
+                    [
+                        new ArchiveTrackHeaderValueCandidate(
+                            "name",
+                            "Name",
+                            "HD - H.264",
+                            "Deutsch - HD - H.264",
+                            "Deutsch - HD - H.264",
+                            IsFlag: false),
+                        new ArchiveTrackHeaderValueCandidate(
+                            "flag-original",
+                            "Originalsprache",
+                            "nein",
+                            "ja",
+                            "1",
                             IsFlag: true)
                     ])
             ],
