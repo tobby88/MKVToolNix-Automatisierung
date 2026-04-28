@@ -112,10 +112,18 @@ public sealed class EpisodeFileNameHelperTests
     }
 
     [Fact]
-    public void BuildEpisodeFileName_RemovesTrailingDotsAndSpaces_FromTitleStem()
+    public void BuildEpisodeFileName_PreservesTrailingEllipsisBeforeExtension()
     {
-        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Serie", "01", "02", "Pilot. ");
+        var fileName = EpisodeFileNameHelper.BuildEpisodeFileName("Der Alte", "10", "07", "Gigolo ist tot...");
 
-        Assert.Equal("Serie - S01E02 - Pilot.mkv", fileName);
+        Assert.Equal("Der Alte - S10E07 - Gigolo ist tot....mkv", fileName);
+    }
+
+    [Fact]
+    public void SanitizeFileName_RemovesTrailingDotsAndSpaces_WhenNoExtensionIsPresent()
+    {
+        var fileName = EpisodeFileNameHelper.SanitizeFileName("Pilot. ");
+
+        Assert.Equal("Pilot", fileName);
     }
 }

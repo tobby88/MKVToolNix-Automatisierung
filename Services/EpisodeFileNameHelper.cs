@@ -99,13 +99,20 @@ internal static class EpisodeFileNameHelper
         }
 
         var extension = Path.GetExtension(trimmedValue);
-        var stem = Path.GetFileNameWithoutExtension(trimmedValue).TrimEnd(' ', '.');
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            return AppendReservedNameSuffixIfNeeded(trimmedValue);
+        }
+
+        // Punkte direkt vor der echten Extension gehören zum Titel und sind in Windows-Dateinamen gültig.
+        // Nur Leerzeichen vor der Extension werden entfernt, weil sie praktisch nie beabsichtigt sind.
+        var stem = Path.GetFileNameWithoutExtension(trimmedValue).TrimEnd(' ');
         if (string.IsNullOrWhiteSpace(stem))
         {
             stem = "_";
         }
 
-        return AppendReservedNameSuffixIfNeeded(stem) + extension;
+        return BuildSafeFileNameWithExtension(stem, extension);
     }
 
     public static string SanitizePathSegment(string value)
@@ -172,6 +179,27 @@ internal static class EpisodeFileNameHelper
         return string.IsNullOrWhiteSpace(extension)
             ? value + "_"
             : reservedNameProbe + "_" + extension;
+    }
+
+    private static string BuildSafeFileNameWithExtension(string stem, string extension)
+    {
+        var reservedNameProbe = stem.TrimEnd(' ', '.');
+        if (ReservedDeviceNames.Contains(reservedNameProbe))
+        {
+            return reservedNameProbe + "_" + extension;
+        }
+
+        foreach (var reservedName in ReservedDeviceNames)
+        {
+            if (stem.Length > reservedName.Length
+                && stem.StartsWith(reservedName, StringComparison.OrdinalIgnoreCase)
+                && stem[reservedName.Length] == '.')
+            {
+                return stem[..reservedName.Length] + "_" + stem[reservedName.Length..] + extension;
+            }
+        }
+
+        return stem + extension;
     }
 
     private static bool TryNormalizeEpisodeRange(string? value, out string normalizedRange)
