@@ -339,6 +339,16 @@ internal sealed class DemoArchiveMaintenanceItem
     public string TargetContainerTitle { get; set; } = string.Empty;
     public string ManualValidationMessage { get; init; } = string.Empty;
     public ObservableCollection<DemoArchiveMaintenanceHeaderCorrection> HeaderCorrections { get; init; } = [];
+    public IEnumerable<DemoArchiveMaintenanceHeaderCorrection> VisibleHeaderCorrections => ShowAllHeaderCorrections
+        ? HeaderCorrections
+        : HeaderCorrections.Where(correction => correction.HasChange);
+    public bool ShowAllHeaderCorrections { get; set; }
+    public int VisibleHeaderCorrectionCount => VisibleHeaderCorrections.Count();
+    public int HiddenHeaderCorrectionCount => Math.Max(0, HeaderCorrections.Count - VisibleHeaderCorrectionCount);
+    public string ManualCorrectionHeaderText => "Manuelle Korrektur (3 Änderung(en))";
+    public string HeaderCorrectionModeText => HiddenHeaderCorrectionCount == 0
+        ? "Es werden nur Track-Werte angezeigt, die beim Anwenden wirklich geändert würden."
+        : $"Es werden nur geänderte Track-Werte angezeigt. {HiddenHeaderCorrectionCount} unveränderte Werte sind ausgeblendet.";
     public string StatusText { get; init; } = string.Empty;
     public string StatusTone { get; init; } = string.Empty;
     public string ChangeSummary { get; init; } = string.Empty;
@@ -361,4 +371,6 @@ internal sealed class DemoArchiveMaintenanceHeaderCorrection
     public bool IsFlag { get; init; }
 
     public bool IsTextValue => !IsFlag;
+
+    public bool HasChange => !string.Equals(CurrentDisplayValue, TargetValue, StringComparison.Ordinal);
 }

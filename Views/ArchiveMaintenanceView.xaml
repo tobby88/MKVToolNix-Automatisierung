@@ -98,7 +98,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="170" />
-            <RowDefinition Height="230" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="130" />
             <RowDefinition Height="Auto" />
@@ -221,52 +221,72 @@
                      HorizontalScrollBarVisibility="Disabled" />
         </GroupBox>
 
-        <GroupBox Grid.Row="4"
+        <Expander Grid.Row="4"
                   Margin="0,10,0,0"
-                  Header="Manuelle Korrektur">
-            <Grid Margin="8"
-                  IsEnabled="{Binding SelectedItem.CanEditManualCorrections, Mode=OneWay}">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="130" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="110" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
+                  Header="{Binding SelectedItem.ManualCorrectionHeaderText, Mode=OneWay}"
+                  IsExpanded="False">
+            <Border Padding="8"
+                    Background="#FFF8FAFC"
+                    BorderBrush="#FFD8DEE6"
+                    BorderThickness="1">
+                <Grid MaxHeight="310"
+                      IsEnabled="{Binding SelectedItem.CanEditManualCorrections, Mode=OneWay}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0"
+                    <TextBlock Grid.Row="0"
                            Grid.Column="0"
                            Margin="0,5,8,5"
                            VerticalAlignment="Center"
                            Text="Ziel-Dateiname" />
-                <TextBox Grid.Row="0"
+                    <TextBox Grid.Row="0"
                          Grid.Column="1"
                          Margin="0,2,14,2"
                          Text="{Binding SelectedItem.TargetFileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Row="0"
+                    <TextBlock Grid.Row="0"
                            Grid.Column="2"
                            Margin="0,5,8,5"
                            VerticalAlignment="Center"
                            Text="MKV-Titel" />
-                <TextBox Grid.Row="0"
+                    <TextBox Grid.Row="0"
                          Grid.Column="3"
                          Margin="0,2,0,2"
                          Text="{Binding SelectedItem.TargetContainerTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                <TextBlock Grid.Row="1"
+                    <TextBlock Grid.Row="1"
                            Grid.ColumnSpan="4"
                            Margin="0,4,0,6"
                            Foreground="#FFAA2E34"
                            TextWrapping="Wrap"
                            Text="{Binding SelectedItem.ManualValidationMessage, Mode=OneWay}" />
 
-                <DataGrid Grid.Row="2"
+                    <DockPanel Grid.Row="2"
+                           Grid.ColumnSpan="4"
+                           Margin="0,0,0,6">
+                    <CheckBox DockPanel.Dock="Right"
+                              Margin="12,0,0,0"
+                              VerticalAlignment="Center"
+                              Content="Alle Track-Werte anzeigen"
+                              IsChecked="{Binding SelectedItem.ShowAllHeaderCorrections, Mode=TwoWay}" />
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="#FF5F6B76"
+                               TextWrapping="Wrap"
+                               Text="{Binding SelectedItem.HeaderCorrectionModeText, Mode=OneWay}" />
+                </DockPanel>
+
+                    <DataGrid Grid.Row="3"
                           Grid.ColumnSpan="4"
-                          ItemsSource="{Binding SelectedItem.HeaderCorrections, Mode=OneWay}"
+                          ItemsSource="{Binding SelectedItem.VisibleHeaderCorrections, Mode=OneWay}"
                           AutoGenerateColumns="False"
                           CanUserAddRows="False"
                           CanUserDeleteRows="False"
@@ -274,7 +294,9 @@
                           HeadersVisibility="Column"
                           IsReadOnly="False"
                           HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto">
+                          VerticalScrollBarVisibility="Auto"
+                          MinHeight="90"
+                          MaxHeight="190">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Spur"
                                             Binding="{Binding DisplayLabel}"
@@ -307,9 +329,10 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
-                </DataGrid>
-            </Grid>
-        </GroupBox>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Expander>
 
         <StackPanel Grid.Row="5"
                     Margin="0,10,0,10"

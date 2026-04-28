@@ -152,7 +152,7 @@ Die `Archivpflege` ist der nachgelagerte Kontrollschritt für bereits vorhandene
 1. Serienarchiv oder einen Serienunterordner wählen.
 2. `Scannen`, um alle `.mkv`-Dateien rekursiv zu prüfen.
 3. In der Tabelle kontrollieren, ob ein Eintrag nur direkte Header-/Dateinamenänderungen braucht oder ob ein manueller Remux-Hinweis vorliegt.
-4. Im Detailbereich die konkreten Änderungen prüfen und bei Bedarf im Bereich `Manuelle Korrektur` Ziel-Dateiname, MKV-Titel oder einzelne Track-Zielwerte anpassen.
+4. Im Detailbereich die konkreten Änderungen prüfen und bei Bedarf den Bereich `Manuelle Korrektur` aufklappen, um Ziel-Dateiname, MKV-Titel oder einzelne Track-Zielwerte anzupassen.
 5. Nur freigegebene Zeilen auswählen und `Ausgewählte Änderungen anwenden`.
 
 Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/Forced-/Original-/Accessibility-Flags sowie sichere Dateinamen-Normalisierungen inklusive gleichnamiger Emby-Begleitdateien. Automatisch erkannte Sollwerte sind vor dem Schreiben manuell überschreibbar; die App schreibt weiterhin nur ausgewählte Zeilen. Wenn eine gleichnamige `.nfo` eine TVDB-Episoden-ID enthält und für die Serie bereits ein TVDB-Mapping gespeichert ist, wird der TVDB-Titel als Sollwert genutzt; sonst bleibt der lokale Dateiname der Fallback. Fehlende AD- oder Untertitelspuren werden bewusst nicht als Problem gemeldet: das Archivpflege-Modul bewertet den vorhandenen Bestand und fordert keine Inhalte an, die nie gemuxt wurden. Doppelte AD-Spuren oder doppelte Untertitel-Slots werden dagegen als Remux-Hinweis markiert, weil diese Fälle nicht sauber per Header-Edit aufzulösen sind.

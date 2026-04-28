@@ -17,6 +17,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     private bool _wasApplied;
     private string _targetFileName;
     private string _targetContainerTitle;
+    private bool _showAllHeaderCorrections;
 
     public ArchiveMaintenanceItemViewModel(ArchiveMaintenanceItemAnalysis analysis)
     {
@@ -37,6 +38,57 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<ArchiveMaintenanceHeaderCorrectionViewModel> HeaderCorrections { get; }
+
+    public IEnumerable<ArchiveMaintenanceHeaderCorrectionViewModel> VisibleHeaderCorrections => ShowAllHeaderCorrections
+        ? HeaderCorrections
+        : HeaderCorrections.Where(correction => correction.HasChange);
+
+    public bool ShowAllHeaderCorrections
+    {
+        get => _showAllHeaderCorrections;
+        set
+        {
+            if (_showAllHeaderCorrections == value)
+            {
+                return;
+            }
+
+            _showAllHeaderCorrections = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(VisibleHeaderCorrections));
+            OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));
+            OnPropertyChanged(nameof(HiddenHeaderCorrectionCount));
+            OnPropertyChanged(nameof(HeaderCorrectionModeText));
+        }
+    }
+
+    public int VisibleHeaderCorrectionCount => VisibleHeaderCorrections.Count();
+
+    public int HiddenHeaderCorrectionCount => Math.Max(0, HeaderCorrections.Count - VisibleHeaderCorrectionCount);
+
+    public string ManualCorrectionHeaderText => HasWritableChanges
+        ? $"Manuelle Korrektur ({BuildCurrentChangeNotes().Count} Änderung(en))"
+        : "Manuelle Korrektur (optional)";
+
+    public string HeaderCorrectionModeText
+    {
+        get
+        {
+            if (HeaderCorrections.Count == 0)
+            {
+                return "Für diese Datei wurden keine Track-Headerwerte gelesen.";
+            }
+
+            if (ShowAllHeaderCorrections)
+            {
+                return "Alle Track-Werte sind eingeblendet. Unveränderte Zielwerte werden nicht geschrieben.";
+            }
+
+            return HiddenHeaderCorrectionCount == 0
+                ? "Es werden nur Track-Werte angezeigt, die beim Anwenden wirklich geändert würden."
+                : $"Es werden nur geänderte Track-Werte angezeigt. {HiddenHeaderCorrectionCount} unveränderte Werte sind ausgeblendet.";
+        }
+    }
 
     public string FilePath => _analysis.FilePath;
 
@@ -386,7 +438,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private void HeaderCorrection_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(ArchiveMaintenanceHeaderCorrectionViewModel.TargetValue))
+        if (e.PropertyName is nameof(ArchiveMaintenanceHeaderCorrectionViewModel.TargetValue)
+            or nameof(ArchiveMaintenanceHeaderCorrectionViewModel.HasChange))
         {
             NotifyManualCorrectionChanged();
         }
@@ -407,6 +460,11 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(DetailText));
         OnPropertyChanged(nameof(ManualValidationMessage));
+        OnPropertyChanged(nameof(VisibleHeaderCorrections));
+        OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));
+        OnPropertyChanged(nameof(HiddenHeaderCorrectionCount));
+        OnPropertyChanged(nameof(ManualCorrectionHeaderText));
+        OnPropertyChanged(nameof(HeaderCorrectionModeText));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -461,6 +519,8 @@ internal sealed class ArchiveMaintenanceHeaderCorrectionViewModel : INotifyPrope
 
     public bool IsTextValue => !IsFlag;
 
+    public bool HasChange => CreateValueEdit() is not null;
+
     public string TargetValue
     {
         get => _targetValue;
@@ -476,6 +536,7 @@ internal sealed class ArchiveMaintenanceHeaderCorrectionViewModel : INotifyPrope
 
             _targetValue = normalizedValue;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasChange));
         }
     }
 

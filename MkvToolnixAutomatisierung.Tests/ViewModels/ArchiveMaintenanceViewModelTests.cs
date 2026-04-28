@@ -101,6 +101,22 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void VisibleHeaderCorrections_HidesUnchangedValuesUntilRequested()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateAnalysisWithTrackCorrectionCandidate());
+        var defaultFlagCorrection = Assert.Single(item.HeaderCorrections);
+
+        Assert.Empty(item.VisibleHeaderCorrections);
+
+        item.ShowAllHeaderCorrections = true;
+        Assert.Single(item.VisibleHeaderCorrections);
+
+        defaultFlagCorrection.TargetValue = "ja";
+        item.ShowAllHeaderCorrections = false;
+        Assert.Single(item.VisibleHeaderCorrections);
+    }
+
+    [Fact]
     public void InvalidManualFileName_DisablesWritableSelection()
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis());
