@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -338,6 +339,19 @@ internal sealed class DemoArchiveMaintenanceItem
     public string TargetFileName { get; set; } = string.Empty;
     public string TargetContainerTitle { get; set; } = string.Empty;
     public string ManualValidationMessage { get; init; } = string.Empty;
+    public string DetailFilePath => string.IsNullOrWhiteSpace(DirectoryPath)
+        ? FileName
+        : Path.Combine(DirectoryPath, FileName);
+    public IReadOnlyList<string> WritableChangeNotes { get; init; } = [];
+    public bool HasWritableDetailChanges => WritableChangeNotes.Count > 0;
+    public IReadOnlyList<string> IssueMessages { get; init; } = [];
+    public bool HasIssues => IssueMessages.Count > 0;
+    public IReadOnlyList<string> SidecarRenameNotes { get; init; } = [];
+    public bool HasSidecarRenameNotes => SidecarRenameNotes.Count > 0;
+    public bool HasNoDetailFindings => !HasWritableDetailChanges && !HasIssues && !HasSidecarRenameNotes;
+    public string DetailSummaryText => HasNoDetailFindings
+        ? "Keine Änderung nötig."
+        : $"{WritableChangeNotes.Count} direkt schreibbare Änderung(en), {IssueMessages.Count} Remux-Hinweis(e)";
     public ObservableCollection<DemoArchiveMaintenanceHeaderCorrection> HeaderCorrections { get; init; } = [];
     public IEnumerable<DemoArchiveMaintenanceHeaderCorrection> VisibleHeaderCorrections => ShowAllHeaderCorrections
         ? HeaderCorrections

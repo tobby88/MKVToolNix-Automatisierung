@@ -289,6 +289,57 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
     }
 
+    public string DetailFilePath => FilePath;
+
+    public IReadOnlyList<string> WritableChangeNotes => BuildCurrentChangeNotes();
+
+    public bool HasWritableDetailChanges => WritableChangeNotes.Count > 0;
+
+    public IReadOnlyList<string> IssueMessages => _analysis.Issues
+        .Select(issue => issue.Message)
+        .ToList();
+
+    public bool HasIssues => IssueMessages.Count > 0;
+
+    public IReadOnlyList<string> SidecarRenameNotes => CreateCurrentRenameOperation() is { Sidecars.Count: > 0 } renameOperation
+        ? renameOperation.Sidecars
+            .Select(sidecar => $"{Path.GetFileName(sidecar.SourcePath)} -> {Path.GetFileName(sidecar.TargetPath)}")
+            .ToList()
+        : [];
+
+    public bool HasSidecarRenameNotes => SidecarRenameNotes.Count > 0;
+
+    public bool HasNoDetailFindings => !HasWritableDetailChanges && !HasIssues && !HasSidecarRenameNotes;
+
+    public string DetailSummaryText
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ManualValidationMessage))
+            {
+                return "Manuelle Korrektur prüfen: " + ManualValidationMessage;
+            }
+
+            if (HasNoDetailFindings)
+            {
+                return "Keine Änderung nötig.";
+            }
+
+            var parts = new List<string>();
+            if (HasWritableDetailChanges)
+            {
+                parts.Add($"{WritableChangeNotes.Count} direkt schreibbare Änderung(en)");
+            }
+
+            if (HasIssues)
+            {
+                parts.Add($"{IssueMessages.Count} Remux-Hinweis(e)");
+            }
+
+            return string.Join(", ", parts);
+        }
+    }
+
     public ArchiveMaintenanceApplyRequest CreateApplyRequest()
     {
             return new ArchiveMaintenanceApplyRequest(
@@ -459,6 +510,12 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(StatusTone));
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(DetailText));
+        OnPropertyChanged(nameof(WritableChangeNotes));
+        OnPropertyChanged(nameof(HasWritableDetailChanges));
+        OnPropertyChanged(nameof(SidecarRenameNotes));
+        OnPropertyChanged(nameof(HasSidecarRenameNotes));
+        OnPropertyChanged(nameof(HasNoDetailFindings));
+        OnPropertyChanged(nameof(DetailSummaryText));
         OnPropertyChanged(nameof(ManualValidationMessage));
         OnPropertyChanged(nameof(VisibleHeaderCorrections));
         OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));

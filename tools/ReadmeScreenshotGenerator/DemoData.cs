@@ -450,6 +450,12 @@ internal static class DemoData
                 StatusText = "Ändern",
                 StatusTone = "Ready",
                 ChangeSummary = "MKV-Titel: Rififi alt -> Rififi (1); Deutsch - HD - H.264: Standard: nein -> ja",
+                WritableChangeNotes =
+                [
+                    "MKV-Titel: Rififi alt -> Rififi (1)",
+                    "Deutsch - HD - H.264: Standard: nein -> ja",
+                    "Deutsch - AAC: Originalsprache: nein -> ja"
+                ],
                 TargetFileName = "Neues aus Büttenwarder - S2014E05 - Rififi (1).mkv",
                 TargetContainerTitle = "Rififi (1)",
                 HeaderCorrections =
@@ -487,6 +493,10 @@ internal static class DemoData
                 StatusText = "Remux nötig",
                 StatusTone = "Warning",
                 ChangeSummary = "Doppelte AD-Spuren für Deutsch: 2, 3.",
+                IssueMessages =
+                [
+                    "Doppelte AD-Spuren für Deutsch: 2, 3."
+                ],
                 TargetFileName = "Die Heiland - S00E15 - Auf der Tastatur schreiben.mkv",
                 TargetContainerTitle = "Auf der Tastatur schreiben"
             },
