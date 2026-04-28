@@ -24,6 +24,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     private string _targetContainerTitle;
     private string _targetNfoTitle;
     private string _targetNfoSortTitle;
+    private bool _targetNfoTitleLocked;
+    private bool _targetNfoSortTitleLocked;
     private string _targetTvdbId;
     private string _targetImdbId;
     private bool _removeImdbId;
@@ -37,6 +39,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         _targetContainerTitle = analysis.ContainerTitleEdit?.ExpectedTitle ?? analysis.ContainerTitle;
         _targetNfoTitle = analysis.NfoTitle ?? string.Empty;
         _targetNfoSortTitle = analysis.NfoSortTitle ?? string.Empty;
+        _targetNfoTitleLocked = analysis.NfoTitleLocked;
+        _targetNfoSortTitleLocked = analysis.NfoSortTitleLocked;
         _targetTvdbId = analysis.ProviderIds.TvdbId ?? string.Empty;
         _targetImdbId = analysis.ProviderIds.ImdbId ?? string.Empty;
         HeaderCorrections = new ObservableCollection<ArchiveMaintenanceHeaderCorrectionViewModel>(
@@ -169,6 +173,11 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             }
 
             _targetNfoTitle = normalizedValue;
+            if (!string.Equals(CurrentNfoTitle.Trim(), normalizedValue.Trim(), StringComparison.Ordinal))
+            {
+                SetTargetNfoTitleLocked(true);
+            }
+
             OnPropertyChanged();
             NotifyManualCorrectionChanged();
         }
@@ -186,7 +195,42 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             }
 
             _targetNfoSortTitle = normalizedValue;
+            if (!string.Equals(CurrentNfoSortTitle.Trim(), normalizedValue.Trim(), StringComparison.Ordinal))
+            {
+                SetTargetNfoSortTitleLocked(true);
+            }
+
             OnPropertyChanged();
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public bool TargetNfoTitleLocked
+    {
+        get => _targetNfoTitleLocked;
+        set
+        {
+            if (_targetNfoTitleLocked == value)
+            {
+                return;
+            }
+
+            SetTargetNfoTitleLocked(value);
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public bool TargetNfoSortTitleLocked
+    {
+        get => _targetNfoSortTitleLocked;
+        set
+        {
+            if (_targetNfoSortTitleLocked == value)
+            {
+                return;
+            }
+
+            SetTargetNfoSortTitleLocked(value);
             NotifyManualCorrectionChanged();
         }
     }
@@ -199,7 +243,15 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public string CurrentNfoSortTitle => _analysis.NfoSortTitle ?? string.Empty;
 
+    public bool CurrentNfoTitleLocked => _analysis.NfoTitleLocked;
+
+    public bool CurrentNfoSortTitleLocked => _analysis.NfoSortTitleLocked;
+
     public bool HasNfoTextSync => _analysis.NfoExists;
+
+    public string NfoTitleLockButtonText => TargetNfoTitleLocked ? "Gesperrt" : "Offen";
+
+    public string NfoSortTitleLockButtonText => TargetNfoSortTitleLocked ? "Gesperrt" : "Offen";
 
     public bool HasSuppressedFileNameChange => _suppressedChangeKinds.Contains(FileNameChangeKind);
 
@@ -497,7 +549,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             TrackHeaderCorrectionCandidates = [],
             ChangeNotes = [],
             NfoTitle = string.IsNullOrWhiteSpace(TargetNfoTitle) ? null : TargetNfoTitle.Trim(),
-            NfoSortTitle = string.IsNullOrWhiteSpace(TargetNfoSortTitle) ? null : TargetNfoSortTitle.Trim()
+            NfoSortTitle = string.IsNullOrWhiteSpace(TargetNfoSortTitle) ? null : TargetNfoSortTitle.Trim(),
+            NfoTitleLocked = TargetNfoTitleLocked,
+            NfoSortTitleLocked = TargetNfoSortTitleLocked
         };
         _wasApplied = true;
         _isSelected = false;
@@ -505,6 +559,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         _targetContainerTitle = currentContainerTitle;
         _targetNfoTitle = _analysis.NfoTitle ?? string.Empty;
         _targetNfoSortTitle = _analysis.NfoSortTitle ?? string.Empty;
+        _targetNfoTitleLocked = _analysis.NfoTitleLocked;
+        _targetNfoSortTitleLocked = _analysis.NfoSortTitleLocked;
         _targetTvdbId = _analysis.ProviderIds.TvdbId ?? string.Empty;
         _targetImdbId = _analysis.ProviderIds.ImdbId ?? string.Empty;
         _removeImdbId = false;
@@ -568,11 +624,23 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public void ResetTargetNfoTitleToCurrent()
     {
         TargetNfoTitle = CurrentNfoTitle;
+        TargetNfoTitleLocked = CurrentNfoTitleLocked;
     }
 
     public void ResetTargetNfoSortTitleToCurrent()
     {
         TargetNfoSortTitle = CurrentNfoSortTitle;
+        TargetNfoSortTitleLocked = CurrentNfoSortTitleLocked;
+    }
+
+    public void ToggleTargetNfoTitleLock()
+    {
+        TargetNfoTitleLocked = !TargetNfoTitleLocked;
+    }
+
+    public void ToggleTargetNfoSortTitleLock()
+    {
+        TargetNfoSortTitleLocked = !TargetNfoSortTitleLocked;
     }
 
     public ArchiveMaintenanceSuppressedChange? SuppressFileNameChange()
@@ -717,11 +785,23 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             yield return $"NFO-Titel: {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.CurrentTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.ExpectedTitle)}";
         }
 
+        if (nfoTextEdit.CurrentTitleLocked != nfoTextEdit.ExpectedTitleLocked)
+        {
+            yield return $"NFO-Titel-Sperre: {FormatLockValue(nfoTextEdit.CurrentTitleLocked)} -> {FormatLockValue(nfoTextEdit.ExpectedTitleLocked)}";
+        }
+
         if (!string.Equals(nfoTextEdit.CurrentSortTitle ?? string.Empty, nfoTextEdit.ExpectedSortTitle ?? string.Empty, StringComparison.Ordinal))
         {
             yield return $"NFO-Sortiertitel: {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.CurrentSortTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.ExpectedSortTitle)}";
         }
+
+        if (nfoTextEdit.CurrentSortTitleLocked != nfoTextEdit.ExpectedSortTitleLocked)
+        {
+            yield return $"NFO-Sortiertitel-Sperre: {FormatLockValue(nfoTextEdit.CurrentSortTitleLocked)} -> {FormatLockValue(nfoTextEdit.ExpectedSortTitleLocked)}";
+        }
     }
+
+    private static string FormatLockValue(bool value) => value ? "gesperrt" : "offen";
 
     private static IEnumerable<string> BuildTrackHeaderDetailChangeNotes(IReadOnlyList<TrackHeaderEditOperation> trackHeaderEdits)
     {
@@ -842,12 +922,18 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         var targetSortTitle = TargetNfoSortTitle.Trim();
         return string.Equals(currentTitle, targetTitle, StringComparison.Ordinal)
                && string.Equals(currentSortTitle, targetSortTitle, StringComparison.Ordinal)
+               && CurrentNfoTitleLocked == TargetNfoTitleLocked
+               && CurrentNfoSortTitleLocked == TargetNfoSortTitleLocked
             ? null
             : new ArchiveNfoTextEditOperation(
                 currentTitle,
                 targetTitle,
                 currentSortTitle,
-                targetSortTitle);
+                targetSortTitle,
+                CurrentNfoTitleLocked,
+                TargetNfoTitleLocked,
+                CurrentNfoSortTitleLocked,
+                TargetNfoSortTitleLocked);
     }
 
     private IEnumerable<string> BuildProviderIdChangeNotes()
@@ -990,6 +1076,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ManualValidationMessage));
         OnPropertyChanged(nameof(HasProviderIdSync));
         OnPropertyChanged(nameof(HasNfoTextSync));
+        OnPropertyChanged(nameof(TargetNfoTitleLocked));
+        OnPropertyChanged(nameof(TargetNfoSortTitleLocked));
+        OnPropertyChanged(nameof(NfoTitleLockButtonText));
+        OnPropertyChanged(nameof(NfoSortTitleLockButtonText));
         OnPropertyChanged(nameof(CanReviewTvdb));
         OnPropertyChanged(nameof(CanReviewImdb));
         OnPropertyChanged(nameof(ProviderIdSummaryText));
@@ -1006,6 +1096,30 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private void SetTargetNfoTitleLocked(bool value)
+    {
+        if (_targetNfoTitleLocked == value)
+        {
+            return;
+        }
+
+        _targetNfoTitleLocked = value;
+        OnPropertyChanged(nameof(TargetNfoTitleLocked));
+        OnPropertyChanged(nameof(NfoTitleLockButtonText));
+    }
+
+    private void SetTargetNfoSortTitleLocked(bool value)
+    {
+        if (_targetNfoSortTitleLocked == value)
+        {
+            return;
+        }
+
+        _targetNfoSortTitleLocked = value;
+        OnPropertyChanged(nameof(TargetNfoSortTitleLocked));
+        OnPropertyChanged(nameof(NfoSortTitleLockButtonText));
     }
 }
 

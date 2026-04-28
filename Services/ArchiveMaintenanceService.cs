@@ -199,7 +199,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                 currentPath,
                 new EmbyNfoTextFields(
                     request.NfoTextEdit.ExpectedTitle,
-                    request.NfoTextEdit.ExpectedSortTitle));
+                    request.NfoTextEdit.ExpectedSortTitle,
+                    request.NfoTextEdit.ExpectedTitleLocked,
+                    request.NfoTextEdit.ExpectedSortTitleLocked));
             outputLines.Add(updateResult.Message);
             output?.Report(updateResult.Message);
             if (!updateResult.Success)
@@ -291,7 +293,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             changeNotes,
             ErrorMessage: null,
             nfoResult.Title,
-            nfoResult.SortTitle);
+            nfoResult.SortTitle,
+            nfoResult.IsTitleLocked,
+            nfoResult.IsSortTitleLocked);
     }
 
     private async Task<ArchiveExpectedEpisodeMetadata?> TryResolveExpectedMetadataFromNfoAsync(
@@ -332,7 +336,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             }
 
             return new ArchiveExpectedEpisodeMetadata(
-                episode.Name.Trim(),
+                ResolveExpectedTitleFromNfoAndTvdb(nfoResult, episode.Name),
                 episode.SeasonNumber?.ToString("00") ?? parsedName.SeasonNumber,
                 episode.EpisodeNumber?.ToString("00") ?? parsedName.EpisodeNumber,
                 mapping.OriginalLanguage);
@@ -353,6 +357,15 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                 parts.Title,
                 parts.SeasonNumber,
                 parts.EpisodeNumber);
+    }
+
+    internal static string ResolveExpectedTitleFromNfoAndTvdb(
+        EmbyNfoMetadataReadResult nfoResult,
+        string tvdbTitle)
+    {
+        return nfoResult.IsTitleLocked && !string.IsNullOrWhiteSpace(nfoResult.Title)
+            ? nfoResult.Title.Trim()
+            : tvdbTitle.Trim();
     }
 
     private static ArchiveEpisodeFileNameParts? TryParseEpisodeFileName(string filePath)
@@ -709,7 +722,9 @@ internal sealed record ArchiveMaintenanceItemAnalysis(
     IReadOnlyList<string> ChangeNotes,
     string? ErrorMessage,
     string? NfoTitle = null,
-    string? NfoSortTitle = null)
+    string? NfoSortTitle = null,
+    bool NfoTitleLocked = false,
+    bool NfoSortTitleLocked = false)
 {
     public bool HasWritableChanges => ContainerTitleEdit is not null || TrackHeaderEdits.Count > 0 || RenameOperation is not null;
 
@@ -741,7 +756,11 @@ internal sealed record ArchiveNfoTextEditOperation(
     string? CurrentTitle,
     string? ExpectedTitle,
     string? CurrentSortTitle,
-    string? ExpectedSortTitle);
+    string? ExpectedSortTitle,
+    bool CurrentTitleLocked,
+    bool ExpectedTitleLocked,
+    bool CurrentSortTitleLocked,
+    bool ExpectedSortTitleLocked);
 
 internal sealed record ArchiveMaintenanceApplyResult(
     string OriginalFilePath,

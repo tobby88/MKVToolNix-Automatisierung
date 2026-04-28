@@ -47,6 +47,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         ResetSelectedContainerTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetContainerTitleToCurrent(), () => IsInteractive && SelectedItem is not null);
         ResetSelectedNfoTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetNfoTitleToCurrent(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
         ResetSelectedNfoSortTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetNfoSortTitleToCurrent(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
+        ToggleSelectedNfoTitleLockCommand = new RelayCommand(() => SelectedItem?.ToggleTargetNfoTitleLock(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
+        ToggleSelectedNfoSortTitleLockCommand = new RelayCommand(() => SelectedItem?.ToggleTargetNfoSortTitleLock(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
         SuppressSelectedFileNameChangeCommand = new RelayCommand(SuppressSelectedFileNameChange, () => IsInteractive && SelectedItem?.CanSuppressFileNameChange == true);
         RestoreSelectedFileNameSuggestionCommand = new RelayCommand(RestoreSelectedFileNameSuggestion, () => IsInteractive && SelectedItem?.CanRestoreFileNameSuggestion == true);
         SuppressSelectedContainerTitleChangeCommand = new RelayCommand(SuppressSelectedContainerTitleChange, () => IsInteractive && SelectedItem?.CanSuppressContainerTitleChange == true);
@@ -84,6 +86,10 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     public RelayCommand ResetSelectedNfoTitleCommand { get; }
 
     public RelayCommand ResetSelectedNfoSortTitleCommand { get; }
+
+    public RelayCommand ToggleSelectedNfoTitleLockCommand { get; }
+
+    public RelayCommand ToggleSelectedNfoSortTitleLockCommand { get; }
 
     public RelayCommand SuppressSelectedFileNameChangeCommand { get; }
 
@@ -174,6 +180,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             ResetSelectedContainerTitleCommand.RaiseCanExecuteChanged();
             ResetSelectedNfoTitleCommand.RaiseCanExecuteChanged();
             ResetSelectedNfoSortTitleCommand.RaiseCanExecuteChanged();
+            ToggleSelectedNfoTitleLockCommand.RaiseCanExecuteChanged();
+            ToggleSelectedNfoSortTitleLockCommand.RaiseCanExecuteChanged();
             SuppressSelectedFileNameChangeCommand.RaiseCanExecuteChanged();
             RestoreSelectedFileNameSuggestionCommand.RaiseCanExecuteChanged();
             SuppressSelectedContainerTitleChangeCommand.RaiseCanExecuteChanged();
@@ -633,6 +641,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         ResetSelectedContainerTitleCommand.RaiseCanExecuteChanged();
         ResetSelectedNfoTitleCommand.RaiseCanExecuteChanged();
         ResetSelectedNfoSortTitleCommand.RaiseCanExecuteChanged();
+        ToggleSelectedNfoTitleLockCommand.RaiseCanExecuteChanged();
+        ToggleSelectedNfoSortTitleLockCommand.RaiseCanExecuteChanged();
         SuppressSelectedFileNameChangeCommand.RaiseCanExecuteChanged();
         RestoreSelectedFileNameSuggestionCommand.RaiseCanExecuteChanged();
         SuppressSelectedContainerTitleChangeCommand.RaiseCanExecuteChanged();

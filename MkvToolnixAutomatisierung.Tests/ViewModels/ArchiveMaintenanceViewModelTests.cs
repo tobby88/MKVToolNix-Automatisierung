@@ -183,6 +183,38 @@ public sealed class ArchiveMaintenanceViewModelTests
         Assert.Equal("Neu", request.NfoTextEdit.ExpectedTitle);
         Assert.Equal("Alt Sort", request.NfoTextEdit.CurrentSortTitle);
         Assert.Equal("Neu Sort", request.NfoTextEdit.ExpectedSortTitle);
+        Assert.False(request.NfoTextEdit.CurrentTitleLocked);
+        Assert.True(request.NfoTextEdit.ExpectedTitleLocked);
+        Assert.False(request.NfoTextEdit.CurrentSortTitleLocked);
+        Assert.True(request.NfoTextEdit.ExpectedSortTitleLocked);
+        Assert.Equal("Gesperrt", item.NfoTitleLockButtonText);
+        Assert.Equal("Gesperrt", item.NfoSortTitleLockButtonText);
+    }
+
+    [Fact]
+    public void ToggleNfoLockCommands_CreateNfoLockOnlyEdit()
+    {
+        var viewModel = CreateViewModel();
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            nfoTitle: "Pilot",
+            nfoSortTitle: "Pilot"));
+        viewModel.Items.Add(item);
+        viewModel.SelectedItem = item;
+
+        viewModel.ToggleSelectedNfoTitleLockCommand.Execute(null);
+        viewModel.ToggleSelectedNfoSortTitleLockCommand.Execute(null);
+        var request = item.CreateApplyRequest();
+
+        Assert.NotNull(request.NfoTextEdit);
+        Assert.Equal("Pilot", request.NfoTextEdit!.CurrentTitle);
+        Assert.Equal("Pilot", request.NfoTextEdit.ExpectedTitle);
+        Assert.False(request.NfoTextEdit.CurrentTitleLocked);
+        Assert.True(request.NfoTextEdit.ExpectedTitleLocked);
+        Assert.False(request.NfoTextEdit.CurrentSortTitleLocked);
+        Assert.True(request.NfoTextEdit.ExpectedSortTitleLocked);
+        Assert.Contains("NFO-Titel-Sperre", item.ChangeSummary, StringComparison.Ordinal);
+        Assert.Contains("NFO-Sortiertitel-Sperre", item.ChangeSummary, StringComparison.Ordinal);
     }
 
     [Fact]

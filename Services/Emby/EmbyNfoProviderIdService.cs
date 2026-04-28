@@ -49,6 +49,8 @@ internal sealed class EmbyNfoProviderIdService
                 EmbyProviderIds.Empty,
                 Title: null,
                 SortTitle: null,
+                IsTitleLocked: false,
+                IsSortTitleLocked: false,
                 WarningMessage: null);
         }
 
@@ -64,6 +66,8 @@ internal sealed class EmbyNfoProviderIdService
                     EmbyProviderIds.Empty,
                     Title: null,
                     SortTitle: null,
+                    IsTitleLocked: false,
+                    IsSortTitleLocked: false,
                     "Die NFO enthält kein XML-Wurzelelement.");
             }
 
@@ -75,6 +79,8 @@ internal sealed class EmbyNfoProviderIdService
                     ReadProviderId(root, "imdb", "imdbid")),
                 ReadOptionalElementValue(root, "title"),
                 ReadOptionalElementValue(root, "sorttitle"),
+                IsLockedField(root, "Name"),
+                IsLockedField(root, "SortName"),
                 WarningMessage: null);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
@@ -85,6 +91,8 @@ internal sealed class EmbyNfoProviderIdService
                 EmbyProviderIds.Empty,
                 Title: null,
                 SortTitle: null,
+                IsTitleLocked: false,
+                IsSortTitleLocked: false,
                 ex.Message);
         }
     }
@@ -195,10 +203,10 @@ internal sealed class EmbyNfoProviderIdService
                 changed |= SetTextElement(root, "sorttitle", textFields.SortTitle!);
             }
 
-            if (titleChanged || sortTitleChanged)
-            {
-                changed |= EnsureLockedFields(root, lockName: titleChanged, lockSortName: sortTitleChanged);
-            }
+            changed |= SetLockedFields(
+                root,
+                textFields.LockTitle ?? (titleChanged ? true : null),
+                textFields.LockSortTitle ?? (sortTitleChanged ? true : null));
 
             if (!changed)
             {
@@ -239,6 +247,13 @@ internal sealed class EmbyNfoProviderIdService
     {
         var value = root.Element(elementName)?.Value.Trim();
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static bool IsLockedField(XElement root, string fieldName)
+    {
+        return root.Element("lockedfields")?.Value
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(field => string.Equals(field, fieldName, StringComparison.OrdinalIgnoreCase)) == true;
     }
 
     private static bool SetUniqueId(XElement root, string type, string value, bool isDefault)
@@ -340,20 +355,9 @@ internal sealed class EmbyNfoProviderIdService
         return true;
     }
 
-    private static bool EnsureLockedFields(XElement root, bool lockName, bool lockSortName)
+    private static bool SetLockedFields(XElement root, bool? lockName, bool? lockSortName)
     {
-        var desiredFields = new List<string>();
-        if (lockName)
-        {
-            desiredFields.Add("Name");
-        }
-
-        if (lockSortName)
-        {
-            desiredFields.Add("SortName");
-        }
-
-        if (desiredFields.Count == 0)
+        if (lockName is null && lockSortName is null)
         {
             return false;
         }
@@ -364,15 +368,25 @@ internal sealed class EmbyNfoProviderIdService
             : lockedFieldsElement.Value
                 .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
-        foreach (var desiredField in desiredFields)
+
+        ApplyLockedField(fields, "Name", lockName);
+        ApplyLockedField(fields, "SortName", lockSortName);
+
+        var expectedFields = fields
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (expectedFields.Count == 0)
         {
-            if (!fields.Contains(desiredField, StringComparer.OrdinalIgnoreCase))
+            if (lockedFieldsElement is null)
             {
-                fields.Add(desiredField);
+                return false;
             }
+
+            lockedFieldsElement.Remove();
+            return true;
         }
 
-        var expectedValue = string.Join("|", fields.Distinct(StringComparer.OrdinalIgnoreCase));
+        var expectedValue = string.Join("|", expectedFields);
         if (lockedFieldsElement is null)
         {
             lockedFieldsElement = new XElement("lockedfields", expectedValue);
@@ -401,6 +415,26 @@ internal sealed class EmbyNfoProviderIdService
 
         lockedFieldsElement.Value = expectedValue;
         return true;
+    }
+
+    private static void ApplyLockedField(List<string> fields, string fieldName, bool? shouldLock)
+    {
+        if (shouldLock is null)
+        {
+            return;
+        }
+
+        if (shouldLock.Value)
+        {
+            if (!fields.Contains(fieldName, StringComparer.OrdinalIgnoreCase))
+            {
+                fields.Add(fieldName);
+            }
+
+            return;
+        }
+
+        fields.RemoveAll(field => string.Equals(field, fieldName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool RemoveProviderId(XElement root, string uniqueIdType, string legacyElementName)
@@ -500,6 +534,8 @@ internal sealed record EmbyNfoMetadataReadResult(
     EmbyProviderIds ProviderIds,
     string? Title,
     string? SortTitle,
+    bool IsTitleLocked,
+    bool IsSortTitleLocked,
     string? WarningMessage);
 
 /// <summary>
@@ -507,7 +543,9 @@ internal sealed record EmbyNfoMetadataReadResult(
 /// </summary>
 internal sealed record EmbyNfoTextFields(
     string? Title,
-    string? SortTitle);
+    string? SortTitle,
+    bool? LockTitle = null,
+    bool? LockSortTitle = null);
 
 /// <summary>
 /// Ergebnis einer NFO-Provider-ID-Aktualisierung.

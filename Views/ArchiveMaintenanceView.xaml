@@ -588,6 +588,29 @@
                                     Command="{Binding DataContext.ResetSelectedNfoTitleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     Content="Ist-Wert"
                                     ToolTip="NFO-Titel auf den aktuell in der NFO gespeicherten Titel zurücksetzen." />
+                            <Button Grid.Row="2"
+                                    Grid.Column="3"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ToggleSelectedNfoTitleLockCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="{Binding NfoTitleLockButtonText, Mode=OneWay}"
+                                    ToolTip="Sperre für das NFO-Feld Name toggeln. Gesperrte Felder werden in lockedfields geschrieben.">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="MinWidth" Value="86" />
+                                        <Setter Property="Foreground" Value="#FF475569" />
+                                        <Setter Property="Background" Value="#FFF3F4F6" />
+                                        <Setter Property="BorderBrush" Value="#FFD0D7DE" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TargetNfoTitleLocked, Mode=OneWay}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                                <Setter Property="Background" Value="#FF4FAD3D" />
+                                                <Setter Property="BorderBrush" Value="#FF3D8F2E" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
 
                             <TextBlock Grid.Row="3"
                                        Grid.Column="0"
@@ -606,6 +629,29 @@
                                     Command="{Binding DataContext.ResetSelectedNfoSortTitleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     Content="Ist-Wert"
                                     ToolTip="NFO-Sortiertitel auf den aktuell in der NFO gespeicherten Sortiertitel zurücksetzen." />
+                            <Button Grid.Row="3"
+                                    Grid.Column="3"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ToggleSelectedNfoSortTitleLockCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="{Binding NfoSortTitleLockButtonText, Mode=OneWay}"
+                                    ToolTip="Sperre für das NFO-Feld SortName toggeln. Gesperrte Felder werden in lockedfields geschrieben.">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="MinWidth" Value="86" />
+                                        <Setter Property="Foreground" Value="#FF475569" />
+                                        <Setter Property="Background" Value="#FFF3F4F6" />
+                                        <Setter Property="BorderBrush" Value="#FFD0D7DE" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TargetNfoSortTitleLocked, Mode=OneWay}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                                <Setter Property="Background" Value="#FF4FAD3D" />
+                                                <Setter Property="BorderBrush" Value="#FF3D8F2E" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </Grid>
                     </Border>
 
@@ -687,7 +733,7 @@
                             BorderBrush="#FFD8DEE6"
                             BorderThickness="1"
                             CornerRadius="4">
-                        <DockPanel>
+                        <DockPanel LastChildFill="False">
                             <DockPanel DockPanel.Dock="Top"
                                        Margin="0,0,0,8">
                                 <CheckBox DockPanel.Dock="Right"
@@ -723,6 +769,16 @@
 
                             <Grid DockPanel.Dock="Top"
                                   Margin="0,0,0,4">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding VisibleHeaderCorrectionGroupCount, Mode=OneWay}" Value="0">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="160" />
                                     <ColumnDefinition Width="110" />

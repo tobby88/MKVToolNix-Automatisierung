@@ -233,7 +233,11 @@ public sealed class ArchiveMaintenanceServiceTests
                     "Alt",
                     "Neu",
                     "Alt Sort",
-                    "Neu Sort")));
+                    "Neu Sort",
+                    CurrentTitleLocked: false,
+                    ExpectedTitleLocked: true,
+                    CurrentSortTitleLocked: false,
+                    ExpectedSortTitleLocked: true)));
 
             Assert.True(result.Success);
             var nfoText = File.ReadAllText(nfoPath);
@@ -245,6 +249,46 @@ public sealed class ArchiveMaintenanceServiceTests
         {
             Directory.Delete(tempRoot, recursive: true);
         }
+    }
+
+    [Fact]
+    public void ResolveExpectedTitleFromNfoAndTvdb_UsesLockedNfoTitle()
+    {
+        var nfoResult = new EmbyNfoMetadataReadResult(
+            @"C:\Archiv\Serie\Season 3\Serie - S03E02 - Lippmann wird vermißt.nfo",
+            NfoExists: true,
+            EmbyProviderIds.Empty,
+            Title: "Lippmann wird vermißt",
+            SortTitle: "Lippmann wird vermißt",
+            IsTitleLocked: true,
+            IsSortTitleLocked: true,
+            WarningMessage: null);
+
+        var result = ArchiveMaintenanceService.ResolveExpectedTitleFromNfoAndTvdb(
+            nfoResult,
+            "Lippmann wird vermisst");
+
+        Assert.Equal("Lippmann wird vermißt", result);
+    }
+
+    [Fact]
+    public void ResolveExpectedTitleFromNfoAndTvdb_UsesTvdbTitle_WhenNfoTitleIsNotLocked()
+    {
+        var nfoResult = new EmbyNfoMetadataReadResult(
+            @"C:\Archiv\Serie\Season 3\Serie - S03E02 - Lippmann wird vermißt.nfo",
+            NfoExists: true,
+            EmbyProviderIds.Empty,
+            Title: "Lippmann wird vermißt",
+            SortTitle: "Lippmann wird vermißt",
+            IsTitleLocked: false,
+            IsSortTitleLocked: true,
+            WarningMessage: null);
+
+        var result = ArchiveMaintenanceService.ResolveExpectedTitleFromNfoAndTvdb(
+            nfoResult,
+            "Lippmann wird vermisst");
+
+        Assert.Equal("Lippmann wird vermisst", result);
     }
 
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)

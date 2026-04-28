@@ -80,6 +80,7 @@ public sealed class EmbyNfoProviderIdServiceTests
                 <episodedetails>
                   <title>Episode Titel</title>
                   <sorttitle>Sortierter Titel</sorttitle>
+                  <lockedfields>Name|SortName</lockedfields>
                   <uniqueid type="tvdb" default="true">12345</uniqueid>
                 </episodedetails>
                 """);
@@ -89,6 +90,8 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.True(result.NfoExists);
             Assert.Equal("Episode Titel", result.Title);
             Assert.Equal("Sortierter Titel", result.SortTitle);
+            Assert.True(result.IsTitleLocked);
+            Assert.True(result.IsSortTitleLocked);
             Assert.Equal("12345", result.ProviderIds.TvdbId);
         }
         finally
@@ -312,6 +315,44 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.True(result.Success);
             var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
             Assert.Equal("Genres|Name", updatedDocument.Root!.Element("lockedfields")?.Value);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpdateTextFields_TogglesLockedFieldsWithoutTextChanges()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Alt</title>
+                  <sorttitle>Alt Sort</sorttitle>
+                  <lockedfields>Name|SortName|Genres</lockedfields>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().UpdateTextFields(
+                mediaPath,
+                new EmbyNfoTextFields(
+                    "Alt",
+                    "Alt Sort",
+                    LockTitle: false,
+                    LockSortTitle: true));
+
+            Assert.True(result.Success);
+            Assert.True(result.NfoChanged);
+            var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
+            Assert.Equal("SortName|Genres", updatedDocument.Root!.Element("lockedfields")?.Value);
         }
         finally
         {
