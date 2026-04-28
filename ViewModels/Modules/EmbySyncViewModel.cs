@@ -16,6 +16,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private readonly EmbyModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly IEmbyProviderReviewDialogService _providerReviewDialogs;
+    private readonly IModuleLogService? _moduleLogs;
     private readonly ObservableCollection<EmbySyncItemViewModel> _items = [];
     private readonly List<string> _reportPaths = [];
 
@@ -29,11 +30,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public EmbySyncViewModel(
         EmbyModuleServices services,
         IUserDialogService dialogService,
-        IEmbyProviderReviewDialogService? providerReviewDialogs = null)
+        IEmbyProviderReviewDialogService? providerReviewDialogs = null,
+        IModuleLogService? moduleLogs = null)
     {
         _services = services;
         _dialogService = dialogService;
         _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService();
+        _moduleLogs = moduleLogs;
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
@@ -238,6 +241,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         {
             AppendLog($"Metadatenreport geladen: {reportPath}");
         }
+
+        if (importEntries.Count == 0)
+        {
+            SaveVisibleLog("Reports prüfen");
+            return Task.CompletedTask;
+        }
+
         return AnalyzeItemsAsync();
     }
 
@@ -290,6 +300,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             StatusText = $"Prüfung abgeschlossen: {items.Count} Datei(en), {MissingIdCount} ohne Provider-ID";
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
+            SaveVisibleLog("Reports prüfen");
         });
     }
 
@@ -336,6 +347,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 : "Emby-Scan und Nachprüfung abgeschlossen.";
             AppendLog(StatusText);
             RefreshSummaryAndCommands();
+            SaveVisibleLog("Emby scannen");
         });
     }
 
@@ -354,10 +366,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        if (ApplyTvdbReviewResult(
-                SelectedItem,
-                _providerReviewDialogs.ReviewTvdb(SelectedItem, _services.EpisodeMetadata, _services.SettingsDialog),
-                isBatchReview: false))
+        var reviewApplied = ApplyTvdbReviewResult(
+            SelectedItem,
+            _providerReviewDialogs.ReviewTvdb(SelectedItem, _services.EpisodeMetadata, _services.SettingsDialog),
+            isBatchReview: false);
+        SaveVisibleLog("TVDB prüfen");
+        if (reviewApplied)
         {
             RefreshSummaryAndCommands();
         }
@@ -418,6 +432,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             : "Keine offenen Provider-ID-Pflichtprüfungen.";
         AppendLog(StatusText);
         RefreshSummaryAndCommands();
+        SaveVisibleLog("Pflichtchecks");
     }
 
     private async Task RunSyncAsync()
@@ -558,6 +573,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             AppendLog(StatusText);
             MarkSelectedReportsDone(completedMediaFilePaths);
             RefreshSummaryAndCommands();
+            SaveVisibleLog("Änderungen schreiben");
         });
     }
 
@@ -852,6 +868,26 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             : LogText + Environment.NewLine + line;
     }
 
+    /// <summary>
+    /// Schreibt den sichtbaren Emby-Abgleichsverlauf nach abgeschlossenen Workflow-Schritten.
+    /// </summary>
+    private void SaveVisibleLog(string operationLabel)
+    {
+        if (_moduleLogs is null || string.IsNullOrWhiteSpace(LogText))
+        {
+            return;
+        }
+
+        try
+        {
+            _moduleLogs.SaveModuleLog("Emby-Abgleich", operationLabel, ReportPath, LogText);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogService.ShowWarning("Protokoll", $"Das Emby-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
+        }
+    }
+
     private string GetInitialReportDirectory()
     {
         if (_reportPaths.Count > 0)
@@ -1007,10 +1043,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        if (ApplyImdbReviewResult(
-                SelectedItem,
-                _providerReviewDialogs.ReviewImdb(SelectedItem, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
-                isBatchReview: false))
+        var reviewApplied = ApplyImdbReviewResult(
+            SelectedItem,
+            _providerReviewDialogs.ReviewImdb(SelectedItem, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
+            isBatchReview: false);
+        SaveVisibleLog("IMDb prüfen");
+        if (reviewApplied)
         {
             RefreshSummaryAndCommands();
         }

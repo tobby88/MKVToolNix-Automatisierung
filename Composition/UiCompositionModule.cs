@@ -88,16 +88,19 @@ internal static class UiCompositionModule
             provider.GetRequiredService<BatchMuxViewModel>()));
         services.AddSingleton<DownloadSortViewModel>(provider => new DownloadSortViewModel(
             provider.GetRequiredService<DownloadSortModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<IUserDialogService>(),
+            provider.GetRequiredService<IModuleLogService>()));
         services.AddSingleton<DownloadViewModel>(provider => new DownloadViewModel(
             provider.GetRequiredService<DownloadModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));
         services.AddSingleton<EmbySyncViewModel>(provider => new EmbySyncViewModel(
             provider.GetRequiredService<EmbyModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<IUserDialogService>(),
+            moduleLogs: provider.GetRequiredService<IModuleLogService>()));
         services.AddSingleton<ArchiveMaintenanceViewModel>(provider => new ArchiveMaintenanceViewModel(
             provider.GetRequiredService<ArchiveMaintenanceModuleServices>(),
-            provider.GetRequiredService<IUserDialogService>()));
+            provider.GetRequiredService<IUserDialogService>(),
+            provider.GetRequiredService<IModuleLogService>()));
         services.AddSingleton<MainWindowViewModel>(provider => new MainWindowViewModel(
             [
                 new ModuleNavigationItem(

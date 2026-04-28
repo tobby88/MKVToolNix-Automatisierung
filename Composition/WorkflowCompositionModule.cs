@@ -26,6 +26,7 @@ internal static class WorkflowCompositionModule
             provider.GetRequiredService<IEpisodeCleanupService>()));
         services.AddSingleton<IMuxWorkflowCoordinator>(provider => provider.GetRequiredService<MuxWorkflowCoordinator>());
         services.AddSingleton<BatchRunLogService>(_ => new BatchRunLogService());
+        services.AddSingleton<IModuleLogService>(_ => new ModuleLogService());
         services.AddSingleton<DownloadSortService>(_ => new DownloadSortService());
         services.AddSingleton<EmbyNfoProviderIdService>(_ => new EmbyNfoProviderIdService());
         services.AddSingleton<EmbyClient>(_ => new EmbyClient());

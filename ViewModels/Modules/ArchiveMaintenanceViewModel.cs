@@ -17,6 +17,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 {
     private readonly ArchiveMaintenanceModuleServices _services;
     private readonly IUserDialogService _dialogService;
+    private readonly IModuleLogService? _moduleLogs;
     private bool _isBusy;
     private bool _isScanning;
     private string _rootDirectory;
@@ -28,10 +29,12 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 
     public ArchiveMaintenanceViewModel(
         ArchiveMaintenanceModuleServices services,
-        IUserDialogService dialogService)
+        IUserDialogService dialogService,
+        IModuleLogService? moduleLogs = null)
     {
         _services = services;
         _dialogService = dialogService;
+        _moduleLogs = moduleLogs;
         _rootDirectory = ResolveInitialRootDirectory();
         SelectRootDirectoryCommand = new AsyncRelayCommand(SelectRootDirectoryAsync, () => !_isBusy, HandleUnexpectedCommandError);
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, HandleUnexpectedCommandError);
@@ -315,6 +318,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             StatusText = $"Scan abgeschlossen: {Items.Count} Datei(en).";
             AppendLog($"SCAN: {StatusText}");
             RefreshCounts();
+            SaveVisibleLog("Scan");
         }
         catch (OperationCanceledException) when (scanCancellationSource.IsCancellationRequested)
         {
@@ -322,6 +326,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             StatusText = "Scan abgebrochen.";
             AppendLog("SCAN: Scan abgebrochen.");
             RefreshCounts();
+            SaveVisibleLog("Scan abgebrochen");
         }
         finally
         {
@@ -367,7 +372,9 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 
             ProgressValue = 100;
             StatusText = "Archivpflege-Anwendung abgeschlossen. Für Remux-Hinweise bleibt ein manueller Mux-Lauf nötig.";
+            AppendLog(StatusText);
             RefreshCounts();
+            SaveVisibleLog("Änderungen anwenden");
         }
         finally
         {
@@ -407,6 +414,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         {
             SaveSuppressedChange(suppressedChange);
             AppendLog($"Archivpflege-Ablehnung gespeichert: {SelectedItem.FileName} Dateiname.");
+            SaveVisibleLog("Manuelle Korrektur");
         }
     }
 
@@ -420,6 +428,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         RemoveSuppressedChange(SelectedItem.FilePath, ArchiveMaintenanceItemViewModel.FileNameChangeKind);
         SelectedItem.RestoreFileNameSuggestion();
         AppendLog($"Archivpflege-Ablehnung aufgehoben: {SelectedItem.FileName} Dateiname.");
+        SaveVisibleLog("Manuelle Korrektur");
     }
 
     private void SuppressSelectedContainerTitleChange()
@@ -428,6 +437,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         {
             SaveSuppressedChange(suppressedChange);
             AppendLog($"Archivpflege-Ablehnung gespeichert: {SelectedItem.FileName} MKV-Titel.");
+            SaveVisibleLog("Manuelle Korrektur");
         }
     }
 
@@ -441,6 +451,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         RemoveSuppressedChange(SelectedItem.FilePath, ArchiveMaintenanceItemViewModel.ContainerTitleChangeKind);
         SelectedItem.RestoreContainerTitleSuggestion();
         AppendLog($"Archivpflege-Ablehnung aufgehoben: {SelectedItem.FileName} MKV-Titel.");
+        SaveVisibleLog("Manuelle Korrektur");
     }
 
     private void SaveSuppressedChange(ArchiveMaintenanceSuppressedChange suppressedChange)
@@ -514,6 +525,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         if (dialog.KeepLocalDetection)
         {
             AppendLog($"TVDB beibehalten: {item.FileName}");
+            SaveVisibleLog("TVDB prüfen");
             return;
         }
 
@@ -526,6 +538,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         AppendLog($"TVDB gewählt: {item.FileName} -> {selection.TvdbEpisodeId}");
         RefreshCounts();
         RefreshCommandStates();
+        SaveVisibleLog("TVDB prüfen");
     }
 
     private void ReviewSelectedImdb()
@@ -550,11 +563,13 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         {
             item.MarkImdbUnavailable();
             AppendLog($"IMDb geprüft: keine IMDb-ID für {item.FileName}");
+            SaveVisibleLog("IMDb prüfen");
         }
         else if (!string.IsNullOrWhiteSpace(dialog.SelectedImdbId))
         {
             item.ApplyImdbSelection(dialog.SelectedImdbId!);
             AppendLog($"IMDb gewählt: {item.FileName} -> {dialog.SelectedImdbId}");
+            SaveVisibleLog("IMDb prüfen");
         }
 
         RefreshCounts();
@@ -589,6 +604,26 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         LogText = string.IsNullOrWhiteSpace(LogText)
             ? line
             : LogText + Environment.NewLine + line;
+    }
+
+    /// <summary>
+    /// Persistiert das sichtbare Archivpflege-Protokoll nach Scan- und Schreibaktionen.
+    /// </summary>
+    private void SaveVisibleLog(string operationLabel)
+    {
+        if (_moduleLogs is null || string.IsNullOrWhiteSpace(LogText))
+        {
+            return;
+        }
+
+        try
+        {
+            _moduleLogs.SaveModuleLog("Archivpflege", operationLabel, RootDirectory, LogText);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogService.ShowWarning("Protokoll", $"Das Archivpflege-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
+        }
     }
 
     private void Item_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)

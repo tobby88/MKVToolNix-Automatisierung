@@ -57,7 +57,9 @@ Wichtig dabei:
    - Der persistierte Log sammelt gezielt den aktuellen Batch-Lauf, damit Planung, Arbeitskopien und Mux-Ausführung zusammen diagnostizierbar bleiben.
    - Die bisherige TXT-Liste neuer Ausgabedateien bleibt als einfache menschenlesbare Prüfliste erhalten.
    - Der zusätzliche JSON-Metadatenreport enthält ein versioniertes Schema und importierbare Provider-IDs wie die bereits ausgewählte TVDB-Episoden-ID.
-8. Das optionale Emby-Modul lädt den strukturierten JSON-Metadatenreport, fragt Emby nach den neuen Items und schreibt Provider-IDs in die nebenliegenden NFO-Dateien.
+8. `ModuleLogService` schreibt die sichtbaren Protokolle von Einsortieren, Emby-Abgleich und Archivpflege ebenfalls nach `.\Logs`.
+   - Diese Logs enthalten keine Mux-Ausgabedatei-Reports, sondern nur Modulname, Vorgang, Kontext und den sichtbaren Protokolltext.
+9. Das optionale Emby-Modul lädt den strukturierten JSON-Metadatenreport, fragt Emby nach den neuen Items und schreibt Provider-IDs in die nebenliegenden NFO-Dateien.
    - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
 
 ## Warum DocFX

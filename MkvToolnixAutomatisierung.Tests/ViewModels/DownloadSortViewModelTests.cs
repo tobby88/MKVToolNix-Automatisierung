@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
@@ -10,10 +11,12 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
 public sealed class DownloadSortViewModelTests
 {
-    private static DownloadSortViewModel CreateViewModel(IUserDialogService? dialogService = null)
+    private static DownloadSortViewModel CreateViewModel(
+        IUserDialogService? dialogService = null,
+        IModuleLogService? moduleLogs = null)
     {
         var services = new DownloadSortModuleServices(new DownloadSortService());
-        return new DownloadSortViewModel(services, dialogService ?? new NullDialogService());
+        return new DownloadSortViewModel(services, dialogService ?? new NullDialogService(), moduleLogs);
     }
 
     private static DownloadSortItemViewModel CreateSortableItem(string displayName = "Testserie - Pilot.mp4")
@@ -161,6 +164,30 @@ public sealed class DownloadSortViewModelTests
     }
 
     [Fact]
+    public async Task ScanCommand_PersistsVisibleProtocol_WhenLoggerIsConfigured()
+    {
+        var rootDirectory = CreateTemporaryDirectory();
+        try
+        {
+            var moduleLogs = new RecordingModuleLogService();
+            var vm = CreateViewModel(moduleLogs: moduleLogs);
+            SetSourceDirectory(vm, rootDirectory);
+
+            await vm.ScanCommand.ExecuteAsync();
+
+            var log = Assert.Single(moduleLogs.Logs);
+            Assert.Equal("Einsortieren", log.ModuleLabel);
+            Assert.Equal("Scan", log.OperationLabel);
+            Assert.Equal(rootDirectory, log.Context);
+            Assert.Contains("Keine losen Download-Dateien", log.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void MixedDefectiveItem_TargetChange_ReevaluatesAndClearsSelection()
     {
         var rootDirectory = CreateTemporaryDirectory();
@@ -264,12 +291,17 @@ public sealed class DownloadSortViewModelTests
 
     private static void ApplyScanResult(DownloadSortViewModel viewModel, string sourceDirectory, DownloadSortScanResult scanResult)
     {
-        typeof(DownloadSortViewModel)
-            .GetField("_sourceDirectory", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(viewModel, sourceDirectory);
+        SetSourceDirectory(viewModel, sourceDirectory);
         typeof(DownloadSortViewModel)
             .GetMethod("ApplyScanResult", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(viewModel, [scanResult]);
+    }
+
+    private static void SetSourceDirectory(DownloadSortViewModel viewModel, string sourceDirectory)
+    {
+        typeof(DownloadSortViewModel)
+            .GetField("_sourceDirectory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(viewModel, sourceDirectory);
     }
 
     private static string CreateTemporaryDirectory()

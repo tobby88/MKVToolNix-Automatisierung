@@ -7,7 +7,7 @@ Die Anwendung verwendet bewusst portable Laufzeitordner relativ zur EXE:
 - `.\Data`
   - Einstellungen, Backups und Korruptions-Snapshots
 - `.\Logs`
-  - Batch-Logs und Listen neu erzeugter Ausgabedateien
+  - Mux-Logs, Listen neu erzeugter Ausgabedateien und allgemeine Modulprotokolle
 - `.\Tools`
   - automatisch bereitgestellte MKVToolNix- und ffprobe-Versionen
   - optional automatisch bereitgestellte portable MediathekView-Versionen

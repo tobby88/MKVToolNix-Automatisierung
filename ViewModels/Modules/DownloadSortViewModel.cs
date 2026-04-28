@@ -13,6 +13,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 {
     private readonly DownloadSortModuleServices _services;
     private readonly IUserDialogService _dialogService;
+    private readonly IModuleLogService? _moduleLogs;
     private readonly ObservableCollection<DownloadSortItemViewModel> _items = [];
     private readonly ObservableCollection<string> _targetFolderOptions = [];
 
@@ -29,10 +30,12 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// </summary>
     public DownloadSortViewModel(
         DownloadSortModuleServices services,
-        IUserDialogService dialogService)
+        IUserDialogService dialogService,
+        IModuleLogService? moduleLogs = null)
     {
         _services = services;
         _dialogService = dialogService;
+        _moduleLogs = moduleLogs;
         _sourceDirectory = PreferredDownloadDirectoryHelper.GetPreferredMediathekDownloadsDirectory();
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
@@ -219,6 +222,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         {
             SetBusy(true);
             await ScanCoreWithoutBusyAsync(resetLog);
+            SaveVisibleLog("Scan");
         }
         finally
         {
@@ -306,6 +310,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             StatusText = $"Sortieren abgeschlossen: {applyResult.MovedGroupCount} Paket(e), {applyResult.MovedFileCount} Datei(en), {applyResult.RenamedFolderCount} Ordner.";
 
             await ScanCoreWithoutBusyAsync(resetLog: false);
+            SaveVisibleLog("Einsortieren");
         }
         finally
         {
@@ -602,6 +607,26 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         LogText = string.IsNullOrWhiteSpace(LogText)
             ? string.Join(Environment.NewLine, materialized)
             : LogText + Environment.NewLine + string.Join(Environment.NewLine, materialized);
+    }
+
+    /// <summary>
+    /// Schreibt das sichtbare Einsortieren-Protokoll nach abgeschlossenen Top-Level-Aktionen.
+    /// </summary>
+    private void SaveVisibleLog(string operationLabel)
+    {
+        if (_moduleLogs is null || string.IsNullOrWhiteSpace(LogText))
+        {
+            return;
+        }
+
+        try
+        {
+            _moduleLogs.SaveModuleLog("Einsortieren", operationLabel, SourceDirectory, LogText);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogService.ShowWarning("Protokoll", $"Das Einsortieren-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
+        }
     }
 
     /// <summary>

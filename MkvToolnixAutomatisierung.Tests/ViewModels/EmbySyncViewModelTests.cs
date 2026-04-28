@@ -26,7 +26,8 @@ public sealed class EmbySyncViewModelTests
         IUserDialogService? dialogService = null,
         IEmbyClient? embyClient = null,
         AppEmbySettings? configuredEmbySettings = null,
-        IEmbyProviderReviewDialogService? providerReviewDialogs = null)
+        IEmbyProviderReviewDialogService? providerReviewDialogs = null,
+        IModuleLogService? moduleLogs = null)
     {
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
@@ -52,7 +53,7 @@ public sealed class EmbySyncViewModelTests
             episodeMetadata,
             new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
             new NullSettingsDialogService());
-        return new EmbySyncViewModel(services, dialogService ?? new NullDialogService(), providerReviewDialogs);
+        return new EmbySyncViewModel(services, dialogService ?? new NullDialogService(), providerReviewDialogs, moduleLogs);
     }
 
     [Fact]
@@ -165,7 +166,8 @@ public sealed class EmbySyncViewModelTests
                 EmbyImdbReviewResult.Apply("tt1234567"),
                 EmbyImdbReviewResult.NoImdbId
             ]);
-        var vm = CreateViewModel(providerReviewDialogs: reviewDialogs);
+        var moduleLogs = new RecordingModuleLogService();
+        var vm = CreateViewModel(providerReviewDialogs: reviewDialogs, moduleLogs: moduleLogs);
         var tvdbMismatchItem = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("100", null));
         tvdbMismatchItem.ApplyAnalysis(new EmbyFileAnalysis(
             tvdbMismatchItem.MediaFilePath,
@@ -209,6 +211,10 @@ public sealed class EmbySyncViewModelTests
         Assert.False(imdbOnlyItem.HasPendingProviderReview);
         Assert.True(imdbOnlyItem.IsImdbUnavailable);
         Assert.True(imdbOnlyItem.HasCompleteProviderIds);
+        var log = Assert.Single(moduleLogs.Logs);
+        Assert.Equal("Emby-Abgleich", log.ModuleLabel);
+        Assert.Equal("Pflichtchecks", log.OperationLabel);
+        Assert.Contains("Provider-ID-Pflichtprüfungen abgeschlossen", log.LogText, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -132,6 +132,33 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ScanCommand_PersistsVisibleProtocol_WhenLoggerIsConfigured()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-log-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var moduleLogs = new RecordingModuleLogService();
+            var viewModel = CreateViewModel(
+                archiveMaintenance: new StaticScanArchiveMaintenanceService([]),
+                moduleLogs: moduleLogs);
+            viewModel.RootDirectory = tempDirectory;
+
+            await viewModel.ScanCommand.ExecuteAsync();
+
+            var log = Assert.Single(moduleLogs.Logs);
+            Assert.Equal("Archivpflege", log.ModuleLabel);
+            Assert.Equal("Scan", log.OperationLabel);
+            Assert.Equal(tempDirectory, log.Context);
+            Assert.Contains("Scan abgeschlossen", log.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void SuppressSelectedFileNameChangeCommand_PersistsConcreteRejectedSuggestion()
     {
         var viewModel = CreateViewModel();
@@ -537,7 +564,8 @@ public sealed class ArchiveMaintenanceViewModelTests
 
     private static ArchiveMaintenanceViewModel CreateViewModel(
         IUserDialogService? dialogService = null,
-        IArchiveMaintenanceService? archiveMaintenance = null)
+        IArchiveMaintenanceService? archiveMaintenance = null,
+        IModuleLogService? moduleLogs = null)
     {
         var settingsStore = new AppSettingsStore();
         var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
@@ -550,7 +578,7 @@ public sealed class ArchiveMaintenanceViewModelTests
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new TvdbClient()),
             new ImdbLookupService(new HttpClient()),
             new NullSettingsDialogService());
-        return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService());
+        return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService(), moduleLogs);
     }
 
     private sealed class PendingArchiveMaintenanceService : IArchiveMaintenanceService
