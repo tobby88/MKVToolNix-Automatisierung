@@ -521,6 +521,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" MinHeight="120" />
                     </Grid.RowDefinitions>
 
@@ -562,13 +563,79 @@
                         </Grid>
                     </Border>
 
-                    <TextBlock Grid.Row="1"
+                    <Border Grid.Row="1"
+                            Margin="0,0,0,8"
+                            Padding="8"
+                            Background="White"
+                            BorderBrush="#FFD8DEE6"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                       Grid.Column="0"
+                                       Grid.ColumnSpan="7"
+                                       Margin="0,0,0,6"
+                                       Foreground="#FF5F6B76"
+                                       Text="{Binding ProviderIdSummaryText, Mode=OneWay}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="0"
+                                       Margin="0,4,12,4"
+                                       VerticalAlignment="Center"
+                                       Text="Provider-IDs" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Margin="0,2,6,2"
+                                     IsEnabled="{Binding HasProviderIdSync, Mode=OneWay}"
+                                     Text="{Binding TargetTvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="2"
+                                    Margin="0,2,16,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ReviewSelectedTvdbCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="TVDB"
+                                    ToolTip="TVDB-Zuordnung für die aktuell ausgewählte Archivdatei prüfen und bei Übernahme Datei/Titel/TVDB-ID vorbereiten." />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="3"
+                                       Margin="0,4,8,4"
+                                       VerticalAlignment="Center"
+                                       Text="IMDb" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="4"
+                                     Margin="0,2,6,2"
+                                     IsEnabled="{Binding HasProviderIdSync, Mode=OneWay}"
+                                     Text="{Binding TargetImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="5"
+                                    Margin="0,2,16,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ReviewSelectedImdbCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="IMDb"
+                                    ToolTip="IMDb-Zuordnung für die aktuell ausgewählte Archivdatei prüfen und als NFO-Änderung vorbereiten." />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="2"
                                Margin="0,0,0,8"
                                Foreground="#FFAA2E34"
                                TextWrapping="Wrap"
                                Text="{Binding ManualValidationMessage, Mode=OneWay}" />
 
-                    <Border Grid.Row="2"
+                    <Border Grid.Row="3"
                             Padding="8"
                             Background="White"
                             BorderBrush="#FFD8DEE6"

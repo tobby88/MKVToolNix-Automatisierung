@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Commands;
+using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -35,6 +38,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         DeselectAllCommand = new RelayCommand(DeselectAll, () => IsInteractive && Items.Any(item => item.IsSelected));
         ApplySelectedCommand = new AsyncRelayCommand(ApplySelectedAsync, CanApplySelected, HandleUnexpectedCommandError);
         OpenSelectedFileCommand = new RelayCommand(OpenSelectedFile, () => SelectedItem is not null);
+        ReviewSelectedTvdbCommand = new RelayCommand(ReviewSelectedTvdb, () => IsInteractive && SelectedItem?.CanReviewTvdb == true);
+        ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, () => IsInteractive && SelectedItem?.CanReviewImdb == true);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -54,6 +59,10 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     public AsyncRelayCommand ApplySelectedCommand { get; }
 
     public RelayCommand OpenSelectedFileCommand { get; }
+
+    public RelayCommand ReviewSelectedTvdbCommand { get; }
+
+    public RelayCommand ReviewSelectedImdbCommand { get; }
 
     public bool IsBusy
     {
@@ -106,6 +115,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             OnPropertyChanged(nameof(SelectedDetailText));
             ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
             OpenSelectedFileCommand.RaiseCanExecuteChanged();
+            ReviewSelectedTvdbCommand.RaiseCanExecuteChanged();
+            ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -300,6 +311,78 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         }
     }
 
+    private void ReviewSelectedTvdb()
+    {
+        if (SelectedItem is not { } item)
+        {
+            return;
+        }
+
+        if (!item.TryBuildMetadataGuess(out var guess) || guess is null)
+        {
+            _dialogService.ShowWarning("TVDB-Prüfung", "Aus dem Ziel-Dateinamen kann kein TVDB-Suchvorschlag gebaut werden.");
+            return;
+        }
+
+        var dialog = new TvdbLookupWindow(_services.EpisodeMetadata, guess, _services.SettingsDialog)
+        {
+            Owner = ResolveOwner()
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (dialog.KeepLocalDetection)
+        {
+            AppendLog($"TVDB beibehalten: {item.FileName}");
+            return;
+        }
+
+        if (dialog.SelectedEpisodeSelection is not { } selection)
+        {
+            return;
+        }
+
+        item.ApplyTvdbSelection(selection);
+        AppendLog($"TVDB gewählt: {item.FileName} -> {selection.TvdbEpisodeId}");
+        RefreshCounts();
+        RefreshCommandStates();
+    }
+
+    private void ReviewSelectedImdb()
+    {
+        if (SelectedItem is not { } item)
+        {
+            return;
+        }
+
+        item.TryBuildMetadataGuess(out var guess);
+        var lookupMode = _services.EpisodeMetadata.LoadSettings().ImdbLookupMode;
+        var dialog = new ImdbLookupWindow(_services.ImdbLookup, lookupMode, guess, item.TargetImdbId)
+        {
+            Owner = ResolveOwner()
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (dialog.ImdbExplicitlyUnavailable)
+        {
+            item.MarkImdbUnavailable();
+            AppendLog($"IMDb geprüft: keine IMDb-ID für {item.FileName}");
+        }
+        else if (!string.IsNullOrWhiteSpace(dialog.SelectedImdbId))
+        {
+            item.ApplyImdbSelection(dialog.SelectedImdbId!);
+            AppendLog($"IMDb gewählt: {item.FileName} -> {dialog.SelectedImdbId}");
+        }
+
+        RefreshCounts();
+        RefreshCommandStates();
+    }
+
     private bool CanScan()
     {
         return !_isBusy && Directory.Exists(RootDirectory);
@@ -369,6 +452,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         DeselectAllCommand.RaiseCanExecuteChanged();
         ApplySelectedCommand.RaiseCanExecuteChanged();
         OpenSelectedFileCommand.RaiseCanExecuteChanged();
+        ReviewSelectedTvdbCommand.RaiseCanExecuteChanged();
+        ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
     }
 
     private void HandleUnexpectedCommandError(Exception ex)
@@ -381,5 +466,11 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private static Window? ResolveOwner()
+    {
+        return Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+               ?? Application.Current?.MainWindow;
     }
 }

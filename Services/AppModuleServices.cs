@@ -115,9 +115,15 @@ internal sealed record BatchModuleServices(
 /// </summary>
 /// <param name="ArchiveMaintenance">Fachservice für Scan, Headeranalyse und freigegebene Korrekturen.</param>
 /// <param name="ArchiveSettings">Persistenter Store für die Serienbibliothek als Startordner.</param>
+/// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Archivdateien.</param>
+/// <param name="ImdbLookup">Optionaler IMDb-Provider über die freie REST-API.</param>
+/// <param name="SettingsDialog">Zentraler Einstellungsdialog für TVDB-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record ArchiveMaintenanceModuleServices(
     ArchiveMaintenanceService ArchiveMaintenance,
-    AppArchiveSettingsStore ArchiveSettings);
+    AppArchiveSettingsStore ArchiveSettings,
+    EpisodeMetadataLookupService EpisodeMetadata,
+    ImdbLookupService ImdbLookup,
+    IAppSettingsDialogService SettingsDialog);
 
 /// <summary>
 /// Bündelt nur die für das Einsortieren loser MediathekView-Downloads benötigten Services.

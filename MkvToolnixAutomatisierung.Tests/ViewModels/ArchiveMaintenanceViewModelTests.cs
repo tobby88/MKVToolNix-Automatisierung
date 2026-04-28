@@ -1,7 +1,10 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
@@ -76,6 +79,8 @@ public sealed class ArchiveMaintenanceViewModelTests
             ContainerTitleEdit: null,
             TrackHeaderEdits: [],
             TrackHeaderCorrectionCandidates: [],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: false,
             Issues: [new ArchiveMaintenanceIssue(ArchiveMaintenanceIssueKind.RemuxRequired, "Doppelte AD-Spuren.")],
             ChangeNotes: [],
             ErrorMessage: null));
@@ -122,6 +127,59 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void CreateApplyRequest_UsesManualProviderIdTargets()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateProviderIdAnalysis());
+
+        item.TargetTvdbId = "456";
+        item.TargetImdbId = "tt7654321";
+        var request = item.CreateApplyRequest();
+
+        Assert.NotNull(request.ProviderIdEdit);
+        Assert.Equal("456", request.ProviderIdEdit!.ProviderIds.TvdbId);
+        Assert.Equal("tt7654321", request.ProviderIdEdit.ProviderIds.ImdbId);
+        Assert.False(request.ProviderIdEdit.RemoveImdbId);
+        Assert.Contains("TVDB-ID", item.ChangeSummary, StringComparison.Ordinal);
+        Assert.Contains("IMDb-ID", item.ChangeSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MarkImdbUnavailable_RemovesExistingImdbIdOnApply()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateProviderIdAnalysis());
+
+        item.MarkImdbUnavailable();
+        var request = item.CreateApplyRequest();
+
+        Assert.NotNull(request.ProviderIdEdit);
+        Assert.Null(request.ProviderIdEdit!.ProviderIds.ImdbId);
+        Assert.True(request.ProviderIdEdit.RemoveImdbId);
+        Assert.Contains("keine IMDb-ID", item.ChangeSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClearingExistingTvdbId_IsValidationError()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateProviderIdAnalysis());
+
+        item.TargetTvdbId = string.Empty;
+
+        Assert.Null(item.CreateApplyRequest().ProviderIdEdit);
+        Assert.False(item.CanSelect);
+        Assert.Contains("TVDB-ID", item.ManualValidationMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CanReviewImdb_RequiresExistingNfo()
+    {
+        var withoutNfo = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());
+        var withNfo = new ArchiveMaintenanceItemViewModel(CreateProviderIdAnalysis());
+
+        Assert.False(withoutNfo.CanReviewImdb);
+        Assert.True(withNfo.CanReviewImdb);
+    }
+
+    [Fact]
     public void VisibleHeaderCorrections_HidesUnchangedValuesUntilRequested()
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateAnalysisWithTrackCorrectionCandidate());
@@ -160,6 +218,8 @@ public sealed class ArchiveMaintenanceViewModelTests
             ContainerTitleEdit: new ContainerTitleEditOperation("Alt", "Pilot"),
             TrackHeaderEdits: [],
             TrackHeaderCorrectionCandidates: [],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: false,
             Issues: [],
             ChangeNotes: ["MKV-Titel: Alt -> Pilot"],
             ErrorMessage: null);
@@ -175,6 +235,8 @@ public sealed class ArchiveMaintenanceViewModelTests
             ContainerTitleEdit: null,
             TrackHeaderEdits: [],
             TrackHeaderCorrectionCandidates: [],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: false,
             Issues: [],
             ChangeNotes: [],
             ErrorMessage: null);
@@ -205,6 +267,25 @@ public sealed class ArchiveMaintenanceViewModelTests
                             IsFlag: true)
                     ])
             ],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: false,
+            Issues: [],
+            ChangeNotes: [],
+            ErrorMessage: null);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateProviderIdAnalysis()
+    {
+        return new ArchiveMaintenanceItemAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            "Pilot",
+            ContainerTitle: "Pilot",
+            RenameOperation: null,
+            ContainerTitleEdit: null,
+            TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates: [],
+            ProviderIds: new EmbyProviderIds("123", "tt1234567"),
+            NfoExists: true,
             Issues: [],
             ChangeNotes: [],
             ErrorMessage: null);
@@ -219,7 +300,10 @@ public sealed class ArchiveMaintenanceViewModelTests
                 new MkvMergeProbeService(),
                 new StubMkvToolNixLocator(),
                 new MuxExecutionService()),
-            archiveSettingsStore);
+            archiveSettingsStore,
+            new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new TvdbClient()),
+            new ImdbLookupService(new HttpClient()),
+            new NullSettingsDialogService());
         return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService());
     }
 
@@ -290,5 +374,10 @@ public sealed class ArchiveMaintenanceViewModelTests
         public void ShowWarning(string title, string message) => throw new NotSupportedException();
 
         public void ShowError(string message) => throw new NotSupportedException();
+    }
+
+    private sealed class NullSettingsDialogService : IAppSettingsDialogService
+    {
+        public bool ShowDialog(Window? owner = null, AppSettingsPage initialPage = AppSettingsPage.Archive) => false;
     }
 }

@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
+using MkvToolnixAutomatisierung.Services.Metadata;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -17,6 +19,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     private bool _wasApplied;
     private string _targetFileName;
     private string _targetContainerTitle;
+    private string _targetTvdbId;
+    private string _targetImdbId;
+    private bool _removeImdbId;
     private bool _showAllHeaderCorrections;
 
     public ArchiveMaintenanceItemViewModel(ArchiveMaintenanceItemAnalysis analysis)
@@ -24,6 +29,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         _analysis = analysis;
         _targetFileName = Path.GetFileName(analysis.RenameOperation?.TargetPath ?? analysis.FilePath);
         _targetContainerTitle = analysis.ContainerTitleEdit?.ExpectedTitle ?? analysis.ContainerTitle;
+        _targetTvdbId = analysis.ProviderIds.TvdbId ?? string.Empty;
+        _targetImdbId = analysis.ProviderIds.ImdbId ?? string.Empty;
         HeaderCorrections = new ObservableCollection<ArchiveMaintenanceHeaderCorrectionViewModel>(
             analysis.TrackHeaderCorrectionCandidates.SelectMany(candidate =>
                 candidate.Values.Select(value => new ArchiveMaintenanceHeaderCorrectionViewModel(candidate, value))));
@@ -142,6 +149,51 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
     }
 
+    public string TargetTvdbId
+    {
+        get => _targetTvdbId;
+        set
+        {
+            var normalizedValue = value?.Trim() ?? string.Empty;
+            if (_targetTvdbId == normalizedValue)
+            {
+                return;
+            }
+
+            _targetTvdbId = normalizedValue;
+            OnPropertyChanged();
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public string TargetImdbId
+    {
+        get => _targetImdbId;
+        set
+        {
+            var normalizedValue = value?.Trim() ?? string.Empty;
+            if (_targetImdbId == normalizedValue)
+            {
+                return;
+            }
+
+            _targetImdbId = normalizedValue;
+            _removeImdbId = string.IsNullOrWhiteSpace(normalizedValue) && !string.IsNullOrWhiteSpace(_analysis.ProviderIds.ImdbId);
+            OnPropertyChanged();
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public bool HasProviderIdSync => _analysis.NfoExists;
+
+    public bool CanReviewTvdb => CanEditManualCorrections && TryBuildMetadataGuess(out _);
+
+    public bool CanReviewImdb => CanEditManualCorrections && HasProviderIdSync;
+
+    public string ProviderIdSummaryText => HasProviderIdSync
+        ? "Provider-IDs aus der NFO. Änderungen werden erst beim Anwenden geschrieben."
+        : "Keine NFO vorhanden. TVDB-/IMDb-IDs können erst nach Emby-NFO-Erzeugung geschrieben werden.";
+
     public string? ManualValidationMessage => BuildManualValidationMessage();
 
     public bool IsSelected
@@ -162,7 +214,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public bool HasWritableChanges => CreateCurrentRenameOperation() is not null
         || CreateCurrentContainerTitleEdit() is not null
-        || CreateCurrentTrackHeaderEdits().Count > 0;
+        || CreateCurrentTrackHeaderEdits().Count > 0
+        || CreateCurrentProviderIdEdit() is not null;
 
     public string StatusText
     {
@@ -350,11 +403,12 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public ArchiveMaintenanceApplyRequest CreateApplyRequest()
     {
-            return new ArchiveMaintenanceApplyRequest(
+        return new ArchiveMaintenanceApplyRequest(
             _analysis.FilePath,
             CreateCurrentRenameOperation(),
             CreateCurrentContainerTitleEdit(),
-            CreateCurrentTrackHeaderEdits());
+            CreateCurrentTrackHeaderEdits(),
+            CreateCurrentProviderIdEdit());
     }
 
     public void MarkApplied(string currentFilePath)
@@ -364,6 +418,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         {
             FilePath = currentFilePath,
             ContainerTitle = currentContainerTitle,
+            ProviderIds = new EmbyProviderIds(
+                string.IsNullOrWhiteSpace(TargetTvdbId) ? null : TargetTvdbId.Trim(),
+                string.IsNullOrWhiteSpace(TargetImdbId) ? null : TargetImdbId.Trim()),
             RenameOperation = null,
             ContainerTitleEdit = null,
             TrackHeaderEdits = [],
@@ -374,8 +431,49 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         _isSelected = false;
         _targetFileName = Path.GetFileName(currentFilePath);
         _targetContainerTitle = currentContainerTitle;
+        _targetTvdbId = _analysis.ProviderIds.TvdbId ?? string.Empty;
+        _targetImdbId = _analysis.ProviderIds.ImdbId ?? string.Empty;
+        _removeImdbId = false;
         HeaderCorrections.Clear();
         OnPropertyChanged(string.Empty);
+    }
+
+    public bool TryBuildMetadataGuess(out EpisodeMetadataGuess? guess)
+    {
+        var fileName = IsTargetFileNameUsable()
+            ? TargetFileName.Trim()
+            : Path.GetFileName(_analysis.FilePath);
+        guess = ArchiveMaintenanceService.TryBuildMetadataGuess(fileName);
+        return guess is not null;
+    }
+
+    public void ApplyTvdbSelection(TvdbEpisodeSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+
+        TargetTvdbId = selection.TvdbEpisodeId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        TargetContainerTitle = selection.EpisodeTitle;
+        TargetFileName = EpisodeFileNameHelper.BuildEpisodeFileName(
+            selection.TvdbSeriesName,
+            selection.SeasonNumber,
+            selection.EpisodeNumber,
+            selection.EpisodeTitle);
+    }
+
+    public void ApplyImdbSelection(string imdbId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imdbId);
+
+        _removeImdbId = false;
+        TargetImdbId = imdbId.Trim();
+    }
+
+    public void MarkImdbUnavailable()
+    {
+        _targetImdbId = string.Empty;
+        _removeImdbId = !string.IsNullOrWhiteSpace(_analysis.ProviderIds.ImdbId);
+        OnPropertyChanged(nameof(TargetImdbId));
+        NotifyManualCorrectionChanged();
     }
 
     private IReadOnlyList<string> BuildCurrentChangeNotes()
@@ -385,6 +483,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
                 ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
                 : [])
+            .Concat(BuildProviderIdChangeNotes())
             .ToList();
     }
 
@@ -447,6 +546,52 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             .ToList();
     }
 
+    private ArchiveProviderIdEditOperation? CreateCurrentProviderIdEdit()
+    {
+        if (_analysis.HasError || _wasApplied || !_analysis.NfoExists || !AreProviderIdsUsable())
+        {
+            return null;
+        }
+
+        var targetTvdbId = string.IsNullOrWhiteSpace(TargetTvdbId) ? null : TargetTvdbId.Trim();
+        var targetImdbId = string.IsNullOrWhiteSpace(TargetImdbId) ? null : TargetImdbId.Trim();
+        var tvdbChanged = !string.Equals(_analysis.ProviderIds.TvdbId ?? string.Empty, targetTvdbId ?? string.Empty, StringComparison.Ordinal);
+        var imdbChanged = !string.Equals(_analysis.ProviderIds.ImdbId ?? string.Empty, targetImdbId ?? string.Empty, StringComparison.Ordinal);
+        var removeImdbId = _removeImdbId || (string.IsNullOrWhiteSpace(targetImdbId) && !string.IsNullOrWhiteSpace(_analysis.ProviderIds.ImdbId));
+        return tvdbChanged || imdbChanged || removeImdbId
+            ? new ArchiveProviderIdEditOperation(new EmbyProviderIds(targetTvdbId, targetImdbId), removeImdbId)
+            : null;
+    }
+
+    private IEnumerable<string> BuildProviderIdChangeNotes()
+    {
+        if (!_analysis.NfoExists || !AreProviderIdsUsable())
+        {
+            yield break;
+        }
+
+        if (!string.Equals(_analysis.ProviderIds.TvdbId ?? string.Empty, TargetTvdbId.Trim(), StringComparison.Ordinal))
+        {
+            yield return $"TVDB-ID: {FormatProviderId(_analysis.ProviderIds.TvdbId)} -> {FormatProviderId(TargetTvdbId)}";
+        }
+
+        if (_removeImdbId && string.IsNullOrWhiteSpace(TargetImdbId))
+        {
+            yield return $"IMDb-ID: {FormatProviderId(_analysis.ProviderIds.ImdbId)} -> keine IMDb-ID";
+            yield break;
+        }
+
+        if (!string.Equals(_analysis.ProviderIds.ImdbId ?? string.Empty, TargetImdbId.Trim(), StringComparison.Ordinal))
+        {
+            yield return $"IMDb-ID: {FormatProviderId(_analysis.ProviderIds.ImdbId)} -> {FormatProviderId(TargetImdbId)}";
+        }
+    }
+
+    private static string FormatProviderId(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "<leer>" : value.Trim();
+    }
+
     private string? BuildManualValidationMessage()
     {
         if (_analysis.HasError || _wasApplied)
@@ -470,6 +615,11 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             return "Der Ziel-Dateiname muss auf .mkv enden.";
         }
 
+        if (!AreProviderIdsUsable())
+        {
+            return BuildProviderIdValidationMessage();
+        }
+
         var renameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
         if (renameOperation is not null && File.Exists(renameOperation.TargetPath))
         {
@@ -480,6 +630,33 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         return existingSidecarTarget is null
             ? null
             : $"Die Ziel-Begleitdatei existiert bereits: {Path.GetFileName(existingSidecarTarget.TargetPath)}.";
+    }
+
+    private bool AreProviderIdsUsable()
+    {
+        return BuildProviderIdValidationMessage() is null;
+    }
+
+    private string? BuildProviderIdValidationMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(TargetTvdbId) && !TargetTvdbId.Trim().All(char.IsDigit))
+        {
+            return "Die TVDB-ID darf nur Ziffern enthalten.";
+        }
+
+        if (string.IsNullOrWhiteSpace(TargetTvdbId) && !string.IsNullOrWhiteSpace(_analysis.ProviderIds.TvdbId))
+        {
+            return "Eine vorhandene TVDB-ID kann hier nicht entfernt werden. Bitte stattdessen eine korrekte TVDB-ID eintragen.";
+        }
+
+        var imdbId = TargetImdbId.Trim();
+        if (!string.IsNullOrWhiteSpace(imdbId)
+            && !System.Text.RegularExpressions.Regex.IsMatch(imdbId, "^tt\\d{7,10}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            return "Die IMDb-ID muss im Format tt1234567 vorliegen.";
+        }
+
+        return null;
     }
 
     private bool IsTargetFileNameUsable()
@@ -524,6 +701,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasNoDetailFindings));
         OnPropertyChanged(nameof(DetailSummaryText));
         OnPropertyChanged(nameof(ManualValidationMessage));
+        OnPropertyChanged(nameof(HasProviderIdSync));
+        OnPropertyChanged(nameof(CanReviewTvdb));
+        OnPropertyChanged(nameof(CanReviewImdb));
+        OnPropertyChanged(nameof(ProviderIdSummaryText));
         OnPropertyChanged(nameof(VisibleHeaderCorrections));
         OnPropertyChanged(nameof(VisibleHeaderCorrectionGroups));
         OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));

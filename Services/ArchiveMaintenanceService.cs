@@ -145,6 +145,26 @@ internal sealed class ArchiveMaintenanceService
             outputLines.Add($"Datei umbenannt: {Path.GetFileName(request.RenameOperation.SourcePath)} -> {Path.GetFileName(currentPath)}");
         }
 
+        if (request.ProviderIdEdit is not null)
+        {
+            var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
+            var updateResult = providerIdService.UpdateProviderIds(
+                currentPath,
+                request.ProviderIdEdit.ProviderIds,
+                request.ProviderIdEdit.RemoveImdbId);
+            outputLines.Add(updateResult.Message);
+            output?.Report(updateResult.Message);
+            if (!updateResult.Success)
+            {
+                return new ArchiveMaintenanceApplyResult(
+                    request.FilePath,
+                    currentPath,
+                    Success: false,
+                    Message: updateResult.Message,
+                    outputLines);
+            }
+        }
+
         _probeService.Invalidate([request.FilePath, currentPath]);
         return new ArchiveMaintenanceApplyResult(
             request.FilePath,
@@ -175,6 +195,8 @@ internal sealed class ArchiveMaintenanceService
                 ContainerTitleEdit: null,
                 TrackHeaderEdits: [],
                 TrackHeaderCorrectionCandidates: [],
+                ProviderIds: EmbyProviderIds.Empty,
+                NfoExists: false,
                 Issues: [],
                 ChangeNotes: [],
                 ErrorMessage: ex.Message);
@@ -192,6 +214,7 @@ internal sealed class ArchiveMaintenanceService
     {
         var parsedName = TryParseEpisodeFileName(filePath);
         var expectedTitle = expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath);
+        var nfoResult = new EmbyNfoProviderIdService().ReadProviderIds(filePath);
         var normalization = ArchiveHeaderNormalizationService.BuildForArchiveFile(
             filePath,
             container,
@@ -214,6 +237,8 @@ internal sealed class ArchiveMaintenanceService
             normalization.ContainerTitleEdit,
             normalization.TrackHeaderEdits,
             BuildTrackHeaderCorrectionCandidates(container, normalization.TrackHeaderEdits),
+            nfoResult.ProviderIds,
+            nfoResult.NfoExists,
             issues,
             changeNotes,
             ErrorMessage: null);
@@ -266,6 +291,18 @@ internal sealed class ArchiveMaintenanceService
         {
             return null;
         }
+    }
+
+    internal static EpisodeMetadataGuess? TryBuildMetadataGuess(string filePath)
+    {
+        var parts = TryParseEpisodeFileName(filePath);
+        return parts is null
+            ? null
+            : new EpisodeMetadataGuess(
+                parts.SeriesName,
+                parts.Title,
+                parts.SeasonNumber,
+                parts.EpisodeNumber);
     }
 
     private static ArchiveEpisodeFileNameParts? TryParseEpisodeFileName(string filePath)
@@ -616,6 +653,8 @@ internal sealed record ArchiveMaintenanceItemAnalysis(
     ContainerTitleEditOperation? ContainerTitleEdit,
     IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits,
     IReadOnlyList<ArchiveTrackHeaderCorrectionCandidate> TrackHeaderCorrectionCandidates,
+    EmbyProviderIds ProviderIds,
+    bool NfoExists,
     IReadOnlyList<ArchiveMaintenanceIssue> Issues,
     IReadOnlyList<string> ChangeNotes,
     string? ErrorMessage)
@@ -631,10 +670,15 @@ internal sealed record ArchiveMaintenanceApplyRequest(
     string FilePath,
     ArchiveRenameOperation? RenameOperation,
     ContainerTitleEditOperation? ContainerTitleEdit,
-    IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits)
+    IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits,
+    ArchiveProviderIdEditOperation? ProviderIdEdit)
 {
-    public bool HasWritableChanges => RenameOperation is not null || ContainerTitleEdit is not null || TrackHeaderEdits.Count > 0;
+    public bool HasWritableChanges => RenameOperation is not null || ContainerTitleEdit is not null || TrackHeaderEdits.Count > 0 || ProviderIdEdit is not null;
 }
+
+internal sealed record ArchiveProviderIdEditOperation(
+    EmbyProviderIds ProviderIds,
+    bool RemoveImdbId);
 
 internal sealed record ArchiveMaintenanceApplyResult(
     string OriginalFilePath,

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Emby;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
@@ -152,6 +153,41 @@ public sealed class ArchiveMaintenanceServiceTests
         }
     }
 
+    [Fact]
+    public async Task ApplyAsync_WritesProviderIdChangesToExistingNfo()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-provider-ids-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.Combine(tempRoot, "Serie - S01E01 - Pilot.nfo");
+            File.WriteAllText(mediaPath, "mkv");
+            File.WriteAllText(nfoPath, "<episodedetails><uniqueid type=\"tvdb\">123</uniqueid><imdbid>tt1234567</imdbid></episodedetails>");
+            var service = new ArchiveMaintenanceService(
+                new MkvMergeProbeService(),
+                new StubMkvToolNixLocator(),
+                new MuxExecutionService(),
+                nfoProviderIds: new EmbyNfoProviderIdService());
+
+            var result = await service.ApplyAsync(new ArchiveMaintenanceApplyRequest(
+                mediaPath,
+                RenameOperation: null,
+                ContainerTitleEdit: null,
+                TrackHeaderEdits: [],
+                ProviderIdEdit: new ArchiveProviderIdEditOperation(new EmbyProviderIds("456", "tt7654321"), RemoveImdbId: false)));
+
+            Assert.True(result.Success);
+            var nfoText = File.ReadAllText(nfoPath);
+            Assert.Contains("456", nfoText, StringComparison.Ordinal);
+            Assert.Contains("tt7654321", nfoText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)
     {
         return new ContainerTrackMetadata(
@@ -196,5 +232,12 @@ public sealed class ArchiveMaintenanceServiceTests
             IsVisualImpaired: false,
             IsHearingImpaired: false,
             IsDefaultTrack: false);
+    }
+
+    private sealed class StubMkvToolNixLocator : IMkvToolNixLocator
+    {
+        public string FindMkvMergePath() => throw new NotSupportedException();
+
+        public string FindMkvPropEditPath() => throw new NotSupportedException();
     }
 }
