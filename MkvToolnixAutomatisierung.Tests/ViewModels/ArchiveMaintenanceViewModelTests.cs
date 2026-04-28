@@ -324,6 +324,28 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void ManualValidation_AllowsCaseOnlyRenameWhenSourceFileExists()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-case-validation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "serie - s01e01 - pilot.mkv");
+            File.WriteAllText(mediaPath, "mkv");
+            var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(mediaPath));
+
+            item.TargetFileName = "Serie - S01E01 - Pilot.mkv";
+
+            Assert.Null(item.ManualValidationMessage);
+            Assert.True(item.CanSelect);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ManualChange_SelectsPreviouslyOkItemUntilUserClearsSelection()
     {
         var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis());

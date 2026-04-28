@@ -994,15 +994,21 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
 
         var renameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
-        if (renameOperation is not null && File.Exists(renameOperation.TargetPath))
+        if (renameOperation is not null && TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
         {
             return "Die Ziel-MKV existiert bereits.";
         }
 
-        var existingSidecarTarget = renameOperation?.Sidecars.FirstOrDefault(sidecar => File.Exists(sidecar.TargetPath));
+        var existingSidecarTarget = renameOperation?.Sidecars.FirstOrDefault(sidecar =>
+            TargetExistsAsDifferentFile(sidecar.SourcePath, sidecar.TargetPath));
         return existingSidecarTarget is null
             ? null
             : $"Die Ziel-Begleitdatei existiert bereits: {Path.GetFileName(existingSidecarTarget.TargetPath)}.";
+    }
+
+    private static bool TargetExistsAsDifferentFile(string sourcePath, string targetPath)
+    {
+        return File.Exists(targetPath) && !PathComparisonHelper.AreSamePath(sourcePath, targetPath);
     }
 
     private bool AreProviderIdsUsable()
