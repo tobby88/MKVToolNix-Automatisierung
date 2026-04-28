@@ -28,7 +28,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         _services = services;
         _dialogService = dialogService;
         _rootDirectory = ResolveInitialRootDirectory();
-        SelectRootDirectoryCommand = new RelayCommand(SelectRootDirectory, () => !_isBusy);
+        SelectRootDirectoryCommand = new AsyncRelayCommand(SelectRootDirectoryAsync, () => !_isBusy, HandleUnexpectedCommandError);
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, HandleUnexpectedCommandError);
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => IsInteractive && SelectedItem is { CanSelect: true });
         SelectAllWritableCommand = new RelayCommand(SelectAllWritable, () => IsInteractive && Items.Any(item => item.CanSelect && !item.IsSelected));
@@ -41,7 +41,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 
     public ObservableCollection<ArchiveMaintenanceItemViewModel> Items { get; } = [];
 
-    public RelayCommand SelectRootDirectoryCommand { get; }
+    public AsyncRelayCommand SelectRootDirectoryCommand { get; }
 
     public AsyncRelayCommand ScanCommand { get; }
 
@@ -183,7 +183,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         RootDirectory = ResolveInitialRootDirectory();
     }
 
-    private void SelectRootDirectory()
+    private async Task SelectRootDirectoryAsync()
     {
         var selectedDirectory = _dialogService.SelectFolder(
             "Archivordner für die Pflege auswählen",
@@ -191,6 +191,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         if (!string.IsNullOrWhiteSpace(selectedDirectory))
         {
             RootDirectory = selectedDirectory;
+            await ScanCommand.ExecuteAsync();
         }
     }
 

@@ -149,8 +149,8 @@ Zusätzlich beim Batch-Lauf:
 
 Die `Archivpflege` ist der nachgelagerte Kontrollschritt für bereits vorhandene MKV-Dateien im Serienarchiv. Sie verwendet dieselben Header-Regeln wie der Mux-Archivvergleich, führt aber keinen automatischen Voll-Remux aus.
 
-1. Serienarchiv oder einen Serienunterordner wählen.
-2. `Scannen`, um alle `.mkv`-Dateien rekursiv zu prüfen.
+1. Serienarchiv oder einen Serienunterordner wählen; danach startet der Scan automatisch.
+2. `Scannen` wiederholt die rekursive Prüfung aller `.mkv`-Dateien bei Bedarf.
 3. In der Tabelle kontrollieren, ob ein Eintrag nur direkte Header-/Dateinamenänderungen braucht oder ob ein manueller Remux-Hinweis vorliegt.
 4. Im Detailbereich die konkreten Änderungen prüfen und bei Bedarf den Bereich `Manuelle Korrektur` aufklappen, um Ziel-Dateiname, MKV-Titel oder einzelne Track-Zielwerte anzupassen.
 5. Nur freigegebene Zeilen auswählen und `Ausgewählte Änderungen anwenden`.

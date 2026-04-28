@@ -330,6 +330,21 @@ internal static class Program
 
     private static string GetRepositoryRoot()
     {
-        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        foreach (var startDirectory in new[] { Environment.CurrentDirectory, AppContext.BaseDirectory })
+        {
+            var currentDirectory = new DirectoryInfo(Path.GetFullPath(startDirectory));
+            while (currentDirectory is not null)
+            {
+                if (File.Exists(Path.Combine(currentDirectory.FullName, "MkvToolnixAutomatisierung.csproj"))
+                    && Directory.Exists(Path.Combine(currentDirectory.FullName, "docs")))
+                {
+                    return currentDirectory.FullName;
+                }
+
+                currentDirectory = currentDirectory.Parent;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Repository-Wurzel für README-Screenshots wurde nicht gefunden.");
     }
 }

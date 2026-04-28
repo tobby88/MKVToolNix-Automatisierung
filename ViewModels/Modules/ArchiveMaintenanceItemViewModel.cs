@@ -43,6 +43,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         ? HeaderCorrections
         : HeaderCorrections.Where(correction => correction.HasChange);
 
+    public IEnumerable<ArchiveMaintenanceHeaderCorrectionGroupViewModel> VisibleHeaderCorrectionGroups => VisibleHeaderCorrections
+        .GroupBy(correction => correction.DisplayLabel, StringComparer.Ordinal)
+        .Select(group => new ArchiveMaintenanceHeaderCorrectionGroupViewModel(group.Key, group.ToList()));
+
     public bool ShowAllHeaderCorrections
     {
         get => _showAllHeaderCorrections;
@@ -56,13 +60,17 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             _showAllHeaderCorrections = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(VisibleHeaderCorrections));
+            OnPropertyChanged(nameof(VisibleHeaderCorrectionGroups));
             OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));
+            OnPropertyChanged(nameof(VisibleHeaderCorrectionGroupCount));
             OnPropertyChanged(nameof(HiddenHeaderCorrectionCount));
             OnPropertyChanged(nameof(HeaderCorrectionModeText));
         }
     }
 
     public int VisibleHeaderCorrectionCount => VisibleHeaderCorrections.Count();
+
+    public int VisibleHeaderCorrectionGroupCount => VisibleHeaderCorrectionGroups.Count();
 
     public int HiddenHeaderCorrectionCount => Math.Max(0, HeaderCorrections.Count - VisibleHeaderCorrectionCount);
 
@@ -518,7 +526,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(DetailSummaryText));
         OnPropertyChanged(nameof(ManualValidationMessage));
         OnPropertyChanged(nameof(VisibleHeaderCorrections));
+        OnPropertyChanged(nameof(VisibleHeaderCorrectionGroups));
         OnPropertyChanged(nameof(VisibleHeaderCorrectionCount));
+        OnPropertyChanged(nameof(VisibleHeaderCorrectionGroupCount));
         OnPropertyChanged(nameof(HiddenHeaderCorrectionCount));
         OnPropertyChanged(nameof(ManualCorrectionHeaderText));
         OnPropertyChanged(nameof(HeaderCorrectionModeText));
@@ -529,6 +539,13 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
+
+/// <summary>
+/// Gruppiert editierbare Headerwerte einer einzelnen Spur für die Archivpflege-Oberfläche.
+/// </summary>
+internal sealed record ArchiveMaintenanceHeaderCorrectionGroupViewModel(
+    string DisplayLabel,
+    IReadOnlyList<ArchiveMaintenanceHeaderCorrectionViewModel> Values);
 
 /// <summary>
 /// Eine editierbare Zielwert-Zeile für die manuelle Header-Korrektur der Archivpflege.

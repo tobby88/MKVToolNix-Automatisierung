@@ -356,8 +356,12 @@ internal sealed class DemoArchiveMaintenanceItem
     public IEnumerable<DemoArchiveMaintenanceHeaderCorrection> VisibleHeaderCorrections => ShowAllHeaderCorrections
         ? HeaderCorrections
         : HeaderCorrections.Where(correction => correction.HasChange);
+    public IEnumerable<DemoArchiveMaintenanceHeaderCorrectionGroup> VisibleHeaderCorrectionGroups => VisibleHeaderCorrections
+        .GroupBy(correction => correction.DisplayLabel, StringComparer.Ordinal)
+        .Select(group => new DemoArchiveMaintenanceHeaderCorrectionGroup(group.Key, group.ToList()));
     public bool ShowAllHeaderCorrections { get; set; }
     public int VisibleHeaderCorrectionCount => VisibleHeaderCorrections.Count();
+    public int VisibleHeaderCorrectionGroupCount => VisibleHeaderCorrectionGroups.Count();
     public int HiddenHeaderCorrectionCount => Math.Max(0, HeaderCorrections.Count - VisibleHeaderCorrectionCount);
     public string ManualCorrectionHeaderText => "Manuelle Korrektur (3 Änderung(en))";
     public string HeaderCorrectionModeText => HiddenHeaderCorrectionCount == 0
@@ -367,6 +371,10 @@ internal sealed class DemoArchiveMaintenanceItem
     public string StatusTone { get; init; } = string.Empty;
     public string ChangeSummary { get; init; } = string.Empty;
 }
+
+internal sealed record DemoArchiveMaintenanceHeaderCorrectionGroup(
+    string DisplayLabel,
+    IReadOnlyList<DemoArchiveMaintenanceHeaderCorrection> Values);
 
 internal sealed class DemoArchiveMaintenanceHeaderCorrection
 {

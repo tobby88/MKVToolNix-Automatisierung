@@ -28,6 +28,27 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task SelectRootDirectoryCommand_ScansSelectedFolderImmediately()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var viewModel = CreateViewModel(new NullDialogService(tempDirectory));
+
+            await viewModel.SelectRootDirectoryCommand.ExecuteAsync();
+
+            Assert.Equal(tempDirectory, viewModel.RootDirectory);
+            Assert.Equal(0, viewModel.TotalCount);
+            Assert.Equal("Scan abgeschlossen: 0 Datei(en).", viewModel.StatusText);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ToggleSelectedItemSelectionCommand_TogglesWritableItem()
     {
         var viewModel = CreateViewModel();
@@ -189,7 +210,7 @@ public sealed class ArchiveMaintenanceViewModelTests
             ErrorMessage: null);
     }
 
-    private static ArchiveMaintenanceViewModel CreateViewModel()
+    private static ArchiveMaintenanceViewModel CreateViewModel(IUserDialogService? dialogService = null)
     {
         var settingsStore = new AppSettingsStore();
         var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
@@ -199,7 +220,7 @@ public sealed class ArchiveMaintenanceViewModelTests
                 new StubMkvToolNixLocator(),
                 new MuxExecutionService()),
             archiveSettingsStore);
-        return new ArchiveMaintenanceViewModel(services, new NullDialogService());
+        return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService());
     }
 
     private sealed class StubMkvToolNixLocator : IMkvToolNixLocator
@@ -211,6 +232,13 @@ public sealed class ArchiveMaintenanceViewModelTests
 
     private sealed class NullDialogService : IUserDialogService
     {
+        private readonly string? _selectedFolder;
+
+        public NullDialogService(string? selectedFolder = null)
+        {
+            _selectedFolder = selectedFolder;
+        }
+
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
 
         public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
@@ -221,7 +249,7 @@ public sealed class ArchiveMaintenanceViewModelTests
 
         public string? SelectOutput(string initialDirectory, string fileName) => throw new NotSupportedException();
 
-        public string? SelectFolder(string title, string initialDirectory) => throw new NotSupportedException();
+        public string? SelectFolder(string title, string initialDirectory) => _selectedFolder ?? throw new NotSupportedException();
 
         public string? SelectExecutable(string title, string filter, string initialDirectory) => throw new NotSupportedException();
 
