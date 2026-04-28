@@ -18,11 +18,13 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     private readonly ArchiveMaintenanceModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private bool _isBusy;
+    private bool _isScanning;
     private string _rootDirectory;
     private string _statusText = "Archivordner wählen und Scan starten.";
     private string _logText = string.Empty;
     private int _progressValue;
     private ArchiveMaintenanceItemViewModel? _selectedItem;
+    private CancellationTokenSource? _scanCancellationSource;
 
     public ArchiveMaintenanceViewModel(
         ArchiveMaintenanceModuleServices services,
@@ -33,6 +35,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         _rootDirectory = ResolveInitialRootDirectory();
         SelectRootDirectoryCommand = new AsyncRelayCommand(SelectRootDirectoryAsync, () => !_isBusy, HandleUnexpectedCommandError);
         ScanCommand = new AsyncRelayCommand(ScanAsync, CanScan, HandleUnexpectedCommandError);
+        CancelScanCommand = new RelayCommand(CancelScan, () => CanCancelScan);
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => IsInteractive && SelectedItem is { CanSelect: true });
         SelectAllWritableCommand = new RelayCommand(SelectAllWritable, () => IsInteractive && Items.Any(item => item.CanSelect && !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => IsInteractive && Items.Any(item => item.IsSelected));
@@ -49,6 +52,8 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     public AsyncRelayCommand SelectRootDirectoryCommand { get; }
 
     public AsyncRelayCommand ScanCommand { get; }
+
+    public RelayCommand CancelScanCommand { get; }
 
     public RelayCommand ToggleSelectedItemSelectionCommand { get; }
 
@@ -82,6 +87,30 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     }
 
     public bool IsInteractive => !IsBusy;
+
+    public bool IsScanning
+    {
+        get => _isScanning;
+        private set
+        {
+            if (_isScanning == value)
+            {
+                return;
+            }
+
+            _isScanning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanCancelScan));
+            OnPropertyChanged(nameof(CancelScanTooltip));
+            RefreshCommandStates();
+        }
+    }
+
+    public bool CanCancelScan => IsScanning && _scanCancellationSource is { IsCancellationRequested: false };
+
+    public string CancelScanTooltip => CanCancelScan
+        ? "Bricht den laufenden Archivpflege-Scan inklusive aktueller Dateianalyse ab."
+        : "Derzeit läuft kein abbrechbarer Archivpflege-Scan.";
 
     public string RootDirectory
     {
@@ -208,6 +237,9 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
 
     private async Task ScanAsync()
     {
+        using var scanCancellationSource = new CancellationTokenSource();
+        _scanCancellationSource = scanCancellationSource;
+        IsScanning = true;
         IsBusy = true;
         Items.Clear();
         SelectedItem = null;
@@ -215,12 +247,20 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         RefreshCounts();
         try
         {
-            var progress = new Progress<ArchiveMaintenanceProgress>(update =>
+            var progress = new InlineProgress<ArchiveMaintenanceProgress>(update =>
             {
+                if (scanCancellationSource.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 StatusText = update.StatusText;
                 ProgressValue = update.ProgressPercent;
             });
-            var result = await _services.ArchiveMaintenance.ScanAsync(RootDirectory, progress);
+            var result = await _services.ArchiveMaintenance.ScanAsync(
+                RootDirectory,
+                progress,
+                scanCancellationSource.Token);
             foreach (var item in result.Items.Select(analysis => new ArchiveMaintenanceItemViewModel(analysis)))
             {
                 item.PropertyChanged += Item_OnPropertyChanged;
@@ -232,8 +272,21 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             AppendLog($"SCAN: {StatusText}");
             RefreshCounts();
         }
+        catch (OperationCanceledException) when (scanCancellationSource.IsCancellationRequested)
+        {
+            ProgressValue = 0;
+            StatusText = "Scan abgebrochen.";
+            AppendLog("SCAN: Scan abgebrochen.");
+            RefreshCounts();
+        }
         finally
         {
+            if (ReferenceEquals(_scanCancellationSource, scanCancellationSource))
+            {
+                _scanCancellationSource = null;
+            }
+
+            IsScanning = false;
             IsBusy = false;
         }
     }
@@ -301,6 +354,21 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         {
             item.IsSelected = false;
         }
+    }
+
+    private void CancelScan()
+    {
+        if (!CanCancelScan)
+        {
+            return;
+        }
+
+        StatusText = "Scan wird abgebrochen...";
+        AppendLog("SCAN: Abbruch angefordert.");
+        _scanCancellationSource?.Cancel();
+        OnPropertyChanged(nameof(CanCancelScan));
+        OnPropertyChanged(nameof(CancelScanTooltip));
+        RefreshCommandStates();
     }
 
     private void OpenSelectedFile()
@@ -447,6 +515,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     {
         SelectRootDirectoryCommand.RaiseCanExecuteChanged();
         ScanCommand.RaiseCanExecuteChanged();
+        CancelScanCommand.RaiseCanExecuteChanged();
         ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         SelectAllWritableCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
@@ -472,5 +541,17 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     {
         return Application.Current?.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
                ?? Application.Current?.MainWindow;
+    }
+
+    private sealed class InlineProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _handler;
+
+        public InlineProgress(Action<T> handler)
+        {
+            _handler = handler;
+        }
+
+        public void Report(T value) => _handler(value);
     }
 }

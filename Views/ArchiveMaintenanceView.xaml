@@ -137,8 +137,7 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0"
-              Margin="0,0,0,10"
-              IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+              Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="150" />
                 <ColumnDefinition Width="*" />
@@ -163,7 +162,35 @@
                     Margin="0,2,0,2"
                     Padding="10,6"
                     Command="{Binding ScanCommand}"
-                    Content="Scannen" />
+                    Content="Scannen">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Visible" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsScanning, Mode=OneWay}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Grid.Column="3"
+                    Margin="0,2,0,2"
+                    Padding="10,6"
+                    Command="{Binding CancelScanCommand}"
+                    Content="Scan abbrechen"
+                    ToolTip="{Binding CancelScanTooltip, Mode=OneWay}">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsScanning, Mode=OneWay}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
         </Grid>
 
         <Border Grid.Row="1"

@@ -7,10 +7,33 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
+/// Fachschnittstelle für die Archivpflege. Sie hält das ViewModel testbar, ohne echte
+/// mkvmerge-Prozesse starten zu müssen, und beschreibt die beiden langen Operationen.
+/// </summary>
+internal interface IArchiveMaintenanceService
+{
+    /// <summary>
+    /// Scannt rekursiv alle MKV-Dateien unterhalb eines Archivordners und bewertet sie einzeln.
+    /// </summary>
+    Task<ArchiveMaintenanceScanResult> ScanAsync(
+        string rootDirectory,
+        IProgress<ArchiveMaintenanceProgress>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Führt die freigegebenen Header- und Umbenennungsänderungen für eine einzelne MKV aus.
+    /// </summary>
+    Task<ArchiveMaintenanceApplyResult> ApplyAsync(
+        ArchiveMaintenanceApplyRequest request,
+        IProgress<string>? output = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Scannt vorhandene Archiv-MKV-Dateien, bewertet sie gegen die gemeinsamen Mux-Headerregeln
 /// und führt nach expliziter Auswahl nur direkte Header- oder Umbenennungsänderungen aus.
 /// </summary>
-internal sealed class ArchiveMaintenanceService
+internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 {
     private static readonly Regex EpisodeFileNamePattern = new(
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
@@ -65,10 +88,14 @@ internal sealed class ArchiveMaintenanceService
         }
 
         var mkvMergePath = _toolLocator.FindMkvMergePath();
-        var mediaFiles = Directory
-            .EnumerateFiles(rootDirectory, "*.mkv", SearchOption.AllDirectories)
-            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var mediaFiles = new List<string>();
+        foreach (var mediaFile in Directory.EnumerateFiles(rootDirectory, "*.mkv", SearchOption.AllDirectories))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            mediaFiles.Add(mediaFile);
+        }
+
+        mediaFiles.Sort(StringComparer.OrdinalIgnoreCase);
         var items = new List<ArchiveMaintenanceItemAnalysis>(mediaFiles.Count);
 
         for (var index = 0; index < mediaFiles.Count; index++)

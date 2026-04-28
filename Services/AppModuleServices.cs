@@ -119,7 +119,7 @@ internal sealed record BatchModuleServices(
 /// <param name="ImdbLookup">Optionaler IMDb-Provider über die freie REST-API.</param>
 /// <param name="SettingsDialog">Zentraler Einstellungsdialog für TVDB-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record ArchiveMaintenanceModuleServices(
-    ArchiveMaintenanceService ArchiveMaintenance,
+    IArchiveMaintenanceService ArchiveMaintenance,
     AppArchiveSettingsStore ArchiveSettings,
     EpisodeMetadataLookupService EpisodeMetadata,
     ImdbLookupService ImdbLookup,

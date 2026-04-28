@@ -52,6 +52,38 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task CancelScanCommand_CancelsRunningScan()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-cancel-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var archiveMaintenance = new PendingArchiveMaintenanceService();
+            var viewModel = CreateViewModel(archiveMaintenance: archiveMaintenance);
+            viewModel.RootDirectory = tempDirectory;
+
+            var scanTask = viewModel.ScanCommand.ExecuteAsync();
+            await archiveMaintenance.WaitUntilScanStartedAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(viewModel.IsScanning);
+            Assert.True(viewModel.CancelScanCommand.CanExecute(null));
+
+            viewModel.CancelScanCommand.Execute(null);
+            await scanTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(archiveMaintenance.ObservedCancellation);
+            Assert.False(viewModel.IsBusy);
+            Assert.False(viewModel.IsScanning);
+            Assert.Equal("Scan abgebrochen.", viewModel.StatusText);
+            Assert.Contains("Scan abgebrochen.", viewModel.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ToggleSelectedItemSelectionCommand_TogglesWritableItem()
     {
         var viewModel = CreateViewModel();
@@ -343,12 +375,14 @@ public sealed class ArchiveMaintenanceViewModelTests
             ErrorMessage: null);
     }
 
-    private static ArchiveMaintenanceViewModel CreateViewModel(IUserDialogService? dialogService = null)
+    private static ArchiveMaintenanceViewModel CreateViewModel(
+        IUserDialogService? dialogService = null,
+        IArchiveMaintenanceService? archiveMaintenance = null)
     {
         var settingsStore = new AppSettingsStore();
         var archiveSettingsStore = new AppArchiveSettingsStore(settingsStore);
         var services = new ArchiveMaintenanceModuleServices(
-            new ArchiveMaintenanceService(
+            archiveMaintenance ?? new ArchiveMaintenanceService(
                 new MkvMergeProbeService(),
                 new StubMkvToolNixLocator(),
                 new MuxExecutionService()),
@@ -357,6 +391,43 @@ public sealed class ArchiveMaintenanceViewModelTests
             new ImdbLookupService(new HttpClient()),
             new NullSettingsDialogService());
         return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService());
+    }
+
+    private sealed class PendingArchiveMaintenanceService : IArchiveMaintenanceService
+    {
+        private readonly TaskCompletionSource _scanStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool ObservedCancellation { get; private set; }
+
+        public Task WaitUntilScanStartedAsync() => _scanStarted.Task;
+
+        public async Task<ArchiveMaintenanceScanResult> ScanAsync(
+            string rootDirectory,
+            IProgress<ArchiveMaintenanceProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            _scanStarted.TrySetResult();
+            progress?.Report(new ArchiveMaintenanceProgress("Testscan läuft...", 10));
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                ObservedCancellation = true;
+                throw;
+            }
+
+            return new ArchiveMaintenanceScanResult(rootDirectory, []);
+        }
+
+        public Task<ArchiveMaintenanceApplyResult> ApplyAsync(
+            ArchiveMaintenanceApplyRequest request,
+            IProgress<string>? output = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class StubMkvToolNixLocator : IMkvToolNixLocator
