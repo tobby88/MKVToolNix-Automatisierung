@@ -124,7 +124,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="1.35*" MinHeight="170" />
             <RowDefinition Height="6" />
-            <RowDefinition Height="0.95*" MinHeight="150" />
+            <RowDefinition x:Name="PlannedMaintenanceRow" Height="0.95*" MinHeight="150" />
             <RowDefinition Height="Auto" />
             <RowDefinition x:Name="ManualCorrectionRow" Height="Auto" MinHeight="0" />
             <RowDefinition Height="Auto" />
@@ -423,9 +423,13 @@
                         <RowDefinition Height="*" MinHeight="120" />
                     </Grid.RowDefinitions>
 
-                    <GroupBox Header="Datei und Container"
-                              Margin="0,0,0,8">
-                        <Grid Margin="8">
+                    <Border Margin="0,0,0,8"
+                            Padding="8"
+                            Background="White"
+                            BorderBrush="#FFD8DEE6"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -437,25 +441,25 @@
 
                             <TextBlock Grid.Row="0"
                                        Grid.Column="0"
-                                       Margin="0,8,12,8"
+                                       Margin="0,4,12,4"
                                        VerticalAlignment="Center"
                                        Text="Ziel-Dateiname" />
                             <TextBox Grid.Row="0"
                                      Grid.Column="1"
-                                     Margin="0,4,0,4"
+                                     Margin="0,2,0,2"
                                      Text="{Binding TargetFileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
                             <TextBlock Grid.Row="1"
                                        Grid.Column="0"
-                                       Margin="0,8,12,8"
+                                       Margin="0,4,12,4"
                                        VerticalAlignment="Center"
                                        Text="MKV-Titel" />
                             <TextBox Grid.Row="1"
                                      Grid.Column="1"
-                                     Margin="0,4,0,4"
+                                     Margin="0,2,0,2"
                                      Text="{Binding TargetContainerTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </Grid>
-                    </GroupBox>
+                    </Border>
 
                     <TextBlock Grid.Row="1"
                                Margin="0,0,0,8"
@@ -463,8 +467,13 @@
                                TextWrapping="Wrap"
                                Text="{Binding ManualValidationMessage, Mode=OneWay}" />
 
-                    <GroupBox Grid.Row="2" Header="Track-Header">
-                        <DockPanel Margin="8">
+                    <Border Grid.Row="2"
+                            Padding="8"
+                            Background="White"
+                            BorderBrush="#FFD8DEE6"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                        <DockPanel>
                             <DockPanel DockPanel.Dock="Top"
                                        Margin="0,0,0,8">
                                 <CheckBox DockPanel.Dock="Right"
@@ -472,10 +481,14 @@
                                           VerticalAlignment="Center"
                                           Content="Alle Track-Werte anzeigen"
                                           IsChecked="{Binding ShowAllHeaderCorrections, Mode=TwoWay}" />
-                                <TextBlock VerticalAlignment="Center"
-                                           Foreground="#FF5F6B76"
-                                           TextWrapping="Wrap"
-                                           Text="{Binding HeaderCorrectionModeText, Mode=OneWay}" />
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="Track-Header" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Foreground="#FF5F6B76"
+                                               TextWrapping="Wrap"
+                                               Text="{Binding HeaderCorrectionModeText, Mode=OneWay}" />
+                                </StackPanel>
                             </DockPanel>
 
                             <TextBlock Margin="0,0,0,4"
@@ -499,22 +512,22 @@
                                 <ItemsControl ItemsSource="{Binding VisibleHeaderCorrectionGroups, Mode=OneWay}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="8"
-                                                    Background="White"
+                                            <Border Margin="0,0,0,6"
+                                                    Padding="6"
+                                                    Background="#FFF8FAFC"
                                                     BorderBrush="#FFD8DEE6"
                                                     BorderThickness="1"
                                                     CornerRadius="4">
                                                 <StackPanel>
-                                                    <TextBlock Margin="0,0,0,6"
+                                                    <TextBlock Margin="0,0,0,4"
                                                                FontWeight="SemiBold"
                                                                Text="{Binding DisplayLabel, Mode=OneWay}" />
                                                     <ItemsControl ItemsSource="{Binding Values, Mode=OneWay}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <Grid Margin="0,0,0,6">
+                                                                <Grid Margin="0,0,0,4">
                                                                     <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="140" />
+                                                                        <ColumnDefinition Width="120" />
                                                                         <ColumnDefinition Width="*" />
                                                                         <ColumnDefinition Width="*" />
                                                                     </Grid.ColumnDefinitions>
@@ -546,7 +559,7 @@
                                 </ItemsControl>
                             </ScrollViewer>
                         </DockPanel>
-                    </GroupBox>
+                    </Border>
                 </Grid>
             </Border>
         </Expander>

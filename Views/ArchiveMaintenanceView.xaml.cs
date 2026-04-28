@@ -10,8 +10,10 @@ namespace MkvToolnixAutomatisierung.Views;
 /// </summary>
 public partial class ArchiveMaintenanceView : UserControl
 {
-    private static readonly GridLength DefaultManualCorrectionHeight = new(0.9, GridUnitType.Star);
+    private static readonly GridLength CompactPlannedMaintenanceHeight = new(0.45, GridUnitType.Star);
+    private static readonly GridLength DefaultManualCorrectionHeight = new(1.45, GridUnitType.Star);
     private GridLength _manualCorrectionExpandedHeight = DefaultManualCorrectionHeight;
+    private GridLength _plannedMaintenanceHeightBeforeManualExpansion;
 
     /// <summary>
     /// Initialisiert die Ansicht samt XAML-Komponenten.
@@ -19,6 +21,7 @@ public partial class ArchiveMaintenanceView : UserControl
     public ArchiveMaintenanceView()
     {
         InitializeComponent();
+        _plannedMaintenanceHeightBeforeManualExpansion = PlannedMaintenanceRow.Height;
     }
 
     private void ArchiveItemsGrid_OnPreviewKeyDown(object sender, KeyEventArgs e)
@@ -56,7 +59,10 @@ public partial class ArchiveMaintenanceView : UserControl
     private void ManualCorrectionExpander_OnExpanded(object sender, RoutedEventArgs e)
     {
         ManualCorrectionSplitter.Visibility = Visibility.Visible;
-        ManualCorrectionRow.MinHeight = 180;
+        _plannedMaintenanceHeightBeforeManualExpansion = PlannedMaintenanceRow.Height;
+        PlannedMaintenanceRow.MinHeight = 90;
+        PlannedMaintenanceRow.Height = CompactPlannedMaintenanceHeight;
+        ManualCorrectionRow.MinHeight = 260;
         ManualCorrectionRow.Height = _manualCorrectionExpandedHeight.GridUnitType == GridUnitType.Auto
             ? DefaultManualCorrectionHeight
             : _manualCorrectionExpandedHeight;
@@ -70,6 +76,8 @@ public partial class ArchiveMaintenanceView : UserControl
         }
 
         ManualCorrectionSplitter.Visibility = Visibility.Collapsed;
+        PlannedMaintenanceRow.MinHeight = 150;
+        PlannedMaintenanceRow.Height = _plannedMaintenanceHeightBeforeManualExpansion;
         ManualCorrectionRow.MinHeight = 0;
         ManualCorrectionRow.Height = GridLength.Auto;
     }
