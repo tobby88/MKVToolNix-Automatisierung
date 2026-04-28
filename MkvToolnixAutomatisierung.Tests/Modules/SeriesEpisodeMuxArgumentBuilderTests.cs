@@ -92,6 +92,34 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
     }
 
     [Fact]
+    public void Build_DerKommissarUndDasMeer_SuppressesOriginalFlags()
+    {
+        var plan = CreateMinimalPlan(
+            originalLanguage: "deu",
+            trackLanguageCode: "de",
+            outputFilePath: @"Z:\Videos\Serien\Der Kommissar und das Meer\Season 1\Der Kommissar und das Meer - S01E01 - Pilot.mkv");
+
+        var arguments = plan.BuildArguments();
+
+        var flagValues = ExtractOriginalFlagValues(arguments);
+        Assert.All(flagValues, value => Assert.Equal("no", value));
+    }
+
+    [Fact]
+    public void Build_DerKommissarUndDerSee_UsesRegularOriginalLanguageRule()
+    {
+        var plan = CreateMinimalPlan(
+            originalLanguage: "deu",
+            trackLanguageCode: "de",
+            outputFilePath: @"Z:\Videos\Serien\Der Kommissar und der See\Season 1\Der Kommissar und der See - S01E01 - Pilot.mkv");
+
+        var arguments = plan.BuildArguments();
+
+        var flagValues = ExtractOriginalFlagValues(arguments);
+        Assert.All(flagValues, value => Assert.Equal("yes", value));
+    }
+
+    [Fact]
     public void Build_AdditionalVideo_UsesConfiguredDefaultTrackFlag()
     {
         var plan = new SeriesEpisodeMuxPlan(
@@ -131,11 +159,14 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
 
     // ── Hilfsmethoden ───────────────────────────────────────────────────────
 
-    private static SeriesEpisodeMuxPlan CreateMinimalPlan(string? originalLanguage, string trackLanguageCode)
+    private static SeriesEpisodeMuxPlan CreateMinimalPlan(
+        string? originalLanguage,
+        string trackLanguageCode,
+        string outputFilePath = @"C:\Temp\output.mkv")
     {
         return new SeriesEpisodeMuxPlan(
             mkvMergePath: @"C:\Tools\mkvmerge.exe",
-            outputFilePath: @"C:\Temp\output.mkv",
+            outputFilePath: outputFilePath,
             title: "Pilot",
             videoSources:
             [

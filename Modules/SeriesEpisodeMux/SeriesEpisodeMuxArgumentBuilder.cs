@@ -1,3 +1,5 @@
+using MkvToolnixAutomatisierung.Services;
+
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
@@ -92,10 +94,10 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--stereo-mode",
             $"{primaryVideoTrackId}:mono",
             "--original-flag",
-            $"{primaryVideoTrackId}:{ResolveOriginalFlag(primaryVideo.LanguageCode, plan.OriginalLanguage)}"
+            $"{primaryVideoTrackId}:{ResolveOriginalFlag(primaryVideo.LanguageCode, plan.OriginalLanguage, plan.OutputFilePath)}"
         ]);
 
-        AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage);
+        AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage, plan.OutputFilePath);
         arguments.Add(plan.ResolveRuntimeFilePath(primaryVideo.FilePath));
     }
 
@@ -137,9 +139,9 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--stereo-mode",
                 $"{trackId}:mono",
                 "--original-flag",
-                $"{trackId}:{ResolveOriginalFlag(videoSource.LanguageCode, plan.OriginalLanguage)}"
+                $"{trackId}:{ResolveOriginalFlag(videoSource.LanguageCode, plan.OriginalLanguage, plan.OutputFilePath)}"
             ]);
-            AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage);
+            AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage, plan.OutputFilePath);
             arguments.Add(plan.ResolveRuntimeFilePath(videoSource.FilePath));
         }
     }
@@ -162,7 +164,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--audio-tracks",
                 string.Join(",", audioSources.Select(source => source.TrackId))
             ]);
-            AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage);
+            AppendAudioTrackMetadata(arguments, audioSources, plan.OriginalLanguage, plan.OutputFilePath);
             arguments.Add(plan.ResolveRuntimeFilePath(audioGroup.Key));
         }
     }
@@ -193,7 +195,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--visual-impaired-flag",
                 $"{adTrackId}:yes",
                 "--original-flag",
-                $"{adTrackId}:{ResolveOriginalFlag(audioDescriptionSource.LanguageCode, plan.OriginalLanguage)}",
+                $"{adTrackId}:{ResolveOriginalFlag(audioDescriptionSource.LanguageCode, plan.OriginalLanguage, plan.OutputFilePath)}",
                 plan.ResolveRuntimeFilePath(audioDescriptionSource.FilePath)
             ]);
         }
@@ -202,7 +204,8 @@ internal static class SeriesEpisodeMuxArgumentBuilder
     private static void AppendAudioTrackMetadata(
         List<string> arguments,
         IReadOnlyList<AudioSourcePlan> audioSources,
-        string? seriesOriginalLanguage)
+        string? seriesOriginalLanguage,
+        string? seriesContext)
     {
         foreach (var audioSource in audioSources)
         {
@@ -216,7 +219,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 "--default-track-flag",
                 audioSource.IsDefaultTrack ? $"{trackIdText}:yes" : $"{trackIdText}:no",
                 "--original-flag",
-                $"{trackIdText}:{ResolveOriginalFlag(audioSource.LanguageCode, seriesOriginalLanguage)}"
+                $"{trackIdText}:{ResolveOriginalFlag(audioSource.LanguageCode, seriesOriginalLanguage, seriesContext)}"
             ]);
         }
     }
@@ -231,7 +234,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
                 continue;
             }
 
-            AppendExternalSubtitle(arguments, subtitle, plan.OriginalLanguage);
+            AppendExternalSubtitle(arguments, subtitle, plan.OriginalLanguage, plan.OutputFilePath);
         }
     }
 
@@ -260,12 +263,16 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--forced-display-flag",
             subtitle.IsForced ? $"{embeddedTrackIdText}:yes" : $"{embeddedTrackIdText}:no",
             "--original-flag",
-            $"{embeddedTrackIdText}:{ResolveOriginalFlag(subtitle.LanguageCode, plan.OriginalLanguage)}",
+            $"{embeddedTrackIdText}:{ResolveOriginalFlag(subtitle.LanguageCode, plan.OriginalLanguage, plan.OutputFilePath)}",
             plan.ResolveRuntimeFilePath(subtitle.FilePath)
         ]);
     }
 
-    private static void AppendExternalSubtitle(List<string> arguments, SubtitleFile subtitle, string? seriesOriginalLanguage)
+    private static void AppendExternalSubtitle(
+        List<string> arguments,
+        SubtitleFile subtitle,
+        string? seriesOriginalLanguage,
+        string? seriesContext)
     {
         arguments.AddRange(
         [
@@ -280,7 +287,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--forced-display-flag",
             subtitle.IsForced ? "0:yes" : "0:no",
             "--original-flag",
-            $"0:{ResolveOriginalFlag(subtitle.LanguageCode, seriesOriginalLanguage)}",
+            $"0:{ResolveOriginalFlag(subtitle.LanguageCode, seriesOriginalLanguage, seriesContext)}",
             subtitle.FilePath
         ]);
     }
@@ -299,38 +306,18 @@ internal static class SeriesEpisodeMuxArgumentBuilder
     /// <returns><c>yes</c> wenn die Spur in der Originalsprache ist, sonst <c>no</c>.</returns>
     internal static string ResolveOriginalFlag(string? trackLanguageCode, string? seriesOriginalLanguage)
     {
-        if (string.IsNullOrWhiteSpace(seriesOriginalLanguage))
-        {
-            return "yes";
-        }
-
-        var normalizedOriginal = NormalizeOriginalLanguageCode(seriesOriginalLanguage);
-        var normalizedTrack = string.IsNullOrWhiteSpace(trackLanguageCode) ? "de" : trackLanguageCode.Trim().ToLowerInvariant();
-        return string.Equals(normalizedTrack, normalizedOriginal, StringComparison.Ordinal) ? "yes" : "no";
+        return SeriesOriginalLanguageRules.ResolveOriginalFlag(trackLanguageCode, seriesOriginalLanguage);
     }
 
-    private static string NormalizeOriginalLanguageCode(string languageCode)
+    /// <summary>
+    /// Bestimmt den Wert des <c>--original-flag</c> inklusive serienbezogener Ausnahmen.
+    /// </summary>
+    internal static string ResolveOriginalFlag(
+        string? trackLanguageCode,
+        string? seriesOriginalLanguage,
+        string? seriesContext)
     {
-        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
-        if (normalized is "de" or "deu" or "ger" || normalized.StartsWith("de-", StringComparison.Ordinal))
-        {
-            return "de";
-        }
-
-        if (normalized is "nds" || normalized.StartsWith("nds-", StringComparison.Ordinal))
-        {
-            return "nds";
-        }
-
-        if (normalized is "en" or "eng" || normalized.StartsWith("en-", StringComparison.Ordinal))
-        {
-            return "en";
-        }
-
-        // Alle anderen Sprachen (swe, fr, ja, …) als Rohwert zurückgeben.
-        // Da mkvmerge-Tracks für diese Sprachen nie vorkommen (Projekt ist deutschzentriert),
-        // gibt der Vergleich immer "no" zurück → korrekt.
-        return normalized;
+        return SeriesOriginalLanguageRules.ResolveOriginalFlag(trackLanguageCode, seriesOriginalLanguage, seriesContext);
     }
 
     private static void AppendAttachments(List<string> arguments, SeriesEpisodeMuxPlan plan)

@@ -84,7 +84,8 @@ internal static class ArchiveHeaderNormalizationService
                 audioDescriptionTracks,
                 subtitleTracks,
                 embeddedSubtitlePlans,
-                originalLanguage));
+                originalLanguage,
+                filePath));
     }
 
     /// <summary>
@@ -98,7 +99,8 @@ internal static class ArchiveHeaderNormalizationService
         IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans,
-        string? originalLanguage)
+        string? originalLanguage,
+        string? seriesContext = null)
     {
         var selectorByTrackId = allExistingTracks
             .Select((track, index) => new KeyValuePair<int, string>(track.TrackId, $"track:{index + 1}"))
@@ -118,7 +120,7 @@ internal static class ArchiveHeaderNormalizationService
                 expectedVisualImpairedFlag: null,
                 expectedHearingImpairedFlag: null,
                 expectedForcedFlag: null,
-                expectedOriginalFlag: BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage));
+                expectedOriginalFlag: SeriesOriginalLanguageRules.BuildExpectedOriginalFlag(entry.Track.Language, originalLanguage, seriesContext));
         }
 
         foreach (var track in retainedNormalAudioTracks)
@@ -134,7 +136,7 @@ internal static class ArchiveHeaderNormalizationService
                 expectedVisualImpairedFlag: false,
                 expectedHearingImpairedFlag: null,
                 expectedForcedFlag: null,
-                expectedOriginalFlag: BuildExpectedOriginalFlag(track.Language, originalLanguage));
+                expectedOriginalFlag: SeriesOriginalLanguageRules.BuildExpectedOriginalFlag(track.Language, originalLanguage, seriesContext));
         }
 
         foreach (var existingAudioDescription in existingAudioDescriptions)
@@ -151,7 +153,7 @@ internal static class ArchiveHeaderNormalizationService
                 expectedVisualImpairedFlag: true,
                 expectedHearingImpairedFlag: null,
                 expectedForcedFlag: null,
-                expectedOriginalFlag: BuildExpectedOriginalFlag(expectedLanguageCode, originalLanguage));
+                expectedOriginalFlag: SeriesOriginalLanguageRules.BuildExpectedOriginalFlag(expectedLanguageCode, originalLanguage, seriesContext));
         }
 
         foreach (var subtitlePlan in embeddedSubtitlePlans)
@@ -178,7 +180,7 @@ internal static class ArchiveHeaderNormalizationService
                 expectedVisualImpairedFlag: null,
                 expectedHearingImpairedFlag: subtitlePlan.IsHearingImpaired,
                 expectedForcedFlag: subtitlePlan.IsForced,
-                expectedOriginalFlag: BuildExpectedOriginalFlag(subtitlePlan.LanguageCode, originalLanguage));
+                expectedOriginalFlag: SeriesOriginalLanguageRules.BuildExpectedOriginalFlag(subtitlePlan.LanguageCode, originalLanguage, seriesContext));
         }
 
         return operations;
@@ -409,19 +411,6 @@ internal static class ArchiveHeaderNormalizationService
             FormatBooleanHeaderValue(currentValue),
             FormatBooleanHeaderValue(expectedValue.Value),
             expectedValue.Value ? "1" : "0"));
-    }
-
-    private static bool? BuildExpectedOriginalFlag(string? languageCode, string? originalLanguage)
-    {
-        if (string.IsNullOrWhiteSpace(originalLanguage))
-        {
-            return null;
-        }
-
-        return string.Equals(
-            SeriesEpisodeMuxArgumentBuilder.ResolveOriginalFlag(languageCode, originalLanguage),
-            "yes",
-            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsHearingImpairedSubtitleMarker(string? trackName)

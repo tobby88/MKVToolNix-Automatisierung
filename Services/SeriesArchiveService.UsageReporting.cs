@@ -195,7 +195,8 @@ public sealed partial class SeriesArchiveService
         IReadOnlyList<ContainerTrackMetadata> existingAudioDescriptions,
         IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
         IReadOnlyList<SubtitleFile> embeddedSubtitlePlans,
-        string? originalLanguage)
+        string? originalLanguage,
+        string? seriesContext)
     {
         return ArchiveHeaderNormalizationService.BuildTrackHeaderEdits(
             allExistingTracks,
@@ -204,7 +205,8 @@ public sealed partial class SeriesArchiveService
             existingAudioDescriptions,
             existingSubtitleTracks,
             embeddedSubtitlePlans,
-            originalLanguage);
+            originalLanguage,
+            seriesContext);
     }
 
     private static ArchiveUsageChange? BuildRemovedAdditionalVideoChange(
