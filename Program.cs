@@ -20,6 +20,7 @@ internal static class Program
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown
             };
+            CrashLogService.RegisterGlobalHandlers(app);
 
             using var bootstrapper = new AppBootstrapper();
             var startupViewModel = new StartupProgressWindowViewModel();
@@ -70,6 +71,7 @@ internal static class Program
                 catch (Exception ex)
                 {
                     startupCompleted = true;
+                    CrashLogService.TryWriteCrashLog("Startup", ex);
                     startupWindow.CloseFromProgram();
                     MessageBox.Show(
                         $"Die Anwendung konnte nicht gestartet werden.\n\n{ex.Message}",
@@ -87,6 +89,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            CrashLogService.TryWriteCrashLog("Program", ex);
             MessageBox.Show(
                 $"Die Anwendung konnte nicht gestartet werden.\n\n{ex.Message}",
                 "Startfehler",
