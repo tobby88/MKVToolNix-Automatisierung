@@ -498,10 +498,15 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="130" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Row="0"
@@ -511,8 +516,29 @@
                                        Text="Ziel-Dateiname" />
                             <TextBox Grid.Row="0"
                                      Grid.Column="1"
-                                     Margin="0,2,0,2"
+                                     Margin="0,2,8,2"
                                      Text="{Binding TargetFileName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="0"
+                                    Grid.Column="2"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ResetSelectedFileNameCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Ist-Wert"
+                                    ToolTip="Ziel-Dateiname auf den aktuell vorhandenen Dateinamen zurücksetzen." />
+                            <Button Grid.Row="0"
+                                    Grid.Column="3"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.SuppressSelectedFileNameChangeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Merken"
+                                    ToolTip="Diese konkrete Dateinamen-Änderung dauerhaft ablehnen, solange Ist- und Soll-Wert gleich bleiben." />
+                            <Button Grid.Row="0"
+                                    Grid.Column="4"
+                                    Margin="0,2,0,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.RestoreSelectedFileNameSuggestionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Aufheben"
+                                    ToolTip="Gespeicherte Ablehnung entfernen und den Vorschlag wieder einsetzen." />
 
                             <TextBlock Grid.Row="1"
                                        Grid.Column="0"
@@ -521,8 +547,65 @@
                                        Text="MKV-Titel" />
                             <TextBox Grid.Row="1"
                                      Grid.Column="1"
-                                     Margin="0,2,0,2"
+                                     Margin="0,2,8,2"
                                      Text="{Binding TargetContainerTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="1"
+                                    Grid.Column="2"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ResetSelectedContainerTitleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Ist-Wert"
+                                    ToolTip="MKV-Titel auf den aktuell eingebetteten Titel zurücksetzen." />
+                            <Button Grid.Row="1"
+                                    Grid.Column="3"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.SuppressSelectedContainerTitleChangeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Merken"
+                                    ToolTip="Diese konkrete MKV-Titel-Änderung dauerhaft ablehnen, solange Ist- und Soll-Wert gleich bleiben." />
+                            <Button Grid.Row="1"
+                                    Grid.Column="4"
+                                    Margin="0,2,0,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.RestoreSelectedContainerTitleSuggestionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Aufheben"
+                                    ToolTip="Gespeicherte Ablehnung entfernen und den Vorschlag wieder einsetzen." />
+
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="0"
+                                       Margin="0,4,12,4"
+                                       VerticalAlignment="Center"
+                                       Text="NFO-Titel" />
+                            <TextBox Grid.Row="2"
+                                     Grid.Column="1"
+                                     Margin="0,2,8,2"
+                                     IsEnabled="{Binding HasNfoTextSync, Mode=OneWay}"
+                                     Text="{Binding TargetNfoTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="2"
+                                    Grid.Column="2"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ResetSelectedNfoTitleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Ist-Wert"
+                                    ToolTip="NFO-Titel auf den aktuell in der NFO gespeicherten Titel zurücksetzen." />
+
+                            <TextBlock Grid.Row="3"
+                                       Grid.Column="0"
+                                       Margin="0,4,12,4"
+                                       VerticalAlignment="Center"
+                                       Text="NFO-Sortiertitel" />
+                            <TextBox Grid.Row="3"
+                                     Grid.Column="1"
+                                     Margin="0,2,8,2"
+                                     IsEnabled="{Binding HasNfoTextSync, Mode=OneWay}"
+                                     Text="{Binding TargetNfoSortTitle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Row="3"
+                                    Grid.Column="2"
+                                    Margin="0,2,6,2"
+                                    Padding="8,4"
+                                    Command="{Binding DataContext.ResetSelectedNfoSortTitleCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Content="Ist-Wert"
+                                    ToolTip="NFO-Sortiertitel auf den aktuell in der NFO gespeicherten Sortiertitel zurücksetzen." />
                         </Grid>
                     </Border>
 

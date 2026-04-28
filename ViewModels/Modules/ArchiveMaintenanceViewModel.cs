@@ -43,6 +43,14 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         OpenSelectedFileCommand = new RelayCommand(OpenSelectedFile, () => SelectedItem is not null);
         ReviewSelectedTvdbCommand = new RelayCommand(ReviewSelectedTvdb, () => IsInteractive && SelectedItem?.CanReviewTvdb == true);
         ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, () => IsInteractive && SelectedItem?.CanReviewImdb == true);
+        ResetSelectedFileNameCommand = new RelayCommand(() => SelectedItem?.ResetTargetFileNameToCurrent(), () => IsInteractive && SelectedItem is not null);
+        ResetSelectedContainerTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetContainerTitleToCurrent(), () => IsInteractive && SelectedItem is not null);
+        ResetSelectedNfoTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetNfoTitleToCurrent(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
+        ResetSelectedNfoSortTitleCommand = new RelayCommand(() => SelectedItem?.ResetTargetNfoSortTitleToCurrent(), () => IsInteractive && SelectedItem?.HasNfoTextSync == true);
+        SuppressSelectedFileNameChangeCommand = new RelayCommand(SuppressSelectedFileNameChange, () => IsInteractive && SelectedItem?.CanSuppressFileNameChange == true);
+        RestoreSelectedFileNameSuggestionCommand = new RelayCommand(RestoreSelectedFileNameSuggestion, () => IsInteractive && SelectedItem?.CanRestoreFileNameSuggestion == true);
+        SuppressSelectedContainerTitleChangeCommand = new RelayCommand(SuppressSelectedContainerTitleChange, () => IsInteractive && SelectedItem?.CanSuppressContainerTitleChange == true);
+        RestoreSelectedContainerTitleSuggestionCommand = new RelayCommand(RestoreSelectedContainerTitleSuggestion, () => IsInteractive && SelectedItem?.CanRestoreContainerTitleSuggestion == true);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -68,6 +76,22 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     public RelayCommand ReviewSelectedTvdbCommand { get; }
 
     public RelayCommand ReviewSelectedImdbCommand { get; }
+
+    public RelayCommand ResetSelectedFileNameCommand { get; }
+
+    public RelayCommand ResetSelectedContainerTitleCommand { get; }
+
+    public RelayCommand ResetSelectedNfoTitleCommand { get; }
+
+    public RelayCommand ResetSelectedNfoSortTitleCommand { get; }
+
+    public RelayCommand SuppressSelectedFileNameChangeCommand { get; }
+
+    public RelayCommand RestoreSelectedFileNameSuggestionCommand { get; }
+
+    public RelayCommand SuppressSelectedContainerTitleChangeCommand { get; }
+
+    public RelayCommand RestoreSelectedContainerTitleSuggestionCommand { get; }
 
     public bool IsBusy
     {
@@ -146,6 +170,14 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             OpenSelectedFileCommand.RaiseCanExecuteChanged();
             ReviewSelectedTvdbCommand.RaiseCanExecuteChanged();
             ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
+            ResetSelectedFileNameCommand.RaiseCanExecuteChanged();
+            ResetSelectedContainerTitleCommand.RaiseCanExecuteChanged();
+            ResetSelectedNfoTitleCommand.RaiseCanExecuteChanged();
+            ResetSelectedNfoSortTitleCommand.RaiseCanExecuteChanged();
+            SuppressSelectedFileNameChangeCommand.RaiseCanExecuteChanged();
+            RestoreSelectedFileNameSuggestionCommand.RaiseCanExecuteChanged();
+            SuppressSelectedContainerTitleChangeCommand.RaiseCanExecuteChanged();
+            RestoreSelectedContainerTitleSuggestionCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -261,8 +293,12 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                 RootDirectory,
                 progress,
                 scanCancellationSource.Token);
-            foreach (var item in result.Items.Select(analysis => new ArchiveMaintenanceItemViewModel(analysis)))
+            var suppressedChanges = _services.ArchiveSettings.Load().SuppressedMaintenanceChanges;
+            foreach (var item in result.Items
+                         .OrderBy(analysis => Path.GetFileName(analysis.FilePath), StringComparer.OrdinalIgnoreCase)
+                         .Select(analysis => new ArchiveMaintenanceItemViewModel(analysis)))
             {
+                item.ApplySuppressedChanges(suppressedChanges);
                 item.PropertyChanged += Item_OnPropertyChanged;
                 Items.Add(item);
             }
@@ -355,6 +391,71 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         {
             item.IsSelected = false;
         }
+    }
+
+    private void SuppressSelectedFileNameChange()
+    {
+        if (SelectedItem?.SuppressFileNameChange() is { } suppressedChange)
+        {
+            SaveSuppressedChange(suppressedChange);
+            AppendLog($"Archivpflege-Ablehnung gespeichert: {SelectedItem.FileName} Dateiname.");
+        }
+    }
+
+    private void RestoreSelectedFileNameSuggestion()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        RemoveSuppressedChange(SelectedItem.FilePath, ArchiveMaintenanceItemViewModel.FileNameChangeKind);
+        SelectedItem.RestoreFileNameSuggestion();
+        AppendLog($"Archivpflege-Ablehnung aufgehoben: {SelectedItem.FileName} Dateiname.");
+    }
+
+    private void SuppressSelectedContainerTitleChange()
+    {
+        if (SelectedItem?.SuppressContainerTitleChange() is { } suppressedChange)
+        {
+            SaveSuppressedChange(suppressedChange);
+            AppendLog($"Archivpflege-Ablehnung gespeichert: {SelectedItem.FileName} MKV-Titel.");
+        }
+    }
+
+    private void RestoreSelectedContainerTitleSuggestion()
+    {
+        if (SelectedItem is null)
+        {
+            return;
+        }
+
+        RemoveSuppressedChange(SelectedItem.FilePath, ArchiveMaintenanceItemViewModel.ContainerTitleChangeKind);
+        SelectedItem.RestoreContainerTitleSuggestion();
+        AppendLog($"Archivpflege-Ablehnung aufgehoben: {SelectedItem.FileName} MKV-Titel.");
+    }
+
+    private void SaveSuppressedChange(ArchiveMaintenanceSuppressedChange suppressedChange)
+    {
+        var settings = _services.ArchiveSettings.Load();
+        settings.SuppressedMaintenanceChanges.RemoveAll(change =>
+            PathComparisonHelper.AreSamePath(change.MediaFilePath, suppressedChange.MediaFilePath)
+            && string.Equals(change.ChangeKind, suppressedChange.ChangeKind, StringComparison.Ordinal));
+        settings.SuppressedMaintenanceChanges.Add(suppressedChange);
+        _services.ArchiveSettings.Save(settings);
+        RefreshCounts();
+        RefreshCommandStates();
+    }
+
+    private void RemoveSuppressedChange(string mediaFilePath, string changeKind)
+    {
+        var settings = _services.ArchiveSettings.Load();
+        settings.SuppressedMaintenanceChanges.RemoveAll(change =>
+            PathComparisonHelper.AreSamePath(change.MediaFilePath, mediaFilePath)
+            && string.Equals(change.ChangeKind, changeKind, StringComparison.Ordinal));
+        _services.ArchiveSettings.Save(settings);
+        RefreshCounts();
+        RefreshCommandStates();
     }
 
     private void CancelScan()
@@ -496,7 +597,11 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
             or nameof(ArchiveMaintenanceItemViewModel.StatusText)
             or nameof(ArchiveMaintenanceItemViewModel.HasWritableChanges)
             or nameof(ArchiveMaintenanceItemViewModel.CanSelect)
-            or nameof(ArchiveMaintenanceItemViewModel.ManualValidationMessage))
+            or nameof(ArchiveMaintenanceItemViewModel.ManualValidationMessage)
+            or nameof(ArchiveMaintenanceItemViewModel.CanSuppressFileNameChange)
+            or nameof(ArchiveMaintenanceItemViewModel.CanRestoreFileNameSuggestion)
+            or nameof(ArchiveMaintenanceItemViewModel.CanSuppressContainerTitleChange)
+            or nameof(ArchiveMaintenanceItemViewModel.CanRestoreContainerTitleSuggestion))
         {
             RefreshCounts();
             RefreshCommandStates();
@@ -524,6 +629,14 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         OpenSelectedFileCommand.RaiseCanExecuteChanged();
         ReviewSelectedTvdbCommand.RaiseCanExecuteChanged();
         ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
+        ResetSelectedFileNameCommand.RaiseCanExecuteChanged();
+        ResetSelectedContainerTitleCommand.RaiseCanExecuteChanged();
+        ResetSelectedNfoTitleCommand.RaiseCanExecuteChanged();
+        ResetSelectedNfoSortTitleCommand.RaiseCanExecuteChanged();
+        SuppressSelectedFileNameChangeCommand.RaiseCanExecuteChanged();
+        RestoreSelectedFileNameSuggestionCommand.RaiseCanExecuteChanged();
+        SuppressSelectedContainerTitleChangeCommand.RaiseCanExecuteChanged();
+        RestoreSelectedContainerTitleSuggestionCommand.RaiseCanExecuteChanged();
     }
 
     private void HandleUnexpectedCommandError(Exception ex)

@@ -105,6 +105,87 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ScanCommand_SortsItemsByMkvFileName()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-sort-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var viewModel = CreateViewModel(archiveMaintenance: new StaticScanArchiveMaintenanceService(
+            [
+                CreateNeutralAnalysis(@"C:\Archiv\Serie\Season 1\Serie - S01E02 - B.mkv"),
+                CreateNeutralAnalysis(@"C:\Archiv\Serie\Season 1\Serie - S01E01 - A.mkv")
+            ]));
+            viewModel.RootDirectory = tempDirectory;
+
+            await viewModel.ScanCommand.ExecuteAsync();
+
+            Assert.Collection(
+                viewModel.Items,
+                item => Assert.Equal("Serie - S01E01 - A.mkv", item.FileName),
+                item => Assert.Equal("Serie - S01E02 - B.mkv", item.FileName));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SuppressSelectedFileNameChangeCommand_PersistsConcreteRejectedSuggestion()
+    {
+        var viewModel = CreateViewModel();
+        var item = new ArchiveMaintenanceItemViewModel(CreateRenameAnalysis());
+        viewModel.Items.Add(item);
+        viewModel.SelectedItem = item;
+
+        viewModel.SuppressSelectedFileNameChangeCommand.Execute(null);
+
+        Assert.Equal(item.CurrentFileName, item.TargetFileName);
+        Assert.True(item.HasSuppressedFileNameChange);
+        var archiveSettings = new AppArchiveSettingsStore().Load();
+        var suppressedChange = Assert.Single(archiveSettings.SuppressedMaintenanceChanges);
+        Assert.Equal(ArchiveMaintenanceItemViewModel.FileNameChangeKind, suppressedChange.ChangeKind);
+        Assert.Equal("Serie - S01E01 - Alt.mkv", suppressedChange.CurrentValue);
+        Assert.Equal("Serie - S01E01 - Neu.mkv", suppressedChange.SuggestedValue);
+    }
+
+    [Fact]
+    public void RestoreSelectedFileNameSuggestionCommand_RemovesRejectedSuggestion()
+    {
+        var viewModel = CreateViewModel();
+        var item = new ArchiveMaintenanceItemViewModel(CreateRenameAnalysis());
+        viewModel.Items.Add(item);
+        viewModel.SelectedItem = item;
+
+        viewModel.SuppressSelectedFileNameChangeCommand.Execute(null);
+        viewModel.RestoreSelectedFileNameSuggestionCommand.Execute(null);
+
+        Assert.Equal("Serie - S01E01 - Neu.mkv", item.TargetFileName);
+        Assert.False(item.HasSuppressedFileNameChange);
+        Assert.Empty(new AppArchiveSettingsStore().Load().SuppressedMaintenanceChanges);
+    }
+
+    [Fact]
+    public void CreateApplyRequest_IncludesNfoTitleEdits()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            nfoTitle: "Alt",
+            nfoSortTitle: "Alt Sort"));
+
+        item.TargetNfoTitle = "Neu";
+        item.TargetNfoSortTitle = "Neu Sort";
+        var request = item.CreateApplyRequest();
+
+        Assert.NotNull(request.NfoTextEdit);
+        Assert.Equal("Alt", request.NfoTextEdit!.CurrentTitle);
+        Assert.Equal("Neu", request.NfoTextEdit.ExpectedTitle);
+        Assert.Equal("Alt Sort", request.NfoTextEdit.CurrentSortTitle);
+        Assert.Equal("Neu Sort", request.NfoTextEdit.ExpectedSortTitle);
+    }
+
+    [Fact]
     public void ToggleSelectedItemSelectionCommand_TogglesWritableItem()
     {
         var viewModel = CreateViewModel();
@@ -292,20 +373,45 @@ public sealed class ArchiveMaintenanceViewModelTests
             ErrorMessage: null);
     }
 
-    private static ArchiveMaintenanceItemAnalysis CreateNeutralAnalysis()
+    private static ArchiveMaintenanceItemAnalysis CreateNeutralAnalysis(
+        string filePath = @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alter Titel.mkv",
+        string? nfoTitle = null,
+        string? nfoSortTitle = null)
     {
         return new ArchiveMaintenanceItemAnalysis(
-            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alter Titel.mkv",
-            "Alter Titel",
-            ContainerTitle: "Alter Titel",
+            filePath,
+            Path.GetFileNameWithoutExtension(filePath).Split(" - ").LastOrDefault() ?? "Alter Titel",
+            ContainerTitle: Path.GetFileNameWithoutExtension(filePath).Split(" - ").LastOrDefault() ?? "Alter Titel",
             RenameOperation: null,
+            ContainerTitleEdit: null,
+            TrackHeaderEdits: [],
+            TrackHeaderCorrectionCandidates: [],
+            ProviderIds: EmbyProviderIds.Empty,
+            NfoExists: nfoTitle is not null || nfoSortTitle is not null,
+            Issues: [],
+            ChangeNotes: [],
+            ErrorMessage: null,
+            NfoTitle: nfoTitle,
+            NfoSortTitle: nfoSortTitle);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateRenameAnalysis()
+    {
+        return new ArchiveMaintenanceItemAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alt.mkv",
+            "Alt",
+            ContainerTitle: "Alt",
+            RenameOperation: new ArchiveRenameOperation(
+                @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Alt.mkv",
+                @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Neu.mkv",
+                Sidecars: []),
             ContainerTitleEdit: null,
             TrackHeaderEdits: [],
             TrackHeaderCorrectionCandidates: [],
             ProviderIds: EmbyProviderIds.Empty,
             NfoExists: false,
             Issues: [],
-            ChangeNotes: [],
+            ChangeNotes: ["Dateiname: Serie - S01E01 - Alt.mkv -> Serie - S01E01 - Neu.mkv"],
             ErrorMessage: null);
     }
 
@@ -476,6 +582,32 @@ public sealed class ArchiveMaintenanceViewModelTests
                 Success: true,
                 Message: "OK",
                 OutputLines: []));
+        }
+    }
+
+    private sealed class StaticScanArchiveMaintenanceService : IArchiveMaintenanceService
+    {
+        private readonly IReadOnlyList<ArchiveMaintenanceItemAnalysis> _items;
+
+        public StaticScanArchiveMaintenanceService(IReadOnlyList<ArchiveMaintenanceItemAnalysis> items)
+        {
+            _items = items;
+        }
+
+        public Task<ArchiveMaintenanceScanResult> ScanAsync(
+            string rootDirectory,
+            IProgress<ArchiveMaintenanceProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ArchiveMaintenanceScanResult(rootDirectory, _items));
+        }
+
+        public Task<ArchiveMaintenanceApplyResult> ApplyAsync(
+            ArchiveMaintenanceApplyRequest request,
+            IProgress<string>? output = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 

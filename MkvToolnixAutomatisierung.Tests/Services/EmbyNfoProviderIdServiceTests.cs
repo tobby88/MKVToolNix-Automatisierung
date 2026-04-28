@@ -66,6 +66,38 @@ public sealed class EmbyNfoProviderIdServiceTests
     }
 
     [Fact]
+    public void ReadEpisodeMetadata_ReadsTitleAndSortTitle()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Episode Titel</title>
+                  <sorttitle>Sortierter Titel</sorttitle>
+                  <uniqueid type="tvdb" default="true">12345</uniqueid>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().ReadEpisodeMetadata(mediaPath);
+
+            Assert.True(result.NfoExists);
+            Assert.Equal("Episode Titel", result.Title);
+            Assert.Equal("Sortierter Titel", result.SortTitle);
+            Assert.Equal("12345", result.ProviderIds.TvdbId);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void UpdateProviderIds_UpdatesUniqueIdsAndLegacyElements()
     {
         var directory = CreateTempDirectory();
@@ -203,6 +235,83 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.DoesNotContain(updatedDocument.Root!.Elements("uniqueid"), element => (string?)element.Attribute("type") == "imdb");
             Assert.Null(updatedDocument.Root.Element("imdbid"));
             Assert.Equal("12345", updatedDocument.Root.Elements("uniqueid").Single(element => (string?)element.Attribute("type") == "tvdb").Value);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpdateTextFields_UpdatesTitleSortTitleAndLocksChangedFields()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Alt</title>
+                  <sorttitle>Alt Sort</sorttitle>
+                  <lockdata>false</lockdata>
+                  <dateadded>2026-04-28</dateadded>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().UpdateTextFields(
+                mediaPath,
+                new EmbyNfoTextFields("Neu", "Neu Sort"));
+
+            Assert.True(result.Success);
+            Assert.True(result.NfoChanged);
+            var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
+            var root = updatedDocument.Root!;
+            Assert.Equal("Neu", root.Element("title")?.Value);
+            Assert.Equal("Neu Sort", root.Element("sorttitle")?.Value);
+            Assert.Equal("Name|SortName", root.Element("lockedfields")?.Value);
+            Assert.True(
+                root.Elements().ToList().IndexOf(root.Element("lockdata")!)
+                < root.Elements().ToList().IndexOf(root.Element("lockedfields")!));
+            Assert.True(
+                root.Elements().ToList().IndexOf(root.Element("lockedfields")!)
+                < root.Elements().ToList().IndexOf(root.Element("dateadded")!));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpdateTextFields_PreservesExistingLockedFields()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Alt</title>
+                  <sorttitle>Alt Sort</sorttitle>
+                  <lockedfields>Genres</lockedfields>
+                </episodedetails>
+                """);
+
+            var result = new EmbyNfoProviderIdService().UpdateTextFields(
+                mediaPath,
+                new EmbyNfoTextFields("Neu", "Alt Sort"));
+
+            Assert.True(result.Success);
+            var updatedDocument = System.Xml.Linq.XDocument.Load(nfoPath);
+            Assert.Equal("Genres|Name", updatedDocument.Root!.Element("lockedfields")?.Value);
         }
         finally
         {

@@ -206,6 +206,47 @@ public sealed class ArchiveMaintenanceServiceTests
         }
     }
 
+    [Fact]
+    public async Task ApplyAsync_WritesNfoTitleChangesToExistingNfo()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-nfo-title-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.Combine(tempRoot, "Serie - S01E01 - Pilot.nfo");
+            File.WriteAllText(mediaPath, "mkv");
+            File.WriteAllText(nfoPath, "<episodedetails><title>Alt</title><sorttitle>Alt Sort</sorttitle><lockdata>false</lockdata><dateadded>2026-04-28</dateadded></episodedetails>");
+            var service = new ArchiveMaintenanceService(
+                new MkvMergeProbeService(),
+                new StubMkvToolNixLocator(),
+                new MuxExecutionService(),
+                nfoProviderIds: new EmbyNfoProviderIdService());
+
+            var result = await service.ApplyAsync(new ArchiveMaintenanceApplyRequest(
+                mediaPath,
+                RenameOperation: null,
+                ContainerTitleEdit: null,
+                TrackHeaderEdits: [],
+                ProviderIdEdit: null,
+                NfoTextEdit: new ArchiveNfoTextEditOperation(
+                    "Alt",
+                    "Neu",
+                    "Alt Sort",
+                    "Neu Sort")));
+
+            Assert.True(result.Success);
+            var nfoText = File.ReadAllText(nfoPath);
+            Assert.Contains("<title>Neu</title>", nfoText, StringComparison.Ordinal);
+            Assert.Contains("<sorttitle>Neu Sort</sorttitle>", nfoText, StringComparison.Ordinal);
+            Assert.Contains("<lockedfields>Name|SortName</lockedfields>", nfoText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)
     {
         return new ContainerTrackMetadata(

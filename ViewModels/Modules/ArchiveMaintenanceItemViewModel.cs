@@ -14,21 +14,29 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 {
+    public const string FileNameChangeKind = "FileName";
+    public const string ContainerTitleChangeKind = "ContainerTitle";
+
     private ArchiveMaintenanceItemAnalysis _analysis;
     private bool _isSelected;
     private bool _wasApplied;
     private string _targetFileName;
     private string _targetContainerTitle;
+    private string _targetNfoTitle;
+    private string _targetNfoSortTitle;
     private string _targetTvdbId;
     private string _targetImdbId;
     private bool _removeImdbId;
     private bool _showAllHeaderCorrections;
+    private readonly HashSet<string> _suppressedChangeKinds = new(StringComparer.Ordinal);
 
     public ArchiveMaintenanceItemViewModel(ArchiveMaintenanceItemAnalysis analysis)
     {
         _analysis = analysis;
         _targetFileName = Path.GetFileName(analysis.RenameOperation?.TargetPath ?? analysis.FilePath);
         _targetContainerTitle = analysis.ContainerTitleEdit?.ExpectedTitle ?? analysis.ContainerTitle;
+        _targetNfoTitle = analysis.NfoTitle ?? string.Empty;
+        _targetNfoSortTitle = analysis.NfoSortTitle ?? string.Empty;
         _targetTvdbId = analysis.ProviderIds.TvdbId ?? string.Empty;
         _targetImdbId = analysis.ProviderIds.ImdbId ?? string.Empty;
         HeaderCorrections = new ObservableCollection<ArchiveMaintenanceHeaderCorrectionViewModel>(
@@ -149,6 +157,66 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
     }
 
+    public string TargetNfoTitle
+    {
+        get => _targetNfoTitle;
+        set
+        {
+            var normalizedValue = value ?? string.Empty;
+            if (_targetNfoTitle == normalizedValue)
+            {
+                return;
+            }
+
+            _targetNfoTitle = normalizedValue;
+            OnPropertyChanged();
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public string TargetNfoSortTitle
+    {
+        get => _targetNfoSortTitle;
+        set
+        {
+            var normalizedValue = value ?? string.Empty;
+            if (_targetNfoSortTitle == normalizedValue)
+            {
+                return;
+            }
+
+            _targetNfoSortTitle = normalizedValue;
+            OnPropertyChanged();
+            NotifyManualCorrectionChanged();
+        }
+    }
+
+    public string CurrentFileName => Path.GetFileName(_analysis.FilePath);
+
+    public string CurrentContainerTitle => _analysis.ContainerTitle ?? string.Empty;
+
+    public string CurrentNfoTitle => _analysis.NfoTitle ?? string.Empty;
+
+    public string CurrentNfoSortTitle => _analysis.NfoSortTitle ?? string.Empty;
+
+    public bool HasNfoTextSync => _analysis.NfoExists;
+
+    public bool HasSuppressedFileNameChange => _suppressedChangeKinds.Contains(FileNameChangeKind);
+
+    public bool HasSuppressedContainerTitleChange => _suppressedChangeKinds.Contains(ContainerTitleChangeKind);
+
+    public bool CanSuppressFileNameChange => CanEditManualCorrections
+        && !HasSuppressedFileNameChange
+        && !string.Equals(CurrentFileName, SuggestedFileName, StringComparison.Ordinal);
+
+    public bool CanRestoreFileNameSuggestion => CanEditManualCorrections && HasSuppressedFileNameChange;
+
+    public bool CanSuppressContainerTitleChange => CanEditManualCorrections
+        && !HasSuppressedContainerTitleChange
+        && !string.Equals(CurrentContainerTitle.Trim(), SuggestedContainerTitle.Trim(), StringComparison.Ordinal);
+
+    public bool CanRestoreContainerTitleSuggestion => CanEditManualCorrections && HasSuppressedContainerTitleChange;
+
     public string TargetTvdbId
     {
         get => _targetTvdbId;
@@ -215,7 +283,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public bool HasWritableChanges => CreateCurrentRenameOperation() is not null
         || CreateCurrentContainerTitleEdit() is not null
         || CreateCurrentTrackHeaderEdits().Count > 0
-        || CreateCurrentProviderIdEdit() is not null;
+        || CreateCurrentProviderIdEdit() is not null
+        || CreateCurrentNfoTextEdit() is not null;
 
     public string StatusText
     {
@@ -408,7 +477,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             CreateCurrentRenameOperation(),
             CreateCurrentContainerTitleEdit(),
             CreateCurrentTrackHeaderEdits(),
-            CreateCurrentProviderIdEdit());
+            CreateCurrentProviderIdEdit(),
+            CreateCurrentNfoTextEdit());
     }
 
     public void MarkApplied(string currentFilePath)
@@ -425,15 +495,20 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             ContainerTitleEdit = null,
             TrackHeaderEdits = [],
             TrackHeaderCorrectionCandidates = [],
-            ChangeNotes = []
+            ChangeNotes = [],
+            NfoTitle = string.IsNullOrWhiteSpace(TargetNfoTitle) ? null : TargetNfoTitle.Trim(),
+            NfoSortTitle = string.IsNullOrWhiteSpace(TargetNfoSortTitle) ? null : TargetNfoSortTitle.Trim()
         };
         _wasApplied = true;
         _isSelected = false;
         _targetFileName = Path.GetFileName(currentFilePath);
         _targetContainerTitle = currentContainerTitle;
+        _targetNfoTitle = _analysis.NfoTitle ?? string.Empty;
+        _targetNfoSortTitle = _analysis.NfoSortTitle ?? string.Empty;
         _targetTvdbId = _analysis.ProviderIds.TvdbId ?? string.Empty;
         _targetImdbId = _analysis.ProviderIds.ImdbId ?? string.Empty;
         _removeImdbId = false;
+        _suppressedChangeKinds.Clear();
         HeaderCorrections.Clear();
         OnPropertyChanged(string.Empty);
     }
@@ -458,6 +533,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             selection.SeasonNumber,
             selection.EpisodeNumber,
             selection.EpisodeTitle);
+        if (HasNfoTextSync)
+        {
+            TargetNfoTitle = selection.EpisodeTitle;
+        }
     }
 
     public void ApplyImdbSelection(string imdbId)
@@ -476,6 +555,124 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         NotifyManualCorrectionChanged();
     }
 
+    public void ResetTargetFileNameToCurrent()
+    {
+        TargetFileName = CurrentFileName;
+    }
+
+    public void ResetTargetContainerTitleToCurrent()
+    {
+        TargetContainerTitle = CurrentContainerTitle;
+    }
+
+    public void ResetTargetNfoTitleToCurrent()
+    {
+        TargetNfoTitle = CurrentNfoTitle;
+    }
+
+    public void ResetTargetNfoSortTitleToCurrent()
+    {
+        TargetNfoSortTitle = CurrentNfoSortTitle;
+    }
+
+    public ArchiveMaintenanceSuppressedChange? SuppressFileNameChange()
+    {
+        return SuppressChange(FileNameChangeKind, CurrentFileName, SuggestedFileName, () => TargetFileName = CurrentFileName);
+    }
+
+    public ArchiveMaintenanceSuppressedChange? SuppressContainerTitleChange()
+    {
+        return SuppressChange(ContainerTitleChangeKind, CurrentContainerTitle, SuggestedContainerTitle, () => TargetContainerTitle = CurrentContainerTitle);
+    }
+
+    public void RestoreFileNameSuggestion()
+    {
+        _suppressedChangeKinds.Remove(FileNameChangeKind);
+        TargetFileName = SuggestedFileName;
+        NotifySuppressionStateChanged();
+    }
+
+    public void RestoreContainerTitleSuggestion()
+    {
+        _suppressedChangeKinds.Remove(ContainerTitleChangeKind);
+        TargetContainerTitle = SuggestedContainerTitle;
+        NotifySuppressionStateChanged();
+    }
+
+    public void ApplySuppressedChanges(IEnumerable<ArchiveMaintenanceSuppressedChange> suppressedChanges)
+    {
+        foreach (var suppressedChange in suppressedChanges)
+        {
+            if (MatchesSuppression(suppressedChange, FileNameChangeKind, CurrentFileName, SuggestedFileName))
+            {
+                _suppressedChangeKinds.Add(FileNameChangeKind);
+                _targetFileName = CurrentFileName;
+            }
+            else if (MatchesSuppression(suppressedChange, ContainerTitleChangeKind, CurrentContainerTitle, SuggestedContainerTitle))
+            {
+                _suppressedChangeKinds.Add(ContainerTitleChangeKind);
+                _targetContainerTitle = CurrentContainerTitle;
+            }
+        }
+
+        if (_suppressedChangeKinds.Count > 0)
+        {
+            OnPropertyChanged(nameof(TargetFileName));
+            OnPropertyChanged(nameof(TargetContainerTitle));
+            NotifyManualCorrectionChanged();
+            NotifySuppressionStateChanged();
+        }
+    }
+
+    private string SuggestedFileName => Path.GetFileName(_analysis.RenameOperation?.TargetPath ?? _analysis.FilePath);
+
+    private string SuggestedContainerTitle => _analysis.ContainerTitleEdit?.ExpectedTitle ?? CurrentContainerTitle;
+
+    private ArchiveMaintenanceSuppressedChange? SuppressChange(
+        string changeKind,
+        string currentValue,
+        string suggestedValue,
+        Action applyCurrentValue)
+    {
+        if (string.Equals(currentValue.Trim(), suggestedValue.Trim(), StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        _suppressedChangeKinds.Add(changeKind);
+        applyCurrentValue();
+        NotifySuppressionStateChanged();
+        return new ArchiveMaintenanceSuppressedChange
+        {
+            MediaFilePath = _analysis.FilePath,
+            ChangeKind = changeKind,
+            CurrentValue = currentValue.Trim(),
+            SuggestedValue = suggestedValue.Trim()
+        };
+    }
+
+    private bool MatchesSuppression(
+        ArchiveMaintenanceSuppressedChange suppressedChange,
+        string changeKind,
+        string currentValue,
+        string suggestedValue)
+    {
+        return PathComparisonHelper.AreSamePath(suppressedChange.MediaFilePath, _analysis.FilePath)
+               && string.Equals(suppressedChange.ChangeKind, changeKind, StringComparison.Ordinal)
+               && string.Equals(suppressedChange.CurrentValue, currentValue.Trim(), StringComparison.Ordinal)
+               && string.Equals(suppressedChange.SuggestedValue, suggestedValue.Trim(), StringComparison.Ordinal);
+    }
+
+    private void NotifySuppressionStateChanged()
+    {
+        OnPropertyChanged(nameof(HasSuppressedFileNameChange));
+        OnPropertyChanged(nameof(HasSuppressedContainerTitleChange));
+        OnPropertyChanged(nameof(CanSuppressFileNameChange));
+        OnPropertyChanged(nameof(CanRestoreFileNameSuggestion));
+        OnPropertyChanged(nameof(CanSuppressContainerTitleChange));
+        OnPropertyChanged(nameof(CanRestoreContainerTitleSuggestion));
+    }
+
     private IReadOnlyList<string> BuildCurrentChangeNotes()
     {
         return ArchiveHeaderNormalizationService
@@ -483,6 +680,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
                 ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
                 : [])
+            .Concat(BuildNfoTextChangeNotes(CreateCurrentNfoTextEdit()))
             .Concat(BuildProviderIdChangeNotes())
             .ToList();
     }
@@ -494,6 +692,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
                 ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
                 : [])
+            .Concat(BuildNfoTextChangeNotes(CreateCurrentNfoTextEdit()))
             .Concat(BuildProviderIdChangeNotes())
             .ToList();
     }
@@ -503,6 +702,24 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         if (containerTitleEdit is not null)
         {
             yield return $"MKV-Titel: {ArchiveHeaderNormalizationService.FormatHeaderValue(containerTitleEdit.CurrentTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(containerTitleEdit.ExpectedTitle)}";
+        }
+    }
+
+    private static IEnumerable<string> BuildNfoTextChangeNotes(ArchiveNfoTextEditOperation? nfoTextEdit)
+    {
+        if (nfoTextEdit is null)
+        {
+            yield break;
+        }
+
+        if (!string.Equals(nfoTextEdit.CurrentTitle ?? string.Empty, nfoTextEdit.ExpectedTitle ?? string.Empty, StringComparison.Ordinal))
+        {
+            yield return $"NFO-Titel: {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.CurrentTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.ExpectedTitle)}";
+        }
+
+        if (!string.Equals(nfoTextEdit.CurrentSortTitle ?? string.Empty, nfoTextEdit.ExpectedSortTitle ?? string.Empty, StringComparison.Ordinal))
+        {
+            yield return $"NFO-Sortiertitel: {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.CurrentSortTitle)} -> {ArchiveHeaderNormalizationService.FormatHeaderValue(nfoTextEdit.ExpectedSortTitle)}";
         }
     }
 
@@ -610,6 +827,27 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         return tvdbChanged || imdbChanged || removeImdbId
             ? new ArchiveProviderIdEditOperation(new EmbyProviderIds(targetTvdbId, targetImdbId), removeImdbId)
             : null;
+    }
+
+    private ArchiveNfoTextEditOperation? CreateCurrentNfoTextEdit()
+    {
+        if (_analysis.HasError || _wasApplied || !_analysis.NfoExists)
+        {
+            return null;
+        }
+
+        var currentTitle = CurrentNfoTitle.Trim();
+        var currentSortTitle = CurrentNfoSortTitle.Trim();
+        var targetTitle = TargetNfoTitle.Trim();
+        var targetSortTitle = TargetNfoSortTitle.Trim();
+        return string.Equals(currentTitle, targetTitle, StringComparison.Ordinal)
+               && string.Equals(currentSortTitle, targetSortTitle, StringComparison.Ordinal)
+            ? null
+            : new ArchiveNfoTextEditOperation(
+                currentTitle,
+                targetTitle,
+                currentSortTitle,
+                targetSortTitle);
     }
 
     private IEnumerable<string> BuildProviderIdChangeNotes()
@@ -751,6 +989,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(DetailSummaryText));
         OnPropertyChanged(nameof(ManualValidationMessage));
         OnPropertyChanged(nameof(HasProviderIdSync));
+        OnPropertyChanged(nameof(HasNfoTextSync));
         OnPropertyChanged(nameof(CanReviewTvdb));
         OnPropertyChanged(nameof(CanReviewImdb));
         OnPropertyChanged(nameof(ProviderIdSummaryText));
@@ -761,6 +1000,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HiddenHeaderCorrectionCount));
         OnPropertyChanged(nameof(ManualCorrectionHeaderText));
         OnPropertyChanged(nameof(HeaderCorrectionModeText));
+        NotifySuppressionStateChanged();
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

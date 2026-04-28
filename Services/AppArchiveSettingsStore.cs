@@ -55,6 +55,12 @@ public sealed class AppArchiveSettings
     public string DefaultSeriesArchiveRootPath { get; set; } = SeriesArchiveService.DefaultArchiveRootDirectory;
 
     /// <summary>
+    /// Bewusst abgelehnte Archivpflege-Vorschläge. Ein Eintrag gilt nur für dieselbe Datei,
+    /// dieselbe Änderungsart und genau dasselbe Ist-/Soll-Paar; neue Regeln bleiben dadurch sichtbar.
+    /// </summary>
+    public List<ArchiveMaintenanceSuppressedChange> SuppressedMaintenanceChanges { get; set; } = [];
+
+    /// <summary>
     /// Erzeugt eine Kopie der Archiv-Einstellungen.
     /// </summary>
     /// <returns>Geklonter Einstellungssatz.</returns>
@@ -62,7 +68,51 @@ public sealed class AppArchiveSettings
     {
         return new AppArchiveSettings
         {
-            DefaultSeriesArchiveRootPath = DefaultSeriesArchiveRootPath
+            DefaultSeriesArchiveRootPath = DefaultSeriesArchiveRootPath,
+            SuppressedMaintenanceChanges = (SuppressedMaintenanceChanges ?? [])
+                .Select(change => change.Clone())
+                .ToList()
+        };
+    }
+}
+
+/// <summary>
+/// Persistierte Ablehnung eines einzelnen Archivpflege-Vorschlags.
+/// </summary>
+public sealed class ArchiveMaintenanceSuppressedChange
+{
+    /// <summary>
+    /// MKV-Pfad, für den der Vorschlag abgelehnt wurde.
+    /// </summary>
+    public string MediaFilePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Fachliche Änderungsart, z. B. Dateiname oder MKV-Titel.
+    /// </summary>
+    public string ChangeKind { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Ist-Wert beim Ablehnen.
+    /// </summary>
+    public string CurrentValue { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Damals vorgeschlagener Soll-Wert.
+    /// </summary>
+    public string SuggestedValue { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Erzeugt eine Kopie des Ablehnungseintrags.
+    /// </summary>
+    /// <returns>Geklonter Eintrag.</returns>
+    public ArchiveMaintenanceSuppressedChange Clone()
+    {
+        return new ArchiveMaintenanceSuppressedChange
+        {
+            MediaFilePath = MediaFilePath,
+            ChangeKind = ChangeKind,
+            CurrentValue = CurrentValue,
+            SuggestedValue = SuggestedValue
         };
     }
 }

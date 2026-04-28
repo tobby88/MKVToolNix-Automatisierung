@@ -192,6 +192,27 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             }
         }
 
+        if (request.NfoTextEdit is not null)
+        {
+            var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
+            var updateResult = providerIdService.UpdateTextFields(
+                currentPath,
+                new EmbyNfoTextFields(
+                    request.NfoTextEdit.ExpectedTitle,
+                    request.NfoTextEdit.ExpectedSortTitle));
+            outputLines.Add(updateResult.Message);
+            output?.Report(updateResult.Message);
+            if (!updateResult.Success)
+            {
+                return new ArchiveMaintenanceApplyResult(
+                    request.FilePath,
+                    currentPath,
+                    Success: false,
+                    Message: updateResult.Message,
+                    outputLines);
+            }
+        }
+
         _probeService.Invalidate([request.FilePath, currentPath]);
         return new ArchiveMaintenanceApplyResult(
             request.FilePath,
@@ -241,7 +262,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     {
         var parsedName = TryParseEpisodeFileName(filePath);
         var expectedTitle = expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath);
-        var nfoResult = new EmbyNfoProviderIdService().ReadProviderIds(filePath);
+        var nfoResult = new EmbyNfoProviderIdService().ReadEpisodeMetadata(filePath);
         var normalization = ArchiveHeaderNormalizationService.BuildForArchiveFile(
             filePath,
             container,
@@ -268,7 +289,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             nfoResult.NfoExists,
             issues,
             changeNotes,
-            ErrorMessage: null);
+            ErrorMessage: null,
+            nfoResult.Title,
+            nfoResult.SortTitle);
     }
 
     private async Task<ArchiveExpectedEpisodeMetadata?> TryResolveExpectedMetadataFromNfoAsync(
@@ -286,7 +309,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             return null;
         }
 
-        var nfoResult = _nfoProviderIds.ReadProviderIds(filePath);
+        var nfoResult = _nfoProviderIds.ReadEpisodeMetadata(filePath);
         if (!nfoResult.NfoExists
             || !int.TryParse(nfoResult.ProviderIds.TvdbId, out var tvdbEpisodeId))
         {
@@ -684,7 +707,9 @@ internal sealed record ArchiveMaintenanceItemAnalysis(
     bool NfoExists,
     IReadOnlyList<ArchiveMaintenanceIssue> Issues,
     IReadOnlyList<string> ChangeNotes,
-    string? ErrorMessage)
+    string? ErrorMessage,
+    string? NfoTitle = null,
+    string? NfoSortTitle = null)
 {
     public bool HasWritableChanges => ContainerTitleEdit is not null || TrackHeaderEdits.Count > 0 || RenameOperation is not null;
 
@@ -698,14 +723,25 @@ internal sealed record ArchiveMaintenanceApplyRequest(
     ArchiveRenameOperation? RenameOperation,
     ContainerTitleEditOperation? ContainerTitleEdit,
     IReadOnlyList<TrackHeaderEditOperation> TrackHeaderEdits,
-    ArchiveProviderIdEditOperation? ProviderIdEdit)
+    ArchiveProviderIdEditOperation? ProviderIdEdit,
+    ArchiveNfoTextEditOperation? NfoTextEdit = null)
 {
-    public bool HasWritableChanges => RenameOperation is not null || ContainerTitleEdit is not null || TrackHeaderEdits.Count > 0 || ProviderIdEdit is not null;
+    public bool HasWritableChanges => RenameOperation is not null
+                                      || ContainerTitleEdit is not null
+                                      || TrackHeaderEdits.Count > 0
+                                      || ProviderIdEdit is not null
+                                      || NfoTextEdit is not null;
 }
 
 internal sealed record ArchiveProviderIdEditOperation(
     EmbyProviderIds ProviderIds,
     bool RemoveImdbId);
+
+internal sealed record ArchiveNfoTextEditOperation(
+    string? CurrentTitle,
+    string? ExpectedTitle,
+    string? CurrentSortTitle,
+    string? ExpectedSortTitle);
 
 internal sealed record ArchiveMaintenanceApplyResult(
     string OriginalFilePath,
