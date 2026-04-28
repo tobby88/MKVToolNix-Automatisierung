@@ -517,12 +517,14 @@
                     Background="#FFF8FAFC"
                     BorderBrush="#FFD8DEE6"
                     BorderThickness="1">
-                <Grid IsEnabled="{Binding CanEditManualCorrections, Mode=OneWay}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <Grid IsEnabled="{Binding CanEditManualCorrections, Mode=OneWay}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" MinHeight="120" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Border Margin="0,0,0,8"
@@ -701,74 +703,72 @@
                                            Text="Soll" />
                             </Grid>
 
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                          HorizontalScrollBarVisibility="Disabled">
-                                <ItemsControl ItemsSource="{Binding VisibleHeaderCorrectionGroups, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,6"
-                                                    Padding="0"
-                                                    Background="#FFF8FAFC"
-                                                    BorderBrush="#FFD8DEE6"
-                                                    BorderThickness="1"
-                                                    CornerRadius="4">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="160" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
+                            <ItemsControl ItemsSource="{Binding VisibleHeaderCorrectionGroups, Mode=OneWay}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6"
+                                                Padding="0"
+                                                Background="#FFF8FAFC"
+                                                BorderBrush="#FFD8DEE6"
+                                                BorderThickness="1"
+                                                CornerRadius="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
 
-                                                    <Border Grid.Column="0"
-                                                            Padding="8,6"
-                                                            Background="#FFEFF6FF"
-                                                            BorderBrush="#FFD8DEE6"
-                                                            BorderThickness="0,0,1,0">
-                                                        <TextBlock FontWeight="SemiBold"
-                                                                   Text="{Binding DisplayLabel, Mode=OneWay}"
-                                                                   TextWrapping="Wrap" />
-                                                    </Border>
+                                                <Border Grid.Column="0"
+                                                        Padding="8,6"
+                                                        Background="#FFEFF6FF"
+                                                        BorderBrush="#FFD8DEE6"
+                                                        BorderThickness="0,0,1,0">
+                                                    <TextBlock FontWeight="SemiBold"
+                                                               Text="{Binding DisplayLabel, Mode=OneWay}"
+                                                               TextWrapping="Wrap" />
+                                                </Border>
 
-                                                    <ItemsControl Grid.Column="1"
-                                                                  Margin="6,4"
-                                                                  ItemsSource="{Binding Values, Mode=OneWay}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate>
-                                                                <Grid Margin="0,0,0,3">
-                                                                    <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="104" />
-                                                                        <ColumnDefinition Width="*" />
-                                                                        <ColumnDefinition Width="*" />
-                                                                    </Grid.ColumnDefinitions>
-                                                                    <TextBlock Grid.Column="0"
-                                                                               Margin="0,4,8,4"
-                                                                               VerticalAlignment="Center"
-                                                                               Text="{Binding DisplayName, Mode=OneWay}" />
-                                                                    <Border Grid.Column="1"
-                                                                            Margin="0,0,8,0"
-                                                                            Style="{StaticResource CompactDisplaySurfaceBorderStyle}">
-                                                                        <TextBlock Text="{Binding CurrentDisplayValue, Mode=OneWay}"
-                                                                                   TextWrapping="Wrap" />
-                                                                    </Border>
-                                                                    <Grid Grid.Column="2">
-                                                                        <TextBox Text="{Binding TargetValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                                 Visibility="{Binding IsTextValue, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                                        <ComboBox ItemsSource="{Binding AvailableFlagValues}"
-                                                                                  SelectedItem="{Binding TargetValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                                  Visibility="{Binding IsFlag, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                                    </Grid>
+                                                <ItemsControl Grid.Column="1"
+                                                              Margin="6,4"
+                                                              ItemsSource="{Binding Values, Mode=OneWay}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,0,0,3">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="104" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0"
+                                                                           Margin="0,4,8,4"
+                                                                           VerticalAlignment="Center"
+                                                                           Text="{Binding DisplayName, Mode=OneWay}" />
+                                                                <Border Grid.Column="1"
+                                                                        Margin="0,0,8,0"
+                                                                        Style="{StaticResource CompactDisplaySurfaceBorderStyle}">
+                                                                    <TextBlock Text="{Binding CurrentDisplayValue, Mode=OneWay}"
+                                                                               TextWrapping="Wrap" />
+                                                                </Border>
+                                                                <Grid Grid.Column="2">
+                                                                    <TextBox Text="{Binding TargetValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                             Visibility="{Binding IsTextValue, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                    <ComboBox ItemsSource="{Binding AvailableFlagValues}"
+                                                                              SelectedItem="{Binding TargetValue, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                              Visibility="{Binding IsFlag, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                                 </Grid>
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </DockPanel>
                     </Border>
-                </Grid>
+                    </Grid>
+                </ScrollViewer>
             </Border>
         </Expander>
 
