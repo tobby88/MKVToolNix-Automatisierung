@@ -143,6 +143,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="150" />
                 <ColumnDefinition Width="130" />
+                <ColumnDefinition Width="150" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Column="0"
@@ -159,38 +160,16 @@
                     Command="{Binding SelectRootDirectoryCommand}"
                     Content="Ordner wählen" />
             <Button Grid.Column="3"
-                    Margin="0,2,0,2"
+                    Margin="0,2,12,2"
                     Padding="10,6"
                     Command="{Binding ScanCommand}"
-                    Content="Scannen">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Visibility" Value="Visible" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsScanning, Mode=OneWay}" Value="True">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
-            <Button Grid.Column="3"
+                    Content="Scannen" />
+            <Button Grid.Column="4"
                     Margin="0,2,0,2"
                     Padding="10,6"
                     Command="{Binding CancelScanCommand}"
                     Content="Scan abbrechen"
-                    ToolTip="{Binding CancelScanTooltip, Mode=OneWay}">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Visibility" Value="Collapsed" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsScanning, Mode=OneWay}" Value="True">
-                                <Setter Property="Visibility" Value="Visible" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Button.Style>
-            </Button>
+                    ToolTip="{Binding CancelScanTooltip, Mode=OneWay}" />
         </Grid>
 
         <Border Grid.Row="1"
