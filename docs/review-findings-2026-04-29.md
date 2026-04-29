@@ -64,4 +64,4 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Verwaltete MediathekView-Installation aus `Tools` wiederfinden.
 - [x] HTTP-`Accept`-Header pro Toolquelle passend setzen.
 - [x] Startup-Cancellation in Migration/Cleanup beachten.
-- [ ] Numerische Einstellungen sichtbar validieren.
+- [x] Numerische Einstellungen sichtbar validieren.

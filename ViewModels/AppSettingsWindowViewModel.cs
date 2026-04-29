@@ -1,4 +1,6 @@
+using System.Collections;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using MkvToolnixAutomatisierung.Services;
@@ -10,8 +12,11 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// <summary>
 /// Zentrales ViewModel für selten geänderte App-Konfiguration wie Archivpfad, Toolpfade, TVDB und Emby.
 /// </summary>
-internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
+internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INotifyDataErrorInfo
 {
+    private const int MinimumEmbyScanWaitTimeoutSeconds = 5;
+    private const int MaximumEmbyScanWaitTimeoutSeconds = 600;
+
     private readonly AppSettingsModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly ManagedToolSettings _managedMkvToolNixSettings;
@@ -30,6 +35,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private string _embyServerUrl;
     private string _embyApiKey;
     private int _embyScanWaitTimeoutSeconds;
+    private string _embyScanWaitTimeoutSecondsText;
     private string _statusText = "Bereit";
     private bool _isBusy;
     private CancellationTokenSource? _toolCheckCancellationSource;
@@ -66,12 +72,15 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         _embyServerUrl = embySettings.ServerUrl;
         _embyApiKey = embySettings.ApiKey;
         _embyScanWaitTimeoutSeconds = embySettings.ScanWaitTimeoutSeconds;
+        _embyScanWaitTimeoutSecondsText = _embyScanWaitTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
         SelectedPage = initialPage;
         RefreshToolResolutionState();
         RefreshDerivedState();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
 
     /// <summary>
     /// Meldet dem Hostfenster, dass der Dialog mit Übernehmen geschlossen werden soll.
@@ -315,16 +324,37 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         get => _embyScanWaitTimeoutSeconds;
         set
         {
-            var normalized = Math.Clamp(value, 5, 600);
-            if (_embyScanWaitTimeoutSeconds == normalized)
+            EmbyScanWaitTimeoutSecondsText = value.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    public string EmbyScanWaitTimeoutSecondsText
+    {
+        get => _embyScanWaitTimeoutSecondsText;
+        set
+        {
+            var normalized = value ?? string.Empty;
+            if (_embyScanWaitTimeoutSecondsText == normalized)
             {
                 return;
             }
 
-            _embyScanWaitTimeoutSeconds = normalized;
+            _embyScanWaitTimeoutSecondsText = normalized;
+            if (TryParseEmbyScanWaitTimeout(out var seconds))
+            {
+                _embyScanWaitTimeoutSeconds = seconds;
+                OnPropertyChanged(nameof(EmbyScanWaitTimeoutSeconds));
+            }
+
             OnPropertyChanged();
+            RefreshValidationState(nameof(EmbyScanWaitTimeoutSecondsText));
         }
     }
+
+    public string EmbyScanWaitTimeoutHelpText => EmbyScanWaitTimeoutValidationMessage
+        ?? $"Zahl zwischen {MinimumEmbyScanWaitTimeoutSeconds} und {MaximumEmbyScanWaitTimeoutSeconds} Sekunden. Die Wartezeit gilt nur für das Nachladen neu sichtbarer Emby-Items nach einem Scan.";
+
+    public string? EmbyScanWaitTimeoutValidationMessage => ValidateEmbyScanWaitTimeout();
 
     public string StatusText
     {
@@ -343,7 +373,11 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public bool IsInteractive => !_isBusy;
 
+    public bool CanSave => IsInteractive && !HasErrors;
+
     public bool CanCancel => !_isBusy || _toolCheckCancellationSource is not null;
+
+    public bool HasErrors => EmbyScanWaitTimeoutValidationMessage is not null;
 
     public bool IsArchiveAvailable => !string.IsNullOrWhiteSpace(ArchiveRootDirectory) && Directory.Exists(ArchiveRootDirectory);
 
@@ -489,6 +523,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public void SaveSettings()
     {
+        EnsureSettingsAreValid();
         var normalizedArchiveRootDirectory = SeriesArchiveService.NormalizeArchiveRootDirectoryForSettings(ArchiveRootDirectory);
         _services.Settings.Update(settings =>
         {
@@ -594,16 +629,72 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(MediathekViewStatusTooltip));
         OnPropertyChanged(nameof(AutoManageMediathekView));
         OnPropertyChanged(nameof(SettingsFilePath));
+        RefreshValidationState(nameof(EmbyScanWaitTimeoutSecondsText));
     }
 
     private AppEmbySettings BuildEmbySettings()
     {
+        EnsureSettingsAreValid();
         return new AppEmbySettings
         {
             ServerUrl = string.IsNullOrWhiteSpace(EmbyServerUrl) ? AppEmbySettings.DefaultServerUrl : EmbyServerUrl,
             ApiKey = EmbyApiKey,
             ScanWaitTimeoutSeconds = EmbyScanWaitTimeoutSeconds
         }.Clone();
+    }
+
+    public IEnumerable GetErrors(string? propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(propertyName)
+            || propertyName == nameof(EmbyScanWaitTimeoutSecondsText)
+            || propertyName == nameof(EmbyScanWaitTimeoutSeconds))
+        {
+            if (EmbyScanWaitTimeoutValidationMessage is { } validationMessage)
+            {
+                yield return validationMessage;
+            }
+        }
+    }
+
+    private void EnsureSettingsAreValid()
+    {
+        if (EmbyScanWaitTimeoutValidationMessage is { } validationMessage)
+        {
+            throw new InvalidOperationException(validationMessage);
+        }
+    }
+
+    private void RefreshValidationState(string propertyName)
+    {
+        OnPropertyChanged(nameof(EmbyScanWaitTimeoutValidationMessage));
+        OnPropertyChanged(nameof(EmbyScanWaitTimeoutHelpText));
+        OnPropertyChanged(nameof(HasErrors));
+        OnPropertyChanged(nameof(CanSave));
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propertyName));
+    }
+
+    private string? ValidateEmbyScanWaitTimeout()
+    {
+        if (!TryParseEmbyScanWaitTimeout(out var seconds))
+        {
+            return $"Bitte eine ganze Zahl zwischen {MinimumEmbyScanWaitTimeoutSeconds} und {MaximumEmbyScanWaitTimeoutSeconds} Sekunden eintragen.";
+        }
+
+        if (seconds < MinimumEmbyScanWaitTimeoutSeconds || seconds > MaximumEmbyScanWaitTimeoutSeconds)
+        {
+            return $"Erlaubt sind {MinimumEmbyScanWaitTimeoutSeconds} bis {MaximumEmbyScanWaitTimeoutSeconds} Sekunden.";
+        }
+
+        return null;
+    }
+
+    private bool TryParseEmbyScanWaitTimeout(out int seconds)
+    {
+        return int.TryParse(
+            EmbyScanWaitTimeoutSecondsText.Trim(),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out seconds);
     }
 
     /// <summary>
@@ -853,6 +944,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         StatusText = statusText;
         OnPropertyChanged(nameof(IsInteractive));
         OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(CanSave));
     }
 
     private void UpdateManagedToolProgress(ManagedToolStartupProgress progress)

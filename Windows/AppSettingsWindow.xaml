@@ -279,19 +279,32 @@
                     <TextBox Grid.Row="2"
                              Grid.Column="1"
                              Margin="0,4,12,4"
-                             Text="{Binding EmbyScanWaitTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
+                             ToolTip="{Binding EmbyScanWaitTimeoutHelpText}"
+                             Text="{Binding EmbyScanWaitTimeoutSecondsText, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}" />
                     <Button Grid.Row="2"
                             Grid.Column="2"
                             Margin="0,2,0,2"
                             Padding="10,6"
+                            IsEnabled="{Binding CanSave}"
                             Click="TestEmbyConnectionButton_Click"
                             Content="Verbindung testen" />
 
                     <TextBlock Grid.Row="3"
                                Grid.Column="1"
                                Grid.ColumnSpan="2"
-                               Foreground="#4D5B68"
-                               Text="Die Wartezeit gilt nur für das Nachladen neu sichtbarer Emby-Items nach einem Scan." />
+                               Text="{Binding EmbyScanWaitTimeoutHelpText}"
+                               TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#4D5B68" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasErrors}" Value="True">
+                                        <Setter Property="Foreground" Value="#B42318" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </Grid>
             </TabItem>
         </TabControl>
@@ -314,7 +327,7 @@
                 <Button x:Name="SaveButton"
                         Width="140"
                         Padding="10,6"
-                        IsEnabled="{Binding IsInteractive}"
+                        IsEnabled="{Binding CanSave}"
                         Click="SaveButton_Click"
                         Content="Übernehmen" />
             </StackPanel>

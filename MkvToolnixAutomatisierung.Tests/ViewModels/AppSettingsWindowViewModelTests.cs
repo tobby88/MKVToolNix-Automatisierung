@@ -72,7 +72,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.SelectedImdbLookupMode = ImdbLookupMode.BrowserOnly;
         viewModel.EmbyServerUrl = "  http://emby-test:8096  ";
         viewModel.EmbyApiKey = "  emby-key  ";
-        viewModel.EmbyScanWaitTimeoutSeconds = 999;
+        viewModel.EmbyScanWaitTimeoutSeconds = 300;
 
         viewModel.SaveSettings();
 
@@ -95,12 +95,31 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal(ImdbLookupMode.BrowserOnly, savedSettings.Metadata?.ImdbLookupMode);
         Assert.Equal("http://emby-test:8096", savedSettings.Emby?.ServerUrl);
         Assert.Equal("emby-key", savedSettings.Emby?.ApiKey);
-        Assert.Equal(600, savedSettings.Emby?.ScanWaitTimeoutSeconds);
+        Assert.Equal(300, savedSettings.Emby?.ScanWaitTimeoutSeconds);
         Assert.True(viewModel.IsArchiveAvailable);
         Assert.True(viewModel.IsFfprobeAvailable);
         Assert.True(viewModel.IsMkvToolNixAvailable);
         Assert.True(viewModel.IsMediathekViewAvailable);
         Assert.Contains("Einstellungen gespeichert", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("4")]
+    [InlineData("601")]
+    public void SaveSettings_ShowsValidationAndBlocksSave_WhenEmbyTimeoutIsInvalid(string invalidValue)
+    {
+        var settingsStore = new AppSettingsStore();
+        var viewModel = CreateViewModel(settingsStore: settingsStore);
+
+        viewModel.EmbyScanWaitTimeoutSecondsText = invalidValue;
+
+        Assert.True(viewModel.HasErrors);
+        Assert.False(viewModel.CanSave);
+        Assert.NotNull(viewModel.EmbyScanWaitTimeoutValidationMessage);
+        Assert.Contains("Sekunden", viewModel.EmbyScanWaitTimeoutHelpText, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() => viewModel.SaveSettings());
     }
 
     [Fact]
