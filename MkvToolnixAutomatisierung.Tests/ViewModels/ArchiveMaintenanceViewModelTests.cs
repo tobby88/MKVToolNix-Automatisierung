@@ -120,6 +120,20 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ApplySelectedCommand_LogsReturnedOutputLines_WhenServiceDoesNotReportProgress()
+    {
+        var archiveMaintenance = new SilentOutputArchiveMaintenanceService(["Header aktualisiert.", "Datei umbenannt."]);
+        var viewModel = CreateViewModel(archiveMaintenance: archiveMaintenance);
+        viewModel.Items.Add(new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis()));
+
+        await viewModel.ApplySelectedCommand.ExecuteAsync();
+
+        Assert.Contains("Wende Änderungen an 1/1", viewModel.LogText, StringComparison.Ordinal);
+        Assert.Contains("Header aktualisiert.", viewModel.LogText, StringComparison.Ordinal);
+        Assert.Contains("Datei umbenannt.", viewModel.LogText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ScanCommand_SortsItemsByMkvFileName()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-sort-" + Guid.NewGuid().ToString("N"));
@@ -721,6 +735,30 @@ public sealed class ArchiveMaintenanceViewModelTests
                 Success: true,
                 Message: "OK",
                 OutputLines: []));
+        }
+    }
+
+    private sealed class SilentOutputArchiveMaintenanceService(IReadOnlyList<string> outputLines) : IArchiveMaintenanceService
+    {
+        public Task<ArchiveMaintenanceScanResult> ScanAsync(
+            string rootDirectory,
+            IProgress<ArchiveMaintenanceProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ArchiveMaintenanceApplyResult> ApplyAsync(
+            ArchiveMaintenanceApplyRequest request,
+            IProgress<string>? output = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new ArchiveMaintenanceApplyResult(
+                request.FilePath,
+                request.FilePath,
+                Success: true,
+                Message: "OK",
+                OutputLines: outputLines));
         }
     }
 

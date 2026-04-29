@@ -42,7 +42,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 - [x] Rename/NFO-Apply-Fehler konsistent behandeln.
 - [x] Remux-Hinweise nach direktem Apply sichtbar halten.
-- [ ] Apply-Logging vollständig machen.
+- [x] Apply-Logging vollständig machen.
 - [ ] NFO-Lock beim Zurücktippen auf Ist-Wert bereinigen.
 - [ ] Case-sensitive Zielkonflikte bei Case-only-Renames prüfen/verbessern.
 

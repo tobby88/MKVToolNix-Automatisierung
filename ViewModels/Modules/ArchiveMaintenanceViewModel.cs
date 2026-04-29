@@ -357,9 +357,16 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                 SelectedItem = item;
                 StatusText = $"Wende Änderungen an {index + 1}/{selectedItems.Count}: {item.FileName}";
                 ProgressValue = index * 100 / selectedItems.Count;
+                AppendLog(StatusText);
+                var reportedOutputLines = new List<string>();
                 var result = await _services.ArchiveMaintenance.ApplyAsync(
                     item.CreateApplyRequest(),
-                    new Progress<string>(AppendLog));
+                    new Progress<string>(line =>
+                    {
+                        reportedOutputLines.Add(line);
+                        AppendLog(line);
+                    }));
+                AppendResultOutputLines(result.OutputLines, reportedOutputLines);
                 if (!result.Success)
                 {
                     AppendLog($"FEHLER: {item.FileName}: {result.Message}");
@@ -379,6 +386,22 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private void AppendResultOutputLines(IReadOnlyList<string> resultOutputLines, IReadOnlyList<string> alreadyReportedLines)
+    {
+        var reportedIndex = 0;
+        foreach (var outputLine in resultOutputLines)
+        {
+            if (reportedIndex < alreadyReportedLines.Count
+                && string.Equals(outputLine, alreadyReportedLines[reportedIndex], StringComparison.Ordinal))
+            {
+                reportedIndex++;
+                continue;
+            }
+
+            AppendLog(outputLine);
         }
     }
 
