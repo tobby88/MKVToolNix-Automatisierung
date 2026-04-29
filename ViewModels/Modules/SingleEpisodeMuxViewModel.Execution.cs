@@ -63,6 +63,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 + Environment.NewLine;
             ResetPreviewOutputBuffer(PreviewText);
 
+            if (!EnsureKnownEpisodeCodeForExecution())
+            {
+                return;
+            }
+
             if (RequiresManualCheck && !IsManualCheckApproved)
             {
                 _dialogService.ShowWarning("Hinweis", "Diese Episode nutzt eine prüfpflichtige Quelle. Bitte zuerst 'Quelle prüfen' ausführen und die Quelle freigeben.");
@@ -203,6 +208,21 @@ internal sealed partial class SingleEpisodeMuxViewModel
             SetBusy(false);
             CompleteCurrentOperation(operationSource);
         }
+    }
+
+    private bool EnsureKnownEpisodeCodeForExecution()
+    {
+        if (EpisodeFileNameHelper.HasKnownEpisodeCode(SeasonNumber, EpisodeNumber))
+        {
+            return true;
+        }
+
+        _dialogService.ShowWarning(
+            "Episodencode fehlt",
+            "Staffel oder Folge ist noch 'xx'. Bitte vor dem Muxen die TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren.");
+        SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
+        SetStatus("Episodencode fehlt", 0);
+        return false;
     }
 
     private BatchRunLogSaveResult? PersistSingleEpisodeArtifactsIfNeeded(

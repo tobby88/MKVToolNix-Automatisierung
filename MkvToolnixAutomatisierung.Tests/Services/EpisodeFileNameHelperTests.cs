@@ -39,6 +39,16 @@ public sealed class EpisodeFileNameHelperTests
         Assert.Equal(expected, EpisodeFileNameHelper.NormalizeSeasonNumber(value));
     }
 
+    [Theory]
+    [InlineData("01", "02", true)]
+    [InlineData("2014", "05-E06", true)]
+    [InlineData("xx", "02", false)]
+    [InlineData("01", "xx", false)]
+    public void HasKnownEpisodeCode_RequiresSeasonAndEpisode(string seasonNumber, string episodeNumber, bool expected)
+    {
+        Assert.Equal(expected, EpisodeFileNameHelper.HasKnownEpisodeCode(seasonNumber, episodeNumber));
+    }
+
     [Fact]
     public void BuildEpisodeFileName_SanitizesInvalidCharacters()
     {

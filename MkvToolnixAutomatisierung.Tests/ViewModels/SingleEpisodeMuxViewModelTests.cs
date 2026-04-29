@@ -397,6 +397,26 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void EnsureKnownEpisodeCodeForExecution_BlocksSxxExxMux()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(),
+            dialogService)
+        {
+            SeasonNumber = "xx",
+            EpisodeNumber = "02"
+        };
+
+        var canExecute = InvokeEnsureKnownEpisodeCodeForExecution(viewModel);
+
+        Assert.False(canExecute);
+        Assert.Equal("Episodencode fehlt", viewModel.StatusText);
+        Assert.Equal(SingleEpisodeExecutionStatusKind.Warning, viewModel.ExecutionStatusKind);
+        Assert.Single(dialogService.WarningMessages);
+    }
+
+    [Fact]
     public void SingleExecutionStatusBadge_ExplainsOpenComparisonWithoutRunningState()
     {
         Assert.Equal(
@@ -557,6 +577,15 @@ public sealed class SingleEpisodeMuxViewModelTests
         method!.Invoke(viewModel, [plan]);
     }
 
+    private static bool InvokeEnsureKnownEpisodeCodeForExecution(SingleEpisodeMuxViewModel viewModel)
+    {
+        var method = typeof(SingleEpisodeMuxViewModel).GetMethod(
+            "EnsureKnownEpisodeCodeForExecution",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return Assert.IsType<bool>(method!.Invoke(viewModel, []));
+    }
+
     private static void InvokeClearCompletedSingleEpisodeInput(
         SingleEpisodeMuxViewModel viewModel,
         string finalStatusText,
@@ -609,6 +638,8 @@ public sealed class SingleEpisodeMuxViewModelTests
         public List<string> OpenedFilePaths { get; } = [];
 
         public List<string> OpenedPaths { get; } = [];
+
+        public List<string> WarningMessages { get; } = [];
 
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
 
@@ -667,7 +698,7 @@ public sealed class SingleEpisodeMuxViewModelTests
 
         public void ShowInfo(string title, string message) => throw new NotSupportedException();
 
-        public void ShowWarning(string title, string message) => throw new NotSupportedException();
+        public void ShowWarning(string title, string message) => WarningMessages.Add(message);
 
         public void ShowError(string message) => throw new NotSupportedException();
     }

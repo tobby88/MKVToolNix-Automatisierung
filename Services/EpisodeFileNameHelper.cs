@@ -73,6 +73,12 @@ internal static class EpisodeFileNameHelper
         return TryNormalizeEpisodeRange(value, out _);
     }
 
+    public static bool HasKnownEpisodeCode(string? seasonNumber, string? episodeNumber)
+    {
+        return NormalizeSeasonNumber(seasonNumber) != "xx"
+            && NormalizeEpisodeNumber(episodeNumber) != "xx";
+    }
+
     public static string BuildEpisodeCode(string seasonNumber, string episodeNumber)
     {
         return $"S{NormalizeSeasonNumber(seasonNumber)}E{NormalizeEpisodeNumber(episodeNumber)}";

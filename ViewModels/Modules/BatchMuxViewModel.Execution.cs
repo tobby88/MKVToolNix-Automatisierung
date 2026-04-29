@@ -27,6 +27,23 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
+        var unresolvedEpisodeCodeItems = readyItems
+            .Where(item => !EpisodeFileNameHelper.HasKnownEpisodeCode(item.SeasonNumber, item.EpisodeNumber))
+            .ToList();
+        if (unresolvedEpisodeCodeItems.Count > 0)
+        {
+            foreach (var item in unresolvedEpisodeCodeItems)
+            {
+                item.SetStatus(BatchEpisodeStatusKind.Warning, "Episodencode fehlt (SxxExx). Bitte vor dem Batch prüfen.");
+            }
+
+            _dialogService.ShowWarning(
+                "Episodencode fehlt",
+                $"{unresolvedEpisodeCodeItems.Count} ausgewählte Episode(n) haben noch Staffel oder Folge 'xx'. Bitte TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren.");
+            SetStatus("Batch blockiert: Episodencode fehlt", ProgressValue);
+            return;
+        }
+
         var cancellationToken = CancellationToken.None;
         Action<string>? appendBatchRunLog = null;
         var planSummaryFrozenForExecution = false;
