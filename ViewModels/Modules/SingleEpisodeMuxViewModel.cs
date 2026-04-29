@@ -475,6 +475,9 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
                 base.OnPropertyChanged(nameof(ManualCheckBadgeBorderBrush));
                 base.OnPropertyChanged(nameof(ManualCheckBadgeTooltip));
                 break;
+            case nameof(ManualCheckFilePaths):
+                TestSelectedSourcesCommand.RaiseCanExecuteChanged();
+                break;
             case nameof(MetadataStatusText):
                 base.OnPropertyChanged(nameof(HasMetadataStatus));
                 base.OnPropertyChanged(nameof(MetadataBadgeState));

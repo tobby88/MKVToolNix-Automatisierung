@@ -25,7 +25,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 ## Muxen
 
 - [x] Stale Dispatcher-Progress-Callbacks nach Abschluss/Abbruch ignorieren.
-- [ ] `TestSelectedSourcesCommand` nach manueller AD-Änderung neu auswerten.
+- [x] `TestSelectedSourcesCommand` nach manueller AD-Änderung neu auswerten.
 - [ ] Lange Einzel-Erkennung und Batch-Redetect abbrechbar machen.
 - [ ] `SxxExx`-Ausführung blockieren oder explizit bestätigen lassen.
 - [ ] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.

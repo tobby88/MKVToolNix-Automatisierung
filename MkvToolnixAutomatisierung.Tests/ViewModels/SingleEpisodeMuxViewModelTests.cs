@@ -171,6 +171,36 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void TestSelectedSourcesCommand_ReraisesCanExecute_WhenAudioDescriptionChangesManualCheckFiles()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "single-manual-check-command", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var audioDescriptionPath = Path.Combine(tempDirectory, "ad.mp4");
+            File.WriteAllText(audioDescriptionPath, "ad");
+            File.WriteAllText(Path.ChangeExtension(audioDescriptionPath, ".txt"), "Sender: SRF");
+            var viewModel = CreateViewModel();
+            var canExecuteChangedCount = 0;
+            viewModel.TestSelectedSourcesCommand.CanExecuteChanged += (_, _) => canExecuteChangedCount++;
+
+            Assert.False(viewModel.TestSelectedSourcesCommand.CanExecute(null));
+
+            viewModel.SetAudioDescription(audioDescriptionPath);
+
+            Assert.True(viewModel.TestSelectedSourcesCommand.CanExecute(null));
+            Assert.True(canExecuteChangedCount > 0);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SelectOutputCommand_UsesCurrentOutputDirectory_AsDialogStart()
     {
         var dialogService = new CapturingDialogService();
