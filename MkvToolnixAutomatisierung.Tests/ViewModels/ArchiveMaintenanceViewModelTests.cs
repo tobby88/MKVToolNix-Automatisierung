@@ -105,6 +105,21 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ApplySelectedCommand_KeepsRemuxHintVisibleAfterWritableChanges()
+    {
+        var viewModel = CreateViewModel(archiveMaintenance: new RecordingArchiveMaintenanceService());
+        var item = new ArchiveMaintenanceItemViewModel(CreateWritableRemuxAnalysis());
+        viewModel.Items.Add(item);
+
+        await viewModel.ApplySelectedCommand.ExecuteAsync();
+
+        Assert.Equal("Remux nötig", item.StatusText);
+        Assert.Equal("Warning", item.StatusTone);
+        Assert.Contains("Doppelte AD-Spuren", item.ChangeSummary, StringComparison.Ordinal);
+        Assert.True(item.HasIssues);
+    }
+
+    [Fact]
     public async Task ScanCommand_SortsItemsByMkvFileName()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-sort-" + Guid.NewGuid().ToString("N"));
@@ -486,6 +501,14 @@ public sealed class ArchiveMaintenanceViewModelTests
             Issues: [],
             ChangeNotes: ["MKV-Titel: Alt -> Pilot"],
             ErrorMessage: null);
+    }
+
+    private static ArchiveMaintenanceItemAnalysis CreateWritableRemuxAnalysis()
+    {
+        return CreateWritableAnalysis() with
+        {
+            Issues = [new ArchiveMaintenanceIssue(ArchiveMaintenanceIssueKind.RemuxRequired, "Doppelte AD-Spuren.")]
+        };
     }
 
     private static ArchiveMaintenanceItemAnalysis CreateNeutralAnalysis(

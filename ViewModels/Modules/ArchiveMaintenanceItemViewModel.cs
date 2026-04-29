@@ -344,7 +344,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         {
             if (_wasApplied)
             {
-                return "Erledigt";
+                return _analysis.RequiresRemux ? "Remux nötig" : "Erledigt";
             }
 
             if (_analysis.HasError)
@@ -380,7 +380,12 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
                 return "Error";
             }
 
-            if (_wasApplied || (!_analysis.HasError && !_analysis.RequiresRemux && !HasWritableChanges))
+            if (_analysis.RequiresRemux)
+            {
+                return "Warning";
+            }
+
+            if (_wasApplied || (!_analysis.HasError && !HasWritableChanges))
             {
                 return "Done";
             }
@@ -390,7 +395,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
                 return "Error";
             }
 
-            return _analysis.RequiresRemux ? "Warning" : "Ready";
+            return "Ready";
         }
     }
 
@@ -400,6 +405,12 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         {
             if (_wasApplied)
             {
+                if (_analysis.Issues.Count > 0)
+                {
+                    return "Freigegebene Änderungen wurden angewendet. Weiterhin nötig: "
+                           + string.Join("; ", _analysis.Issues.Select(issue => issue.Message));
+                }
+
                 return "Freigegebene Änderungen wurden angewendet.";
             }
 

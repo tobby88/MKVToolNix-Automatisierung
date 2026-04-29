@@ -41,7 +41,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 ## Archivpflege
 
 - [x] Rename/NFO-Apply-Fehler konsistent behandeln.
-- [ ] Remux-Hinweise nach direktem Apply sichtbar halten.
+- [x] Remux-Hinweise nach direktem Apply sichtbar halten.
 - [ ] Apply-Logging vollständig machen.
 - [ ] NFO-Lock beim Zurücktippen auf Ist-Wert bereinigen.
 - [ ] Case-sensitive Zielkonflikte bei Case-only-Renames prüfen/verbessern.
