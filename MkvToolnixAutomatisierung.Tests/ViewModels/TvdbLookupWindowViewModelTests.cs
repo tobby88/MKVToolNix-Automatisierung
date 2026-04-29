@@ -128,6 +128,36 @@ public sealed class TvdbLookupWindowViewModelTests
         Assert.Contains(store.CurrentSettings.SeriesMappings, mapping => mapping.TvdbSeriesId == 42);
     }
 
+    [Fact]
+    public async Task TryBuildSelection_KeepsTvdbSpecialsAsSeasonZero()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        });
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Beispielserie", "2024", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Sonderfolge", 0, 7, "2024-01-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+        var viewModel = new TvdbLookupWindowViewModel(
+            service,
+            new EpisodeMetadataGuess("Beispielserie", "Sonderfolge", "xx", "xx"));
+
+        await viewModel.SearchSeriesAsync(autoLoadEpisodes: true);
+        viewModel.SelectedEpisodeItem = Assert.Single(viewModel.EpisodeResults);
+
+        var success = viewModel.TryBuildSelection(out var selection, out var validationMessage);
+
+        Assert.True(success);
+        Assert.Null(validationMessage);
+        Assert.NotNull(selection);
+        Assert.Equal("00", selection!.SeasonNumber);
+        Assert.Equal("07", selection.EpisodeNumber);
+        Assert.Contains("S00E07", viewModel.SelectedEpisodeItem?.DisplayText, StringComparison.Ordinal);
+    }
+
     private static EpisodeMetadataLookupService CreateServiceWithEpisodes(IReadOnlyList<TvdbEpisodeRecord> episodes)
     {
         return new EpisodeMetadataLookupService(

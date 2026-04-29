@@ -71,6 +71,6 @@ internal static class TvdbLookupWindowTextFormatter
 
     public static string FormatTvdbNumber(int? value)
     {
-        return value is null or <= 0 ? "xx" : value.Value.ToString("00");
+        return value is null or < 0 ? "xx" : value.Value.ToString("00");
     }
 }

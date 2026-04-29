@@ -48,7 +48,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 ## Emby, TVDB und IMDb
 
-- [ ] TVDB-Specials aus dem manuellen Dialog als `S00E..` übernehmen.
+- [x] TVDB-Specials aus dem manuellen Dialog als `S00E..` übernehmen.
 - [ ] `Keine IMDb-ID` auch ohne weitere Provider-ID in die NFO schreiben.
 - [ ] Lokale NFO-Analyse bei Emby-Netzwerkfehlern weiterführen.
 - [ ] Erledigt-Markierung ohne Emby-Refresh sauber modellieren.
