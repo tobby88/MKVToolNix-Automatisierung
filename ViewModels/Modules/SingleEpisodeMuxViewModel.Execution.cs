@@ -1,9 +1,7 @@
 using System.Threading;
-using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
-using MkvToolnixAutomatisierung.Windows;
 
 namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 
@@ -23,10 +21,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
             PlanRefreshProblemText = string.Empty;
             ApplyPlanPresentation(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
+            InvalidateOperationProgressCallbacks();
             SetStatus("Vorschau bereit", 0);
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
+            InvalidateOperationProgressCallbacks();
             SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
             SetStatus("Abgebrochen", 0);
         }
@@ -136,6 +136,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 var completedPlan = _currentPlan ?? throw new InvalidOperationException("Der abgeschlossene Mux-Plan fehlt.");
                 var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
+                InvalidateOperationProgressCallbacks();
                 SetStatus(finalStatusText, 100);
                 var logSaveResult = PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: false);
                 ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Success);
@@ -147,6 +148,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 OpenSingleEpisodeRunArtifactIfAvailable(logSaveResult);
                 await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Success);
+                InvalidateOperationProgressCallbacks();
                 SetStatus(finalStatusText, 100);
             }
             else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
@@ -157,6 +159,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 var completedPlan = _currentPlan ?? throw new InvalidOperationException("Der abgeschlossene Mux-Plan fehlt.");
                 var cleanupCandidate = BuildSingleEpisodeCleanupCandidate(completedPlan);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
+                InvalidateOperationProgressCallbacks();
                 SetStatus(finalStatusText, 100);
                 var logSaveResult = PersistSingleEpisodeArtifactsIfNeeded(completedPlan, outputExistedBeforeRun, hasWarning: true);
                 ClearCompletedSingleEpisodeInput(finalStatusText, SingleEpisodeExecutionStatusKind.Warning);
@@ -168,10 +171,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 OpenSingleEpisodeRunArtifactIfAvailable(logSaveResult);
                 await OfferSingleEpisodeCleanupCandidateAsync(cleanupCandidate, cancellationToken);
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
+                InvalidateOperationProgressCallbacks();
                 SetStatus(finalStatusText, 100);
             }
             else
             {
+                InvalidateOperationProgressCallbacks();
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.Error);
                 SetStatus(
                     _currentPlan.HasHeaderEdits
@@ -183,6 +188,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         }
         catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
         {
+            InvalidateOperationProgressCallbacks();
             SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
             SetStatus("Abgebrochen", 0);
         }
@@ -469,7 +475,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void HandleWorkingCopyPreparationUpdate(WorkingCopyPreparationUpdate update)
     {
-        _ = Application.Current.Dispatcher.BeginInvoke(() =>
+        DispatchCurrentOperationProgress(() =>
         {
             if (update.ReusesExistingCopy)
             {
@@ -488,7 +494,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void HandleMuxUpdate(MuxExecutionUpdate update)
     {
-        _ = Application.Current.Dispatcher.BeginInvoke(() =>
+        DispatchCurrentOperationProgress(() =>
         {
             var progressValue = update.ProgressPercent ?? ProgressValue;
             var baseText = _currentPlan?.HasHeaderEdits == true
@@ -560,10 +566,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
             (current, total, _) =>
             {
                 var progress = total <= 0 ? 0 : (int)Math.Round(current * 100d / total);
-                Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    SetStatus($"Verschiebe Quelldateien in den Papierkorb... {current}/{total}", progress);
-                });
+                DispatchCurrentOperationProgress(() =>
+                    SetStatus($"Verschiebe Quelldateien in den Papierkorb... {current}/{total}", progress));
             },
             cancellationToken);
 

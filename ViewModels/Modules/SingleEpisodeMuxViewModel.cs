@@ -38,6 +38,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private SingleEpisodeExecutionStatusKind _executionStatusKind = SingleEpisodeExecutionStatusKind.Ready;
     private SeriesEpisodeMuxPlan? _currentPlan;
     private int _detectionProgressVersion;
+    private int _operationProgressGeneration;
 
     public SingleEpisodeMuxViewModel(
         SingleEpisodeModuleServices services,
@@ -312,6 +313,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     {
         _currentOperationCts?.Cancel();
         _currentOperationCts?.Dispose();
+        BeginOperationProgressScope();
         _currentOperationCts = new CancellationTokenSource();
         NotifyCurrentOperationChanged();
         return _currentOperationCts;
@@ -325,6 +327,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             return;
         }
 
+        InvalidateOperationProgressCallbacks();
         _currentOperationCts.Dispose();
         _currentOperationCts = null;
         NotifyCurrentOperationChanged();
@@ -338,6 +341,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         }
 
         _currentOperationCts.Cancel();
+        InvalidateOperationProgressCallbacks();
         SetStatus("Abbruch angefordert...", ProgressValue);
         NotifyCurrentOperationChanged();
     }
@@ -354,6 +358,42 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         StatusText = text;
         ProgressValue = Math.Clamp(progressValue, 0, 100);
         OnPropertyChanged(nameof(ExecutionStatusTooltip));
+    }
+
+    /// <summary>
+    /// Schützt verzögert eintreffende Kopier- und Mux-Fortschritte davor, einen bereits
+    /// abgeschlossenen oder abgebrochenen Einzelvorgang wieder auf "läuft" zurückzusetzen.
+    /// </summary>
+    private void DispatchCurrentOperationProgress(Action applyProgress)
+    {
+        var generation = Volatile.Read(ref _operationProgressGeneration);
+        var dispatcher = Application.Current?.Dispatcher;
+        void ApplyIfCurrent()
+        {
+            if (_currentOperationCts is { IsCancellationRequested: false }
+                && Volatile.Read(ref _operationProgressGeneration) == generation)
+            {
+                applyProgress();
+            }
+        }
+
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            ApplyIfCurrent();
+            return;
+        }
+
+        _ = dispatcher.BeginInvoke(ApplyIfCurrent);
+    }
+
+    private void BeginOperationProgressScope()
+    {
+        Interlocked.Increment(ref _operationProgressGeneration);
+    }
+
+    private void InvalidateOperationProgressCallbacks()
+    {
+        Interlocked.Increment(ref _operationProgressGeneration);
     }
 
     private void SetExecutionStatus(SingleEpisodeExecutionStatusKind statusKind)

@@ -29,6 +29,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private readonly BatchOperationController _operationController = new();
     private readonly EpisodePlanCache _planCache = new();
     private readonly DebouncedRefreshController _selectedPlanSummaryRefresh = new(TimeSpan.FromMilliseconds(200));
+    private int _batchProgressGeneration;
 
     private string _sourceDirectory = string.Empty;
     private string _outputDirectory = string.Empty;
@@ -426,14 +427,42 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private void SetStatusFromAnyThread(string text, int progress)
     {
+        DispatchBatchProgress(() => SetStatus(text, progress));
+    }
+
+    /// <summary>
+    /// Führt verzögerte Fortschrittsupdates nur aus, solange sie noch zum aktuellen Batch-Vorgang gehören.
+    /// </summary>
+    private void DispatchBatchProgress(Action applyProgress)
+    {
+        var generation = Volatile.Read(ref _batchProgressGeneration);
         var dispatcher = Application.Current?.Dispatcher;
+        void ApplyIfCurrent()
+        {
+            if (_operationController.CanCancelCurrentOperation
+                && Volatile.Read(ref _batchProgressGeneration) == generation)
+            {
+                applyProgress();
+            }
+        }
+
         if (dispatcher is null || dispatcher.CheckAccess())
         {
-            SetStatus(text, progress);
+            ApplyIfCurrent();
             return;
         }
 
-        _ = dispatcher.BeginInvoke(() => SetStatus(text, progress));
+        _ = dispatcher.BeginInvoke(ApplyIfCurrent);
+    }
+
+    private void BeginBatchProgressScope()
+    {
+        Interlocked.Increment(ref _batchProgressGeneration);
+    }
+
+    private void InvalidateBatchProgressCallbacks()
+    {
+        Interlocked.Increment(ref _batchProgressGeneration);
     }
 
     /// <summary>
@@ -452,6 +481,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private CancellationToken BeginBatchOperation(BatchOperationKind operationKind)
     {
+        BeginBatchProgressScope();
         var token = _operationController.Begin(operationKind);
         NotifyBatchOperationStateChanged();
         return token;
@@ -462,6 +492,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private void CompleteBatchOperation(BatchOperationKind operationKind)
     {
+        InvalidateBatchProgressCallbacks();
         _operationController.Complete(operationKind);
         NotifyBatchOperationStateChanged();
     }
@@ -482,6 +513,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private void CompleteCurrentBatchOperation()
     {
+        InvalidateBatchProgressCallbacks();
         _operationController.CompleteCurrent();
         NotifyBatchOperationStateChanged();
     }
@@ -496,6 +528,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
             return;
         }
 
+        InvalidateBatchProgressCallbacks();
         StatusText = _operationController.CurrentOperationKind switch
         {
             BatchOperationKind.Scan => "Batch-Scan wird abgebrochen...",
@@ -550,5 +583,4 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
-
 

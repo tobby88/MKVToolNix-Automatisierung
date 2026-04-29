@@ -197,24 +197,19 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        if (Application.Current.Dispatcher.CheckAccess())
-        {
-            ApplyUpdate();
-            return;
-        }
-
-        _ = Application.Current.Dispatcher.BeginInvoke(ApplyUpdate);
+        DispatchBatchProgress(ApplyUpdate);
     }
 
     private void HandleSelectedItemDetectionProgress(DetectionProgressUpdate update)
     {
-        if (Application.Current.Dispatcher.CheckAccess())
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
         {
             SetStatus(update.StatusText, update.ProgressPercent);
             return;
         }
 
-        _ = Application.Current.Dispatcher.BeginInvoke(() => SetStatus(update.StatusText, update.ProgressPercent));
+        _ = dispatcher.BeginInvoke(() => SetStatus(update.StatusText, update.ProgressPercent));
     }
 
 }

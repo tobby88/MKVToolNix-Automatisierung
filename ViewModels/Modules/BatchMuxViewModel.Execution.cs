@@ -1,5 +1,4 @@
 using System.Threading;
-using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -132,6 +131,7 @@ internal sealed partial class BatchMuxViewModel
                 logSaveResult = null;
             }
 
+            InvalidateBatchProgressCallbacks();
             SetStatus(
                 BuildBatchCompletionStatusText(executionOutcome),
                 100);
@@ -145,6 +145,7 @@ internal sealed partial class BatchMuxViewModel
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            InvalidateBatchProgressCallbacks();
             appendBatchRunLog?.Invoke("ABGEBROCHEN: Batch-Lauf durch Benutzer abgebrochen.");
             SetStatus("Batch abgebrochen", ProgressValue);
         }
@@ -216,10 +217,7 @@ internal sealed partial class BatchMuxViewModel
                 doneFiles,
                 (current, total, _filePath) =>
                 {
-                    Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        progressTracker.ReportRecycleProgress(current, total);
-                    });
+                    progressTracker.ReportRecycleProgress(current, total);
                 },
                 cancellationToken);
 

@@ -1,4 +1,3 @@
-using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
 
@@ -74,16 +73,13 @@ internal sealed class BatchExecutionRunner
                 {
                     var combinedCopiedBytes = copiedBeforeCurrentFile + copiedBytes;
 
-                    Application.Current.Dispatcher.BeginInvoke(() =>
-                    {
-                        progressTracker.ReportCopyProgress(
-                            index + 1,
-                            copyPreparation.CopyPlansToExecute.Count,
-                            combinedCopiedBytes,
-                            copyPreparation.TotalCopyBytes,
-                            copiedBytes,
-                            copyPlan.FileSizeBytes);
-                    });
+                    progressTracker.ReportCopyProgress(
+                        index + 1,
+                        copyPreparation.CopyPlansToExecute.Count,
+                        combinedCopiedBytes,
+                        copyPreparation.TotalCopyBytes,
+                        copiedBytes,
+                        copyPlan.FileSizeBytes);
                 },
                 cancellationToken);
 
@@ -285,8 +281,7 @@ internal sealed class BatchExecutionRunner
             doneDirectory,
             (current, total, _filePath) =>
             {
-                _ = Application.Current.Dispatcher.BeginInvoke(() =>
-                    progressTracker.ReportMoveToDone(currentItemIndex, current, total));
+                progressTracker.ReportMoveToDone(currentItemIndex, current, total);
             },
             cancellationToken);
 

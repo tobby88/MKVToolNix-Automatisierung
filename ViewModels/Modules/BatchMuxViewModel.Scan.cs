@@ -100,7 +100,7 @@ internal sealed partial class BatchMuxViewModel
                 () =>
                 {
                     var processed = Interlocked.Increment(ref completedCount);
-                    _ = Application.Current.Dispatcher.BeginInvoke(() =>
+                    DispatchBatchProgress(() =>
                     {
                         // Einzelne Abschlussmeldungen aus den parallelen Scan-Tasks können noch kurz
                         // später in der UI ankommen. Der globale Fortschritt darf dabei nie hinter
@@ -176,11 +176,13 @@ internal sealed partial class BatchMuxViewModel
                 archiveComparisonItems,
                 automatic: true,
                 cancellationToken);
+            InvalidateBatchProgressCallbacks();
             SetStatus(StatusText, 100);
             RefreshCommands();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            InvalidateBatchProgressCallbacks();
             var comparisonWasCancelled = _operationController.CurrentOperationKind == BatchOperationKind.Comparison;
             AppendLog(comparisonWasCancelled
                 ? "ABGEBROCHEN: Archivvergleich durch Benutzer abgebrochen."
