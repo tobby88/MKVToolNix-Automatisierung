@@ -33,6 +33,13 @@ public sealed class FileStateSnapshotTests : IDisposable
         Assert.False(cachedValue.Matches(FileStateSnapshot.TryCreate(filePath)));
     }
 
+    [Fact]
+    public void TryCreate_ReturnsNull_ForMissingOrInvalidPath()
+    {
+        Assert.Null(FileStateSnapshot.TryCreate(Path.Combine(_tempDirectory, "missing.mkv")));
+        Assert.Null(FileStateSnapshot.TryCreate("bad\0path.mkv"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

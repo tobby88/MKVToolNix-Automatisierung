@@ -18,7 +18,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] DownloadSort-Move-Quellen auf den gewählten Root begrenzen.
 - [x] UI-Cancellation für lange Einsortierläufe ergänzen.
 - [x] Case-only Ordner-Kanonisierung beim Einsortieren prüfen und umsetzen.
-- [ ] `FileStateSnapshot.TryCreate` race-sicher machen.
+- [x] `FileStateSnapshot.TryCreate` race-sicher machen.
 - [ ] Arbeitskopien im `FileCopyService` atomar ersetzen.
 - [ ] Leere gewählte Quellordner nach Cleanup erhalten oder gezielt neu anlegen.
 

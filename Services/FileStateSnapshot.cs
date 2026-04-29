@@ -7,13 +7,25 @@ internal readonly record struct FileStateSnapshot(long Length, DateTime LastWrit
 {
     public static FileStateSnapshot? TryCreate(string? filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        if (string.IsNullOrWhiteSpace(filePath))
         {
             return null;
         }
 
-        var info = new FileInfo(filePath);
-        return new FileStateSnapshot(info.Length, info.LastWriteTimeUtc);
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return null;
+            }
+
+            var info = new FileInfo(filePath);
+            return new FileStateSnapshot(info.Length, info.LastWriteTimeUtc);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+        {
+            return null;
+        }
     }
 }
 
