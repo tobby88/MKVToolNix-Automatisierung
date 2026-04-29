@@ -442,7 +442,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
     private static bool TargetExistsAsDifferentFile(string sourcePath, string targetPath)
     {
-        return File.Exists(targetPath) && !PathComparisonHelper.AreSamePath(sourcePath, targetPath);
+        return PathComparisonHelper.FileExistsAsDifferentEntry(sourcePath, targetPath);
     }
 
     private static string CreateTemporaryCaseRenamePath(string directory)

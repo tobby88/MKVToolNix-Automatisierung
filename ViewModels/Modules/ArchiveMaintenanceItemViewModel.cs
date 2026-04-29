@@ -1027,7 +1027,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private static bool TargetExistsAsDifferentFile(string sourcePath, string targetPath)
     {
-        return File.Exists(targetPath) && !PathComparisonHelper.AreSamePath(sourcePath, targetPath);
+        return PathComparisonHelper.FileExistsAsDifferentEntry(sourcePath, targetPath);
     }
 
     private bool AreProviderIdsUsable()

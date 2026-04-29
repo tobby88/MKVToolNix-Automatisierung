@@ -44,7 +44,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Remux-Hinweise nach direktem Apply sichtbar halten.
 - [x] Apply-Logging vollständig machen.
 - [x] NFO-Lock beim Zurücktippen auf Ist-Wert bereinigen.
-- [ ] Case-sensitive Zielkonflikte bei Case-only-Renames prüfen/verbessern.
+- [x] Case-sensitive Zielkonflikte bei Case-only-Renames prüfen/verbessern.
 
 ## Emby, TVDB und IMDb
 
