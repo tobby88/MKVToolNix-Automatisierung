@@ -10,6 +10,9 @@ public sealed class AudioTrackClassifierTests
     [InlineData("", true, true)]
     [InlineData("Deutsch (sehbehinderte) - AAC", false, true)]
     [InlineData("Deutsch Audiodeskription - AAC", false, true)]
+    [InlineData("English Audio Description - AAC", false, true)]
+    [InlineData("English descriptive audio - AAC", false, true)]
+    [InlineData("English (visually impaired) - AAC", false, true)]
     [InlineData("Deutsch - AAC", false, false)]
     public void IsAudioDescriptionTrack_DetectsExpectedSignals(string trackName, bool isVisualImpaired, bool expected)
     {

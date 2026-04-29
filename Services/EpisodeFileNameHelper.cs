@@ -41,10 +41,26 @@ internal static class EpisodeFileNameHelper
     public static bool LooksLikeAudioDescription(string filePath)
     {
         var fileName = Path.GetFileNameWithoutExtension(filePath);
-        return Regex.IsMatch(fileName, @"\bAudiodes(?:krip\w*)?\b", RegexOptions.IgnoreCase)
-            || fileName.Contains("hörfassung", StringComparison.OrdinalIgnoreCase)
-            || fileName.Contains("hoerfassung", StringComparison.OrdinalIgnoreCase)
-            || Regex.IsMatch(fileName, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
+        return ContainsAudioDescriptionMarker(fileName);
+    }
+
+    /// <summary>
+    /// Erkennt deutsche und englische Audiodeskriptionsmarker in Datei-, Titel- oder Tracktexten.
+    /// </summary>
+    public static bool ContainsAudioDescriptionMarker(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(value, @"\bAudiodes(?:krip\w*)?\b", RegexOptions.IgnoreCase)
+            || value.Contains("hörfassung", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("hoerfassung", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase)
+            || Regex.IsMatch(value, @"\b(?:audio\s*-?\s*description|audio\s*-?\s*described|descriptive\s+audio|described\s+audio)\b", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(value, @"\b(?:visually\s+impaired|visual\s+impaired|vision\s+impaired)\b", RegexOptions.IgnoreCase)
+            || Regex.IsMatch(value, @"(?:^|[^a-z])AD(?:[^a-z]|$)", RegexOptions.IgnoreCase);
     }
 
     public static string NormalizeEpisodeNumber(string? value)

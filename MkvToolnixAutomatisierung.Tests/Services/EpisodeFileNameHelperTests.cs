@@ -12,7 +12,12 @@ public sealed class EpisodeFileNameHelperTests
     [InlineData(@"C:\Temp\Serie - AD.mp4", true)]
     [InlineData(@"C:\Temp\Serie - Pilot (Hörfassung).mp4", true)]
     [InlineData(@"C:\Temp\Serie - Pilot (Hoerfassung).mp4", true)]
+    [InlineData(@"C:\Temp\Serie - Pilot (Audio Description).mp4", true)]
+    [InlineData(@"C:\Temp\Serie - Pilot (with audio-described track).mp4", true)]
+    [InlineData(@"C:\Temp\Serie - Pilot (Descriptive Audio).mp4", true)]
+    [InlineData(@"C:\Temp\Serie - Pilot (visually impaired).mp4", true)]
     [InlineData(@"C:\Temp\Serie - Audiodesign.mp4", false)]
+    [InlineData(@"C:\Temp\Serie - Audio Design.mp4", false)]
     [InlineData(@"C:\Temp\Serie - Adventure.mp4", false)]
     public void LooksLikeAudioDescription_DetectsExpectedPatterns(string filePath, bool expected)
     {

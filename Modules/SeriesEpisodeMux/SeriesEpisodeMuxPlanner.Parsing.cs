@@ -342,6 +342,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         name = Regex.Replace(name, @"\(\s*Audiodes(?:krip\w*)?[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\(\s*Audiodes(?:krip\w*)?[^)]*$", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
+        name = StripEnglishAudioDescriptionMarkers(name);
         name = Regex.Replace(name, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bAudiodes(?:krip\w*)?\b", string.Empty, RegexOptions.IgnoreCase);
         name = Regex.Replace(name, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
@@ -371,11 +372,23 @@ public sealed partial class SeriesEpisodeMuxPlanner
         normalized = Regex.Replace(normalized, @"\(\s*Audiodes(?:krip\w*)?[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*Audiodes(?:krip\w*)?[^)]*$", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\(\s*H(?:ö|oe)rfassung\s*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = StripEnglishAudioDescriptionMarkers(normalized);
         normalized = Regex.Replace(normalized, @"\bAudiodeskription\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bAudiodes(?:krip\w*)?\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bH(?:ö|oe)rfassung\b", string.Empty, RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         normalized = Regex.Replace(normalized, @"\s*[-:]\s*$", string.Empty);
+        return normalized;
+    }
+
+    private static string StripEnglishAudioDescriptionMarkers(string value)
+    {
+        // Englische Anbieter nutzen mehrere Begriffe fuer denselben AD-Sachverhalt.
+        // Die Muster bleiben auf "audio/visual impaired"-Phrasen begrenzt, damit normale
+        // Titelwoerter wie "description" oder "visual" nicht versehentlich verschwinden.
+        var normalized = Regex.Replace(value, @"\(\s*(?:with\s+)?(?:audio\s*-?\s*description|audio\s*-?\s*described|descriptive\s+audio|described\s+audio|visually\s+impaired|visual\s+impaired|vision\s+impaired)[^)]*\)", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\(\s*(?:with\s+)?(?:audio\s*-?\s*description|audio\s*-?\s*described|descriptive\s+audio|described\s+audio|visually\s+impaired|visual\s+impaired|vision\s+impaired)[^)]*$", string.Empty, RegexOptions.IgnoreCase);
+        normalized = Regex.Replace(normalized, @"\b(?:with\s+)?(?:audio\s*-?\s*description|audio\s*-?\s*described|descriptive\s+audio|described\s+audio|visually\s+impaired|visual\s+impaired|vision\s+impaired)\b", string.Empty, RegexOptions.IgnoreCase);
         return normalized;
     }
 
@@ -634,4 +647,3 @@ public sealed partial class SeriesEpisodeMuxPlanner
         long FileSizeBytes,
         string? AttachmentPath) : EpisodeCandidateBase(Identity, Sender, DurationSeconds);
 }
-

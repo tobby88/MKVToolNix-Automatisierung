@@ -84,6 +84,18 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         Assert.Equal("Findus zieht um", normalizedTitle);
     }
 
+    [Theory]
+    [InlineData("Pilot (Audio Description)", "Pilot")]
+    [InlineData("Pilot (with audio-described track)", "Pilot")]
+    [InlineData("Pilot - descriptive audio", "Pilot")]
+    [InlineData("Pilot (visually impaired)", "Pilot")]
+    public void NormalizeEpisodeTitle_RemovesEnglishAudioDescriptionMarkers(string rawTitle, string expectedTitle)
+    {
+        var normalizedTitle = SeriesEpisodeMuxPlanner.NormalizeEpisodeTitle(rawTitle);
+
+        Assert.Equal(expectedTitle, normalizedTitle);
+    }
+
     [Fact]
     public void NormalizeEpisodeTitle_RemovesShortFilmEditorialLabel()
     {

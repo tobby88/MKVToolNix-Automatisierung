@@ -35,7 +35,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Videoreihenfolge im PlanCache-Key berücksichtigen.
 - [x] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
 - [x] Arbeitskopie-Staleness stärker validieren.
-- [ ] AD-Heuristik um englische Marker erweitern.
+- [x] AD-Heuristik um englische Marker erweitern.
 - [ ] Single-/Batch-XAML-Duplikate prüfen und sinnvoll reduzieren.
 
 ## Archivpflege

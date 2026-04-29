@@ -178,7 +178,7 @@ public sealed partial class SeriesArchiveService
                     .Where(value => !string.IsNullOrWhiteSpace(value)));
             _ = TryInferExplicitLanguageCode(titleSignals, out var inferredLanguageCode);
             var normalizedLanguageCode = inferredLanguageCode ?? "de";
-            var isAudioDescription = ContainsAny(titleSignals, "audiodeskrip", "sehbehinder");
+            var isAudioDescription = EpisodeFileNameHelper.ContainsAudioDescriptionMarker(titleSignals);
             candidates.Add(new EmbeddedTextDurationCandidate(
                 textAttachment.Id,
                 normalizedLanguageCode,

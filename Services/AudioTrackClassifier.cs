@@ -36,8 +36,7 @@ internal static class AudioTrackClassifier
     public static bool IsAudioDescriptionTrack(string? trackName, bool isVisualImpaired)
     {
         return isVisualImpaired
-            || (trackName?.Contains("sehbehinder", StringComparison.OrdinalIgnoreCase) ?? false)
-            || (trackName?.Contains("audiodeskrip", StringComparison.OrdinalIgnoreCase) ?? false);
+            || EpisodeFileNameHelper.ContainsAudioDescriptionMarker(trackName);
     }
 
     /// <summary>
