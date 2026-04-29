@@ -25,6 +25,10 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
     [InlineData("de", "ger")]
     [InlineData("en", "en")]
     [InlineData("en", "eng")]
+    [InlineData("sv", "swe")]
+    [InlineData("fra", "fr")]
+    [InlineData("jpn", "ja")]
+    [InlineData("nob", "no")]
     public void ResolveOriginalFlag_TrackMatchesSeriesOriginalLanguage_ReturnsYes(
         string trackLanguage, string seriesOriginalLanguage)
     {

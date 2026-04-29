@@ -298,10 +298,10 @@ internal static class SeriesEpisodeMuxArgumentBuilder
     /// <remarks>
     /// Ist die Originalsprache der Serie unbekannt, wird <c>yes</c> zurückgegeben (Rückwärtskompatibilität).
     /// Andernfalls gilt: Die Spur ist original, wenn ihr Sprachcode mit der Originalsprache der Serie übereinstimmt.
-    /// Der Vergleich normalisiert bewusst nur Deutsch- und Englisch-Varianten; alle anderen Sprachen
-    /// (z. B. <c>swe</c>, <c>fr</c>) werden direkt als Rohwert verglichen.
+    /// Der Vergleich normalisiert bekannte ISO-639-Varianten vorab, damit z. B. <c>swe</c> und
+    /// <c>sv</c> oder <c>fra</c> und <c>fr</c> als dieselbe Sprache gelten.
     /// </remarks>
-    /// <param name="trackLanguageCode">Normalisierter Sprachcode der Spur (<c>de</c>, <c>en</c>, <c>nds</c>).</param>
+    /// <param name="trackLanguageCode">Sprachcode der Spur, z. B. <c>de</c>, <c>eng</c>, <c>sv</c> oder <c>nds</c>.</param>
     /// <param name="seriesOriginalLanguage">Roher TVDB-Sprachcode der Serie (z. B. <c>deu</c>, <c>swe</c>).</param>
     /// <returns><c>yes</c> wenn die Spur in der Originalsprache ist, sonst <c>no</c>.</returns>
     internal static string ResolveOriginalFlag(string? trackLanguageCode, string? seriesOriginalLanguage)

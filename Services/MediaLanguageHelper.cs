@@ -13,9 +13,25 @@ internal static class MediaLanguageHelper
     /// <returns>Normalisierter MKV-Sprachcode für den finalen Mux.</returns>
     public static string NormalizeMuxLanguageCode(string? languageCode)
     {
+        return TryNormalizeKnownMuxLanguageCode(languageCode) ?? "de";
+    }
+
+    /// <summary>
+    /// Normalisiert bekannte ISO-639-Varianten auf die projektweit verwendeten MKV-Codes.
+    /// </summary>
+    /// <remarks>
+    /// Im Gegensatz zu <see cref="NormalizeMuxLanguageCode"/> gibt diese Methode bei unbekannten
+    /// Werten <see langword="null"/> zurück. Dadurch können Vergleichsregeln, etwa für das
+    /// Originalsprache-Flag, unbekannte externe Codes konservativ als "nicht gleich" behandeln,
+    /// statt sie wegen des deutschzentrierten Mux-Fallbacks versehentlich auf Deutsch abzubilden.
+    /// </remarks>
+    /// <param name="languageCode">Rohwert aus Tool-Metadaten, TVDB oder manueller Eingabe.</param>
+    /// <returns>Normalisierter bekannter MKV-Code oder <see langword="null"/>.</returns>
+    public static string? TryNormalizeKnownMuxLanguageCode(string? languageCode)
+    {
         if (string.IsNullOrWhiteSpace(languageCode))
         {
-            return "de";
+            return null;
         }
 
         var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
@@ -117,7 +133,7 @@ internal static class MediaLanguageHelper
             return "zh";
         }
 
-        return "de";
+        return null;
     }
 
     /// <summary>

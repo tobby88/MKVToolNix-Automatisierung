@@ -41,7 +41,7 @@ internal static partial class SeriesOriginalLanguageRules
         var normalizedOriginal = NormalizeOriginalLanguageCode(seriesOriginalLanguage);
         var normalizedTrack = string.IsNullOrWhiteSpace(trackLanguageCode)
             ? "de"
-            : trackLanguageCode.Trim().ToLowerInvariant();
+            : NormalizeOriginalLanguageCode(trackLanguageCode);
         return string.Equals(normalizedTrack, normalizedOriginal, StringComparison.Ordinal) ? "yes" : "no";
     }
 
@@ -126,25 +126,7 @@ internal static partial class SeriesOriginalLanguageRules
     private static string NormalizeOriginalLanguageCode(string languageCode)
     {
         var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
-        if (normalized is "de" or "deu" or "ger" || normalized.StartsWith("de-", StringComparison.Ordinal))
-        {
-            return "de";
-        }
-
-        if (normalized is "nds" || normalized.StartsWith("nds-", StringComparison.Ordinal))
-        {
-            return "nds";
-        }
-
-        if (normalized is "en" or "eng" || normalized.StartsWith("en-", StringComparison.Ordinal))
-        {
-            return "en";
-        }
-
-        // Alle anderen Sprachen (swe, fr, ja, ...) als Rohwert zurückgeben.
-        // Da mkvmerge-Tracks für diese Sprachen selten vorkommen, ergibt der Vergleich in
-        // deutschzentrierten Quellen normalerweise "no".
-        return normalized;
+        return MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode(normalized) ?? normalized;
     }
 
     [GeneratedRegex(@"^(?<series>.+?)\s+-\s+S(?:\d{2,4}|xx)E(?:\d{2}(?:-E?\d{2})?|xx)", RegexOptions.IgnoreCase)]

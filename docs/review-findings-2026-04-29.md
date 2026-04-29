@@ -33,7 +33,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Inkompatible AD-Laufzeit nicht automatisch wählen.
 - [x] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
 - [x] Videoreihenfolge im PlanCache-Key berücksichtigen.
-- [ ] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
+- [x] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
 - [ ] Arbeitskopie-Staleness stärker validieren.
 - [ ] AD-Heuristik um englische Marker erweitern.
 - [ ] Single-/Batch-XAML-Duplikate prüfen und sinnvoll reduzieren.

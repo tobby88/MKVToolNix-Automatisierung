@@ -38,4 +38,12 @@ public sealed class MediaLanguageHelperTests
         Assert.Equal(expectedCode, MediaLanguageHelper.NormalizeMuxLanguageCode(rawCode));
         Assert.Equal(expectedDisplayName, MediaLanguageHelper.GetLanguageDisplayName(rawCode));
     }
+
+    [Fact]
+    public void TryNormalizeKnownMuxLanguageCode_ReturnsNull_ForUnknownValues()
+    {
+        Assert.Equal("sv", MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode("swe"));
+        Assert.Null(MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode("zz"));
+        Assert.Null(MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode(null));
+    }
 }
