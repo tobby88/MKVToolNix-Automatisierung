@@ -63,5 +63,5 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Toolprüfung im Einstellungsdialog abbrechbar machen.
 - [x] Verwaltete MediathekView-Installation aus `Tools` wiederfinden.
 - [x] HTTP-`Accept`-Header pro Toolquelle passend setzen.
-- [ ] Startup-Cancellation in Migration/Cleanup beachten.
+- [x] Startup-Cancellation in Migration/Cleanup beachten.
 - [ ] Numerische Einstellungen sichtbar validieren.
