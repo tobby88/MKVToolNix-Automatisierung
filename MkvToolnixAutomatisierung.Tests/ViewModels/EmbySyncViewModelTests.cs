@@ -383,6 +383,55 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task RunSyncCommand_WritesNoImdbDecision_WhenNoOtherProviderIdIsSet()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S00E01 - Bonus.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Bonus</title>
+                  <uniqueid type="imdb">tt1234567</uniqueid>
+                  <imdbid>tt1234567</imdbid>
+                </episodedetails>
+                """);
+
+            var vm = CreateViewModel();
+            var item = new EmbySyncItemViewModel(mediaPath, EmbyProviderIds.Empty);
+            item.ApplyAnalysis(new EmbyFileAnalysis(
+                item.MediaFilePath,
+                nfoPath,
+                MediaFileExists: true,
+                NfoExists: true,
+                NfoProviderIds: new EmbyProviderIds(null, "tt1234567"),
+                EmbyItem: null,
+                WarningMessage: null));
+            item.MarkImdbUnavailable();
+            vm.Items.Add(item);
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("IDs fehlen", item.StatusText);
+            var updatedText = File.ReadAllText(nfoPath);
+            Assert.DoesNotContain("tt1234567", updatedText, StringComparison.Ordinal);
+            Assert.DoesNotContain("<imdbid>", updatedText, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_RefreshesEmby_WhenNfoIsCurrentButServerIdsDiffer()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));

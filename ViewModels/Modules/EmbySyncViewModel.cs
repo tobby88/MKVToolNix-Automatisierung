@@ -476,7 +476,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     continue;
                 }
 
-                if (!item.ProviderIds.HasAny)
+                if (!item.ProviderIds.HasAny && !item.IsImdbUnavailable)
                 {
                     item.SetStatus("Übersprungen", "Keine TVDB- oder IMDB-ID vorhanden. Bitte IDs manuell ergänzen oder Emby-Metadaten prüfen.");
                     skippedCount++;
