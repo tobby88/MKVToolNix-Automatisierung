@@ -11,13 +11,14 @@ internal sealed partial class BatchMuxViewModel
 {
     private async Task ApplyDetectionToItemAsync(BatchEpisodeItemViewModel item, string selectedVideoPath)
     {
-        await ApplyDetectionToItemAsync(item, selectedVideoPath, item.ExcludedSourcePaths);
+        await ApplyDetectionToItemAsync(item, selectedVideoPath, item.ExcludedSourcePaths, CancellationToken.None);
     }
 
     private async Task<bool> ApplyDetectionToItemAsync(
         BatchEpisodeItemViewModel item,
         string selectedVideoPath,
-        IReadOnlyCollection<string>? excludedSourcePaths)
+        IReadOnlyCollection<string>? excludedSourcePaths,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -28,7 +29,8 @@ internal sealed partial class BatchMuxViewModel
                 selectedVideoPath,
                 OutputDirectory,
                 HandleSelectedItemDetectionProgress,
-                excludedSourcePaths);
+                excludedSourcePaths,
+                cancellationToken);
             var outputPath = result.OutputPath;
             var outputAlreadyExists = File.Exists(outputPath);
             var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
@@ -52,6 +54,12 @@ internal sealed partial class BatchMuxViewModel
                 ScheduleSelectedItemPlanSummaryRefresh();
             }
             return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AppendLog($"ABGEBROCHEN: Erkennung für {Path.GetFileName(selectedVideoPath)} durch Benutzer abgebrochen.");
+            SetStatus("Erkennung abgebrochen", ProgressValue);
+            return false;
         }
         catch (Exception ex)
         {

@@ -215,7 +215,21 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        await ApplyDetectionToItemAsync(item, path);
+        var cancellationToken = CancellationToken.None;
+        var operationStarted = false;
+        try
+        {
+            cancellationToken = BeginBatchOperation(BatchOperationKind.Scan);
+            operationStarted = true;
+            await ApplyDetectionToItemAsync(item, path, item.ExcludedSourcePaths, cancellationToken);
+        }
+        finally
+        {
+            if (operationStarted)
+            {
+                CompleteCurrentBatchOperation();
+            }
+        }
     }
 
     private static async Task FlushPendingScanUiUpdatesAsync()

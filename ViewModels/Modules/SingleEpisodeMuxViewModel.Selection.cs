@@ -142,9 +142,11 @@ internal sealed partial class SingleEpisodeMuxViewModel
         string selectedVideoPath,
         IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
+        var operationSource = BeginCurrentOperation();
         var detectionProgressVersion = 0;
         try
         {
+            var cancellationToken = operationSource.Token;
             SetBusy(true);
             SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             SetStatus("Dateien werden erkannt...", 0);
@@ -155,7 +157,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 selectedVideoPath,
                 update => HandleDetectionUpdate(detectionProgressVersion, update),
                 excludedSourcePaths,
-                onDetectionCompleted: () => SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue));
+                onDetectionCompleted: () => SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue),
+                cancellationToken: cancellationToken);
             CompleteDetectionProgressSession(detectionProgressVersion);
             detectionProgressVersion = 0;
             var detected = detectionResult.Detected;
@@ -183,7 +186,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             RefreshOutputTargetStatus();
             PreviewText = BuildDetectionPreview(detected);
             SetStatus("Zielvergleich wird berechnet...", InitialPlanProgressValue);
-            var planSummaryReady = await RefreshPlanSummaryImmediatelyAsync(CancellationToken.None);
+            var planSummaryReady = await RefreshPlanSummaryImmediatelyAsync(cancellationToken);
             if (!planSummaryReady)
             {
                 SetExecutionStatus(SingleEpisodeExecutionStatusKind.ComparisonPending);
@@ -197,6 +200,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 planSummaryReady ? 100 : InitialPlanProgressValue);
             RefreshCommands();
             return true;
+        }
+        catch (OperationCanceledException) when (operationSource.IsCancellationRequested)
+        {
+            SetExecutionStatus(SingleEpisodeExecutionStatusKind.Cancelled);
+            SetStatus("Erkennung abgebrochen", ProgressValue);
+            return false;
         }
         catch (Exception ex)
         {
@@ -213,6 +222,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             }
 
             SetBusy(false);
+            CompleteCurrentOperation(operationSource);
         }
     }
 

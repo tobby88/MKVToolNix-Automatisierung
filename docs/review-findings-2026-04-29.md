@@ -26,7 +26,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 - [x] Stale Dispatcher-Progress-Callbacks nach Abschluss/Abbruch ignorieren.
 - [x] `TestSelectedSourcesCommand` nach manueller AD-Änderung neu auswerten.
-- [ ] Lange Einzel-Erkennung und Batch-Redetect abbrechbar machen.
+- [x] Lange Einzel-Erkennung und Batch-Redetect abbrechbar machen.
 - [ ] `SxxExx`-Ausführung blockieren oder explizit bestätigen lassen.
 - [ ] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
 - [ ] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.

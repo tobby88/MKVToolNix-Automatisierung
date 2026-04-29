@@ -279,7 +279,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     public bool CanCancelCurrentOperation => _currentOperationCts is { IsCancellationRequested: false };
 
     public string CancelCurrentOperationTooltip => CanCancelCurrentOperation
-        ? "Bricht die laufende Vorschau-, Kopier- oder Mux-Aktion ab."
+        ? "Bricht die laufende Erkennungs-, Vorschau-, Kopier- oder Mux-Aktion ab."
         : "Derzeit läuft keine abbrechbare Einzelaktion.";
 
     private void SetBusy(bool isBusy)
