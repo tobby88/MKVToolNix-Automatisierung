@@ -51,7 +51,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] TVDB-Specials aus dem manuellen Dialog als `S00E..` übernehmen.
 - [x] `Keine IMDb-ID` auch ohne weitere Provider-ID in die NFO schreiben.
 - [x] Lokale NFO-Analyse bei Emby-Netzwerkfehlern weiterführen.
-- [ ] Erledigt-Markierung ohne Emby-Refresh sauber modellieren.
+- [x] Erledigt-Markierung ohne Emby-Refresh sauber modellieren.
 - [ ] Emby-Scan-Scope deutlicher begrenzen oder anzeigen.
 - [ ] TVDB-/IMDb-Netzwerkfehler benutzerfreundlich übersetzen.
 - [ ] TVDB-/IMDb-Pagination mit Limit und Loop-Erkennung absichern.
