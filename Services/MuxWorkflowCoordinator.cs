@@ -124,6 +124,7 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
             cancellationToken.ThrowIfCancellationRequested();
             EnsureOutputDirectoryExists(plan);
             cancellationToken.ThrowIfCancellationRequested();
+            EnsureWorkingCopyCurrent(plan);
             return await _muxService.ExecuteAsync(plan, onOutput, onUpdate, cancellationToken);
         }
         finally
@@ -147,6 +148,17 @@ internal sealed class MuxWorkflowCoordinator : IMuxWorkflowCoordinator
         // Zielordner erst unmittelbar vor dem echten Werkzeuglauf anlegen,
         // damit Vorschau und Planaktualisierung keine Dateisystem-Seiteneffekte auslösen.
         Directory.CreateDirectory(outputDirectory);
+    }
+
+    private static void EnsureWorkingCopyCurrent(SeriesEpisodeMuxPlan plan)
+    {
+        if (plan.WorkingCopy is null || plan.WorkingCopy.IsReusable)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "Die vorbereitete Arbeitskopie passt nicht mehr zur aktuellen Archivdatei. Bitte den Eintrag neu analysieren und die Arbeitskopie erneut erstellen.");
     }
 }
 

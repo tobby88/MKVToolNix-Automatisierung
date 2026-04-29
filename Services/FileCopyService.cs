@@ -49,6 +49,8 @@ internal sealed class FileCopyService : IFileCopyService
         Action<long, long>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
+        EnsureSourceUnchanged(copyPlan);
+
         var destinationDirectory = Path.GetDirectoryName(copyPlan.DestinationFilePath);
         if (string.IsNullOrWhiteSpace(destinationDirectory))
         {
@@ -92,12 +94,23 @@ internal sealed class FileCopyService : IFileCopyService
                 }
             }
 
+            EnsureSourceUnchanged(copyPlan);
             File.Move(temporaryDestinationPath, copyPlan.DestinationFilePath, overwrite: true);
+            File.SetLastWriteTimeUtc(copyPlan.DestinationFilePath, copyPlan.SourceLastWriteUtc);
         }
         catch
         {
             TryDeleteTemporaryCopy(temporaryDestinationPath);
             throw;
+        }
+    }
+
+    private static void EnsureSourceUnchanged(FileCopyPlan copyPlan)
+    {
+        if (!copyPlan.IsSourceUnchanged)
+        {
+            throw new InvalidOperationException(
+                "Die Archivdatei wurde seit der Planberechnung verändert. Bitte den Eintrag neu analysieren, bevor eine Arbeitskopie erstellt wird.");
         }
     }
 

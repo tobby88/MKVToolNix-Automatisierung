@@ -101,14 +101,32 @@ public sealed record FileCopyPlan(
     {
         get
         {
-            if (!File.Exists(DestinationFilePath))
+            if (!IsSourceUnchanged || !File.Exists(DestinationFilePath))
             {
                 return false;
             }
 
             var destinationInfo = new FileInfo(DestinationFilePath);
             return destinationInfo.Length == FileSizeBytes
-                && destinationInfo.LastWriteTimeUtc >= SourceLastWriteUtc;
+                && destinationInfo.LastWriteTimeUtc == SourceLastWriteUtc;
+        }
+    }
+
+    /// <summary>
+    /// Gibt an, ob die Archivquelle noch dem Zustand entspricht, aus dem dieser Plan berechnet wurde.
+    /// </summary>
+    public bool IsSourceUnchanged
+    {
+        get
+        {
+            if (!File.Exists(SourceFilePath))
+            {
+                return false;
+            }
+
+            var sourceInfo = new FileInfo(SourceFilePath);
+            return sourceInfo.Length == FileSizeBytes
+                && sourceInfo.LastWriteTimeUtc == SourceLastWriteUtc;
         }
     }
 }

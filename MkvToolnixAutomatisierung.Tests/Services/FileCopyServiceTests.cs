@@ -40,6 +40,23 @@ public sealed class FileCopyServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CopyAsync_PreservesSourceTimestampAndMarksCopyReusable()
+    {
+        var sourcePath = Path.Combine(_tempDirectory, "source.bin");
+        var destinationPath = Path.Combine(_tempDirectory, "copy.bin");
+        var sourceTimestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        await File.WriteAllBytesAsync(sourcePath, [1, 2, 3, 4]);
+        File.SetLastWriteTimeUtc(sourcePath, sourceTimestamp);
+        var copyPlan = new FileCopyPlan(sourcePath, destinationPath, 4, sourceTimestamp);
+        var service = new FileCopyService();
+
+        await service.CopyAsync(copyPlan);
+
+        Assert.Equal(sourceTimestamp, File.GetLastWriteTimeUtc(destinationPath));
+        Assert.True(copyPlan.IsReusable);
+    }
+
+    [Fact]
     public async Task CopyAsync_ReplacesExistingDestinationAfterSuccessfulCopy()
     {
         var sourcePath = Path.Combine(_tempDirectory, "source.bin");
@@ -53,6 +70,40 @@ public sealed class FileCopyServiceTests : IDisposable
             new FileCopyPlan(sourcePath, destinationPath, newContent.Length, File.GetLastWriteTimeUtc(sourcePath)));
 
         Assert.Equal(newContent, await File.ReadAllBytesAsync(destinationPath));
+    }
+
+    [Fact]
+    public async Task CopyAsync_RejectsSourceChangedSincePlanCreation()
+    {
+        var sourcePath = Path.Combine(_tempDirectory, "source.bin");
+        var destinationPath = Path.Combine(_tempDirectory, "copy.bin");
+        var plannedTimestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        await File.WriteAllBytesAsync(sourcePath, [1, 2, 3, 4]);
+        File.SetLastWriteTimeUtc(sourcePath, plannedTimestamp);
+        var copyPlan = new FileCopyPlan(sourcePath, destinationPath, 4, plannedTimestamp);
+        await File.WriteAllBytesAsync(sourcePath, [5, 6, 7, 8]);
+        File.SetLastWriteTimeUtc(sourcePath, plannedTimestamp.AddSeconds(1));
+        var service = new FileCopyService();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.CopyAsync(copyPlan));
+
+        Assert.Contains("seit der Planberechnung", exception.Message);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public async Task IsReusable_RejectsDestinationWithOnlyNewerTimestamp()
+    {
+        var sourcePath = Path.Combine(_tempDirectory, "source.bin");
+        var destinationPath = Path.Combine(_tempDirectory, "copy.bin");
+        var sourceTimestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        await File.WriteAllBytesAsync(sourcePath, [1, 2, 3, 4]);
+        await File.WriteAllBytesAsync(destinationPath, [1, 2, 3, 4]);
+        File.SetLastWriteTimeUtc(sourcePath, sourceTimestamp);
+        File.SetLastWriteTimeUtc(destinationPath, sourceTimestamp.AddMinutes(5));
+        var copyPlan = new FileCopyPlan(sourcePath, destinationPath, 4, sourceTimestamp);
+
+        Assert.False(copyPlan.IsReusable);
     }
 
     [Fact]
