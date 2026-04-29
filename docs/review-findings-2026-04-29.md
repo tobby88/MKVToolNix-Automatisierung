@@ -36,7 +36,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
 - [x] Arbeitskopie-Staleness stärker validieren.
 - [x] AD-Heuristik um englische Marker erweitern.
-- [ ] Single-/Batch-XAML-Duplikate prüfen und sinnvoll reduzieren.
+- [x] Single-/Batch-XAML-Duplikate prüfen und sinnvoll reduzieren.
 
 ## Archivpflege
 

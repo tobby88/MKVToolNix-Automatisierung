@@ -3,87 +3,18 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:views="clr-namespace:MkvToolnixAutomatisierung.Views">
     <UserControl.Resources>
-        <!-- Gemeinsame Darstellungsstile für read-only Oberflächen und Inline-Validierung im Batch. -->
-        <Style x:Key="DisplaySurfaceBorderStyle" TargetType="Border">
-            <Setter Property="Background" Value="#F7F7F7" />
-            <Setter Property="BorderBrush" Value="#D8D8D8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="8,6" />
-        </Style>
-        <Style x:Key="DisplaySurfaceTextStyle" TargetType="TextBlock">
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="VerticalAlignment" Value="Top" />
-        </Style>
-        <Style x:Key="DisplaySurfacePathTextBoxStyle" TargetType="TextBox">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="IsReadOnly" Value="True" />
-            <Setter Property="IsReadOnlyCaretVisible" Value="True" />
-            <Setter Property="AcceptsReturn" Value="True" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="VerticalAlignment" Value="Top" />
-            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
-            <Setter Property="VerticalScrollBarVisibility" Value="Disabled" />
-        </Style>
-        <!-- Detailflächen dürfen für mehrere Einträge etwas wachsen, ohne den Detailbereich unnötig aufzublähen. -->
-        <Style x:Key="CompactListSurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
-            <Setter Property="MinHeight" Value="44" />
-            <Setter Property="MaxHeight" Value="104" />
-            <Setter Property="VerticalAlignment" Value="Top" />
-        </Style>
-        <Style x:Key="EpisodeIndexTextBoxStyle" TargetType="TextBox">
-            <Style.Triggers>
-                <Trigger Property="Text" Value="xx">
-                    <Setter Property="Background" Value="#FFF4F4" />
-                    <Setter Property="BorderBrush" Value="#C85B5B" />
-                    <Setter Property="BorderThickness" Value="1.5" />
-                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="PrimaryActionButtonStyle" TargetType="Button">
-            <Setter Property="Padding" Value="12,6" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#FF1F5FB8" />
-            <Setter Property="BorderBrush" Value="#FF174A90" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              RecognizesAccessKey="True"
-                                              TextElement.Foreground="{TemplateBinding Foreground}" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#FF174A90" />
-                                <Setter Property="BorderBrush" Value="#FF123A72" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#FF123A72" />
-                                <Setter Property="BorderBrush" Value="#FF0D2C57" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#FF5F6B76" />
-                                <Setter Property="Background" Value="#FFE5E7EB" />
-                                <Setter Property="BorderBrush" Value="#FFD0D7DE" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="MuxCommonStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Detailflächen dürfen für mehrere Einträge etwas wachsen, ohne den Detailbereich unnötig aufzublähen. -->
+            <Style x:Key="CompactListSurfaceBorderStyle" TargetType="Border" BasedOn="{StaticResource DisplaySurfaceBorderStyle}">
+                <Setter Property="MinHeight" Value="44" />
+                <Setter Property="MaxHeight" Value="104" />
+                <Setter Property="VerticalAlignment" Value="Top" />
+            </Style>
+        </ResourceDictionary>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
