@@ -80,6 +80,10 @@
                     <Setter Property="Background" Value="#FFE9F2FF" />
                     <Setter Property="BorderBrush" Value="#FF4C84D3" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Skipped">
+                    <Setter Property="Background" Value="#FFF1F5F9" />
+                    <Setter Property="BorderBrush" Value="#FF94A3B8" />
+                </DataTrigger>
                 <DataTrigger Binding="{Binding StatusTone}" Value="Warning">
                     <Setter Property="Background" Value="#FFFFF4D6" />
                     <Setter Property="BorderBrush" Value="#FFD6A62A" />
@@ -101,6 +105,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding StatusTone}" Value="Done">
                     <Setter Property="Foreground" Value="#FF1F5FB8" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusTone}" Value="Skipped">
+                    <Setter Property="Foreground" Value="#FF475569" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding StatusTone}" Value="Warning">
                     <Setter Property="Foreground" Value="#FF8A5A00" />

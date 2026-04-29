@@ -195,6 +195,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.False(vm.CanEditProviderIds);
         Assert.False(vm.CanReviewTvdb);
         Assert.Equal("Ohne NFO-Sync", vm.StatusText);
+        Assert.Equal("Skipped", vm.StatusTone);
         Assert.Equal("Emby-Asset ohne Episoden-NFO.", vm.Note);
         Assert.DoesNotContain("Bitte Emby zuerst scannen", vm.Note, StringComparison.Ordinal);
     }
@@ -331,6 +332,7 @@ public sealed class EmbySyncItemViewModelTests
     [Theory]
     [InlineData("NFO aktuell", "Done")]
     [InlineData("Aktualisiert", "Done")]
+    [InlineData("Ohne NFO-Sync", "Skipped")]
     [InlineData("Prüfung offen", "Warning")]
     [InlineData("IDs fehlen", "Warning")]
     [InlineData("NFO fehlt", "Warning")]

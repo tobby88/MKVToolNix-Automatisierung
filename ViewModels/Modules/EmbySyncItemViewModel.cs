@@ -899,6 +899,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         {
             "Bereit" or "TVDB gewählt" or "Lokal bereit" => "Ready",
             "NFO aktuell" or "Aktualisiert" => "Done",
+            "Ohne NFO-Sync" => "Skipped",
             "Prüfung offen" or "IDs fehlen" or "IDs prüfen" or "NFO fehlt" or "NFO prüfen" or "Refresh prüfen" or "Übersprungen" => "Warning",
             "Fehlt" => "Error",
             _ => "Neutral"

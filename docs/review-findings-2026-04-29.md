@@ -55,7 +55,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Emby-Scan-Scope deutlicher begrenzen oder anzeigen.
 - [x] TVDB-/IMDb-Netzwerkfehler benutzerfreundlich übersetzen.
 - [x] TVDB-/IMDb-Pagination mit Limit und Loop-Erkennung absichern.
-- [ ] Status `Ohne NFO-Sync` farblich klarer darstellen.
+- [x] Status `Ohne NFO-Sync` farblich klarer darstellen.
 
 ## Tooling, Startup und Einstellungen
 
