@@ -30,7 +30,7 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
     /// <inheritdoc />
     public async Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
     {
-        using var downloadsResponse = await _httpClient.GetAsync(DownloadsPageUri, cancellationToken);
+        using var downloadsResponse = await ManagedToolHttp.GetAsync(_httpClient, DownloadsPageUri, ManagedToolHttp.HtmlAcceptHeader, cancellationToken);
         downloadsResponse.EnsureSuccessStatusCode();
         var downloadsHtml = await downloadsResponse.Content.ReadAsStringAsync(cancellationToken);
 
@@ -40,7 +40,7 @@ internal sealed class MkvToolNixPackageSource : IManagedToolPackageSource
             return package;
         }
 
-        using var checksumResponse = await _httpClient.GetAsync(new Uri(package.DownloadUri, "sha256sums.txt"), cancellationToken);
+        using var checksumResponse = await ManagedToolHttp.GetAsync(_httpClient, new Uri(package.DownloadUri, "sha256sums.txt"), ManagedToolHttp.TextAcceptHeader, cancellationToken);
         checksumResponse.EnsureSuccessStatusCode();
         var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
 
@@ -138,7 +138,7 @@ internal sealed class FfprobePackageSource : IManagedToolPackageSource
     /// <inheritdoc />
     public async Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
     {
-        using var releaseResponse = await _httpClient.GetAsync(LatestReleaseApiUri, cancellationToken);
+        using var releaseResponse = await ManagedToolHttp.GetAsync(_httpClient, LatestReleaseApiUri, ManagedToolHttp.JsonAcceptHeader, cancellationToken);
         releaseResponse.EnsureSuccessStatusCode();
         var releaseJson = await releaseResponse.Content.ReadAsStringAsync(cancellationToken);
         var parsedRelease = ParseLatestRelease(releaseJson);
@@ -146,7 +146,7 @@ internal sealed class FfprobePackageSource : IManagedToolPackageSource
         string? checksumText = null;
         if (parsedRelease.Package.ExpectedSha256 is null && parsedRelease.ChecksumDownloadUri is not null)
         {
-            using var checksumResponse = await _httpClient.GetAsync(parsedRelease.ChecksumDownloadUri, cancellationToken);
+            using var checksumResponse = await ManagedToolHttp.GetAsync(_httpClient, parsedRelease.ChecksumDownloadUri, ManagedToolHttp.TextAcceptHeader, cancellationToken);
             checksumResponse.EnsureSuccessStatusCode();
             checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
         }
@@ -293,12 +293,12 @@ internal sealed class MediathekViewPackageSource : IManagedToolPackageSource
     /// <inheritdoc />
     public async Task<ManagedToolPackage> GetLatestPackageAsync(CancellationToken cancellationToken = default)
     {
-        using var downloadsResponse = await _httpClient.GetAsync(StableDownloadsUri, cancellationToken);
+        using var downloadsResponse = await ManagedToolHttp.GetAsync(_httpClient, StableDownloadsUri, ManagedToolHttp.HtmlAcceptHeader, cancellationToken);
         downloadsResponse.EnsureSuccessStatusCode();
         var downloadsHtml = await downloadsResponse.Content.ReadAsStringAsync(cancellationToken);
         var packageWithoutChecksum = ParseLatestPackageFromDownloadsPage(downloadsHtml);
 
-        using var checksumResponse = await _httpClient.GetAsync(new Uri(packageWithoutChecksum.DownloadUri.ToString() + ".SHA-512"), cancellationToken);
+        using var checksumResponse = await ManagedToolHttp.GetAsync(_httpClient, new Uri(packageWithoutChecksum.DownloadUri.ToString() + ".SHA-512"), ManagedToolHttp.TextAcceptHeader, cancellationToken);
         checksumResponse.EnsureSuccessStatusCode();
         var checksumText = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
 
@@ -341,6 +341,28 @@ internal sealed class MediathekViewPackageSource : IManagedToolPackageSource
             downloadUri,
             archiveFileName,
             ExpectedSha512: ManagedToolParsing.TryReadSha512FromChecksumText(checksumText));
+    }
+}
+
+/// <summary>
+/// Zentralisiert die HTTP-Header der Tool-Metadatenquellen, damit HTML-, JSON- und
+/// Prüfsummen-Endpunkte nicht versehentlich mit unpassenden Defaults abgefragt werden.
+/// </summary>
+internal static class ManagedToolHttp
+{
+    internal const string HtmlAcceptHeader = "text/html, application/xhtml+xml;q=0.9, */*;q=0.1";
+    internal const string JsonAcceptHeader = "application/vnd.github+json, application/json;q=0.9, */*;q=0.1";
+    internal const string TextAcceptHeader = "text/plain, */*;q=0.1";
+
+    internal static async Task<HttpResponseMessage> GetAsync(
+        HttpClient httpClient,
+        Uri requestUri,
+        string acceptHeader,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Accept.ParseAdd(acceptHeader);
+        return await httpClient.SendAsync(request, cancellationToken);
     }
 }
 

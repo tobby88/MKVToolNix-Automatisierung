@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using MkvToolnixAutomatisierung.Services;
 using Xunit;
 
@@ -170,5 +173,83 @@ public sealed class ManagedToolPackageSourceTests
         Assert.False(ManagedToolParsing.IsValidSha256("xyz"));
         Assert.True(ManagedToolParsing.IsValidSha512(new string('a', 128)));
         Assert.False(ManagedToolParsing.IsValidSha512("xyz"));
+    }
+
+    [Fact]
+    public async Task PackageSources_SendAcceptHeadersForEndpointType()
+    {
+        var requests = new List<(Uri Uri, string Accept)>();
+        using var httpClient = new HttpClient(new RecordingHttpMessageHandler(request =>
+        {
+            requests.Add((request.RequestUri!, string.Join(", ", request.Headers.Accept.Select(header => header.ToString()))));
+            return request.RequestUri!.ToString() switch
+            {
+                "https://mkvtoolnix.download/downloads.html" => TextResponse(
+                    """
+                    <html><body>
+                    <a href="windows/releases/98.0/mkvtoolnix-64-bit-98.0.7z">new</a>
+                    </body></html>
+                    """,
+                    "text/html"),
+                "https://mkvtoolnix.download/windows/releases/98.0/sha256sums.txt" => TextResponse(
+                    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee  mkvtoolnix-64-bit-98.0.7z",
+                    "text/plain"),
+                "https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest" => TextResponse(
+                    """
+                    {
+                      "published_at": "2026-04-18T13:04:00Z",
+                      "assets": [
+                        {
+                          "name": "ffmpeg-master-latest-win64-gpl-shared.zip",
+                          "browser_download_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip",
+                          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                          "updated_at": "2026-04-18T13:04:00Z"
+                        }
+                      ]
+                    }
+                    """,
+                    "application/json"),
+                "https://download.mediathekview.de/stabil/" => TextResponse(
+                    """
+                    <html><body>
+                    <a href="/stabil/MediathekView-14.5.0-win.zip">new</a>
+                    </body></html>
+                    """,
+                    "text/html"),
+                "https://download.mediathekview.de/stabil/MediathekView-14.5.0-win.zip.SHA-512" => TextResponse(new string('f', 128), "text/plain"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            };
+        }));
+
+        await new MkvToolNixPackageSource(httpClient).GetLatestPackageAsync();
+        await new FfprobePackageSource(httpClient).GetLatestPackageAsync();
+        await new MediathekViewPackageSource(httpClient).GetLatestPackageAsync();
+
+        Assert.Contains(requests, request => request.Uri == new Uri("https://mkvtoolnix.download/downloads.html")
+                                            && request.Accept.Contains("text/html", StringComparison.Ordinal));
+        Assert.Contains(requests, request => request.Uri == new Uri("https://mkvtoolnix.download/windows/releases/98.0/sha256sums.txt")
+                                            && request.Accept.Contains("text/plain", StringComparison.Ordinal));
+        Assert.Contains(requests, request => request.Uri == new Uri("https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/latest")
+                                            && request.Accept.Contains("application/vnd.github+json", StringComparison.Ordinal));
+        Assert.Contains(requests, request => request.Uri == new Uri("https://download.mediathekview.de/stabil/")
+                                            && request.Accept.Contains("text/html", StringComparison.Ordinal));
+        Assert.Contains(requests, request => request.Uri == new Uri("https://download.mediathekview.de/stabil/MediathekView-14.5.0-win.zip.SHA-512")
+                                            && request.Accept.Contains("text/plain", StringComparison.Ordinal));
+    }
+
+    private static HttpResponseMessage TextResponse(string text, string mediaType)
+    {
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(text, Encoding.UTF8, mediaType)
+        };
+    }
+
+    private sealed class RecordingHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(responder(request));
+        }
     }
 }
