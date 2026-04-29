@@ -281,6 +281,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var durationReferenceCandidate = SelectBestNormalVideoCandidate(normalCandidates);
         var selectedVideoCandidates = SelectVideoCandidates(normalCandidates, durationReferenceCandidate);
         var primaryVideoCandidate = selectedVideoCandidates[0];
+        var candidateDurationsByPath = BuildCandidateDurationLookup(allNormalCandidates, audioDescriptionCandidates);
+        var runtimeCompatibleCleanupVideoSeeds = FilterCleanupSeedsByRuntime(
+            cleanupEligibleVideoSeeds,
+            candidateDurationsByPath,
+            primaryVideoCandidate.DurationSeconds);
+        var runtimeCompatibleSupplementSeeds = FilterCleanupSeedsByRuntime(
+            [.. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds],
+            candidateDurationsByPath,
+            primaryVideoCandidate.DurationSeconds);
         var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
             .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
             .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))
@@ -288,7 +297,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName);
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. runtimeCompatibleCleanupVideoSeeds, .. runtimeCompatibleSupplementSeeds], companionFilesByBaseName);
 
         return new EpisodeDetectionContext(
             directory,
@@ -426,6 +435,58 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static IReadOnlyDictionary<string, int?> BuildCandidateDurationLookup(
+        IReadOnlyList<NormalVideoCandidate> normalCandidates,
+        IReadOnlyList<AudioDescriptionCandidate> audioDescriptionCandidates)
+    {
+        return normalCandidates
+            .Select(candidate => (candidate.FilePath, candidate.DurationSeconds))
+            .Concat(audioDescriptionCandidates.Select(candidate => (candidate.FilePath, candidate.DurationSeconds)))
+            .GroupBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().DurationSeconds, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Trennt Cleanup-Kandidaten mit gleicher Episodenidentität, aber deutlich anderer Laufzeit.
+    /// Solche Varianten können fachlich getrennte Fassungen sein und dürfen nicht als "unbenutzt"
+    /// im Done-/Papierkorb-Cleanup landen.
+    /// </summary>
+    internal static IReadOnlyList<CandidateSeed> FilterCleanupSeedsByRuntime(
+        IReadOnlyList<CandidateSeed> seeds,
+        IReadOnlyDictionary<string, int?> candidateDurationsByPath,
+        int? referenceDurationSeconds)
+    {
+        if (referenceDurationSeconds is null)
+        {
+            return seeds.ToList();
+        }
+
+        return seeds
+            .Where(seed => IsCleanupSeedRuntimeCompatible(seed, candidateDurationsByPath, referenceDurationSeconds.Value))
+            .ToList();
+    }
+
+    private static bool IsCleanupSeedRuntimeCompatible(
+        CandidateSeed seed,
+        IReadOnlyDictionary<string, int?> candidateDurationsByPath,
+        int referenceDurationSeconds)
+    {
+        if (candidateDurationsByPath.TryGetValue(seed.FilePath, out var probedDurationSeconds)
+            && probedDurationSeconds is int durationSeconds)
+        {
+            return AreCandidateDurationsCompatible(durationSeconds, referenceDurationSeconds);
+        }
+
+        if (seed.TextMetadata.Duration is { } declaredDuration)
+        {
+            return AreCandidateDurationsCompatible((int)Math.Round(declaredDuration.TotalSeconds), referenceDurationSeconds);
+        }
+
+        // Ohne belastbare Laufzeit bleibt die Datei im Cleanup-Kandidatenkreis. Das ist
+        // konservativer als versehentlich echte Begleitdateien der gewählten Variante liegenzulassen.
+        return true;
     }
 
     private static IReadOnlyList<string> CollectSubtitlePathsFromSeeds(

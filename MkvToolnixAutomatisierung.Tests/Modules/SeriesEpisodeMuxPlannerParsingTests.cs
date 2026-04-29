@@ -404,6 +404,29 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         }
     }
 
+    [Fact]
+    public void FilterCleanupSeedsByRuntime_DropsRuntimeForeignEpisodeVariants()
+    {
+        var selectedSeed = CreateCandidateSeed("selected.mp4", TimeSpan.FromHours(1));
+        var compatibleSeed = CreateCandidateSeed("compatible.mp4", TimeSpan.FromHours(1).Add(TimeSpan.FromSeconds(15)));
+        var foreignSeed = CreateCandidateSeed("foreign.mp4", TimeSpan.FromMinutes(90));
+        var unknownSeed = CreateCandidateSeed("unknown.mp4", duration: null);
+        var probedDurations = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase)
+        {
+            [compatibleSeed.FilePath] = 3615
+        };
+
+        var filteredSeeds = SeriesEpisodeMuxPlanner.FilterCleanupSeedsByRuntime(
+            [selectedSeed, compatibleSeed, foreignSeed, unknownSeed],
+            probedDurations,
+            referenceDurationSeconds: 3600);
+
+        Assert.Contains(selectedSeed, filteredSeeds);
+        Assert.Contains(compatibleSeed, filteredSeeds);
+        Assert.Contains(unknownSeed, filteredSeeds);
+        Assert.DoesNotContain(foreignSeed, filteredSeeds);
+    }
+
     private static SeriesEpisodeMuxPlanner CreatePlanner()
     {
         var settingsStore = new AppSettingsStore();
@@ -440,6 +463,21 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     {
         CreateEmptyFile(Path.Combine(directory, baseName + ".mp4"));
         CreateCompanionText(Path.Combine(directory, baseName + ".txt"), topic, title, duration);
+    }
+
+    private static SeriesEpisodeMuxPlanner.CandidateSeed CreateCandidateSeed(string fileName, TimeSpan? duration)
+    {
+        var filePath = Path.Combine(Path.GetTempPath(), fileName);
+        return new SeriesEpisodeMuxPlanner.CandidateSeed(
+            filePath,
+            AttachmentPath: null,
+            new CompanionTextMetadata(
+                Sender: null,
+                Topic: "Beispielserie",
+                Title: "Pilot",
+                Duration: duration,
+                ExpectedSizeBytes: null),
+            new SeriesEpisodeMuxPlanner.EpisodeIdentity("Beispielserie", "Pilot", "01", "02"));
     }
 
     private static void CreateCompanionText(

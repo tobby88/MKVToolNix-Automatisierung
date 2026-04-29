@@ -29,7 +29,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Lange Einzel-Erkennung und Batch-Redetect abbrechbar machen.
 - [x] `SxxExx`-Ausführung blockieren oder explizit bestätigen lassen.
 - [x] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
-- [ ] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
+- [x] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
 - [ ] Inkompatible AD-Laufzeit nicht automatisch wählen.
 - [ ] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
 - [ ] Videoreihenfolge im PlanCache-Key berücksichtigen.
