@@ -170,16 +170,16 @@ Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/For
 1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
 2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
 3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
-4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
+4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Falls Emby die Bibliothek nicht eindeutig zuordnen kann, zeigt die App den globalen Fallback ausdrücklich an, statt ihn als bibliotheksscharfen Scan aussehen zu lassen. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
 5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft; IMDb wird für jede NFO-fähige Episode bewusst bestätigt, korrigiert oder als nicht vorhanden markiert.
 6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist.
 7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
-Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs. Dateien in Emby-Asset-Ordnern wie `trailers` oder `backdrops` bekommen normalerweise keine Episoden-NFO; solche Einträge werden erkannt und beim Provider-ID-Sync übersprungen.
+Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs. Wenn Emby temporär nicht erreichbar ist oder eine Datei noch nicht als Item liefert, prüft die App vorhandene lokale `.nfo`-Dateien trotzdem weiter, damit ein Serverproblem nicht jede lokale Kontrolle blockiert. Dateien in Emby-Asset-Ordnern wie `trailers` oder `backdrops` bekommen normalerweise keine Episoden-NFO; solche Einträge werden erkannt und beim Provider-ID-Sync übersprungen.
 
 Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
 
-Für IMDb nutzt der Dialog je nach Einstellung bevorzugt `imdbapi.dev`, ausschließlich `imdbapi.dev` oder ausschließlich die Browserhilfe. Im Automatikmodus fällt der Dialog nur dann auf die Browserhilfe zurück, wenn der freie API-Dienst insgesamt nicht erreichbar ist.
+Für IMDb nutzt der Dialog je nach Einstellung bevorzugt `imdbapi.dev`, ausschließlich `imdbapi.dev` oder ausschließlich die Browserhilfe. Im Automatikmodus fällt der Dialog nur dann auf die Browserhilfe zurück, wenn der freie API-Dienst insgesamt nicht erreichbar ist. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. Netzwerk- oder Dienstfehler bei TVDB und IMDb werden im Dialog als verständliche Statusmeldung angezeigt; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
 
 ## Unterstützte Dateien
 

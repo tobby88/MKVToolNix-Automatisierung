@@ -7,7 +7,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 - [x] Zeilenend-/Encoding-Konfiguration vereinheitlichen.
 - [x] Dupliziertes `CopyCodeCoverageShim`-MSBuild-Ziel zentralisieren.
-- [ ] README/Testing-Doku um kritische Provider-/Emby-Edgecases ergänzen.
+- [x] README/Testing-Doku um kritische Provider-/Emby-Edgecases ergänzen.
 
 ## Download, Einsortieren und Dateioperationen
 

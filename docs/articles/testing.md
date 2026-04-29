@@ -19,6 +19,17 @@ Das Projekt verwendet jetzt drei Testebenen:
 - manuelle GUI-Prüfung
   - bleibt für Dialoge, WPF-Bindings und visuelle Usability weiterhin sinnvoll
 
+## Kritische Provider- und Emby-Regressionen
+
+Einige Tests sind bewusst auf die zuletzt fehleranfälligen Provider- und Emby-Pfade zugeschnitten:
+
+- TVDB- und IMDb-Dialoge übersetzen Netzwerk-, Timeout- und Dienstfehler in sichtbare Statusmeldungen, statt technische Exceptions bis zur UI durchzureichen.
+- TVDB- und IMDb-Pagination ist mit Seitenlimits und Loop-Erkennung abgesichert, damit ein defekter Provider keine endlose Suche auslöst.
+- Der Emby-Abgleich prüft lokale `.nfo`-Dateien weiter, wenn Emby-Item- oder Library-Abfragen temporär fehlschlagen.
+- Eine explizite Entscheidung `Keine IMDb-ID` wird auch ohne weitere Provider-ID in die NFO geschrieben.
+- Reports können als erledigt markiert werden, auch wenn kein Emby-Refresh nötig ist, weil die lokale NFO bereits aktuell war.
+- Der Scan-Status unterscheidet zwischen gezieltem Serienbibliotheksscan und sichtbar gemeldetem globalem Fallback.
+
 ## FakeMkvMerge
 
 Die Integrationstests verwenden `TestTools/FakeMkvMerge`. Das Hilfsprogramm simuliert:
