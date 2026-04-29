@@ -206,8 +206,7 @@ internal sealed partial class BatchMuxViewModel
 
         if (doneFiles.Count == 0)
         {
-            _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
-            _services.Cleanup.DeleteDirectoryIfEmpty(SourceDirectory);
+            DeleteEmptyBatchCleanupDirectory(doneDirectory);
             return;
         }
 
@@ -239,14 +238,27 @@ internal sealed partial class BatchMuxViewModel
                     + string.Join(Environment.NewLine, recycleResult.FailedFiles.Select(Path.GetFileName)));
             }
 
-            _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
-            _services.Cleanup.DeleteDirectoryIfEmpty(SourceDirectory);
+            DeleteEmptyBatchCleanupDirectory(doneDirectory);
             return;
         }
 
         if (_dialogService.AskOpenDoneDirectory(doneDirectory))
         {
             _dialogService.OpenPathWithDefaultApp(doneDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Der Done-Ordner ist ein internes Zwischenziel und darf verschwinden. Der gewählte
+    /// Batch-Quellordner bleibt dagegen erhalten, damit die Ansicht nach dem Cleanup weiter
+    /// scan- und bedienbar bleibt.
+    /// </summary>
+    private void DeleteEmptyBatchCleanupDirectory(string doneDirectory)
+    {
+        _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
+        if (!string.IsNullOrWhiteSpace(SourceDirectory) && !Directory.Exists(SourceDirectory))
+        {
+            Directory.CreateDirectory(SourceDirectory);
         }
     }
 

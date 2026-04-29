@@ -20,7 +20,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Case-only Ordner-Kanonisierung beim Einsortieren prüfen und umsetzen.
 - [x] `FileStateSnapshot.TryCreate` race-sicher machen.
 - [x] Arbeitskopien im `FileCopyService` atomar ersetzen.
-- [ ] Leere gewählte Quellordner nach Cleanup erhalten oder gezielt neu anlegen.
+- [x] Leere gewählte Quellordner nach Cleanup erhalten oder gezielt neu anlegen.
 
 ## Muxen
 

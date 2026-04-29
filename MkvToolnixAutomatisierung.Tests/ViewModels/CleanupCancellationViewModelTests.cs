@@ -53,6 +53,29 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task OfferBatchDoneCleanupAsync_KeepsSelectedSourceDirectory_WhenDoneFolderIsEmpty()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "batch-source");
+        var doneDirectory = Path.Combine(sourceDirectory, "done");
+        Directory.CreateDirectory(doneDirectory);
+        var cleanup = new StubCleanupService(
+            recycleResult: new FileRecycleResult([], [], [], WasCanceled: false));
+        var viewModel = new BatchMuxViewModel(
+            ViewModelTestContext.CreateBatchServices(cleanup: cleanup),
+            new CapturingDialogService());
+        SetBatchSourceDirectory(viewModel, sourceDirectory);
+
+        await InvokeOfferBatchDoneCleanupAsync(
+            viewModel,
+            doneDirectory,
+            [],
+            new BatchRunProgressTracker(1, static (_, _) => { }));
+
+        Assert.Contains(doneDirectory, cleanup.DeletedEmptyDirectories);
+        Assert.DoesNotContain(sourceDirectory, cleanup.DeletedEmptyDirectories);
+    }
+
+    [Fact]
     public async Task OfferSingleEpisodeCleanupAsync_ShowsWarning_WhenRecycleWasCanceled()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "single-source");
@@ -142,6 +165,13 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
         Assert.NotNull(method);
         var task = Assert.IsAssignableFrom<Task>(method!.Invoke(viewModel, [plan, CancellationToken.None]));
         await task;
+    }
+
+    private static void SetBatchSourceDirectory(BatchMuxViewModel viewModel, string sourceDirectory)
+    {
+        typeof(BatchMuxViewModel)
+            .GetField("_sourceDirectory", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(viewModel, sourceDirectory);
     }
 
     private static SeriesEpisodeMuxPlan CreatePlan(string sourceFilePath, string subtitlePath, string outputPath)
