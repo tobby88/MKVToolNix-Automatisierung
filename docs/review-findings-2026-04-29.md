@@ -40,7 +40,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 ## Archivpflege
 
-- [ ] Rename/NFO-Apply-Fehler konsistent behandeln.
+- [x] Rename/NFO-Apply-Fehler konsistent behandeln.
 - [ ] Remux-Hinweise nach direktem Apply sichtbar halten.
 - [ ] Apply-Logging vollständig machen.
 - [ ] NFO-Lock beim Zurücktippen auf Ist-Wert bereinigen.

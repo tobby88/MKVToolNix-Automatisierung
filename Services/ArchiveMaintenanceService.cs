@@ -136,6 +136,12 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
         var outputLines = new List<string>();
         var currentPath = request.FilePath;
+        void AddOutputLine(string line)
+        {
+            outputLines.Add(line);
+            output?.Report(line);
+        }
+
         if (request.ContainerTitleEdit is not null || request.TrackHeaderEdits.Count > 0)
         {
             var mkvPropEditPath = _toolLocator.FindMkvPropEditPath();
@@ -163,13 +169,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                     outputLines);
             }
 
-            outputLines.Add("Header aktualisiert.");
-        }
-
-        if (request.RenameOperation is not null)
-        {
-            currentPath = ApplyRename(request.RenameOperation);
-            outputLines.Add($"Datei umbenannt: {Path.GetFileName(request.RenameOperation.SourcePath)} -> {Path.GetFileName(currentPath)}");
+            AddOutputLine("Header aktualisiert.");
         }
 
         if (request.ProviderIdEdit is not null)
@@ -179,8 +179,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                 currentPath,
                 request.ProviderIdEdit.ProviderIds,
                 request.ProviderIdEdit.RemoveImdbId);
-            outputLines.Add(updateResult.Message);
-            output?.Report(updateResult.Message);
+            AddOutputLine(updateResult.Message);
             if (!updateResult.Success)
             {
                 return new ArchiveMaintenanceApplyResult(
@@ -202,8 +201,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                     request.NfoTextEdit.ExpectedSortTitle,
                     request.NfoTextEdit.ExpectedTitleLocked,
                     request.NfoTextEdit.ExpectedSortTitleLocked));
-            outputLines.Add(updateResult.Message);
-            output?.Report(updateResult.Message);
+            AddOutputLine(updateResult.Message);
             if (!updateResult.Success)
             {
                 return new ArchiveMaintenanceApplyResult(
@@ -211,6 +209,26 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                     currentPath,
                     Success: false,
                     Message: updateResult.Message,
+                    outputLines);
+            }
+        }
+
+        if (request.RenameOperation is not null)
+        {
+            try
+            {
+                currentPath = ApplyRename(request.RenameOperation);
+                AddOutputLine($"Datei umbenannt: {Path.GetFileName(request.RenameOperation.SourcePath)} -> {Path.GetFileName(currentPath)}");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                var message = $"Umbenennen fehlgeschlagen: {ex.Message}";
+                AddOutputLine(message);
+                return new ArchiveMaintenanceApplyResult(
+                    request.FilePath,
+                    currentPath,
+                    Success: false,
+                    Message: message,
                     outputLines);
             }
         }

@@ -229,6 +229,83 @@ public sealed class ArchiveMaintenanceServiceTests
     }
 
     [Fact]
+    public async Task ApplyAsync_ReturnsFailure_WhenRenameTargetAlreadyExists()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-rename-conflict-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "Serie - S01E01 - Alt.mkv");
+            var targetPath = Path.Combine(tempRoot, "Serie - S01E01 - Neu.mkv");
+            File.WriteAllText(mediaPath, "source");
+            File.WriteAllText(targetPath, "target");
+            var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+                mediaPath,
+                "Serie - S01E01 - Neu.mkv");
+            var service = new ArchiveMaintenanceService(
+                new MkvMergeProbeService(),
+                new StubMkvToolNixLocator(),
+                new MuxExecutionService(),
+                nfoProviderIds: new EmbyNfoProviderIdService());
+
+            var result = await service.ApplyAsync(new ArchiveMaintenanceApplyRequest(
+                mediaPath,
+                operation,
+                ContainerTitleEdit: null,
+                TrackHeaderEdits: [],
+                ProviderIdEdit: null));
+
+            Assert.False(result.Success);
+            Assert.Equal(mediaPath, result.CurrentFilePath);
+            Assert.Contains("Umbenennen fehlgeschlagen", result.Message, StringComparison.Ordinal);
+            Assert.True(File.Exists(mediaPath));
+            Assert.Equal("target", File.ReadAllText(targetPath));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ApplyAsync_DoesNotRename_WhenNfoUpdateFails()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "archive-nfo-before-rename-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var mediaPath = Path.Combine(tempRoot, "Serie - S01E01 - Alt.mkv");
+            var targetPath = Path.Combine(tempRoot, "Serie - S01E01 - Neu.mkv");
+            File.WriteAllText(mediaPath, "mkv");
+            var operation = ArchiveMaintenanceService.BuildManualRenameOperation(
+                mediaPath,
+                "Serie - S01E01 - Neu.mkv");
+            var service = new ArchiveMaintenanceService(
+                new MkvMergeProbeService(),
+                new StubMkvToolNixLocator(),
+                new MuxExecutionService(),
+                nfoProviderIds: new EmbyNfoProviderIdService());
+
+            var result = await service.ApplyAsync(new ArchiveMaintenanceApplyRequest(
+                mediaPath,
+                operation,
+                ContainerTitleEdit: null,
+                TrackHeaderEdits: [],
+                ProviderIdEdit: new ArchiveProviderIdEditOperation(new EmbyProviderIds("123", null), RemoveImdbId: false)));
+
+            Assert.False(result.Success);
+            Assert.Equal(mediaPath, result.CurrentFilePath);
+            Assert.Contains("NFO-Datei fehlt", result.Message, StringComparison.Ordinal);
+            Assert.True(File.Exists(mediaPath));
+            Assert.False(File.Exists(targetPath));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ApplyAsync_WritesProviderIdChangesToExistingNfo()
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "archive-provider-ids-" + Guid.NewGuid().ToString("N"));
