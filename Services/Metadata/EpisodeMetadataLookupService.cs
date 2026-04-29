@@ -252,7 +252,7 @@ internal sealed class EpisodeMetadataLookupService
             return new EpisodeMetadataResolutionResult(
                 guess,
                 Selection: null,
-                StatusText: $"TVDB-Automatik fehlgeschlagen: {ex.Message} Bitte prüfen.",
+                StatusText: $"{ProviderLookupErrorFormatter.FormatTvdbAutomaticFailure(ex)} Bitte prüfen.",
                 ConfidenceScore: 0,
                 RequiresReview: true,
                 QueryWasAttempted: true,

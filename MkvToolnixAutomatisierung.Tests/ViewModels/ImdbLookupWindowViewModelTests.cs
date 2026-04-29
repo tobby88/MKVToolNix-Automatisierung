@@ -128,7 +128,26 @@ public sealed class ImdbLookupWindowViewModelTests
         Assert.False(vm.IsApiWorkflowVisible);
         Assert.True(vm.IsBrowserWorkflowVisible);
         Assert.NotEmpty(vm.SearchOptions);
+        Assert.Contains("Netzwerkfehler", vm.StatusText, StringComparison.Ordinal);
         Assert.Contains("Browserhilfe", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_ShowsFriendlyStatus_WhenApiUnavailableInApiOnlyMode()
+    {
+        using var httpClient = new HttpClient(new FailingHttpMessageHandler());
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.ApiOnly,
+            new EpisodeMetadataGuess("Neues aus Büttenwarder", "Rififi", "05", "06"),
+            currentImdbId: null);
+
+        await vm.InitializeAsync();
+
+        Assert.True(vm.IsApiWorkflowVisible);
+        Assert.False(vm.IsBrowserWorkflowVisible);
+        Assert.Contains("IMDb-Suche über imdbapi.dev nicht möglich", vm.StatusText, StringComparison.Ordinal);
+        Assert.Contains("Netzwerkfehler", vm.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]

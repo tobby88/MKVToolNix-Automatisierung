@@ -1,3 +1,4 @@
+using System.Net.Http;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 using Xunit;
@@ -55,6 +56,29 @@ public sealed class TvdbLookupWindowViewModelTests
         Assert.Equal(100, viewModel.SelectedEpisodeItem?.Episode.Id);
         Assert.Equal("TVDB stimmt mit der lokalen Erkennung überein.", viewModel.ComparisonSummaryText);
         Assert.Contains("TVDB-Vorschlag", viewModel.StatusText);
+    }
+
+    [Fact]
+    public async Task SearchSeriesAsync_ShowsFriendlyStatus_WhenTvdbNetworkFails()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        });
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesException = new HttpRequestException("No such host is known")
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+        var viewModel = new TvdbLookupWindowViewModel(
+            service,
+            new EpisodeMetadataGuess("Beispielserie", "Pilot", "01", "01"));
+
+        await viewModel.SearchSeriesAsync(autoLoadEpisodes: true);
+
+        Assert.Empty(viewModel.SeriesResults);
+        Assert.Contains("TVDB-Suche nicht möglich", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("Netzwerkfehler", viewModel.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -211,6 +235,10 @@ public sealed class TvdbLookupWindowViewModelTests
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
 
+        public Exception? SearchSeriesException { get; init; }
+
+        public Exception? EpisodesException { get; init; }
+
         public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
             string apiKey,
             string? pin,
@@ -218,6 +246,11 @@ public sealed class TvdbLookupWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             SearchSeriesCallCount++;
+            if (SearchSeriesException is not null)
+            {
+                throw SearchSeriesException;
+            }
+
             IReadOnlyList<TvdbSeriesSearchResult> results = SearchSeriesResultFactory?.Invoke(query) ?? [];
             return Task.FromResult(results);
         }
@@ -230,6 +263,11 @@ public sealed class TvdbLookupWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             GetSeriesEpisodesCallCount++;
+            if (EpisodesException is not null)
+            {
+                throw EpisodesException;
+            }
+
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
         }

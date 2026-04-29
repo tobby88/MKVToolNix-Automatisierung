@@ -73,10 +73,11 @@ internal sealed partial class TvdbLookupWindowViewModel
                 UpdateComparisonSummary();
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            StatusText = "TVDB-Suche fehlgeschlagen";
-            throw;
+            StatusText = ProviderLookupErrorFormatter.FormatTvdbSearchFailure(ex);
+            ClearLoadedResults();
+            UpdateComparisonSummary();
         }
         finally
         {
@@ -131,10 +132,13 @@ internal sealed partial class TvdbLookupWindowViewModel
                 StatusText = $"{_episodes.Count} Episode(n) geladen.";
             }
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            StatusText = "Episodenliste konnte nicht geladen werden";
-            throw;
+            StatusText = ProviderLookupErrorFormatter.FormatTvdbEpisodeFailure(ex);
+            _episodes.Clear();
+            ReplaceItems(EpisodeResults, []);
+            SelectedEpisodeItem = null;
+            UpdateComparisonSummary();
         }
         finally
         {

@@ -373,10 +373,11 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         catch (Exception ex) when (TryActivateBrowserFallback(ex))
         {
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            StatusText = "IMDb-Suche fehlgeschlagen.";
-            throw;
+            StatusText = ProviderLookupErrorFormatter.FormatImdbSearchFailure(ex);
+            ClearApiResults();
+            UpdateComparisonSummary();
         }
         finally
         {
@@ -508,10 +509,13 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         catch (Exception ex) when (TryActivateBrowserFallback(ex))
         {
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            StatusText = "IMDb-Episodenliste konnte nicht geladen werden.";
-            throw;
+            StatusText = ProviderLookupErrorFormatter.FormatImdbEpisodeFailure(ex);
+            _episodes.Clear();
+            ReplaceItems(EpisodeResults, []);
+            SelectedEpisodeItem = null;
+            UpdateComparisonSummary();
         }
         finally
         {
@@ -696,10 +700,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(IsBrowserWorkflowVisible));
         RebuildSearchOptions();
 
-        var reason = string.IsNullOrWhiteSpace(ex.Message)
-            ? "imdbapi.dev ist derzeit nicht erreichbar."
-            : $"imdbapi.dev ist derzeit nicht erreichbar: {ex.Message}";
-        StatusText = $"{reason} Browserhilfe aktiviert.";
+        StatusText = $"{ProviderLookupErrorFormatter.FormatImdbFallbackReason(ex)} Browserhilfe aktiviert.";
         return true;
     }
 
