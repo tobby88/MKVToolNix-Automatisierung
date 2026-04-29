@@ -32,7 +32,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
 - [x] Inkompatible AD-Laufzeit nicht automatisch wählen.
 - [x] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
-- [ ] Videoreihenfolge im PlanCache-Key berücksichtigen.
+- [x] Videoreihenfolge im PlanCache-Key berücksichtigen.
 - [ ] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
 - [ ] Arbeitskopie-Staleness stärker validieren.
 - [ ] AD-Heuristik um englische Marker erweitern.

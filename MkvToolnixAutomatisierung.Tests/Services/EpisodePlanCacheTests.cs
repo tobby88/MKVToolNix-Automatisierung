@@ -217,6 +217,47 @@ public sealed class EpisodePlanCacheTests : IDisposable
     }
 
     [Fact]
+    public void TryGet_ReturnsFalse_WhenPlannedVideoPathOrderChanges()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var firstVideoPath = CreateFile("episode-de.mp4", "video");
+        var secondVideoPath = CreateFile("episode-nds.mp4", "platt");
+        var input = new StubPlanInput
+        {
+            MainVideoPath = firstVideoPath,
+            PlannedVideoPaths = [firstVideoPath, secondVideoPath]
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        input.PlannedVideoPaths = [secondVideoPath, firstVideoPath];
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_TreatsEquivalentSubtitleAndAttachmentOrderAsSamePlan()
+    {
+        var cache = new EpisodePlanCache();
+        var owner = new object();
+        var input = new StubPlanInput
+        {
+            SubtitlePaths = [@"C:\Temp\b.ass", @"C:\Temp\a.srt"],
+            AttachmentPaths = [@"C:\Temp\meta-2.txt", @"C:\Temp\meta-1.txt"]
+        };
+        cache.Store(owner, input, CreatePlan("cached"));
+
+        input.SubtitlePaths = [@"C:\Temp\a.srt", @"C:\Temp\b.ass"];
+        input.AttachmentPaths = [@"C:\Temp\meta-1.txt", @"C:\Temp\meta-2.txt"];
+
+        var found = cache.TryGet(owner, input, out _);
+
+        Assert.True(found);
+    }
+
+    [Fact]
     public void TryGet_ReturnsFalse_WhenDetectionNotesChange()
     {
         var cache = new EpisodePlanCache();

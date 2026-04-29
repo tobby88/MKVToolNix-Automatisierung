@@ -192,7 +192,7 @@ internal sealed class EpisodePlanCache
         AppendFileValue(builder, input.OutputPath);
         AppendValue(builder, input.TitleForMux);
         AppendValues(builder, input.ExcludedSourcePaths);
-        AppendFileValues(builder, input.PlannedVideoPaths);
+        AppendOrderedFileValues(builder, input.PlannedVideoPaths);
         AppendValues(builder, input.DetectionNotes);
         AppendValue(builder, input.SeriesName);
         AppendValue(builder, input.SeasonNumber);
@@ -227,6 +227,24 @@ internal sealed class EpisodePlanCache
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
         {
             AppendFileValue(builder, value);
+        }
+
+        builder.Append(']');
+    }
+
+    private static void AppendOrderedFileValues(StringBuilder builder, IEnumerable<string> values)
+    {
+        builder.Append('[');
+        var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // PlannedVideoPaths bildet die finale Videospurreihenfolge ab. Anders als bei
+        // Untertiteln oder Anhängen ist eine reine Umordnung deshalb planrelevant.
+        foreach (var value in values.Where(value => !string.IsNullOrWhiteSpace(value)))
+        {
+            if (seenPaths.Add(value))
+            {
+                AppendFileValue(builder, value);
+            }
         }
 
         builder.Append(']');
