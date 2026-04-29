@@ -60,7 +60,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 ## Tooling, Startup und Einstellungen
 
 - [x] Settings-Recovery-Warnung bei Tool-State-Save erhalten.
-- [ ] Toolprüfung im Einstellungsdialog abbrechbar machen.
+- [x] Toolprüfung im Einstellungsdialog abbrechbar machen.
 - [ ] Verwaltete MediathekView-Installation aus `Tools` wiederfinden.
 - [ ] HTTP-`Accept`-Header pro Toolquelle passend setzen.
 - [ ] Startup-Cancellation in Migration/Cleanup beachten.

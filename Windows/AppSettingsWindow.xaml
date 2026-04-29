@@ -298,8 +298,7 @@
 
         <DockPanel Grid.Row="1"
                    Margin="0,12,0,0"
-                   LastChildFill="False"
-                   IsEnabled="{Binding IsInteractive}">
+                   LastChildFill="False">
             <TextBlock DockPanel.Dock="Left"
                        VerticalAlignment="Center"
                        Foreground="#44515D"
@@ -309,11 +308,13 @@
                         Width="120"
                         Margin="0,0,12,0"
                         Padding="10,6"
+                        IsEnabled="{Binding CanCancel}"
                         Click="CancelButton_Click"
                         Content="Abbrechen" />
                 <Button x:Name="SaveButton"
                         Width="140"
                         Padding="10,6"
+                        IsEnabled="{Binding IsInteractive}"
                         Click="SaveButton_Click"
                         Content="Übernehmen" />
             </StackPanel>

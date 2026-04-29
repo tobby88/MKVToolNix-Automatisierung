@@ -148,6 +148,30 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Cancel_DuringManagedToolCheck_AbortsAndKeepsDialogOpen()
+    {
+        var installer = new CancellableManagedToolInstaller();
+        var settingsStore = new AppSettingsStore();
+        var viewModel = CreateViewModel(settingsStore: settingsStore, managedToolInstaller: installer);
+        var closeRequested = false;
+        viewModel.CloseRequested += (_, _) => closeRequested = true;
+
+        viewModel.AutoManageMkvToolNix = true;
+        var saveTask = viewModel.SaveAndCloseAsync();
+        await installer.Started.Task;
+
+        Assert.False(viewModel.IsInteractive);
+        Assert.True(viewModel.CanCancel);
+        viewModel.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => saveTask);
+        Assert.True(viewModel.IsInteractive);
+        Assert.False(closeRequested);
+        Assert.Contains("Werkzeugprüfung abgebrochen", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.True(settingsStore.Load().ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
+    }
+
+    [Fact]
     public void ToolStatus_ShowsManagedInstallationEvenWhenAutoManageIsDisabled()
     {
         var mkvToolNixDirectory = CreateDirectory("managed-mkvtoolnix");
@@ -415,6 +439,21 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             CallCount++;
             progress?.Report(new ManagedToolStartupProgress("Werkzeuge bereit", "Test", 100d, false));
             return Task.FromResult(new ManagedToolStartupResult([]));
+        }
+    }
+
+    private sealed class CancellableManagedToolInstaller : IManagedToolInstallerService
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<ManagedToolStartupResult> EnsureManagedToolsAsync(
+            IProgress<ManagedToolStartupProgress>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            progress?.Report(new ManagedToolStartupProgress("Werkzeuge werden geprüft", "Test", null, true));
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new ManagedToolStartupResult([]);
         }
     }
 

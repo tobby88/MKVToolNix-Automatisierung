@@ -36,6 +36,7 @@ public partial class AppSettingsWindow : Window
             return;
         }
 
+        _viewModel.Cancel();
         e.Cancel = true;
     }
 
@@ -81,6 +82,9 @@ public partial class AppSettingsWindow : Window
         try
         {
             await _viewModel.SaveAndCloseAsync();
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception ex)
         {

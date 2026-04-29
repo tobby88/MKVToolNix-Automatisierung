@@ -32,6 +32,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     private int _embyScanWaitTimeoutSeconds;
     private string _statusText = "Bereit";
     private bool _isBusy;
+    private CancellationTokenSource? _toolCheckCancellationSource;
     private ResolvedToolPath? _resolvedFfprobePath;
     private ResolvedMkvToolNixPaths? _resolvedMkvToolNixPaths;
     private ResolvedToolPath? _resolvedMediathekViewPath;
@@ -342,6 +343,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public bool IsInteractive => !_isBusy;
 
+    public bool CanCancel => !_isBusy || _toolCheckCancellationSource is not null;
+
     public bool IsArchiveAvailable => !string.IsNullOrWhiteSpace(ArchiveRootDirectory) && Directory.Exists(ArchiveRootDirectory);
 
     public string ArchiveStatusText => IsArchiveAvailable ? "Archiv bereit" : "Archiv fehlt";
@@ -469,6 +472,18 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
     public void Cancel()
     {
+        if (_toolCheckCancellationSource is not null)
+        {
+            _toolCheckCancellationSource.Cancel();
+            StatusText = "Abbruch der Werkzeugprüfung angefordert...";
+            return;
+        }
+
+        if (_isBusy)
+        {
+            return;
+        }
+
         CloseRequested?.Invoke(this, false);
     }
 
@@ -514,6 +529,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
     public async Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
     {
         var settingsWereSaved = false;
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _toolCheckCancellationSource = linkedCancellation;
+        OnPropertyChanged(nameof(CanCancel));
 
         try
         {
@@ -524,7 +542,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
 
             var result = await _services.ManagedTools.EnsureManagedToolsAsync(
                 new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
-                cancellationToken);
+                linkedCancellation.Token);
             RefreshDerivedState();
 
             if (result.HasWarning)
@@ -537,6 +555,13 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
                 StatusText = "Einstellungen gespeichert; Werkzeuge bereit.";
             }
         }
+        catch (OperationCanceledException) when (linkedCancellation.IsCancellationRequested)
+        {
+            StatusText = settingsWereSaved
+                ? "Einstellungen gespeichert; Werkzeugprüfung abgebrochen."
+                : "Einstellungen konnten nicht gespeichert werden.";
+            throw;
+        }
         catch
         {
             StatusText = settingsWereSaved
@@ -546,7 +571,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         }
         finally
         {
+            _toolCheckCancellationSource = null;
             SetBusy(false, StatusText);
+            OnPropertyChanged(nameof(CanCancel));
         }
     }
 
@@ -825,6 +852,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged
         _isBusy = isBusy;
         StatusText = statusText;
         OnPropertyChanged(nameof(IsInteractive));
+        OnPropertyChanged(nameof(CanCancel));
     }
 
     private void UpdateManagedToolProgress(ManagedToolStartupProgress progress)
