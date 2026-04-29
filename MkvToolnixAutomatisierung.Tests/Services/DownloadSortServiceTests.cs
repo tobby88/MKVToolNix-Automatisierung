@@ -119,6 +119,24 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_PlansFolderRename_WhenOnlyCasingDiffersFromCanonicalName()
+    {
+        var existingDirectory = Path.Combine(_rootDirectory, "soko leipzig");
+        Directory.CreateDirectory(existingDirectory);
+        CreateEmptyFile(Path.Combine(existingDirectory, "SOKO Leipzig-Take Me Out-1234.mp4"));
+        CreateCompanionText(
+            Path.Combine(existingDirectory, "SOKO Leipzig-Take Me Out-1234.txt"),
+            topic: "SOKO Leipzig",
+            title: "Take Me Out");
+
+        var result = _service.Scan(_rootDirectory);
+
+        var renamePlan = Assert.Single(result.FolderRenames);
+        Assert.Equal("soko leipzig", renamePlan.CurrentFolderName);
+        Assert.Equal("SOKO Leipzig", renamePlan.TargetFolderName);
+    }
+
+    [Fact]
     public void Scan_MapsEditorialTitleWithQuotedSeriesAlias()
     {
         CreateEmptyFile(Path.Combine(_rootDirectory, "hallo deutschland-Antoine Monot in Jubilaeumsstaffel-1234.mp4"));
@@ -505,6 +523,28 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(canonicalDirectory, Path.GetFileName(looseTextPath))));
         Assert.False(File.Exists(looseVideoPath));
         Assert.False(File.Exists(looseTextPath));
+    }
+
+    [Fact]
+    public void Apply_RenamesFolder_WhenOnlyCasingDiffersFromCanonicalName()
+    {
+        var existingDirectory = Path.Combine(_rootDirectory, "soko leipzig");
+        Directory.CreateDirectory(existingDirectory);
+        var loosePath = Path.Combine(_rootDirectory, "SOKO Leipzig-Take Me Out-1234.mp4");
+        CreateEmptyFile(loosePath);
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("SOKO Leipzig-Take Me Out", [loosePath], "SOKO Leipzig")],
+            [new DownloadSortFolderRenamePlan("soko leipzig", "SOKO Leipzig", "Groß-/Kleinschreibung vereinheitlichen.")]);
+
+        var rootFolderNames = Directory.GetDirectories(_rootDirectory)
+            .Select(Path.GetFileName)
+            .ToList();
+        Assert.Equal(1, applyResult.RenamedFolderCount);
+        Assert.Contains("SOKO Leipzig", rootFolderNames, StringComparer.Ordinal);
+        Assert.DoesNotContain("soko leipzig", rootFolderNames, StringComparer.Ordinal);
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "SOKO Leipzig", Path.GetFileName(loosePath))));
     }
 
     [Fact]

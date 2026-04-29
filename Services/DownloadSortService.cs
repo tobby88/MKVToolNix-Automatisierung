@@ -313,7 +313,8 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            if (Directory.Exists(destinationPath))
+            var isCaseOnlyRename = IsCaseOnlyPathChange(sourcePath, destinationPath);
+            if (!isCaseOnlyRename && Directory.Exists(destinationPath))
             {
                 logLines.Add($"UEBERSPRUNGEN: Ordner '{renamePlan.CurrentFolderName}' wurde nicht umbenannt, weil '{renamePlan.TargetFolderName}' bereits existiert.");
                 continue;
@@ -321,7 +322,7 @@ internal sealed class DownloadSortService
 
             try
             {
-                Directory.Move(sourcePath, destinationPath);
+                MoveDirectoryWithCaseOnlySupport(sourcePath, destinationPath);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -842,8 +843,9 @@ internal sealed class DownloadSortService
             }
 
             var targetFolderName = detectedFolderNames[0];
-            if (string.Equals(currentFolderName, targetFolderName, StringComparison.OrdinalIgnoreCase)
-                || existingDirectoryNames.Contains(targetFolderName!))
+            var matchesTargetIgnoringCase = string.Equals(currentFolderName, targetFolderName, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(currentFolderName, targetFolderName, StringComparison.Ordinal)
+                || (!matchesTargetIgnoringCase && existingDirectoryNames.Contains(targetFolderName!)))
             {
                 continue;
             }
@@ -1273,6 +1275,59 @@ internal sealed class DownloadSortService
 
         childPath = candidatePath;
         return true;
+    }
+
+    /// <summary>
+    /// Benennt Ordner auch dann zuverlässig um, wenn sich auf Windows nur die Schreibweise ändert.
+    /// </summary>
+    private static void MoveDirectoryWithCaseOnlySupport(string sourcePath, string destinationPath)
+    {
+        if (!IsCaseOnlyPathChange(sourcePath, destinationPath))
+        {
+            Directory.Move(sourcePath, destinationPath);
+            return;
+        }
+
+        var temporaryPath = CreateTemporaryDirectoryRenamePath(sourcePath);
+        Directory.Move(sourcePath, temporaryPath);
+        try
+        {
+            Directory.Move(temporaryPath, destinationPath);
+        }
+        catch
+        {
+            if (Directory.Exists(temporaryPath) && !Directory.Exists(sourcePath))
+            {
+                Directory.Move(temporaryPath, sourcePath);
+            }
+
+            throw;
+        }
+    }
+
+    private static bool IsCaseOnlyPathChange(string sourcePath, string destinationPath)
+    {
+        return PathComparisonHelper.AreSamePath(sourcePath, destinationPath)
+            && !string.Equals(
+                Path.GetFullPath(sourcePath),
+                Path.GetFullPath(destinationPath),
+                StringComparison.Ordinal);
+    }
+
+    private static string CreateTemporaryDirectoryRenamePath(string sourcePath)
+    {
+        var parentDirectory = Path.GetDirectoryName(sourcePath) ?? ".";
+        var folderName = Path.GetFileName(sourcePath);
+        for (var index = 0; index < 10_000; index++)
+        {
+            var candidate = Path.Combine(parentDirectory, $".{folderName}.rename-{Guid.NewGuid():N}.tmp");
+            if (!Directory.Exists(candidate) && !File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new IOException($"Es konnte kein temporärer Umbenennungspfad für '{folderName}' erzeugt werden.");
     }
 
     /// <summary>
