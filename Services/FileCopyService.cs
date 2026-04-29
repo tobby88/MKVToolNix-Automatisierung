@@ -56,37 +56,85 @@ internal sealed class FileCopyService : IFileCopyService
         }
 
         Directory.CreateDirectory(destinationDirectory);
+        var temporaryDestinationPath = CreateTemporaryCopyPath(copyPlan.DestinationFilePath);
 
-        await using var sourceStream = new FileStream(
-            copyPlan.SourceFilePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            BufferSize,
-            useAsync: true);
-
-        await using var destinationStream = new FileStream(
-            copyPlan.DestinationFilePath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            BufferSize,
-            useAsync: true);
-
-        var buffer = new byte[BufferSize];
-        long copiedBytes = 0;
-
-        while (true)
+        try
         {
-            var bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken);
-            if (bytesRead == 0)
+            await using (var sourceStream = new FileStream(
+                             copyPlan.SourceFilePath,
+                             FileMode.Open,
+                             FileAccess.Read,
+                             FileShare.Read,
+                             BufferSize,
+                             useAsync: true))
+            await using (var destinationStream = new FileStream(
+                             temporaryDestinationPath,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             BufferSize,
+                             useAsync: true))
             {
-                break;
+                var buffer = new byte[BufferSize];
+                long copiedBytes = 0;
+
+                while (true)
+                {
+                    var bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken);
+                    if (bytesRead == 0)
+                    {
+                        break;
+                    }
+
+                    await destinationStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
+                    copiedBytes += bytesRead;
+                    onProgress?.Invoke(copiedBytes, copyPlan.FileSizeBytes);
+                }
             }
 
-            await destinationStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
-            copiedBytes += bytesRead;
-            onProgress?.Invoke(copiedBytes, copyPlan.FileSizeBytes);
+            File.Move(temporaryDestinationPath, copyPlan.DestinationFilePath, overwrite: true);
+        }
+        catch
+        {
+            TryDeleteTemporaryCopy(temporaryDestinationPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Legt die Arbeitskopie zuerst im Zielordner ab, damit der finale Replace auf demselben
+    /// Volume bleibt und keine halb geschriebene Ziel-MKV sichtbar wird.
+    /// </summary>
+    private static string CreateTemporaryCopyPath(string destinationFilePath)
+    {
+        var destinationDirectory = Path.GetDirectoryName(destinationFilePath) ?? ".";
+        var destinationFileName = Path.GetFileName(destinationFilePath);
+        for (var index = 0; index < 10_000; index++)
+        {
+            var candidate = Path.Combine(destinationDirectory, $".{destinationFileName}.copy-{Guid.NewGuid():N}.tmp");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new IOException($"Es konnte kein temporärer Kopierpfad für '{destinationFileName}' erzeugt werden.");
+    }
+
+    private static void TryDeleteTemporaryCopy(string temporaryDestinationPath)
+    {
+        try
+        {
+            if (File.Exists(temporaryDestinationPath))
+            {
+                File.Delete(temporaryDestinationPath);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

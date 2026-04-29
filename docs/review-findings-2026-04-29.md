@@ -19,7 +19,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] UI-Cancellation für lange Einsortierläufe ergänzen.
 - [x] Case-only Ordner-Kanonisierung beim Einsortieren prüfen und umsetzen.
 - [x] `FileStateSnapshot.TryCreate` race-sicher machen.
-- [ ] Arbeitskopien im `FileCopyService` atomar ersetzen.
+- [x] Arbeitskopien im `FileCopyService` atomar ersetzen.
 - [ ] Leere gewählte Quellordner nach Cleanup erhalten oder gezielt neu anlegen.
 
 ## Muxen

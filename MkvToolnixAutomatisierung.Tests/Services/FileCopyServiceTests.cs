@@ -39,6 +39,42 @@ public sealed class FileCopyServiceTests : IDisposable
         Assert.Equal(content.Length, progressUpdates[^1]);
     }
 
+    [Fact]
+    public async Task CopyAsync_ReplacesExistingDestinationAfterSuccessfulCopy()
+    {
+        var sourcePath = Path.Combine(_tempDirectory, "source.bin");
+        var destinationPath = Path.Combine(_tempDirectory, "copy.bin");
+        var newContent = Enumerable.Range(0, 8000).Select(index => (byte)(index % 199)).ToArray();
+        await File.WriteAllBytesAsync(sourcePath, newContent);
+        await File.WriteAllTextAsync(destinationPath, "old");
+        var service = new FileCopyService();
+
+        await service.CopyAsync(
+            new FileCopyPlan(sourcePath, destinationPath, newContent.Length, File.GetLastWriteTimeUtc(sourcePath)));
+
+        Assert.Equal(newContent, await File.ReadAllBytesAsync(destinationPath));
+    }
+
+    [Fact]
+    public async Task CopyAsync_WhenCancelled_KeepsExistingDestinationAndRemovesTemporaryCopy()
+    {
+        var sourcePath = Path.Combine(_tempDirectory, "source.bin");
+        var destinationPath = Path.Combine(_tempDirectory, "copy.bin");
+        await File.WriteAllBytesAsync(sourcePath, Enumerable.Repeat((byte)7, 2048).ToArray());
+        await File.WriteAllTextAsync(destinationPath, "old");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var service = new FileCopyService();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.CopyAsync(
+                new FileCopyPlan(sourcePath, destinationPath, new FileInfo(sourcePath).Length, File.GetLastWriteTimeUtc(sourcePath)),
+                cancellationToken: cancellation.Token));
+
+        Assert.Equal("old", await File.ReadAllTextAsync(destinationPath));
+        Assert.Empty(Directory.GetFiles(_tempDirectory, ".copy.bin.copy-*.tmp"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
