@@ -61,7 +61,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 
 - [x] Settings-Recovery-Warnung bei Tool-State-Save erhalten.
 - [x] Toolprüfung im Einstellungsdialog abbrechbar machen.
-- [ ] Verwaltete MediathekView-Installation aus `Tools` wiederfinden.
+- [x] Verwaltete MediathekView-Installation aus `Tools` wiederfinden.
 - [ ] HTTP-`Accept`-Header pro Toolquelle passend setzen.
 - [ ] Startup-Cancellation in Migration/Cleanup beachten.
 - [ ] Numerische Einstellungen sichtbar validieren.

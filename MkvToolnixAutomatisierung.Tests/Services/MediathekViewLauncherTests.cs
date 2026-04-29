@@ -1,16 +1,19 @@
 using System.Diagnostics;
 using System.IO;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
 
+[Collection("PortableStorage")]
 public sealed class MediathekViewLauncherTests : IDisposable
 {
     private readonly string _tempDirectory;
 
-    public MediathekViewLauncherTests()
+    public MediathekViewLauncherTests(PortableStorageFixture storageFixture)
     {
+        storageFixture.Reset();
         _tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-mediathekview-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDirectory);
     }
@@ -65,6 +68,26 @@ public sealed class MediathekViewLauncherTests : IDisposable
         Assert.NotNull(resolved);
         Assert.Equal(managedExecutablePath, resolved.Path);
         Assert.Equal(ToolPathResolutionSource.ManagedSettings, resolved.Source);
+    }
+
+    [Fact]
+    public void PathResolver_UsesPortableToolsFallbackForManagedInstallationWithoutSettings()
+    {
+        var executablePath = Path.Combine(
+            PortableAppStorage.ToolsDirectory,
+            "mediathekview",
+            "14.5.0",
+            "MediathekView",
+            "Portable",
+            "MediathekView_Portable.exe");
+        Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
+        File.WriteAllText(executablePath, "tool");
+
+        var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings());
+
+        Assert.NotNull(resolved);
+        Assert.Equal(executablePath, resolved.Path);
+        Assert.Equal(ToolPathResolutionSource.PortableToolsFallback, resolved.Source);
     }
 
     [Fact]

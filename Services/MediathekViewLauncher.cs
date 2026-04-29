@@ -145,6 +145,7 @@ internal static class MediathekViewPathResolver
 {
     private const string MediathekViewExecutableName = "MediathekView.exe";
     private const string MediathekViewPortableExecutableName = "MediathekView_Portable.exe";
+    private const string ManagedMediathekViewDirectoryName = "mediathekview";
 
     public static ResolvedToolPath? TryResolve(AppToolPathSettings settings)
     {
@@ -160,6 +161,11 @@ internal static class MediathekViewPathResolver
             return new ResolvedToolPath(managedPath, ToolPathResolutionSource.ManagedSettings);
         }
 
+        if (TryFindInPortableTools() is { } portableToolsHit)
+        {
+            return new ResolvedToolPath(portableToolsHit, ToolPathResolutionSource.PortableToolsFallback);
+        }
+
         if (TryFindInDownloads() is { } downloadsHit)
         {
             return new ResolvedToolPath(downloadsHit, ToolPathResolutionSource.DownloadsFallback);
@@ -173,6 +179,20 @@ internal static class MediathekViewPathResolver
         if (TryFindInPath() is { } pathHit)
         {
             return new ResolvedToolPath(pathHit, ToolPathResolutionSource.SystemPath);
+        }
+
+        return null;
+    }
+
+    private static string? TryFindInPortableTools()
+    {
+        var managedRoot = Path.Combine(PortableAppStorage.ToolsDirectory, ManagedMediathekViewDirectoryName);
+        foreach (var candidateDirectory in EnumerateCandidateDirectories(managedRoot))
+        {
+            if (TryFindExecutableUnderRoot(candidateDirectory, preferPortable: true) is { } executablePath)
+            {
+                return executablePath;
+            }
         }
 
         return null;
@@ -246,6 +266,34 @@ internal static class MediathekViewPathResolver
         }
 
         return null;
+    }
+
+    private static IEnumerable<string> EnumerateCandidateDirectories(string rootDirectory)
+    {
+        if (!Directory.Exists(rootDirectory))
+        {
+            return [];
+        }
+
+        try
+        {
+            return Directory
+                .EnumerateDirectories(rootDirectory, "*", SearchOption.TopDirectoryOnly)
+                .Where(path =>
+                {
+                    var directoryName = Path.GetFileName(path);
+                    return !directoryName.StartsWith(".staging-", StringComparison.OrdinalIgnoreCase)
+                           && !directoryName.StartsWith(".download-", StringComparison.OrdinalIgnoreCase);
+                })
+                .Select(path => new DirectoryInfo(path))
+                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .Select(directory => directory.FullName)
+                .ToArray();
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     private static IEnumerable<string> EnumerateKnownInstallRoots()
