@@ -28,7 +28,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] `TestSelectedSourcesCommand` nach manueller AD-Änderung neu auswerten.
 - [x] Lange Einzel-Erkennung und Batch-Redetect abbrechbar machen.
 - [x] `SxxExx`-Ausführung blockieren oder explizit bestätigen lassen.
-- [ ] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
+- [x] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
 - [ ] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
 - [ ] Inkompatible AD-Laufzeit nicht automatisch wählen.
 - [ ] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.

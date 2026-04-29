@@ -492,6 +492,35 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
+    public async Task RunBatchCommand_PendingReviewCancellation_ReportsRemainingReviewTypes()
+    {
+        var workflow = new RejectingManualSourceWorkflow();
+        var dialogService = new FakeDialogService();
+        var viewModel = CreateBatchViewModel(workflow, dialogService);
+        var manualItem = CreateManualCheckItem();
+        var metadataItem = CreatePendingReviewItem();
+        var planItem = CreateReadyItem(@"C:\Temp\plan.mp4", @"C:\Temp\plan.mkv");
+        planItem.SetPlanNotes([
+            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+        ]);
+        planItem.RefreshArchivePresence();
+
+        viewModel.EpisodeItems.Add(manualItem);
+        viewModel.EpisodeItems.Add(metadataItem);
+        viewModel.EpisodeItems.Add(planItem);
+
+        viewModel.RunBatchCommand.Execute(null);
+        Assert.True(await WaitUntilAsync(() => dialogService.LastWarningMessage is not null, TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(1, workflow.ManualSourceReviewCallCount);
+        Assert.Equal(0, dialogService.ConfirmBatchExecutionCallCount);
+        Assert.Contains("1 Quellenprüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("1 TVDB-Prüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("1 Archiv-/Planhinweis", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Batch abgebrochen: Prüfungen offen", viewModel.StatusText);
+    }
+
+    [Fact]
     public async Task OpenSelectedFileCommands_OpenFilesByCategory()
     {
         var dialogService = new FakeDialogService();
@@ -1254,6 +1283,39 @@ public sealed class BatchMetadataReviewTests
         }
     }
 
+    private sealed class RejectingManualSourceWorkflow : IEpisodeReviewWorkflow
+    {
+        public int ManualSourceReviewCallCount { get; private set; }
+
+        public Task<bool> ReviewManualSourceAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string openFailedStatusText,
+            string approvedStatusText,
+            string alternativeStatusText,
+            Func<IReadOnlyCollection<string>, Task<bool>> tryAlternativeAsync)
+        {
+            ManualSourceReviewCallCount++;
+            return Task.FromResult(false);
+        }
+
+        public Task<EpisodeMetadataReviewOutcome> ReviewMetadataAsync(
+            IEpisodeReviewItem item,
+            Action<string, int> reportStatus,
+            int currentProgress,
+            string reviewStatusText,
+            string cancelledStatusText,
+            string localApprovedStatusText,
+            string tvdbApprovedStatusText,
+            Action onEpisodeChanged)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
     private sealed class MetadataChangingEpisodeReviewWorkflow : IEpisodeReviewWorkflow
     {
         private readonly TaskCompletionSource _metadataReviewCompletion = new();
@@ -1419,6 +1481,10 @@ public sealed class BatchMetadataReviewTests
 
         public List<string> OpenedFilePaths { get; } = [];
 
+        public List<(string Title, string Message)> WarningMessages { get; } = [];
+
+        public string? LastWarningMessage => WarningMessages.Count == 0 ? null : WarningMessages[^1].Message;
+
         public string? SelectMainVideo(string initialDirectory) => throw new NotSupportedException();
         public string? SelectAudioDescription(string initialDirectory) => throw new NotSupportedException();
         public string[]? SelectSubtitles(string initialDirectory) => throw new NotSupportedException();
@@ -1469,6 +1535,7 @@ public sealed class BatchMetadataReviewTests
 
         public void ShowWarning(string title, string message)
         {
+            WarningMessages.Add((title, message));
         }
 
         public void ShowError(string message) => throw new InvalidOperationException(message);

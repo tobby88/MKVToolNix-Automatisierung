@@ -65,8 +65,8 @@ internal sealed partial class BatchMuxViewModel
             {
                 _dialogService.ShowWarning(
                     "Hinweis",
-                    "Der Batch wurde abgebrochen, weil nicht alle prüfpflichtigen Quellen freigegeben wurden.");
-                SetStatus("Batch abgebrochen", 0);
+                    BuildPendingReviewAbortMessage(readyItems));
+                SetStatus("Batch abgebrochen: Prüfungen offen", 0);
                 return;
             }
 
@@ -198,6 +198,41 @@ internal sealed partial class BatchMuxViewModel
         }
 
         return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Erklärt nach einem abgebrochenen Pflichtcheck konkret, welche Freigabearten noch offen sind.
+    /// </summary>
+    private static string BuildPendingReviewAbortMessage(IReadOnlyList<BatchEpisodeItemViewModel> readyItems)
+    {
+        var pendingReviewParts = new List<string>();
+        var pendingSourceCount = readyItems.Count(item => item.HasPendingManualCheck);
+        var pendingMetadataCount = readyItems.Count(item => item.HasPendingMetadataReview);
+        var pendingPlanCount = readyItems.Count(item => item.HasPendingPlanReview);
+
+        if (pendingSourceCount > 0)
+        {
+            pendingReviewParts.Add($"{pendingSourceCount} Quellenprüfung(en)");
+        }
+
+        if (pendingMetadataCount > 0)
+        {
+            pendingReviewParts.Add($"{pendingMetadataCount} TVDB-Prüfung(en)");
+        }
+
+        if (pendingPlanCount > 0)
+        {
+            pendingReviewParts.Add($"{pendingPlanCount} Archiv-/Planhinweis(e)");
+        }
+
+        if (pendingReviewParts.Count == 0)
+        {
+            return "Der Batch wurde abgebrochen, bevor alle Pflichtprüfungen abgeschlossen wurden.";
+        }
+
+        return "Der Batch wurde abgebrochen, weil noch Pflichtprüfungen offen sind: "
+            + string.Join(", ", pendingReviewParts)
+            + ".";
     }
 
     private List<string> BuildBatchCleanupFileList(BatchEpisodeItemViewModel item, SeriesEpisodeMuxPlan plan)
