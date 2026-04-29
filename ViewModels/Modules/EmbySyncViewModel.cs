@@ -266,14 +266,22 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             EmbyLibraryMatch? libraryMatch = null;
             if (canQueryEmby)
             {
-                libraryMatch = await _services.Sync.FindSeriesLibraryAsync(settings, archiveRootPath, CancellationToken.None);
-                if (libraryMatch is null)
+                try
                 {
-                    AppendLog($"Keine passende Emby-Serienbibliothek zur Archivwurzel gefunden: {archiveRootPath}");
+                    libraryMatch = await _services.Sync.FindSeriesLibraryAsync(settings, archiveRootPath, CancellationToken.None);
+                    if (libraryMatch is null)
+                    {
+                        AppendLog($"Keine passende Emby-Serienbibliothek zur Archivwurzel gefunden: {archiveRootPath}");
+                    }
+                    else
+                    {
+                        AppendLog($"Emby-Serienbibliothek erkannt: {libraryMatch.Library.Name} ({libraryMatch.MatchedLocation})");
+                    }
                 }
-                else
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    AppendLog($"Emby-Serienbibliothek erkannt: {libraryMatch.Library.Name} ({libraryMatch.MatchedLocation})");
+                    canQueryEmby = false;
+                    AppendLog($"Emby-Abfrage nicht möglich: {ex.Message}. Prüfe lokale NFO-Dateien ohne Emby-Itemdaten.");
                 }
             }
 
@@ -286,13 +294,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     : $"Prüfe lokale NFO {index + 1}/{items.Count}...";
                 ProgressValue = ScaleProgress(index, items.Count, 10, 90);
 
-                var analysis = await _services.Sync.AnalyzeFileAsync(
+                var analysis = await AnalyzeFileWithLocalFallbackAsync(
+                    item,
                     settings,
-                    item.MediaFilePath,
                     canQueryEmby,
                     archiveRootPath,
                     libraryMatch,
-                    CancellationToken.None);
+                    "Reports prüfen");
                 item.ApplyAnalysis(analysis);
             }
 
@@ -644,14 +652,43 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             // Nach einem Library-Scan kann Emby die NFO erst jetzt angelegt oder Provider-IDs
             // ergänzt haben. Diese zweite, kurze Prüfung verhindert, dass wir mit veraltetem
             // "NFO fehlt"-Zustand weiterarbeiten.
-            var analysis = await _services.Sync.AnalyzeFileAsync(
+            var analysis = await AnalyzeFileWithLocalFallbackAsync(
+                item,
                 settings,
-                item.MediaFilePath,
                 queryEmby: true,
                 archiveRootPath,
                 libraryMatch,
-                CancellationToken.None);
+                "Nach Emby-Scan");
             item.ApplyAnalysis(analysis);
+        }
+    }
+
+    /// <summary>
+    /// Liest immer zuerst die lokale NFO und degradiert nur den optionalen Emby-Anteil,
+    /// wenn der Server während der Prüfung nicht erreichbar ist.
+    /// </summary>
+    private async Task<EmbyFileAnalysis> AnalyzeFileWithLocalFallbackAsync(
+        EmbySyncItemViewModel item,
+        AppEmbySettings settings,
+        bool queryEmby,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch,
+        string operationLabel)
+    {
+        try
+        {
+            return await _services.Sync.AnalyzeFileAsync(
+                settings,
+                item.MediaFilePath,
+                queryEmby,
+                archiveRootPath,
+                libraryMatch,
+                CancellationToken.None);
+        }
+        catch (Exception ex) when (queryEmby && ex is not OperationCanceledException)
+        {
+            AppendLog($"{operationLabel}: Emby-Abfrage für {item.MediaFileName} fehlgeschlagen: {ex.Message}. Verwende lokale NFO-Daten.");
+            return _services.Sync.AnalyzeLocalFile(item.MediaFilePath);
         }
     }
 

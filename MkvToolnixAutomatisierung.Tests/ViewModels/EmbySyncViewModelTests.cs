@@ -340,6 +340,53 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task SelectReportCommand_ContinuesWithLocalNfo_WhenEmbyLookupFails()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-viewmodel-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <title>Pilot</title>
+                  <tvdbid>12345</tvdbid>
+                  <imdbid>tt1234567</imdbid>
+                </episodedetails>
+                """);
+            var reportPath = WriteMetadataReport(tempDirectory, "run.metadata.json", mediaPath, string.Empty);
+            var dialogService = new SelectingDialogService([reportPath]);
+            var vm = CreateViewModel(
+                dialogService,
+                configuredEmbySettings: new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+
+            await vm.SelectReportCommand.ExecuteAsync();
+
+            var item = Assert.Single(vm.Items);
+            Assert.Equal("12345", item.TvdbId);
+            Assert.Equal("tt1234567", item.ImdbId);
+            Assert.Contains("Prüfung abgeschlossen", vm.StatusText, StringComparison.Ordinal);
+            Assert.Contains("Emby-Abfrage nicht möglich", vm.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_WithoutEmbyCredentials_UpdatesLocalNfoAndSkipsRefresh()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
