@@ -31,7 +31,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
 - [x] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
 - [x] Inkompatible AD-Laufzeit nicht automatisch wählen.
-- [ ] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
+- [x] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
 - [ ] Videoreihenfolge im PlanCache-Key berücksichtigen.
 - [ ] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.
 - [ ] Arbeitskopie-Staleness stärker validieren.

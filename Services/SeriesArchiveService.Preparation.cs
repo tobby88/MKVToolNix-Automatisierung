@@ -739,7 +739,9 @@ public sealed partial class SeriesArchiveService
             PrimarySourcePath: videoPlan.VideoSelections[0].FilePath,
             VideoSelections: videoPlan.VideoSelections,
             RetainedAudioTrackIds: retainedNormalAudioTracks.Select(track => track.TrackId).ToList(),
-            PrimarySubtitleTrackIds: null,
+            // Bei einer frischen Primärquelle zählen nur explizit geplante Untertitel.
+            // Sonst würde mkvmerge eingebettete Untertitel der MP4/MKV still übernehmen.
+            PrimarySubtitleTrackIds: [],
             PrimarySourceAttachmentIds: null,
             IncludePrimaryAttachments: false,
             AttachmentSourcePath: attachmentReusePlan.AttachmentSourcePath,

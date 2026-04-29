@@ -282,7 +282,9 @@ public sealed record ArchiveIntegrationDecision(
             PrimarySourcePath: string.Empty,
             VideoSelections: [],
             RetainedAudioTrackIds: null,
-            PrimarySubtitleTrackIds: null,
+            // Frische Mediathek-Quellen dürfen eingebettete Untertitel nicht implizit durchreichen.
+            // Externe und bewusst aus dem Archiv übernommene Untertitel werden separat geplant.
+            PrimarySubtitleTrackIds: [],
             PrimarySourceAttachmentIds: null,
             IncludePrimaryAttachments: false,
             AttachmentSourcePath: null,
@@ -341,4 +343,3 @@ public sealed record ArchiveIntegrationDecision(
             Notes: notes);
     }
 }
-

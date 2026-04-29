@@ -120,6 +120,16 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
     }
 
     [Fact]
+    public void Build_PrimarySourceSubtitleIdsEmpty_DisablesImplicitEmbeddedSubtitles()
+    {
+        var plan = CreateMinimalPlan(originalLanguage: "deu", trackLanguageCode: "de");
+
+        var arguments = plan.BuildArguments();
+
+        AssertContainsSequence(arguments, "--audio-tracks", "1", "--no-subtitles", "--no-attachments", "--video-tracks", "0");
+    }
+
+    [Fact]
     public void Build_AdditionalVideo_UsesConfiguredDefaultTrackFlag()
     {
         var plan = new SeriesEpisodeMuxPlan(

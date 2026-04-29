@@ -57,6 +57,15 @@ public sealed class SeriesArchiveServiceTests : IDisposable
     }
 
     [Fact]
+    public void CreateForFreshTarget_SuppressesEmbeddedPrimarySubtitles()
+    {
+        var decision = ArchiveIntegrationDecision.CreateForFreshTarget(@"C:\Temp\output.mkv");
+
+        Assert.NotNull(decision.PrimarySubtitleTrackIds);
+        Assert.Empty(decision.PrimarySubtitleTrackIds);
+    }
+
+    [Fact]
     public void ConfigureArchiveRootDirectory_PersistsNormalizedPath()
     {
         var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
