@@ -116,6 +116,40 @@ public sealed class AppSettingsStoreTests
     }
 
     [Fact]
+    public void Update_PreservesLoadWarningAfterBackupRecovery()
+    {
+        PortableAppStorage.EnsureDataDirectoryForSave();
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, "{ invalid json");
+        File.WriteAllText(
+            PortableAppStorage.SettingsBackupFilePath,
+            JsonSerializer.Serialize(
+                new CombinedAppSettings
+                {
+                    ToolPaths = new AppToolPathSettings
+                    {
+                        FfprobePath = @"C:\Tools\ffprobe.exe"
+                    }
+                },
+                AppSettingsFileLocator.SerializerOptions));
+
+        var store = new AppSettingsStore();
+        var initialLoad = store.LoadWithDiagnostics();
+        Assert.True(initialLoad.HasWarning);
+        Assert.Equal(AppSettingsLoadStatus.LoadedBackup, initialLoad.Status);
+
+        new AppToolPathStore(store).Save(new AppToolPathSettings
+        {
+            FfprobePath = @"C:\Tools\ffprobe-new.exe"
+        });
+
+        var afterToolStateSave = store.LoadWithDiagnostics();
+        Assert.True(afterToolStateSave.HasWarning);
+        Assert.Contains("settings.json.bak", afterToolStateSave.WarningMessage, StringComparison.Ordinal);
+        Assert.Equal(AppSettingsLoadStatus.LoadedPrimary, afterToolStateSave.Status);
+        Assert.Equal(@"C:\Tools\ffprobe-new.exe", afterToolStateSave.Settings.ToolPaths!.FfprobePath);
+    }
+
+    [Fact]
     public void Load_ClearsLegacyDownloadOverridesWhenAutoManageIsEnabled()
     {
         var userProfileDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-store-legacy", Guid.NewGuid().ToString("N"));

@@ -70,7 +70,7 @@ public sealed class AppSettingsStore
             var updatedSettings = _cachedSettings!.Clone();
             updateAction(updatedSettings);
             Normalize(updatedSettings);
-            SaveCore(updatedSettings);
+            SaveCore(updatedSettings, preserveCachedWarning: true);
         }
     }
 
@@ -105,12 +105,13 @@ public sealed class AppSettingsStore
         _isLoaded = true;
     }
 
-    private void SaveCore(CombinedAppSettings settings)
+    private void SaveCore(CombinedAppSettings settings, bool preserveCachedWarning = false)
     {
+        var warningMessage = preserveCachedWarning ? _cachedWarningMessage : null;
         AppSettingsFileLocator.SaveCombinedSettings(settings);
         _cachedSettings = settings.Clone();
         _cachedStatus = AppSettingsLoadStatus.LoadedPrimary;
-        _cachedWarningMessage = null;
+        _cachedWarningMessage = warningMessage;
         _isLoaded = true;
     }
 
