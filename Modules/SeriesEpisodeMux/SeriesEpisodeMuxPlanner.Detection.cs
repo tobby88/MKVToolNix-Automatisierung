@@ -23,7 +23,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var primaryVideoCandidate = context.PrimaryVideoCandidate
             ?? throw new InvalidOperationException("Es konnte keine primäre Videoquelle für diese Episode ermittelt werden.");
         var selectedAudioDescription = SelectAudioDescriptionCandidate(context.AudioDescriptionCandidates, primaryVideoCandidate);
-        var notes = BuildDetectionNotes(mainVideoPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
+        var notes = BuildDetectionNotes(mainVideoPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.AudioDescriptionCandidates, context.SourceHealthNotes);
         var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
 
         ReportProgress(onProgress, "Erstelle Vorschlag...", 94);
@@ -59,7 +59,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             context.AudioDescriptionCandidates,
             context.PrimaryVideoCandidate,
             preferredFilePath: audioDescriptionPath);
-        var notes = BuildDetectionNotes(audioDescriptionPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
+        var notes = BuildDetectionNotes(audioDescriptionPath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.AudioDescriptionCandidates, context.SourceHealthNotes);
         var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
 
         if (context.PrimaryVideoCandidate is null)
@@ -117,7 +117,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var selectedAudioDescription = SelectAudioDescriptionCandidate(
             context.AudioDescriptionCandidates,
             context.PrimaryVideoCandidate);
-        var notes = BuildDetectionNotes(subtitlePath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.SourceHealthNotes);
+        var notes = BuildDetectionNotes(subtitlePath, context.NormalCandidates, context.SelectedVideoCandidates, context.PrimaryVideoCandidate, selectedAudioDescription, context.AudioDescriptionCandidates, context.SourceHealthNotes);
         var manualCheckFilePaths = BuildManualCheckFilePaths(context.SelectedVideoCandidates, selectedAudioDescription);
 
         if (context.PrimaryVideoCandidate is null)

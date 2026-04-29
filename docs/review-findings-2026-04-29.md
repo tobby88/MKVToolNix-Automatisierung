@@ -30,7 +30,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] `SxxExx`-Ausführung blockieren oder explizit bestätigen lassen.
 - [x] Batch-Abbruchmeldungen nach Review-Ursache differenzieren.
 - [x] Laufzeitfremde Varianten derselben Episode nicht im Cleanup miträumen.
-- [ ] Inkompatible AD-Laufzeit nicht automatisch wählen.
+- [x] Inkompatible AD-Laufzeit nicht automatisch wählen.
 - [ ] Eingebettete Untertitel frischer Primärquellen explizit ausschließen.
 - [ ] Videoreihenfolge im PlanCache-Key berücksichtigen.
 - [ ] Originalsprache-Regeln für ISO-Code-Normalisierung erweitern.

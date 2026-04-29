@@ -209,7 +209,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
     }
 
-    private static AudioDescriptionCandidate? SelectAudioDescriptionCandidate(
+    internal static AudioDescriptionCandidate? SelectAudioDescriptionCandidate(
         IReadOnlyList<AudioDescriptionCandidate> candidates,
         NormalVideoCandidate? primaryVideoCandidate,
         string? preferredFilePath = null)
@@ -219,10 +219,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return null;
         }
 
-        var sameDurationCandidates = FilterByDuration(candidates, primaryVideoCandidate?.DurationSeconds);
-        var pool = sameDurationCandidates.Count == 0 ? candidates : sameDurationCandidates;
+        var durationCompatibleCandidates = primaryVideoCandidate?.DurationSeconds is int primaryDurationSeconds
+            ? FilterByDurationOrEmpty(candidates, primaryDurationSeconds)
+            : candidates.ToList();
+        if (primaryVideoCandidate?.DurationSeconds is not null && durationCompatibleCandidates.Count == 0)
+        {
+            return null;
+        }
 
-        return pool
+        return durationCompatibleCandidates
             .OrderBy(candidate => string.Equals(candidate.FilePath, preferredFilePath, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(candidate => primaryVideoCandidate is null
                 ? 0
@@ -240,11 +245,17 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return candidates.ToList();
         }
 
-        var filtered = candidates
-            .Where(candidate => candidate.DurationSeconds is null || AreCandidateDurationsCompatible(candidate.DurationSeconds.Value, preferredDurationSeconds.Value))
-            .ToList();
+        var filtered = FilterByDurationOrEmpty(candidates, preferredDurationSeconds.Value);
 
         return filtered.Count == 0 ? candidates.ToList() : filtered;
+    }
+
+    private static List<TCandidate> FilterByDurationOrEmpty<TCandidate>(IEnumerable<TCandidate> candidates, int preferredDurationSeconds)
+        where TCandidate : EpisodeCandidateBase
+    {
+        return candidates
+            .Where(candidate => candidate.DurationSeconds is null || AreCandidateDurationsCompatible(candidate.DurationSeconds.Value, preferredDurationSeconds))
+            .ToList();
     }
 
     private static bool AreCandidateDurationsCompatible(int candidateDurationSeconds, int preferredDurationSeconds)
@@ -263,6 +274,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         IReadOnlyList<NormalVideoCandidate> selectedVideoCandidates,
         NormalVideoCandidate? primaryVideoCandidate,
         AudioDescriptionCandidate? selectedAudioDescription,
+        IReadOnlyList<AudioDescriptionCandidate> audioDescriptionCandidates,
         IReadOnlyList<string> sourceHealthNotes)
     {
         var notes = sourceHealthNotes
@@ -301,7 +313,28 @@ public sealed partial class SeriesEpisodeMuxPlanner
             notes.Add("Die ausgewählte AD-Quelle stammt von SRF. Bitte die Datei vor dem Muxen prüfen.");
         }
 
+        if (HasRejectedAudioDescriptionDurationCandidate(audioDescriptionCandidates, selectedAudioDescription, primaryVideoCandidate))
+        {
+            notes.Add("Mindestens eine AD-Quelle wurde wegen abweichender Laufzeit nicht automatisch übernommen.");
+        }
+
         return notes;
+    }
+
+    private static bool HasRejectedAudioDescriptionDurationCandidate(
+        IReadOnlyList<AudioDescriptionCandidate> audioDescriptionCandidates,
+        AudioDescriptionCandidate? selectedAudioDescription,
+        NormalVideoCandidate? primaryVideoCandidate)
+    {
+        if (primaryVideoCandidate?.DurationSeconds is not int primaryDurationSeconds)
+        {
+            return false;
+        }
+
+        return audioDescriptionCandidates.Any(candidate =>
+            !string.Equals(candidate.FilePath, selectedAudioDescription?.FilePath, StringComparison.OrdinalIgnoreCase)
+            && candidate.DurationSeconds is int audioDescriptionDurationSeconds
+            && !AreCandidateDurationsCompatible(audioDescriptionDurationSeconds, primaryDurationSeconds));
     }
 
     private static List<string> BuildManualCheckFilePaths(

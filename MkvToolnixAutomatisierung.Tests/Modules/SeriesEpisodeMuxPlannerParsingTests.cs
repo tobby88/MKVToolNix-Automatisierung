@@ -427,6 +427,35 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
         Assert.DoesNotContain(foreignSeed, filteredSeeds);
     }
 
+    [Fact]
+    public void SelectAudioDescriptionCandidate_RejectsPreferredCandidate_WhenDurationIsIncompatible()
+    {
+        var primaryVideo = CreateNormalVideoCandidate("primary.mp4", durationSeconds: 3600);
+        var incompatibleAudioDescription = CreateAudioDescriptionCandidate("ad-long.mp4", durationSeconds: 5400);
+        var compatibleAudioDescription = CreateAudioDescriptionCandidate("ad-compatible.mp4", durationSeconds: 3615);
+
+        var selectedAudioDescription = SeriesEpisodeMuxPlanner.SelectAudioDescriptionCandidate(
+            [incompatibleAudioDescription, compatibleAudioDescription],
+            primaryVideo,
+            preferredFilePath: incompatibleAudioDescription.FilePath);
+
+        Assert.Equal(compatibleAudioDescription, selectedAudioDescription);
+    }
+
+    [Fact]
+    public void SelectAudioDescriptionCandidate_ReturnsNull_WhenAllKnownDurationsAreIncompatible()
+    {
+        var primaryVideo = CreateNormalVideoCandidate("primary.mp4", durationSeconds: 3600);
+        var incompatibleAudioDescription = CreateAudioDescriptionCandidate("ad-long.mp4", durationSeconds: 5400);
+
+        var selectedAudioDescription = SeriesEpisodeMuxPlanner.SelectAudioDescriptionCandidate(
+            [incompatibleAudioDescription],
+            primaryVideo,
+            preferredFilePath: incompatibleAudioDescription.FilePath);
+
+        Assert.Null(selectedAudioDescription);
+    }
+
     private static SeriesEpisodeMuxPlanner CreatePlanner()
     {
         var settingsStore = new AppSettingsStore();
@@ -478,6 +507,37 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
                 Duration: duration,
                 ExpectedSizeBytes: null),
             new SeriesEpisodeMuxPlanner.EpisodeIdentity("Beispielserie", "Pilot", "01", "02"));
+    }
+
+    private static SeriesEpisodeMuxPlanner.NormalVideoCandidate CreateNormalVideoCandidate(
+        string fileName,
+        int? durationSeconds)
+    {
+        return new SeriesEpisodeMuxPlanner.NormalVideoCandidate(
+            FilePath: Path.Combine(Path.GetTempPath(), fileName),
+            Identity: new SeriesEpisodeMuxPlanner.EpisodeIdentity("Beispielserie", "Pilot", "01", "02"),
+            Sender: "ZDF",
+            DurationSeconds: durationSeconds,
+            VideoWidth: 1920,
+            VideoCodecLabel: "H.264",
+            VideoLanguage: "deu",
+            AudioCodecLabel: "AAC",
+            FileSizeBytes: 1_000,
+            SubtitlePaths: [],
+            AttachmentPath: null);
+    }
+
+    private static SeriesEpisodeMuxPlanner.AudioDescriptionCandidate CreateAudioDescriptionCandidate(
+        string fileName,
+        int? durationSeconds)
+    {
+        return new SeriesEpisodeMuxPlanner.AudioDescriptionCandidate(
+            FilePath: Path.Combine(Path.GetTempPath(), fileName),
+            Identity: new SeriesEpisodeMuxPlanner.EpisodeIdentity("Beispielserie", "Pilot", "01", "02"),
+            Sender: "ZDF",
+            DurationSeconds: durationSeconds,
+            FileSizeBytes: 1_000,
+            AttachmentPath: null);
     }
 
     private static void CreateCompanionText(
