@@ -54,7 +54,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Erledigt-Markierung ohne Emby-Refresh sauber modellieren.
 - [x] Emby-Scan-Scope deutlicher begrenzen oder anzeigen.
 - [x] TVDB-/IMDb-Netzwerkfehler benutzerfreundlich übersetzen.
-- [ ] TVDB-/IMDb-Pagination mit Limit und Loop-Erkennung absichern.
+- [x] TVDB-/IMDb-Pagination mit Limit und Loop-Erkennung absichern.
 - [ ] Status `Ohne NFO-Sync` farblich klarer darstellen.
 
 ## Tooling, Startup und Einstellungen

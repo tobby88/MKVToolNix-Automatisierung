@@ -110,6 +110,49 @@ public sealed class ImdbLookupServiceTests
             });
     }
 
+    [Fact]
+    public async Task LoadEpisodesAsync_Stops_WhenPageTokenRepeats()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/titles/tt0108778/seasons" => CreateJsonResponse(
+                    """
+                    {
+                      "seasons": [
+                        { "season": "1", "episodeCount": 2 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0108778/episodes?season=1" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000001", "title": "Episode 1", "season": "1", "episodeNumber": 1 }
+                      ],
+                      "nextPageToken": "loop"
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0108778/episodes?season=1&pageToken=loop" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000002", "title": "Episode 2", "season": "1", "episodeNumber": 2 }
+                      ],
+                      "nextPageToken": "loop"
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var service = new ImdbLookupService(httpClient);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadEpisodesAsync("tt0108778"));
+
+        Assert.Contains("IMDb-Pagination", exception.Message, StringComparison.Ordinal);
+    }
+
     private static HttpResponseMessage CreateJsonResponse(string json)
     {
         return new HttpResponseMessage(HttpStatusCode.OK)

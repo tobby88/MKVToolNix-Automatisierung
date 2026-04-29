@@ -44,6 +44,7 @@ internal interface ITvdbClient : IDisposable
 /// </summary>
 internal sealed class TvdbClient : ITvdbClient
 {
+    private const int MaxEpisodePages = 100;
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
 
     private readonly HttpClient _httpClient;
@@ -190,9 +191,15 @@ internal sealed class TvdbClient : ITvdbClient
 
         var results = new List<TvdbEpisodeRecord>();
         var page = 0;
+        var pageCount = 0;
 
         while (true)
         {
+            if (pageCount++ >= MaxEpisodePages)
+            {
+                throw new InvalidOperationException($"TVDB-Pagination abgebrochen, weil mehr als {MaxEpisodePages} Episodenseiten angefordert wurden.");
+            }
+
             using var response = await SendAuthorizedGetAsync(
                 apiKey,
                 pin,

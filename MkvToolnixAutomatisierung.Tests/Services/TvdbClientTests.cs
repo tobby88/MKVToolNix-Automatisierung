@@ -130,6 +130,34 @@ public sealed class TvdbClientTests
     }
 
     [Fact]
+    public async Task GetSeriesEpisodesAsync_Stops_WhenTvdbKeepsReturningNextPages()
+    {
+        var requests = new List<string>();
+
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request =>
+            {
+                requests.Add(request.RequestUri!.PathAndQuery);
+
+                return request.RequestUri!.PathAndQuery switch
+                {
+                    "/v4/login" => JsonResponse("""{"data":{"token":"token-123"}}"""),
+                    var path when path.StartsWith("/v4/series/42/episodes/default?page=", StringComparison.Ordinal) => JsonResponse(
+                        """{"data":{"episodes":[]},"links":{"next":"still-more"}}"""),
+                    _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+                };
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSeriesEpisodesAsync("key", pin: null, 42));
+
+        Assert.Contains("TVDB-Pagination", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(101, requests.Count);
+    }
+
+    [Fact]
     public async Task GetSeriesEpisodesAsync_ReauthenticatesOnce_WhenEpisodeRequestReturnsUnauthorized()
     {
         var requests = new List<(string PathAndQuery, string? Token)>();

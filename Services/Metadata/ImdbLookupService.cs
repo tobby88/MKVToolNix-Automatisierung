@@ -14,6 +14,7 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// </remarks>
 internal sealed class ImdbLookupService
 {
+    private const int MaxEpisodePagesPerSeason = 100;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Uri ApiBaseAddress = new("https://api.imdbapi.dev/");
     private readonly HttpClient _httpClient;
@@ -126,9 +127,22 @@ internal sealed class ImdbLookupService
                 continue;
             }
 
+            var seenPageTokens = new HashSet<string>(StringComparer.Ordinal);
+            var pageCount = 0;
             string? nextPageToken = null;
             do
             {
+                var currentPageToken = nextPageToken ?? string.Empty;
+                if (!seenPageTokens.Add(currentPageToken))
+                {
+                    throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil ein Seiten-Token erneut geliefert wurde.");
+                }
+
+                if (++pageCount > MaxEpisodePagesPerSeason)
+                {
+                    throw new InvalidOperationException($"IMDb-Pagination abgebrochen, weil mehr als {MaxEpisodePagesPerSeason} Seiten für eine Staffel angefordert wurden.");
+                }
+
                 var requestUri = BuildEpisodesRequestUri(seriesId, season.Season!, nextPageToken);
                 using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
                 response.EnsureSuccessStatusCode();
@@ -148,6 +162,10 @@ internal sealed class ImdbLookupService
                 nextPageToken = string.IsNullOrWhiteSpace(payload.NextPageToken)
                     ? null
                     : payload.NextPageToken;
+                if (nextPageToken is not null && seenPageTokens.Contains(nextPageToken))
+                {
+                    throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil der Provider erneut auf eine bereits geladene Seite verweist.");
+                }
             }
             while (!string.IsNullOrWhiteSpace(nextPageToken));
         }
