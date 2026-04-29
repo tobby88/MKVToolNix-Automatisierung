@@ -190,7 +190,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         ? ReportSelectionDetailText
         : string.Join(Environment.NewLine, _reportPaths);
 
-    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Items erneut ein. So können neue Emby-Treffer vor dem abschließenden Schreibschritt noch geprüft oder korrigiert werden.";
+    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Treffer erneut ein. Wenn keine passende Serienbibliothek erkannt wird, ist der globale Fallback im Status und Protokoll ausdrücklich als nicht bibliotheksscharf markiert.";
 
     public string ReviewPendingProviderIdsTooltip => "Arbeitet die offenen Provider-ID-Pflichtprüfungen der ausgewählten Zeilen sequenziell ab: TVDB nur bei widersprüchlichen Quellen, IMDb grundsätzlich pro Episode.";
 
@@ -336,10 +336,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             AppendLog(scanTrigger.Message);
             if (scanTrigger.UsedGlobalLibraryScan)
             {
+                StatusText = "Globaler Emby-Scan läuft (nicht bibliotheksscharf).";
                 AppendLog("Hinweis: Für den globalen Emby-Fallback ist derzeit kein bibliotheksscharfer Serverfortschritt verfügbar.");
             }
             else if (scanTrigger.Library is not null && !string.IsNullOrWhiteSpace(scanTrigger.MatchedLibraryPath))
             {
+                StatusText = $"Emby-Serienbibliotheksscan läuft: {scanTrigger.Library.Name}";
                 libraryMatch = new EmbyLibraryMatch(scanTrigger.Library, scanTrigger.MatchedLibraryPath!);
                 await WaitForSeriesLibraryScanAsync(settings, scanTrigger.Library);
             }

@@ -228,6 +228,7 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Equal(1, client.TriggerLibraryScanCallCount);
         Assert.Null(client.LastItemFileScanItemId);
         Assert.Null(result.Library);
+        Assert.Contains("nicht bibliotheksscharf", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

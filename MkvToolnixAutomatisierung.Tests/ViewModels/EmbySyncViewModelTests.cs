@@ -126,6 +126,8 @@ public sealed class EmbySyncViewModelTests
         Assert.Contains("Serienbibliothek", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Serverfortschritt", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Emby-Treffer", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("global", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("nicht bibliotheksscharf", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

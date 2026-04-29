@@ -96,8 +96,8 @@ internal sealed class EmbyMetadataSyncService
 
     /// <summary>
     /// Startet bevorzugt einen gezielten Scan der konfigurierten Serienbibliothek.
-    /// Falls Emby den Bibliothekswurzelpfad nicht direkt als Item auflösen kann,
-    /// wird konservativ auf den globalen Library-Scan zurückgefallen.
+    /// Falls keine passende Bibliothek ermittelt werden kann, wird der globale Fallback
+    /// ausdrücklich als nicht bibliotheksscharfer Scan gemeldet.
     /// </summary>
     public async Task<EmbyLibraryScanTriggerResult> TriggerSeriesLibraryScanAsync(
         AppEmbySettings settings,
@@ -119,12 +119,12 @@ internal sealed class EmbyMetadataSyncService
         return string.IsNullOrWhiteSpace(archiveRootPath)
             ? new EmbyLibraryScanTriggerResult(
                 UsedGlobalLibraryScan: true,
-                "Globaler Emby-Library-Scan angestoßen, weil kein Serienbibliothekspfad konfiguriert ist.",
+                "Globaler Emby-Library-Scan angestoßen (nicht bibliotheksscharf), weil kein Serienbibliothekspfad konfiguriert ist.",
                 Library: null,
                 MatchedLibraryPath: null)
             : new EmbyLibraryScanTriggerResult(
                 UsedGlobalLibraryScan: true,
-                $"Globaler Emby-Library-Scan angestoßen, weil in Emby keine passende Serienbibliothek zur Archivwurzel gefunden wurde: {archiveRootPath}",
+                $"Globaler Emby-Library-Scan angestoßen (nicht bibliotheksscharf), weil in Emby keine passende Serienbibliothek zur Archivwurzel gefunden wurde: {archiveRootPath}",
                 Library: null,
                 MatchedLibraryPath: null);
     }
