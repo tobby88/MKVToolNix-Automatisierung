@@ -68,6 +68,16 @@ public sealed class DownloadSortViewModelTests
     }
 
     [Fact]
+    public void CancelCurrentOperationCommand_InitiallyCannotExecute()
+    {
+        var vm = CreateViewModel();
+
+        Assert.False(vm.CanCancelCurrentOperation);
+        Assert.False(vm.CancelCurrentOperationCommand.CanExecute(null));
+        Assert.Contains("Kein laufender", vm.CancelCurrentOperationTooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SelectAllSortableCommand_SelectsOnlySortableItems()
     {
         var vm = CreateViewModel();

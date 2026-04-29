@@ -24,6 +24,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private string _logText = string.Empty;
     private int _progressValue;
     private bool _isBusy;
+    private CancellationTokenSource? _currentOperationCts;
 
     /// <summary>
     /// Initialisiert das Einsortieren-Modul samt Scan-, Auswahl- und Ausführungskommandos.
@@ -46,6 +47,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, CanToggleSelectedItemSelection);
         ApplyTargetFolderToMatchingItemsCommand = new RelayCommand(ApplySelectedTargetFolderToMatchingItems, CanApplySelectedTargetFolderToMatchingItems);
         RunSortCommand = new AsyncRelayCommand(RunSortAsync, CanRunSort, unexpectedCommandErrorHandler);
+        CancelCurrentOperationCommand = new RelayCommand(CancelCurrentOperation, () => CanCancelCurrentOperation);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -63,6 +65,8 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     public RelayCommand ApplyTargetFolderToMatchingItemsCommand { get; }
 
     public AsyncRelayCommand RunSortCommand { get; }
+
+    public RelayCommand CancelCurrentOperationCommand { get; }
 
     /// <summary>
     /// Alle aktuell erkannten Einsortier-Pakete.
@@ -156,6 +160,12 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
 
     public bool IsInteractive => !_isBusy;
 
+    public bool CanCancelCurrentOperation => _currentOperationCts is { IsCancellationRequested: false };
+
+    public string CancelCurrentOperationTooltip => CanCancelCurrentOperation
+        ? "Bricht den laufenden Scan oder Einsortierlauf nach dem aktuellen Arbeitsschritt ab."
+        : "Kein laufender Einsortierlauf.";
+
     public int ItemCount => Items.Count;
 
     public int SelectedCount => Items.Count(item => item.IsSelected);
@@ -218,14 +228,23 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task ScanCoreAsync(bool resetLog)
     {
+        var operationCts = BeginCurrentOperation();
         try
         {
             SetBusy(true);
-            await ScanCoreWithoutBusyAsync(resetLog);
+            await ScanCoreWithoutBusyAsync(resetLog, operationCts.Token);
             SaveVisibleLog("Scan");
+        }
+        catch (OperationCanceledException) when (operationCts.IsCancellationRequested)
+        {
+            StatusText = "Scan abgebrochen";
+            ProgressValue = 0;
+            AppendLog(["ABGEBROCHEN: Scan wurde vom Benutzer abgebrochen."]);
+            SaveVisibleLog("Scan abgebrochen");
         }
         finally
         {
+            CompleteCurrentOperation(operationCts);
             SetBusy(false);
         }
     }
@@ -287,6 +306,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             return;
         }
 
+        var operationCts = BeginCurrentOperation();
         try
         {
             SetBusy(true);
@@ -297,7 +317,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
                 .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.TargetFolderName, item.DefectiveFilePaths))
                 .ToList();
 
-            var applyResult = await Task.Run(() => _services.DownloadSort.Apply(SourceDirectory, requests, _currentFolderRenames));
+            var applyResult = await Task.Run(
+                () => _services.DownloadSort.Apply(SourceDirectory, requests, _currentFolderRenames, operationCts.Token),
+                operationCts.Token);
             AppendLog(applyResult.LogLines);
             if (applyResult.LogLines.Any(line => line.StartsWith("FEHLER:", StringComparison.OrdinalIgnoreCase)))
             {
@@ -309,11 +331,18 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             ProgressValue = 85;
             StatusText = $"Sortieren abgeschlossen: {applyResult.MovedGroupCount} Paket(e), {applyResult.MovedFileCount} Datei(en), {applyResult.RenamedFolderCount} Ordner.";
 
-            await ScanCoreWithoutBusyAsync(resetLog: false);
+            await ScanCoreWithoutBusyAsync(resetLog: false, cancellationToken: operationCts.Token);
             SaveVisibleLog("Einsortieren");
+        }
+        catch (OperationCanceledException) when (operationCts.IsCancellationRequested)
+        {
+            StatusText = "Einsortieren abgebrochen";
+            AppendLog(["ABGEBROCHEN: Einsortieren wurde vom Benutzer abgebrochen. Bitte neu scannen, bevor du weiterarbeitest."]);
+            SaveVisibleLog("Einsortieren abgebrochen");
         }
         finally
         {
+            CompleteCurrentOperation(operationCts);
             SetBusy(false);
         }
     }
@@ -478,6 +507,45 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         RefreshSummaryAndCommands();
     }
 
+    private CancellationTokenSource BeginCurrentOperation()
+    {
+        _currentOperationCts?.Cancel();
+        _currentOperationCts?.Dispose();
+        _currentOperationCts = new CancellationTokenSource();
+        OnPropertyChanged(nameof(CanCancelCurrentOperation));
+        OnPropertyChanged(nameof(CancelCurrentOperationTooltip));
+        CancelCurrentOperationCommand.RaiseCanExecuteChanged();
+        return _currentOperationCts;
+    }
+
+    private void CompleteCurrentOperation(CancellationTokenSource operationCts)
+    {
+        if (!ReferenceEquals(_currentOperationCts, operationCts))
+        {
+            return;
+        }
+
+        _currentOperationCts = null;
+        operationCts.Dispose();
+        OnPropertyChanged(nameof(CanCancelCurrentOperation));
+        OnPropertyChanged(nameof(CancelCurrentOperationTooltip));
+        CancelCurrentOperationCommand.RaiseCanExecuteChanged();
+    }
+
+    private void CancelCurrentOperation()
+    {
+        if (_currentOperationCts is null || _currentOperationCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _currentOperationCts.Cancel();
+        StatusText = "Abbruch angefordert...";
+        OnPropertyChanged(nameof(CanCancelCurrentOperation));
+        OnPropertyChanged(nameof(CancelCurrentOperationTooltip));
+        CancelCurrentOperationCommand.RaiseCanExecuteChanged();
+    }
+
     /// <summary>
     /// Aktualisiert Zähler, Zusammenfassungstext und alle vom Zustand abhängigen Kommandos.
     /// </summary>
@@ -500,6 +568,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ApplyTargetFolderToMatchingItemsCommand.RaiseCanExecuteChanged();
         RunSortCommand.RaiseCanExecuteChanged();
+        CancelCurrentOperationCommand.RaiseCanExecuteChanged();
     }
 
     /// <summary>
@@ -632,7 +701,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// <summary>
     /// Führt den eigentlichen Download-Scan aus und aktualisiert danach Status, Fortschritt und Ergebnisliste.
     /// </summary>
-    private async Task ScanCoreWithoutBusyAsync(bool resetLog)
+    private async Task ScanCoreWithoutBusyAsync(bool resetLog, CancellationToken cancellationToken)
     {
         if (resetLog)
         {
@@ -643,7 +712,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         ProgressValue = 15;
 
         IProgress<DownloadSortScanProgress> scanProgress = new Progress<DownloadSortScanProgress>(HandleDownloadSortScanProgress);
-        var scanResult = await Task.Run(() => _services.DownloadSort.Scan(SourceDirectory, scanProgress.Report));
+        var scanResult = await Task.Run(
+            () => _services.DownloadSort.Scan(SourceDirectory, scanProgress.Report, cancellationToken),
+            cancellationToken);
 
         ApplyScanResult(scanResult);
         ProgressValue = 100;

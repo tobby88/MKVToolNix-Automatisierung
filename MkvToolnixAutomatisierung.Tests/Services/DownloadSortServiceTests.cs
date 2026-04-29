@@ -16,6 +16,34 @@ public sealed class DownloadSortServiceTests : IDisposable
     }
 
     [Fact]
+    public void Scan_ThrowsOperationCanceled_WhenCancellationIsRequested()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            _service.Scan(_rootDirectory, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void Apply_ThrowsOperationCanceled_BeforeMovingNextGroup()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.mp4");
+        CreateEmptyFile(videoPath);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            _service.Apply(
+                _rootDirectory,
+                [new DownloadSortMoveRequest("Serie-Folge", [videoPath], "Serie")],
+                [],
+                cancellation.Token));
+        Assert.True(File.Exists(videoPath));
+        Assert.False(Directory.Exists(Path.Combine(_rootDirectory, "Serie")));
+    }
+
+    [Fact]
     public void Scan_MapsAliasSeries_AndPlansLegacyFolderRename()
     {
         var legacyDirectory = Path.Combine(_rootDirectory, "Der Kommissar und");

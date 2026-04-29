@@ -183,8 +183,7 @@
 
         <StackPanel Grid.Row="3"
                     Margin="0,10,0,10"
-                    Orientation="Horizontal"
-                    IsEnabled="{Binding IsInteractive, Mode=OneWay}">
+                    Orientation="Horizontal">
             <Button Margin="0,0,8,0"
                     Padding="10,6"
                     Command="{Binding SelectAllSortableCommand}"
@@ -203,6 +202,11 @@
                     Command="{Binding RunSortCommand}"
                     ToolTip="{Binding RunSortTooltip, Mode=OneWay}"
                     Content="Auswahl einsortieren" />
+            <Button Margin="8,0,0,0"
+                    Padding="10,6"
+                    Command="{Binding CancelCurrentOperationCommand}"
+                    ToolTip="{Binding CancelCurrentOperationTooltip, Mode=OneWay}"
+                    Content="Abbrechen" />
         </StackPanel>
 
         <GroupBox Grid.Row="4" Header="Protokoll">

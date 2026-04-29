@@ -113,22 +113,26 @@ internal sealed class DownloadSortService
     /// </summary>
     /// <param name="rootDirectory">Oberordner, in dessen Wurzel lose Mediathek-Dateien liegen.</param>
     /// <param name="onProgress">Optionaler Callback für laufende Scan-Fortschrittsmeldungen.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal für lange Ordner-Scans.</param>
     /// <returns>Scanergebnis inklusive Move-Kandidaten und sicherer Ordner-Umbenennungen.</returns>
     public DownloadSortScanResult Scan(
         string rootDirectory,
-        Action<DownloadSortScanProgress>? onProgress = null)
+        Action<DownloadSortScanProgress>? onProgress = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureDirectoryExists(rootDirectory);
+        cancellationToken.ThrowIfCancellationRequested();
 
         ReportScanProgress(onProgress, "Pruefe vorhandene Serienordner...", 5);
-        var folderRenames = BuildFolderRenamePlans(rootDirectory, onProgress);
+        var folderRenames = BuildFolderRenamePlans(rootDirectory, onProgress, cancellationToken);
 
         ReportScanProgress(onProgress, "Lese lose Download-Dateien...", 30);
-        var rootGroups = EnumerateLogicalGroups(rootDirectory);
+        var rootGroups = EnumerateLogicalGroups(rootDirectory, cancellationToken);
 
         var candidates = new List<DownloadSortCandidate>();
         for (var index = 0; index < rootGroups.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var group = rootGroups[index];
             ReportScanProgress(
                 onProgress,
@@ -794,7 +798,8 @@ internal sealed class DownloadSortService
 
     private static IReadOnlyList<DownloadSortFolderRenamePlan> BuildFolderRenamePlans(
         string rootDirectory,
-        Action<DownloadSortScanProgress>? onProgress)
+        Action<DownloadSortScanProgress>? onProgress,
+        CancellationToken cancellationToken)
     {
         var directoryPaths = Directory.GetDirectories(rootDirectory);
         var existingDirectoryNames = directoryPaths
@@ -807,6 +812,7 @@ internal sealed class DownloadSortService
 
         for (var index = 0; index < directoryPaths.Length; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var directoryPath = directoryPaths[index];
             var currentFolderName = Path.GetFileName(directoryPath);
             if (string.IsNullOrWhiteSpace(currentFolderName))
@@ -824,7 +830,7 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            var detectedFolderNames = EnumerateLogicalGroups(directoryPath)
+            var detectedFolderNames = EnumerateLogicalGroups(directoryPath, cancellationToken)
                 .Select(group => DetectFolderProposal(group.FilePaths).SuggestedFolderName)
                 .Where(folderName => !string.IsNullOrWhiteSpace(folderName))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -1133,14 +1139,33 @@ internal sealed class DownloadSortService
             SeriesEpisodeMuxPlanner.NormalizeSeparators(remainder));
     }
 
-    private static IReadOnlyList<DownloadFileGroup> EnumerateLogicalGroups(string directoryPath)
+    private static IReadOnlyList<DownloadFileGroup> EnumerateLogicalGroups(
+        string directoryPath,
+        CancellationToken cancellationToken)
     {
-        return Directory.EnumerateFiles(directoryPath)
-            .Where(IsSupportedSortFile)
-            .GroupBy(BuildLogicalSortGroupKey, StringComparer.OrdinalIgnoreCase)
+        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var filePath in Directory.EnumerateFiles(directoryPath))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!IsSupportedSortFile(filePath))
+            {
+                continue;
+            }
+
+            var groupKey = BuildLogicalSortGroupKey(filePath);
+            if (!groups.TryGetValue(groupKey, out var groupFilePaths))
+            {
+                groupFilePaths = [];
+                groups.Add(groupKey, groupFilePaths);
+            }
+
+            groupFilePaths.Add(filePath);
+        }
+
+        return groups
             .Select(group => new DownloadFileGroup(
                 BuildGroupDisplayName(group.Key),
-                group
+                group.Value
                     .OrderBy(GetExtensionPriority)
                     .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .ToList()))

@@ -16,7 +16,7 @@ Jeder Punkt wird nach Umsetzung mit passenden Tests und einem thematischen Commi
 - [x] Stale Quellen in der DownloadSort-Konfliktprüfung robust überspringen.
 - [x] DownloadSort-Overwrite zwischen Prüfung und Move TOCTOU-sicherer machen.
 - [x] DownloadSort-Move-Quellen auf den gewählten Root begrenzen.
-- [ ] UI-Cancellation für lange Einsortierläufe ergänzen.
+- [x] UI-Cancellation für lange Einsortierläufe ergänzen.
 - [ ] Case-only Ordner-Kanonisierung beim Einsortieren prüfen und umsetzen.
 - [ ] `FileStateSnapshot.TryCreate` race-sicher machen.
 - [ ] Arbeitskopien im `FileCopyService` atomar ersetzen.
