@@ -274,6 +274,28 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public void NfoTextChange_ReturningToCurrentValue_RestoresOriginalLockState()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(
+            @"C:\Archiv\Serie\Season 1\Serie - S01E01 - Pilot.mkv",
+            nfoTitle: "Pilot",
+            nfoSortTitle: "Pilot"));
+
+        item.TargetNfoTitle = "Pilot neu";
+        item.TargetNfoSortTitle = "Pilot neu";
+
+        Assert.True(item.TargetNfoTitleLocked);
+        Assert.True(item.TargetNfoSortTitleLocked);
+
+        item.TargetNfoTitle = "Pilot";
+        item.TargetNfoSortTitle = "Pilot";
+
+        Assert.False(item.TargetNfoTitleLocked);
+        Assert.False(item.TargetNfoSortTitleLocked);
+        Assert.Null(item.CreateApplyRequest().NfoTextEdit);
+    }
+
+    [Fact]
     public void ToggleSelectedItemSelectionCommand_TogglesWritableItem()
     {
         var viewModel = CreateViewModel();

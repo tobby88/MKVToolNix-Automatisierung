@@ -177,6 +177,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             {
                 SetTargetNfoTitleLocked(true);
             }
+            else
+            {
+                SetTargetNfoTitleLocked(CurrentNfoTitleLocked);
+            }
 
             OnPropertyChanged();
             NotifyManualCorrectionChanged();
@@ -198,6 +202,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             if (!string.Equals(CurrentNfoSortTitle.Trim(), normalizedValue.Trim(), StringComparison.Ordinal))
             {
                 SetTargetNfoSortTitleLocked(true);
+            }
+            else
+            {
+                SetTargetNfoSortTitleLocked(CurrentNfoSortTitleLocked);
             }
 
             OnPropertyChanged();
