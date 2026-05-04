@@ -520,10 +520,52 @@ public sealed class EmbySyncViewModelTests
 
             await vm.RunSyncCommand.ExecuteAsync();
 
-            Assert.Equal("IDs fehlen", item.StatusText);
+            Assert.Equal("Aktualisiert", item.StatusText);
+            Assert.True(item.HasCompleteProviderIds);
+            Assert.Contains("keine Emby-API-Zugangsdaten", item.Note, StringComparison.Ordinal);
             var updatedText = File.ReadAllText(nfoPath);
             Assert.DoesNotContain("tt1234567", updatedText, StringComparison.Ordinal);
             Assert.DoesNotContain("<imdbid>", updatedText, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task RunSyncCommand_TreatsAlreadyEmptyProviderIdsAsCurrentAfterNoImdbDecision()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S00E02 - Featurette.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Featurette</title></episodedetails>");
+
+            var vm = CreateViewModel();
+            var item = new EmbySyncItemViewModel(mediaPath, EmbyProviderIds.Empty);
+            item.ApplyAnalysis(new EmbyFileAnalysis(
+                item.MediaFilePath,
+                nfoPath,
+                MediaFileExists: true,
+                NfoExists: true,
+                NfoProviderIds: EmbyProviderIds.Empty,
+                EmbyItem: null,
+                WarningMessage: null));
+            item.MarkImdbUnavailable();
+            vm.Items.Add(item);
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("NFO aktuell", item.StatusText);
+            Assert.True(item.HasCompleteProviderIds);
+            Assert.Contains("NFO-Provider-IDs waren bereits aktuell", item.Note, StringComparison.Ordinal);
         }
         finally
         {

@@ -205,13 +205,17 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public bool HasPendingProviderReview => RequiresTvdbReview || RequiresImdbReview;
 
     /// <summary>
-    /// Für einen vollständigen Emby-Abgleich wird eine TVDB-ID und entweder eine IMDb-ID oder
-    /// eine bewusst bestätigte "keine IMDb-ID"-Entscheidung erwartet.
+    /// Kennzeichnet, ob der Provider-ID-Teil fachlich abgeschlossen ist.
     /// </summary>
-    public bool HasCompleteProviderIds => HasTvdbId
-        && HasValidProviderIds
+    /// <remarks>
+    /// Normalerweise bedeutet das: TVDB-ID vorhanden und IMDb-ID vorhanden oder bewusst leer.
+    /// Bonusmaterial kann aber absichtlich gar keine Provider-IDs haben; nach der IMDb-Prüfung
+    /// ist auch dieser leere Zustand ein gültiger Abschluss und darf nicht weiter als Warnung
+    /// "IDs fehlen" hängen bleiben.
+    /// </remarks>
+    public bool HasCompleteProviderIds => HasValidProviderIds
         && !HasPendingProviderReview
-        && (HasImdbId || IsImdbUnavailable);
+        && ((HasTvdbId && (HasImdbId || IsImdbUnavailable)) || HasApprovedEmptyProviderIds);
 
     /// <summary>
     /// Kennzeichnet, ob das bereits gefundene Emby-Item noch andere Provider-IDs kennt als die geprüfte lokale Auswahl.
@@ -486,7 +490,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         NotifyProviderReviewPropertiesChanged();
         SetStatus(
             HasPendingProviderReview ? "Prüfung offen" : HasCompleteProviderIds ? "Bereit" : "IDs fehlen",
-            "IMDb geprüft: keine IMDb-ID vergeben.");
+            HasApprovedEmptyProviderIds
+                ? "Provider-IDs geprüft: keine TVDB-/IMDb-ID vergeben."
+                : "IMDb geprüft: keine IMDb-ID vergeben.");
     }
 
     public void SetStatus(string statusText, string note)
@@ -669,6 +675,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             return validationMessage;
         }
 
+        if (HasApprovedEmptyProviderIds)
+        {
+            return "Keine TVDB-/IMDb-ID vergeben.";
+        }
+
         if (HasCompleteProviderIds)
         {
             return localOnly ? "IDs lokal vorhanden." : "IDs vorhanden.";
@@ -706,8 +717,10 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             return "TVDB-ID fehlt.";
         }
 
-        return "Keine TVDB-/IMDB-ID.";
+        return "Keine TVDB-/IMDb-ID.";
     }
+
+    private bool HasApprovedEmptyProviderIds => !HasTvdbId && !HasImdbId && IsImdbUnavailable;
 
     private void SetTvdbId(string? value, bool markReviewResolved)
     {

@@ -317,6 +317,23 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void MarkImdbUnavailable_CompletesProviderReviewWhenNoIdsExist()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Bonus.mkv", EmbyProviderIds.Empty);
+
+        vm.MarkImdbUnavailable();
+
+        Assert.False(vm.HasTvdbId);
+        Assert.False(vm.HasImdbId);
+        Assert.True(vm.IsImdbUnavailable);
+        Assert.False(vm.HasPendingProviderReview);
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.Equal("Bereit", vm.StatusText);
+        Assert.Equal("Ready", vm.StatusTone);
+        Assert.Contains("keine TVDB-/IMDb-ID", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InvalidImdbId_DoesNotCountAsCompleteProviderIds()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null))
