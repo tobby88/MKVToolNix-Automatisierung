@@ -194,7 +194,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     public string ReviewPendingProviderIdsTooltip => "Arbeitet die offenen Provider-ID-Pflichtprüfungen der ausgewählten Zeilen sequenziell ab: TVDB nur bei widersprüchlichen Quellen, IMDb grundsätzlich pro Episode.";
 
-    public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien. Wenn Emby-Zugangsdaten vorhanden sind und das Emby-Item bereits bekannt ist, wird danach nur für tatsächlich geänderte Einträge ein gezielter Metadatenrefresh angestoßen.";
+    public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien. Wenn Emby-Zugangsdaten vorhanden sind und das Emby-Item bekannt oder anhand des Pfads auffindbar ist, wird danach nur für tatsächlich geänderte Einträge ein gezielter Metadatenrefresh angestoßen.";
 
     private async Task SelectReportAsync()
     {
@@ -467,6 +467,28 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         {
             var settings = LoadConfiguredSettings();
             var canRefreshEmby = HasEmbyApiSettings();
+            var archiveRootPath = canRefreshEmby
+                ? _services.ArchiveSettings.Load().DefaultSeriesArchiveRootPath
+                : null;
+            EmbyLibraryMatch? libraryMatch = null;
+            if (canRefreshEmby && !string.IsNullOrWhiteSpace(archiveRootPath))
+            {
+                try
+                {
+                    libraryMatch = await _services.Sync.FindSeriesLibraryAsync(settings, archiveRootPath, CancellationToken.None);
+                    if (libraryMatch is null)
+                    {
+                        AppendLog($"Keine passende Emby-Serienbibliothek für Refresh-Suche gefunden: {archiveRootPath}. Versuche Rohpfade.");
+                        archiveRootPath = null;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppendLog($"Emby-Serienbibliothek für Refresh-Suche nicht ermittelt: {ex.Message}. Versuche Rohpfade.");
+                    archiveRootPath = null;
+                }
+            }
+
             var updatedCount = 0;
             var refreshOnlyCount = 0;
             var skippedCount = 0;
@@ -550,23 +572,24 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 {
                     item.MarkUpdated(
                         metadataRefreshTriggered: false,
-                        noRefreshReason: string.IsNullOrWhiteSpace(item.EmbyItemId)
-                            ? "Emby-Item noch nicht gefunden."
-                            : "Emby-Refresh nicht ausgeführt, weil keine Emby-API-Zugangsdaten konfiguriert sind.");
+                        noRefreshReason: "Emby-Refresh nicht ausgeführt, weil keine Emby-API-Zugangsdaten konfiguriert sind.");
                     completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
-                if (string.IsNullOrWhiteSpace(item.EmbyItemId))
+                var refreshItemId = await ResolveRefreshItemIdAsync(settings, item, archiveRootPath, libraryMatch);
+                if (string.IsNullOrWhiteSpace(refreshItemId))
                 {
-                    item.MarkUpdated(metadataRefreshTriggered: false);
+                    item.MarkUpdated(
+                        metadataRefreshTriggered: false,
+                        noRefreshReason: "Emby-Item auch bei erneuter Pfadsuche nicht gefunden.");
                     completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
                 try
                 {
-                    await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
+                    await _services.Sync.RefreshItemMetadataAsync(settings, refreshItemId);
                     item.MarkUpdated(metadataRefreshTriggered: true);
                     completedMediaFilePaths.Add(item.MediaFilePath);
                 }
@@ -585,6 +608,49 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             RefreshSummaryAndCommands();
             SaveVisibleLog("Änderungen schreiben");
         });
+    }
+
+    /// <summary>
+    /// Ermittelt unmittelbar vor dem Metadatenrefresh noch einmal das konkrete Emby-Item.
+    /// </summary>
+    /// <remarks>
+    /// Die Vorprüfung kann ein Item verpassen, wenn Emby die Datei erst kurz nach dem Scan sichtbar macht
+    /// oder wenn die UI-Zeile aus einem Report ohne Emby-ID stammt. Der Schreibschritt soll deshalb nicht
+    /// allein wegen einer leeren Zeilen-ID aufgeben, sondern den Pfad einmal gezielt nachschlagen.
+    /// </remarks>
+    private async Task<string?> ResolveRefreshItemIdAsync(
+        AppEmbySettings settings,
+        EmbySyncItemViewModel item,
+        string? archiveRootPath,
+        EmbyLibraryMatch? libraryMatch)
+    {
+        if (!string.IsNullOrWhiteSpace(item.EmbyItemId))
+        {
+            return item.EmbyItemId;
+        }
+
+        try
+        {
+            var embyItem = await _services.Sync.FindItemByPathAsync(
+                settings,
+                item.MediaFilePath,
+                archiveRootPath,
+                libraryMatch,
+                CancellationToken.None);
+            if (embyItem is null)
+            {
+                return null;
+            }
+
+            item.ApplyEmbyRefreshTarget(embyItem);
+            AppendLog($"Emby-Item für Refresh gefunden: {item.MediaFileName} -> {embyItem.Id}");
+            return embyItem.Id;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AppendLog($"Emby-Item-Suche vor Refresh fehlgeschlagen: {item.MediaFileName} -> {ex.Message}");
+            return null;
+        }
     }
 
     private async Task ResolveEmbyItemsWithinBudgetAsync(

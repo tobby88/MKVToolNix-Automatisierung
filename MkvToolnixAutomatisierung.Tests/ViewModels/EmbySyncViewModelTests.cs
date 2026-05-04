@@ -138,6 +138,7 @@ public sealed class EmbySyncViewModelTests
         Assert.Contains("Letzter Schritt", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("aktuell ausgewählten", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ohne zusätzlichen Bibliotheksscan", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("anhand des Pfads", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NFO-Dateien", vm.RunSyncTooltip, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -432,6 +433,59 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task RunSyncCommand_ResolvesMissingEmbyItemBeforeRefreshingChangedNfo()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+
+            var embyClient = new FindingRefreshEmbyClient(
+                mediaPath,
+                new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    mediaPath,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)));
+            var vm = CreateViewModel(
+                embyClient: embyClient,
+                configuredEmbySettings: new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+            var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "tt1234567"));
+            item.ApplyImdbSelection("tt1234567");
+            vm.Items.Add(item);
+            vm.SelectedItem = item;
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("Aktualisiert", item.StatusText);
+            Assert.Contains("Emby-Refresh angestoßen", item.Note, StringComparison.Ordinal);
+            Assert.Equal("emby-1", item.EmbyItemId);
+            Assert.Equal(1, embyClient.FindItemCallCount);
+            Assert.Equal(1, embyClient.RefreshCallCount);
+            Assert.Equal("emby-1", embyClient.LastRefreshItemId);
+            var updatedText = File.ReadAllText(nfoPath);
+            Assert.Contains("<tvdbid>12345</tvdbid>", updatedText);
+            Assert.Contains("<imdbid>tt1234567</imdbid>", updatedText);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_WritesNoImdbDecision_WhenNoOtherProviderIdIsSet()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
@@ -653,6 +707,9 @@ public sealed class EmbySyncViewModelTests
             await vm.RunSyncCommand.ExecuteAsync();
 
             var doneReportPath = Path.Combine(tempDirectory, "done", "run.metadata.json");
+            Assert.Equal("Aktualisiert", item.StatusText);
+            Assert.Contains("keine Emby-API-Zugangsdaten", item.Note, StringComparison.Ordinal);
+            Assert.DoesNotContain("noch nicht gefunden", item.Note, StringComparison.Ordinal);
             Assert.True(File.Exists(doneReportPath));
             Assert.False(File.Exists(reportPath));
             Assert.Contains(doneReportPath, vm.ReportPath, StringComparison.OrdinalIgnoreCase);
@@ -980,6 +1037,47 @@ public sealed class EmbySyncViewModelTests
 
         public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
             => Task.FromResult<EmbyItem?>(null);
+
+        public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+        {
+            RefreshCallCount++;
+            LastRefreshItemId = itemId;
+            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class FindingRefreshEmbyClient(string expectedPath, EmbyItem item) : IEmbyClient
+    {
+        public int FindItemCallCount { get; private set; }
+
+        public int RefreshCallCount { get; private set; }
+
+        public string? LastRefreshItemId { get; private set; }
+
+        public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<EmbyLibraryFolder>>([]);
+
+        public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerLibraryScanAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
+        {
+            FindItemCallCount++;
+            var foundItem = string.Equals(mediaFilePath, expectedPath, StringComparison.OrdinalIgnoreCase)
+                ? item
+                : null;
+            return Task.FromResult(foundItem);
+        }
 
         public Task RefreshItemMetadataAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
         {

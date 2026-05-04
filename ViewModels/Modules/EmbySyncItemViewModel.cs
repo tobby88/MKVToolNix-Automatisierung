@@ -404,6 +404,21 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     }
 
     /// <summary>
+    /// Hinterlegt ein spät gefundenes Emby-Item nur als Refresh-Ziel, ohne bereits geprüfte
+    /// lokale Provider-ID-Entscheidungen durch eventuell veraltete Emby-Providerwerte erneut
+    /// in einen Pflichtcheck zurückzuwerfen.
+    /// </summary>
+    /// <param name="item">Von Emby anhand des MKV-Pfads gefundenes Medien-Item.</param>
+    public void ApplyEmbyRefreshTarget(EmbyItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        EmbyItemId = item.Id;
+        _embyProviderIds = BuildProviderIdsFromEmbyItem(item);
+        OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
+    }
+
+    /// <summary>
     /// Baut aus dem standardisierten MKV-Dateinamen den lokalen TVDB-Startvorschlag.
     /// </summary>
     public bool TryBuildMetadataGuess(out EpisodeMetadataGuess? guess)
