@@ -14,6 +14,7 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// </remarks>
 internal sealed class ImdbLookupService
 {
+    private const int MaxAutomaticSeasonsToLoad = 12;
     private const int MaxEpisodePagesPerSeason = 100;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly Uri ApiBaseAddress = new("https://api.imdbapi.dev/");
@@ -58,10 +59,12 @@ internal sealed class ImdbLookupService
     }
 
     /// <summary>
-    /// Lädt alle Episoden einer Serie über sämtliche Seasons hinweg.
+    /// Lädt Episoden einer Serie. Kleine Serien werden vollständig geladen; bei großen Serien
+    /// begrenzt eine vorhandene lokale Staffelnummer die automatische Provider-Abfrage.
     /// </summary>
     public async Task<IReadOnlyList<ImdbEpisodeRecord>> LoadEpisodesAsync(
         string seriesId,
+        string? preferredSeason = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(seriesId))
@@ -69,18 +72,22 @@ internal sealed class ImdbLookupService
             return [];
         }
 
-        if (_episodeCache.TryGetValue(seriesId, out var cachedResults))
+        var normalizedPreferredSeason = NormalizeSeason(preferredSeason);
+        var cacheKey = string.IsNullOrWhiteSpace(normalizedPreferredSeason)
+            ? seriesId
+            : $"{seriesId}|season:{normalizedPreferredSeason}";
+        if (_episodeCache.TryGetValue(cacheKey, out var cachedResults))
         {
             return cachedResults;
         }
 
         var requestTask = _episodeLoadsInFlight.GetOrAdd(
-            seriesId,
+            cacheKey,
             _ => ExecuteSharedLookupAsync(
-                seriesId,
+                cacheKey,
                 _episodeCache,
                 _episodeLoadsInFlight,
-                () => FetchEpisodesAsync(seriesId, CancellationToken.None)));
+                () => FetchEpisodesAsync(seriesId, normalizedPreferredSeason, CancellationToken.None)));
 
         return await requestTask.WaitAsync(cancellationToken);
     }
@@ -115,59 +122,20 @@ internal sealed class ImdbLookupService
 
     private async Task<IReadOnlyList<ImdbEpisodeRecord>> FetchEpisodesAsync(
         string seriesId,
+        string? preferredSeason,
         CancellationToken cancellationToken)
     {
         var seasons = await LoadSeasonsAsync(seriesId, cancellationToken);
         var episodes = new List<ImdbEpisodeRecord>();
 
-        foreach (var season in seasons)
+        foreach (var season in SelectSeasonsForEpisodeLookup(seasons, preferredSeason))
         {
             if (string.IsNullOrWhiteSpace(season.Season))
             {
                 continue;
             }
 
-            var seenPageTokens = new HashSet<string>(StringComparer.Ordinal);
-            var pageCount = 0;
-            string? nextPageToken = null;
-            do
-            {
-                var currentPageToken = nextPageToken ?? string.Empty;
-                if (!seenPageTokens.Add(currentPageToken))
-                {
-                    throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil ein Seiten-Token erneut geliefert wurde.");
-                }
-
-                if (++pageCount > MaxEpisodePagesPerSeason)
-                {
-                    throw new InvalidOperationException($"IMDb-Pagination abgebrochen, weil mehr als {MaxEpisodePagesPerSeason} Seiten für eine Staffel angefordert wurden.");
-                }
-
-                var requestUri = BuildEpisodesRequestUri(seriesId, season.Season!, nextPageToken);
-                using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
-                response.EnsureSuccessStatusCode();
-
-                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                var payload = await JsonSerializer.DeserializeAsync<ImdbEpisodesResponse>(stream, JsonOptions, cancellationToken)
-                              ?? throw new InvalidOperationException("Die IMDb-API lieferte keine lesbaren Episodendaten.");
-
-                episodes.AddRange(payload.Episodes
-                    .Select(static episode => new ImdbEpisodeRecord(
-                        episode.Id ?? string.Empty,
-                        episode.Title ?? string.Empty,
-                        episode.Season ?? string.Empty,
-                        episode.EpisodeNumber))
-                    .Where(static episode => !string.IsNullOrWhiteSpace(episode.Id) && !string.IsNullOrWhiteSpace(episode.Title)));
-
-                nextPageToken = string.IsNullOrWhiteSpace(payload.NextPageToken)
-                    ? null
-                    : payload.NextPageToken;
-                if (nextPageToken is not null && seenPageTokens.Contains(nextPageToken))
-                {
-                    throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil der Provider erneut auf eine bereits geladene Seite verweist.");
-                }
-            }
-            while (!string.IsNullOrWhiteSpace(nextPageToken));
+            episodes.AddRange(await FetchSeasonEpisodesAsync(seriesId, season.Season!, cancellationToken));
         }
 
         return episodes
@@ -175,6 +143,57 @@ internal sealed class ImdbLookupService
             .ThenBy(static episode => episode.EpisodeNumber ?? int.MaxValue)
             .ThenBy(static episode => episode.Title, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task<IReadOnlyList<ImdbEpisodeRecord>> FetchSeasonEpisodesAsync(
+        string seriesId,
+        string season,
+        CancellationToken cancellationToken)
+    {
+        var episodes = new List<ImdbEpisodeRecord>();
+        var seenPageTokens = new HashSet<string>(StringComparer.Ordinal);
+        var pageCount = 0;
+        string? nextPageToken = null;
+        do
+        {
+            var currentPageToken = nextPageToken ?? string.Empty;
+            if (!seenPageTokens.Add(currentPageToken))
+            {
+                throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil ein Seiten-Token erneut geliefert wurde.");
+            }
+
+            if (++pageCount > MaxEpisodePagesPerSeason)
+            {
+                throw new InvalidOperationException($"IMDb-Pagination abgebrochen, weil mehr als {MaxEpisodePagesPerSeason} Seiten für eine Staffel angefordert wurden.");
+            }
+
+            var requestUri = BuildEpisodesRequestUri(seriesId, season, nextPageToken);
+            using var response = await _httpClient.GetAsync(requestUri, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var payload = await JsonSerializer.DeserializeAsync<ImdbEpisodesResponse>(stream, JsonOptions, cancellationToken)
+                          ?? throw new InvalidOperationException("Die IMDb-API lieferte keine lesbaren Episodendaten.");
+
+            episodes.AddRange(payload.Episodes
+                .Select(static episode => new ImdbEpisodeRecord(
+                    episode.Id ?? string.Empty,
+                    episode.Title ?? string.Empty,
+                    episode.Season ?? string.Empty,
+                    episode.EpisodeNumber))
+                .Where(static episode => !string.IsNullOrWhiteSpace(episode.Id) && !string.IsNullOrWhiteSpace(episode.Title)));
+
+            nextPageToken = string.IsNullOrWhiteSpace(payload.NextPageToken)
+                ? null
+                : payload.NextPageToken;
+            if (nextPageToken is not null && seenPageTokens.Contains(nextPageToken))
+            {
+                throw new InvalidOperationException("IMDb-Pagination abgebrochen, weil der Provider erneut auf eine bereits geladene Seite verweist.");
+            }
+        }
+        while (!string.IsNullOrWhiteSpace(nextPageToken));
+
+        return episodes;
     }
 
     private async Task<IReadOnlyList<ImdbSeasonRecord>> LoadSeasonsAsync(
@@ -195,6 +214,28 @@ internal sealed class ImdbLookupService
             .ToList();
     }
 
+    private static IReadOnlyList<ImdbSeasonRecord> SelectSeasonsForEpisodeLookup(
+        IReadOnlyList<ImdbSeasonRecord> seasons,
+        string? preferredSeason)
+    {
+        if (seasons.Count <= MaxAutomaticSeasonsToLoad || string.IsNullOrWhiteSpace(preferredSeason))
+        {
+            return seasons;
+        }
+
+        var matchingSeason = seasons.FirstOrDefault(season =>
+            string.Equals(NormalizeSeason(season.Season), preferredSeason, StringComparison.OrdinalIgnoreCase));
+        if (matchingSeason is not null)
+        {
+            return [matchingSeason];
+        }
+
+        // Bei sehr großen Serien ist ein vollständiger Abruf oft teurer als der freie Provider erlaubt.
+        // Wenn IMDb die erkannte Staffel nicht in der Season-Liste meldet, versuchen wir genau diese
+        // Staffel direkt statt dutzende andere Staffeln spekulativ zu laden.
+        return [new ImdbSeasonRecord { Season = preferredSeason }];
+    }
+
     private static Uri BuildEpisodesRequestUri(string seriesId, string season, string? pageToken)
     {
         var relativePath = $"titles/{Uri.EscapeDataString(seriesId)}/episodes?season={Uri.EscapeDataString(season)}";
@@ -211,6 +252,19 @@ internal sealed class ImdbLookupService
         return int.TryParse(season, out var parsed)
             ? parsed
             : int.MaxValue;
+    }
+
+    private static string? NormalizeSeason(string? season)
+    {
+        var normalized = (season ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Contains("xx", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return int.TryParse(normalized, out var parsed)
+            ? parsed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : normalized;
     }
 
     private static async Task<IReadOnlyList<TResult>> ExecuteSharedLookupAsync<TResult>(

@@ -238,6 +238,22 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public void TryBuildImdbId_AcceptsLocalizedImdbUrl()
+    {
+        using var httpClient = new HttpClient(new FailingHttpMessageHandler());
+        var vm = new ImdbLookupWindowViewModel(new ImdbLookupService(httpClient), ImdbLookupMode.BrowserOnly, null, null)
+        {
+            ImdbInput = "https://www.imdb.com/de/title/tt7654321/?ref_=fn_al_tt_1"
+        };
+
+        var success = vm.TryBuildImdbId(out var imdbId, out var validationMessage);
+
+        Assert.True(success);
+        Assert.Equal("tt7654321", imdbId);
+        Assert.Null(validationMessage);
+    }
+
+    [Fact]
     public void TryBuildImdbId_RejectsInvalidInput()
     {
         using var httpClient = new HttpClient(new FailingHttpMessageHandler());
@@ -311,16 +327,32 @@ public sealed class ImdbLookupWindowViewModelTests
         Assert.Contains("Zwischenablage", vm.StatusText, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("IMDb: tt0826760")]
+    [InlineData("Episode link: https://www.imdb.com/title/tt0826760/?ref_=ttep_ep1")]
+    [InlineData("Episode link: https://www.imdb.com/de/title/tt0826760/?ref_=ttep_ep1")]
+    public void TryImportClipboardText_AcceptsIdOrImdbUrlEmbeddedInClipboardText(string clipboardText)
+    {
+        using var httpClient = new HttpClient(new FailingHttpMessageHandler());
+        var vm = new ImdbLookupWindowViewModel(new ImdbLookupService(httpClient), ImdbLookupMode.BrowserOnly, null, null);
+
+        var success = vm.TryImportClipboardText(clipboardText);
+
+        Assert.True(success);
+        Assert.Equal("tt0826760", vm.ImdbInput);
+    }
+
     [Fact]
-    public void TryImportClipboardText_IgnoresAlreadyImportedId()
+    public void TryImportClipboardText_AcceptsAlreadyImportedIdAsSuccessfulNoOp()
     {
         using var httpClient = new HttpClient(new FailingHttpMessageHandler());
         var vm = new ImdbLookupWindowViewModel(new ImdbLookupService(httpClient), ImdbLookupMode.BrowserOnly, null, "tt0826760");
 
         var success = vm.TryImportClipboardText("https://www.imdb.com/title/tt0826760/?ref_=ttep_ep1");
 
-        Assert.False(success);
+        Assert.True(success);
         Assert.Equal("tt0826760", vm.ImdbInput);
+        Assert.Contains("bereits eingetragen", vm.StatusText, StringComparison.Ordinal);
     }
 
     private static HttpResponseMessage CreateJsonResponse(string json)

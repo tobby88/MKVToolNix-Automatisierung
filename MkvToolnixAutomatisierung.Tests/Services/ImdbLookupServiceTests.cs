@@ -111,6 +111,48 @@ public sealed class ImdbLookupServiceTests
     }
 
     [Fact]
+    public async Task LoadEpisodesAsync_WithLargeSeries_UsesPreferredSeasonOnly()
+    {
+        var requestedUris = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestedUris.Add(request.RequestUri!.ToString());
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/titles/tt0108778/seasons" => CreateJsonResponse(
+                    $$"""
+                    {
+                      "seasons": [
+                        {{string.Join(
+                            "," + Environment.NewLine,
+                            Enumerable.Range(1, 20).Select(season => $$"""        { "season": "{{season}}", "episodeCount": 1 }"""))}}
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0108778/episodes?season=18" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000018", "title": "Episode 18", "season": "18", "episodeNumber": 1 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var service = new ImdbLookupService(httpClient);
+
+        var episodes = await service.LoadEpisodesAsync("tt0108778", preferredSeason: "18");
+
+        var episode = Assert.Single(episodes);
+        Assert.Equal("tt0000018", episode.Id);
+        Assert.DoesNotContain(
+            requestedUris,
+            uri => uri.Contains("episodes?season=1", StringComparison.Ordinal)
+                   && !uri.Contains("episodes?season=18", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task LoadEpisodesAsync_Stops_WhenPageTokenRepeats()
     {
         using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>

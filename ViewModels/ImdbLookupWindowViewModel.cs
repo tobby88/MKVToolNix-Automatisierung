@@ -19,7 +19,9 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 {
     private static readonly Regex BareImdbIdPattern = new(@"^tt\d{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex ImdbTitlePathPattern = new(@"^/title/(?<id>tt\d{7,10})(?:[/?#]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex StandaloneImdbIdPattern = new(@"(?<![A-Za-z0-9])(?<id>tt\d{7,10})(?![A-Za-z0-9])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex AbsoluteUrlPattern = new(@"https?://[^\s<>""]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ImdbTitlePathPattern = new(@"^/(?:[a-z]{2}(?:-[a-z]{2})?/)?title/(?<id>tt\d{7,10})(?:[/?#]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly ImdbLookupService _lookupService;
     private readonly EpisodeMetadataGuess? _guess;
     private readonly ImdbLookupMode _lookupMode;
@@ -452,7 +454,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         if (TryNormalizeImdbId(ImdbInput, out var currentImdbId)
             && string.Equals(currentImdbId, imdbId, StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            StatusText = $"IMDb-ID aus Zwischenablage ist bereits eingetragen: {imdbId}";
+            return true;
         }
 
         ImdbInput = imdbId!;
@@ -475,8 +478,24 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             return true;
         }
 
-        if (TryExtractImdbIdFromUrl(normalized, out imdbId))
+        if (TryExtractImdbIdFromUrl(normalized, out imdbId)
+            || TryExtractImdbIdFromSupportedUrlInText(normalized, out imdbId))
         {
+            return true;
+        }
+
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var unsupportedUri)
+            && (string.Equals(unsupportedUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(unsupportedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
+        {
+            imdbId = null;
+            return false;
+        }
+
+        var standaloneMatch = StandaloneImdbIdPattern.Match(normalized);
+        if (standaloneMatch.Success)
+        {
+            imdbId = standaloneMatch.Groups["id"].Value.ToLowerInvariant();
             return true;
         }
 
@@ -494,7 +513,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         try
         {
             SetBusy(true, "Lade Episodenliste...");
-            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id);
+            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, _guess?.SeasonNumber);
             _episodes.Clear();
             _episodes.AddRange(episodes);
             ApplyEpisodeFilter(autoSelectBest);
@@ -849,6 +868,20 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         imdbId = match.Groups["id"].Value.ToLowerInvariant();
         return true;
+    }
+
+    private static bool TryExtractImdbIdFromSupportedUrlInText(string input, out string? imdbId)
+    {
+        foreach (Match match in AbsoluteUrlPattern.Matches(input))
+        {
+            if (TryExtractImdbIdFromUrl(match.Value, out imdbId))
+            {
+                return true;
+            }
+        }
+
+        imdbId = null;
+        return false;
     }
 
     private static bool IsSupportedImdbHost(string host)
