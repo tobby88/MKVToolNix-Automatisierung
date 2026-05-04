@@ -98,10 +98,46 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <TextBox Grid.Row="0"
-                                 Margin="0,0,0,8"
-                                 Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="Episodenliste filtern. Primär zählt der Episodentitel; Staffel/Folge dient nur als Tie-Breaker." />
+                        <Grid Grid.Row="0"
+                              Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="54" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="6" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Episodenliste filtern. Primär zählt der Episodentitel; Staffel/Folge dient nur als Tie-Breaker." />
+                            <Button Grid.Column="2"
+                                    Padding="8,4"
+                                    Click="PreviousSeasonButton_Click"
+                                    Content="Staffel -"
+                                    IsEnabled="{Binding CanLoadPreviousEpisodeSeason}"
+                                    ToolTip="Lädt die vorherige IMDb-Staffel der ausgewählten Serie." />
+                            <TextBox Grid.Column="4"
+                                     HorizontalContentAlignment="Center"
+                                     Text="{Binding EpisodeSeasonText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="IMDb-Staffel, die gezielt über die API geladen wird. Bei Serien mit IMDb-Versatz hier korrigieren." />
+                            <Button Grid.Column="6"
+                                    Padding="8,4"
+                                    Click="LoadSeasonButton_Click"
+                                    Content="Laden"
+                                    IsEnabled="{Binding CanLoadEpisodeSeason}"
+                                    ToolTip="Lädt genau die eingetragene IMDb-Staffel." />
+                            <Button Grid.Column="8"
+                                    Padding="8,4"
+                                    Click="NextSeasonButton_Click"
+                                    Content="Staffel +"
+                                    IsEnabled="{Binding CanLoadNextEpisodeSeason}"
+                                    ToolTip="Lädt die nächste IMDb-Staffel der ausgewählten Serie." />
+                        </Grid>
 
                         <ListBox Grid.Row="1"
                                  ItemsSource="{Binding EpisodeResults}"

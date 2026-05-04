@@ -27,6 +27,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private readonly ImdbLookupMode _lookupMode;
     private readonly List<ImdbSeriesSearchResult> _seriesResults = [];
     private readonly List<ImdbEpisodeRecord> _episodes = [];
+    private string _episodeSeasonText;
     private bool _isBusy;
     private bool _isInitialized;
     private bool _suppressSeriesSelectionChanged;
@@ -52,6 +53,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         _guess = guess;
         _seriesSearchText = guess?.SeriesName ?? string.Empty;
         _episodeSearchText = guess?.EpisodeTitle ?? string.Empty;
+        _episodeSeasonText = NormalizeSeasonText(guess?.SeasonNumber) ?? string.Empty;
         _searchText = BuildDefaultSearchText(guess);
         _imdbInput = TryNormalizeImdbId(currentImdbId, out var normalizedImdbId)
             ? normalizedImdbId!
@@ -147,6 +149,26 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public ObservableCollection<SearchOptionItem> SearchOptions { get; } = [];
 
+    /// <summary>
+    /// IMDb-Staffel, deren Episoden im API-Modus gezielt geladen werden.
+    /// </summary>
+    public string EpisodeSeasonText
+    {
+        get => _episodeSeasonText;
+        set
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (_episodeSeasonText == normalized)
+            {
+                return;
+            }
+
+            _episodeSeasonText = normalized;
+            OnPropertyChanged();
+            NotifyEpisodeSeasonCommandPropertiesChanged();
+        }
+    }
+
     public SelectableSeriesItem? SelectedSeriesItem
     {
         get => _selectedSeriesItem;
@@ -166,6 +188,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
                 SelectedEpisodeItem = null;
                 UpdateComparisonSummary();
             }
+
+            NotifyEpisodeSeasonCommandPropertiesChanged();
         }
     }
 
@@ -295,6 +319,16 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         || !string.IsNullOrWhiteSpace(EpisodeSearchText)
         || !string.IsNullOrWhiteSpace(SearchText);
 
+    public bool CanLoadEpisodeSeason => SelectedSeriesItem is not null
+        && NormalizeSeasonText(EpisodeSeasonText) is not null;
+
+    public bool CanLoadPreviousEpisodeSeason => SelectedSeriesItem is not null
+        && TryParseEpisodeSeason(EpisodeSeasonText, out var season)
+        && season > 0;
+
+    public bool CanLoadNextEpisodeSeason => SelectedSeriesItem is not null
+        && TryParseEpisodeSeason(EpisodeSeasonText, out _);
+
     public bool CanApply => TryNormalizeImdbId(ImdbInput, out _);
 
     public async Task InitializeAsync()
@@ -395,6 +429,21 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
+    }
+
+    public Task LoadSelectedEpisodeSeasonAsync()
+    {
+        return LoadEpisodeSeasonAsync(offset: 0, autoSelectBest: true);
+    }
+
+    public Task LoadPreviousEpisodeSeasonAsync()
+    {
+        return LoadEpisodeSeasonAsync(offset: -1, autoSelectBest: true);
+    }
+
+    public Task LoadNextEpisodeSeasonAsync()
+    {
+        return LoadEpisodeSeasonAsync(offset: 1, autoSelectBest: true);
     }
 
     public void MarkSelectedSearchOpened()
@@ -512,8 +561,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         try
         {
-            SetBusy(true, "Lade Episodenliste...");
-            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, _guess?.SeasonNumber);
+            SetBusy(true, BuildEpisodeLoadStatus(EpisodeSeasonText));
+            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, EpisodeSeasonText);
             _episodes.Clear();
             _episodes.AddRange(episodes);
             ApplyEpisodeFilter(autoSelectBest);
@@ -521,7 +570,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             if (SelectedEpisodeItem is null)
             {
                 StatusText = _episodes.Count == 0
-                    ? "Keine Episoden zu dieser Serie geladen."
+                    ? BuildNoEpisodesLoadedStatus(EpisodeSeasonText)
                     : $"{_episodes.Count} Episode(n) geladen. Bitte Episode auswählen.";
             }
         }
@@ -540,6 +589,43 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         {
             SetBusy(false, StatusText);
         }
+    }
+
+    private async Task LoadEpisodeSeasonAsync(int offset, bool autoSelectBest)
+    {
+        if (SelectedSeriesItem is null)
+        {
+            return;
+        }
+
+        if (offset != 0)
+        {
+            if (!TryParseEpisodeSeason(EpisodeSeasonText, out var season))
+            {
+                StatusText = "Bitte zuerst eine numerische IMDb-Staffel eingeben.";
+                return;
+            }
+
+            var targetSeason = season + offset;
+            if (targetSeason < 0)
+            {
+                StatusText = "Vor Staffel 0 kann keine IMDb-Staffel geladen werden.";
+                return;
+            }
+
+            EpisodeSeasonText = targetSeason.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        else if (NormalizeSeasonText(EpisodeSeasonText) is string normalizedSeason)
+        {
+            EpisodeSeasonText = normalizedSeason;
+        }
+        else
+        {
+            StatusText = "Bitte zuerst eine IMDb-Staffel eingeben.";
+            return;
+        }
+
+        await LoadEpisodesForSelectedSeriesAsync(autoSelectBest);
     }
 
     private void ApplyEpisodeFilter(bool autoSelectBest)
@@ -852,6 +938,20 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         return $"{currentImdbInfo}{Environment.NewLine}Lokal erkannt: {guess.SeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(guess.SeasonNumber, guess.EpisodeNumber)} - {guess.EpisodeTitle}";
     }
 
+    private static string BuildEpisodeLoadStatus(string seasonText)
+    {
+        return NormalizeSeasonText(seasonText) is string season
+            ? $"Lade IMDb-Episodenliste für Staffel {season}..."
+            : "Lade IMDb-Episodenliste...";
+    }
+
+    private static string BuildNoEpisodesLoadedStatus(string seasonText)
+    {
+        return NormalizeSeasonText(seasonText) is string season
+            ? $"Keine Episoden zu IMDb-Staffel {season} geladen."
+            : "Keine Episoden zu dieser Serie geladen.";
+    }
+
     private static bool TryExtractImdbIdFromUrl(string input, out string? imdbId)
     {
         imdbId = null;
@@ -916,6 +1016,24 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             : int.MaxValue;
     }
 
+    private static bool TryParseEpisodeSeason(string seasonText, out int season)
+    {
+        return int.TryParse(NormalizeSeasonText(seasonText), out season);
+    }
+
+    private static string? NormalizeSeasonText(string? seasonText)
+    {
+        var normalized = (seasonText ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Contains("xx", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return int.TryParse(normalized, out var season)
+            ? season.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : normalized;
+    }
+
     private static void ReplaceItems<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {
         target.Clear();
@@ -929,6 +1047,14 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     {
         IsBusy = isBusy;
         StatusText = statusText;
+        NotifyEpisodeSeasonCommandPropertiesChanged();
+    }
+
+    private void NotifyEpisodeSeasonCommandPropertiesChanged()
+    {
+        OnPropertyChanged(nameof(CanLoadEpisodeSeason));
+        OnPropertyChanged(nameof(CanLoadPreviousEpisodeSeason));
+        OnPropertyChanged(nameof(CanLoadNextEpisodeSeason));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -58,6 +58,21 @@ public partial class ImdbLookupWindow : Window
         await RunUiActionAsync(() => _viewModel.HandleSelectedSeriesSelectionChangedAsync(), "IMDb-Fehler");
     }
 
+    private async void PreviousSeasonButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync(() => _viewModel.LoadPreviousEpisodeSeasonAsync(), "IMDb-Fehler");
+    }
+
+    private async void LoadSeasonButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync(() => _viewModel.LoadSelectedEpisodeSeasonAsync(), "IMDb-Fehler");
+    }
+
+    private async void NextSeasonButton_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync(() => _viewModel.LoadNextEpisodeSeasonAsync(), "IMDb-Fehler");
+    }
+
     private void OpenSearchButton_Click(object sender, RoutedEventArgs e)
     {
         OpenSelectedSearch();

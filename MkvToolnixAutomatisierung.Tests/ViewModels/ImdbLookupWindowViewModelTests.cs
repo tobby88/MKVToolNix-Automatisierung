@@ -114,6 +114,73 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public async Task LoadNextEpisodeSeasonAsync_LoadsAdjacentSeasonForLargeSeries()
+    {
+        var requestedUris = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestedUris.Add(request.RequestUri!.ToString());
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/search/titles?query=Big Series" => CreateJsonResponse(
+                    """
+                    {
+                      "titles": [
+                        { "id": "tt0100001", "type": "tvSeries", "primaryTitle": "Big Series", "originalTitle": "Big Series", "startYear": 1980, "endYear": null }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100001/seasons" => CreateJsonResponse(
+                    $$"""
+                    {
+                      "seasons": [
+                        {{string.Join(
+                            "," + Environment.NewLine,
+                            Enumerable.Range(1, 20).Select(season => $$"""        { "season": "{{season}}", "episodeCount": 1 }"""))}}
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100001/episodes?season=18" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000018", "title": "Target", "season": "18", "episodeNumber": 1 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100001/episodes?season=19" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000019", "title": "Target", "season": "19", "episodeNumber": 1 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            new EpisodeMetadataGuess("Big Series", "Target", "18", "01"),
+            currentImdbId: null);
+
+        await vm.InitializeAsync();
+
+        Assert.Equal("18", vm.EpisodeSeasonText);
+        Assert.Equal("tt0000018", vm.ImdbInput);
+
+        await vm.LoadNextEpisodeSeasonAsync();
+
+        Assert.Equal("19", vm.EpisodeSeasonText);
+        Assert.Equal("tt0000019", vm.ImdbInput);
+        Assert.DoesNotContain(requestedUris, uri => string.Equals(
+            uri,
+            "https://api.imdbapi.dev/titles/tt0100001/episodes?season=1",
+            StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task InitializeAsync_FallsBackToBrowser_WhenApiUnavailableInAutoMode()
     {
         using var httpClient = new HttpClient(new FailingHttpMessageHandler());
