@@ -57,8 +57,18 @@ jobs:
             return
           }
 
-          gh pr create `
+          $prOutput = gh pr create `
             --head $branch `
             --base master `
             --title 'Update README screenshots' `
-            --body 'Automatisch generierte Aktualisierung der README-Screenshots.'
+            --body 'Automatisch generierte Aktualisierung der README-Screenshots.' 2>&1
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host $prOutput
+            return
+          }
+
+          $escapedBranch = [uri]::EscapeDataString($branch)
+          $manualPrUrl = "https://github.com/$env:GITHUB_REPOSITORY/compare/master...$escapedBranch?quick_pull=1"
+          Write-Warning "Screenshot-Branch wurde aktualisiert, aber GitHub hat das automatische Erstellen des PRs verweigert: $prOutput"
+          Write-Host "::notice title=Screenshot-PR manuell erstellen::$manualPrUrl"
