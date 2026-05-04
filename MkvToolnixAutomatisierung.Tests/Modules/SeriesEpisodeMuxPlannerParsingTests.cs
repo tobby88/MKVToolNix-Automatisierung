@@ -383,6 +383,34 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_ParsesPippiSubtitleOnlyTitle_FromRepeatedSeriesPrefix()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var subtitlePath = Path.Combine(tempDirectory, "Pippi Langstrumpf-Pippi Langstrumpf_ Mit Pippi Langstrumpf auf der Walze - 1. Teil-1830973604.ass");
+            CreateEmptyFile(subtitlePath);
+            CreateCompanionText(
+                Path.ChangeExtension(subtitlePath, ".txt"),
+                topic: "Pippi Langstrumpf",
+                title: "Pippi Langstrumpf: Mit Pippi Langstrumpf auf der Walze - 1. Teil",
+                duration: "00:24:00");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+            var seed = context.GetSelectedSeed(subtitlePath);
+
+            Assert.Equal("Pippi Langstrumpf", seed.Identity.SeriesName);
+            Assert.Equal("Mit Pippi Langstrumpf auf der Walze - 1. Teil", seed.Identity.Title);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_CollectsEquivalentMetadataOnlyTxt_WithEpisodeSeed()
     {
         var planner = CreatePlanner();

@@ -115,15 +115,22 @@ internal static class EpisodeMetadataMatchingHeuristics
         int seriesScore)
     {
         var scoredEpisodes = episodes
-            .Select(episode => new
+            .Select(episode =>
             {
-                Episode = episode,
-                TitleSimilarity = CalculateTitleSimilarity(guess.EpisodeTitle, episode.Name)
+                var rawTitleSimilarity = CalculateTitleSimilarity(guess.EpisodeTitle, episode.Name);
+                var isSeriesNameOnlyTitleMatch = IsSeriesNameOnlyEpisodeTitle(guess, series, episode);
+                return new
+                {
+                    Episode = episode,
+                    TitleSimilarity = isSeriesNameOnlyTitleMatch ? 0 : rawTitleSimilarity,
+                    IsSeriesNameOnlyTitleMatch = isSeriesNameOnlyTitleMatch
+                };
             })
             .Select(entry => new
             {
                 entry.Episode,
                 entry.TitleSimilarity,
+                entry.IsSeriesNameOnlyTitleMatch,
                 EpisodeScore = CalculateEpisodeScore(guess, entry.Episode, entry.TitleSimilarity)
             })
             .ToList();
@@ -156,6 +163,11 @@ internal static class EpisodeMetadataMatchingHeuristics
             .FirstOrDefault();
 
         if (bestEpisode is null)
+        {
+            return null;
+        }
+
+        if (bestEpisode.IsSeriesNameOnlyTitleMatch)
         {
             return null;
         }
@@ -197,6 +209,33 @@ internal static class EpisodeMetadataMatchingHeuristics
             strongTitleMatchCount,
             seasonMatched,
             episodeMatched);
+    }
+
+    private static bool IsSeriesNameOnlyEpisodeTitle(
+        EpisodeMetadataGuess guess,
+        TvdbSeriesSearchResult series,
+        TvdbEpisodeRecord episode)
+    {
+        var normalizedLocalTitle = NormalizeText(guess.EpisodeTitle);
+        var normalizedEpisodeTitle = NormalizeText(episode.Name);
+        if (string.IsNullOrWhiteSpace(normalizedLocalTitle)
+            || string.IsNullOrWhiteSpace(normalizedEpisodeTitle)
+            || string.Equals(normalizedLocalTitle, normalizedEpisodeTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalizedSeriesNames = new[]
+        {
+            NormalizeText(guess.SeriesName),
+            NormalizeText(series.Name)
+        };
+
+        // Manche TVDB-Datensätze enthalten eine generische Episode, deren Titel nur der Serienname ist.
+        // Dieser Treffer darf einen spezifischeren lokalen Titel nicht automatisch überschreiben.
+        return normalizedSeriesNames.Any(seriesName =>
+            !string.IsNullOrWhiteSpace(seriesName)
+            && string.Equals(normalizedEpisodeTitle, seriesName, StringComparison.OrdinalIgnoreCase));
     }
 
     public static bool ShouldRequireReview(ScoredAutomaticMatch match)

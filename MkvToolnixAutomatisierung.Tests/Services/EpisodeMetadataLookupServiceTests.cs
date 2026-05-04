@@ -339,6 +339,81 @@ public sealed class EpisodeMetadataLookupServiceTests
     }
 
     [Fact]
+    public async Task ResolveAutomaticallyAsync_DoesNotUseSeriesTitleOnlyEpisode_ForSpecificPippiTitle()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Pippi Langstrumpf", "1969", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Pippi Langstrumpf", 1, 1, "1969-02-08")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Pippi Langstrumpf", "Mit Pippi Langstrumpf auf der Walze - 1. Teil", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.Null(result.Selection);
+        Assert.Contains("keine Episode sicher zuordenbar", result.StatusText);
+    }
+
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_DoesNotUseSeriesTitleOnlyEpisode_EvenWhenEpisodeNumberMatches()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Pippi Langstrumpf", "1969", null)],
+            EpisodesResultFactory = _ => [new TvdbEpisodeRecord(100, "Pippi Langstrumpf", 1, 4, "1969-03-01")]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Pippi Langstrumpf", "Mit Pippi Langstrumpf auf der Walze - 1. Teil", "01", "04"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.True(result.RequiresReview);
+        Assert.Null(result.Selection);
+    }
+
+    [Fact]
+    public async Task ResolveAutomaticallyAsync_MatchesPippiWalzeProviderVariant_WhenTvdbOmitsPartSuffix()
+    {
+        var settings = new AppMetadataSettings
+        {
+            TvdbApiKey = "key"
+        };
+        var store = new FakeMetadataStore(settings);
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new TvdbSeriesSearchResult(42, "Pippi Langstrumpf", "1969", null)],
+            EpisodesResultFactory = _ =>
+            [
+                new TvdbEpisodeRecord(100, "Pippi Langstrumpf", 1, 1, "1969-02-08"),
+                new TvdbEpisodeRecord(101, "Mit Pippi Langstrumpf auf der Walz", 1, 4, "1969-03-01")
+            ]
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var result = await service.ResolveAutomaticallyAsync(
+            new EpisodeMetadataGuess("Pippi Langstrumpf", "Mit Pippi Langstrumpf auf der Walze - 1. Teil", "xx", "xx"));
+
+        Assert.True(result.QuerySucceeded);
+        Assert.NotNull(result.Selection);
+        Assert.Equal(101, result.Selection!.TvdbEpisodeId);
+        Assert.Equal("Mit Pippi Langstrumpf auf der Walz", result.Selection.EpisodeTitle);
+    }
+
+    [Fact]
     public async Task ResolveAutomaticallyAsync_RequiresReview_WhenLocalGuessUsesEpisodeRange()
     {
         var settings = new AppMetadataSettings
