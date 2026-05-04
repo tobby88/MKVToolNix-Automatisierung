@@ -69,6 +69,7 @@ jobs:
           }
 
           $escapedBranch = [uri]::EscapeDataString($branch)
-          $manualPrUrl = "https://github.com/$env:GITHUB_REPOSITORY/compare/master...$escapedBranch?quick_pull=1"
+          $manualPrUrl = "https://github.com/$env:GITHUB_REPOSITORY/compare/master...$escapedBranch" + "?quick_pull=1"
           Write-Warning "Screenshot-Branch wurde aktualisiert, aber GitHub hat das automatische Erstellen des PRs verweigert: $prOutput"
           Write-Host "::notice title=Screenshot-PR manuell erstellen::$manualPrUrl"
+          exit 0
