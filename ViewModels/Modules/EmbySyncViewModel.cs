@@ -493,6 +493,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             var refreshOnlyCount = 0;
             var skippedCount = 0;
             var refreshFailureCount = 0;
+            var refreshPendingCount = 0;
             var completedMediaFilePaths = new List<string>();
 
             for (var index = 0; index < selectedItems.Count; index++)
@@ -580,10 +581,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 var refreshItemId = await ResolveRefreshItemIdAsync(settings, item, archiveRootPath, libraryMatch);
                 if (string.IsNullOrWhiteSpace(refreshItemId))
                 {
-                    item.MarkUpdated(
-                        metadataRefreshTriggered: false,
-                        noRefreshReason: "Emby-Item auch bei erneuter Pfadsuche nicht gefunden.");
-                    completedMediaFilePaths.Add(item.MediaFilePath);
+                    refreshPendingCount++;
+                    item.MarkUpdatedRefreshPending("Emby-Item auch bei erneuter Pfadsuche nicht gefunden.");
                     continue;
                 }
 
@@ -602,7 +601,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = 100;
-            StatusText = BuildRunSyncSummary(updatedCount, refreshOnlyCount, skippedCount, refreshFailureCount, canRefreshEmby);
+            StatusText = BuildRunSyncSummary(updatedCount, refreshOnlyCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
             AppendLog(StatusText);
             MarkSelectedReportsDone(completedMediaFilePaths);
             RefreshSummaryAndCommands();
@@ -1243,6 +1242,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         int refreshOnlyCount,
         int skippedCount,
         int refreshFailureCount,
+        int refreshPendingCount,
         bool canRefreshEmby)
     {
         var parts = new List<string>
@@ -1257,6 +1257,11 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         if (refreshFailureCount > 0)
         {
             parts.Add($"{refreshFailureCount} Emby-Refresh-Fehler.");
+        }
+
+        if (refreshPendingCount > 0)
+        {
+            parts.Add($"{refreshPendingCount} Emby-Refresh offen, weil das Emby-Item nicht gefunden wurde.");
         }
 
         if (!canRefreshEmby)

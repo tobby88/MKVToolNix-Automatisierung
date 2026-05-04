@@ -486,6 +486,57 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task RunSyncCommand_KeepsRefreshOpen_WhenChangedNfoHasNoEmbyItem()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            var reportPath = WriteMetadataReport(
+                tempDirectory,
+                "run.metadata.json",
+                mediaPath,
+                "12345",
+                imdbId: "tt1234567");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+
+            var dialogService = new SelectingDialogService([reportPath]);
+            var embyClient = new RecordingRefreshEmbyClient();
+            var vm = CreateViewModel(
+                dialogService,
+                embyClient,
+                new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+            await vm.SelectReportCommand.ExecuteAsync();
+            var item = Assert.Single(vm.Items);
+            item.ApplyImdbSelection("tt1234567");
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("Refresh offen", item.StatusText);
+            Assert.Contains("Emby-Item auch bei erneuter Pfadsuche nicht gefunden", item.Note, StringComparison.Ordinal);
+            Assert.Contains("Emby-Refresh offen", vm.StatusText, StringComparison.Ordinal);
+            Assert.Equal(0, embyClient.RefreshCallCount);
+            Assert.True(File.Exists(reportPath));
+            Assert.False(File.Exists(Path.Combine(tempDirectory, "done", "run.metadata.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_WritesNoImdbDecision_WhenNoOtherProviderIdIsSet()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));

@@ -531,6 +531,21 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     }
 
     /// <summary>
+    /// Kennzeichnet eine lokal geschriebene NFO, deren notwendiger Emby-Refresh noch nicht möglich war.
+    /// </summary>
+    public void MarkUpdatedRefreshPending(string reason)
+    {
+        var normalizedReason = string.IsNullOrWhiteSpace(reason)
+            ? "Emby-Item nicht gefunden."
+            : reason.Trim();
+        SetStatus(
+            "Refresh offen",
+            HasCompleteProviderIds
+                ? $"NFO aktualisiert, {normalizedReason}"
+                : $"NFO aktualisiert. {normalizedReason} {BuildProviderCoverageNote()}");
+    }
+
+    /// <summary>
     /// Kennzeichnet, dass die NFO bereits geschrieben wurde, Emby den anschließenden Refresh aber nicht ausführen konnte.
     /// </summary>
     public void MarkRefreshFailed(string failureMessage)
@@ -928,7 +943,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             "Bereit" or "TVDB gewählt" or "Lokal bereit" => "Ready",
             "NFO aktuell" or "Aktualisiert" => "Done",
             "Ohne NFO-Sync" => "Skipped",
-            "Prüfung offen" or "IDs fehlen" or "IDs prüfen" or "NFO fehlt" or "NFO prüfen" or "Refresh prüfen" or "Übersprungen" => "Warning",
+            "Prüfung offen" or "IDs fehlen" or "IDs prüfen" or "NFO fehlt" or "NFO prüfen" or "Refresh prüfen" or "Refresh offen" or "Übersprungen" => "Warning",
             "Fehlt" => "Error",
             _ => "Neutral"
         };
