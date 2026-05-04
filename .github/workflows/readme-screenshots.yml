@@ -35,7 +35,8 @@ jobs:
       - name: Create screenshot update PR
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SCREENSHOT_PR_TOKEN || github.token }}
+          SCREENSHOT_PR_TOKEN_CONFIGURED: ${{ secrets.SCREENSHOT_PR_TOKEN != '' }}
         run: |
           $changes = git status --porcelain -- docs/images/readme
           if (-not $changes) {
@@ -71,5 +72,8 @@ jobs:
           $escapedBranch = [uri]::EscapeDataString($branch)
           $manualPrUrl = "https://github.com/$env:GITHUB_REPOSITORY/compare/master...$escapedBranch" + "?quick_pull=1"
           Write-Warning "Screenshot-Branch wurde aktualisiert, aber GitHub hat das automatische Erstellen des PRs verweigert: $prOutput"
+          if ($env:SCREENSHOT_PR_TOKEN_CONFIGURED -ne 'true') {
+            Write-Warning "Der Workflow nutzt nur GITHUB_TOKEN. Wenn die Repository-Einstellung 'Allow GitHub Actions to create and approve pull requests' deaktiviert ist, kann GitHub Actions damit keinen PR öffnen. Hinterlege alternativ ein PAT mit Pull-Request-Rechten als Secret SCREENSHOT_PR_TOKEN."
+          }
           Write-Host "::notice title=Screenshot-PR manuell erstellen::$manualPrUrl"
           exit 0
