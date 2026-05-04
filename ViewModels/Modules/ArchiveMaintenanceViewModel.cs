@@ -364,7 +364,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                     new Progress<string>(line =>
                     {
                         reportedOutputLines.Add(line);
-                        AppendLog(line);
+                        AppendToolOutputLog(line);
                     }));
                 AppendResultOutputLines(result.OutputLines, reportedOutputLines);
                 if (!result.Success)
@@ -401,7 +401,16 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                 continue;
             }
 
-            AppendLog(outputLine);
+            AppendToolOutputLog(outputLine);
+        }
+    }
+
+    private void AppendToolOutputLog(string line)
+    {
+        var cleanedLine = PersistedLogTextCleaner.Clean(line);
+        if (!string.IsNullOrWhiteSpace(cleanedLine))
+        {
+            AppendLog(cleanedLine);
         }
     }
 

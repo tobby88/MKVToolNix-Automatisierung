@@ -134,6 +134,27 @@ public sealed class ArchiveMaintenanceViewModelTests
     }
 
     [Fact]
+    public async Task ApplySelectedCommand_FiltersRoutineToolOutputLines()
+    {
+        var archiveMaintenance = new SilentOutputArchiveMaintenanceService(
+        [
+            "The file is being analyzed.",
+            "Progress: 42%",
+            "Header aktualisiert.",
+            "Done."
+        ]);
+        var viewModel = CreateViewModel(archiveMaintenance: archiveMaintenance);
+        viewModel.Items.Add(new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis()));
+
+        await viewModel.ApplySelectedCommand.ExecuteAsync();
+
+        Assert.Contains("Header aktualisiert.", viewModel.LogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("The file is being analyzed.", viewModel.LogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Progress: 42%", viewModel.LogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Done.", viewModel.LogText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ScanCommand_SortsItemsByMkvFileName()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "archive-maintenance-sort-" + Guid.NewGuid().ToString("N"));

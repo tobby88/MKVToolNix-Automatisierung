@@ -170,6 +170,30 @@ public sealed class BatchRunLogServiceTests
     }
 
     [Fact]
+    public void SaveBatchRunArtifacts_FiltersRoutineToolAndProgressLines()
+    {
+        var service = new BatchRunLogService();
+        var outputDirectory = CreateDirectory("output");
+        var sourceDirectory = CreateDirectory("source");
+
+        var result = service.SaveBatchRunArtifacts(
+            sourceDirectory,
+            outputDirectory,
+            "STARTE: Episode\r\nProgress: 17%\r\nThe file is being analyzed.\r\nHeader aktualisiert.\r\nDone.",
+            [],
+            successCount: 1,
+            warningCount: 0,
+            errorCount: 0);
+
+        var batchLogText = File.ReadAllText(result.BatchLogPath);
+        Assert.Contains("STARTE: Episode", batchLogText, StringComparison.Ordinal);
+        Assert.Contains("Header aktualisiert.", batchLogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Progress: 17%", batchLogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("The file is being analyzed.", batchLogText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Done.", batchLogText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SaveBatchRunArtifacts_UsesProvidedRunLabel_ForLogFileAndHeader()
     {
         var service = new BatchRunLogService();

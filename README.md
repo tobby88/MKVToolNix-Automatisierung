@@ -75,7 +75,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und die gespeicherten Modulprotokolle.
+- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs.
 - Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.

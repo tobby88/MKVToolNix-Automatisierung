@@ -58,7 +58,8 @@ Wichtig dabei:
    - Die bisherige TXT-Liste neuer Ausgabedateien bleibt als einfache menschenlesbare Prüfliste erhalten.
    - Der zusätzliche JSON-Metadatenreport enthält ein versioniertes Schema und importierbare Provider-IDs wie die bereits ausgewählte TVDB-Episoden-ID.
 8. `ModuleLogService` schreibt die sichtbaren Protokolle von Einsortieren, Emby-Abgleich und Archivpflege ebenfalls nach `.\Logs`.
-   - Diese Logs enthalten keine Mux-Ausgabedatei-Reports, sondern nur Modulname, Vorgang, Kontext und den sichtbaren Protokolltext.
+   - Diese Logs enthalten keine Mux-Ausgabedatei-Reports, sondern nur Modulname, Vorgang, Kontext und den bereinigten sichtbaren Protokolltext.
+   - Allgemeine Modulprotokolle werden pro App-Sitzung fortgeschrieben; wiederholte Saves desselben Modulkontexts hängen nur neue Zeilen an.
 9. Das optionale Emby-Modul lädt den strukturierten JSON-Metadatenreport, fragt Emby nach den neuen Items und schreibt Provider-IDs in die nebenliegenden NFO-Dateien.
    - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
 

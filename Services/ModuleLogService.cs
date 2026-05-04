@@ -4,13 +4,13 @@ using System.Text;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Schreibt sichtbare Modul-Protokolle in den portablen Log-Ordner, ohne sie mit Mux-spezifischen
+/// Schreibt sichtbare Modul-Protokolle in ein fortlaufendes Sitzungslog, ohne sie mit Mux-spezifischen
 /// Ausgabedatei-Reports zu vermischen.
 /// </summary>
 internal interface IModuleLogService
 {
     /// <summary>
-    /// Persistiert das aktuelle sichtbare Modul-Protokoll als eigene Textdatei.
+    /// Persistiert neue Zeilen des aktuellen sichtbaren Modul-Protokolls im Sitzungslog.
     /// </summary>
     /// <param name="moduleLabel">Benutzerlesbarer Modulname, z. B. <c>Einsortieren</c>.</param>
     /// <param name="operationLabel">Benutzerlesbarer Vorgang, z. B. <c>Scan</c> oder <c>Sync</c>.</param>
@@ -25,11 +25,15 @@ internal interface IModuleLogService
 }
 
 /// <summary>
-/// Dateibasierte Implementierung für allgemeine Modul-Protokolle.
+/// Dateibasierte Implementierung für allgemeine Modul-Protokolle mit einer Datei pro App-Sitzung.
 /// </summary>
 internal sealed class ModuleLogService : IModuleLogService
 {
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
+    private readonly Dictionary<string, string> _lastSavedLogByContext = new(StringComparer.Ordinal);
+    private readonly object _sync = new();
+    private readonly DateTimeOffset _sessionStartedAt = DateTimeOffset.Now;
+    private string? _sessionLogPath;
 
     public ModuleLogSaveResult SaveModuleLog(
         string moduleLabel,
@@ -38,36 +42,86 @@ internal sealed class ModuleLogService : IModuleLogService
         string logText)
     {
         PortableAppStorage.EnsureLogsDirectoryForSave();
-
-        var createdAt = DateTimeOffset.Now;
         var safeModuleLabel = NormalizeLabel(moduleLabel, fallback: "Modul");
         var safeOperationLabel = NormalizeLabel(operationLabel, fallback: "Protokoll");
-        var fileStamp = createdAt.LocalDateTime.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
-        var filePath = GetUniqueLogPath($"{safeModuleLabel} - {safeOperationLabel} - {fileStamp}.log.txt");
+        var normalizedContext = NormalizeLogText(context);
+        var normalizedLogText = PersistedLogTextCleaner.Clean(logText);
+        var logKey = $"{safeModuleLabel}\0{normalizedContext}";
 
-        File.WriteAllText(
-            filePath,
-            BuildLogText(createdAt, safeModuleLabel, safeOperationLabel, context, logText),
-            Utf8Encoding);
+        lock (_sync)
+        {
+            _sessionLogPath ??= CreateSessionLogPath(_sessionStartedAt);
+            EnsureSessionHeader(_sessionLogPath, _sessionStartedAt);
 
-        return new ModuleLogSaveResult(filePath);
+            var newLogText = GetNewLogText(logKey, normalizedLogText);
+            if (!string.IsNullOrWhiteSpace(newLogText))
+            {
+                File.AppendAllText(
+                    _sessionLogPath,
+                    BuildOperationSection(DateTimeOffset.Now, safeModuleLabel, safeOperationLabel, normalizedContext, newLogText),
+                    Utf8Encoding);
+            }
+
+            return new ModuleLogSaveResult(_sessionLogPath);
+        }
     }
 
-    private static string BuildLogText(
+    private string GetNewLogText(string logKey, string normalizedLogText)
+    {
+        _lastSavedLogByContext.TryGetValue(logKey, out var previousLogText);
+        _lastSavedLogByContext[logKey] = normalizedLogText;
+
+        if (string.IsNullOrWhiteSpace(normalizedLogText))
+        {
+            return string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(previousLogText))
+        {
+            return normalizedLogText;
+        }
+
+        if (string.Equals(previousLogText, normalizedLogText, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        var expectedPrefix = previousLogText + Environment.NewLine;
+        return normalizedLogText.StartsWith(expectedPrefix, StringComparison.Ordinal)
+            ? normalizedLogText[expectedPrefix.Length..]
+            : normalizedLogText;
+    }
+
+    private static void EnsureSessionHeader(string filePath, DateTimeOffset sessionStartedAt)
+    {
+        if (File.Exists(filePath))
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("MKVToolNix-Automatisierung - Sitzungsprotokoll");
+        builder.AppendLine($"Gestartet am: {sessionStartedAt:dd.MM.yyyy HH:mm:ss}");
+        builder.AppendLine();
+        File.WriteAllText(filePath, builder.ToString(), Utf8Encoding);
+    }
+
+    private static string BuildOperationSection(
         DateTimeOffset createdAt,
         string moduleLabel,
         string operationLabel,
-        string? context,
-        string logText)
+        string normalizedContext,
+        string normalizedLogText)
     {
         var builder = new StringBuilder();
-        builder.AppendLine($"MKVToolNix-Automatisierung - {moduleLabel}-Protokoll");
-        builder.AppendLine($"Erstellt am: {createdAt:dd.MM.yyyy HH:mm:ss}");
+        builder.AppendLine("---");
+        builder.AppendLine($"Zeit: {createdAt:dd.MM.yyyy HH:mm:ss}");
+        builder.AppendLine($"Modul: {moduleLabel}");
         builder.AppendLine($"Vorgang: {operationLabel}");
-        if (!string.IsNullOrWhiteSpace(context))
+        if (!string.IsNullOrWhiteSpace(normalizedContext))
         {
             builder.AppendLine("Kontext:");
-            foreach (var line in NormalizeLogText(context).Split(Environment.NewLine))
+            foreach (var line in normalizedContext.Split(Environment.NewLine))
             {
                 builder.AppendLine($"  {line}");
             }
@@ -75,8 +129,8 @@ internal sealed class ModuleLogService : IModuleLogService
 
         builder.AppendLine();
         builder.AppendLine("Protokoll:");
-        var normalizedLogText = NormalizeLogText(logText);
-        builder.AppendLine(string.IsNullOrWhiteSpace(normalizedLogText) ? "(leer)" : normalizedLogText.TrimEnd());
+        builder.AppendLine(normalizedLogText.TrimEnd());
+        builder.AppendLine();
         return builder.ToString();
     }
 
@@ -125,6 +179,12 @@ internal sealed class ModuleLogService : IModuleLogService
         }
 
         return Path.Combine(PortableAppStorage.LogsDirectory, $"{stem} - {Guid.NewGuid():N}.log.txt");
+    }
+
+    private static string CreateSessionLogPath(DateTimeOffset sessionStartedAt)
+    {
+        var fileStamp = sessionStartedAt.LocalDateTime.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+        return GetUniqueLogPath($"Sitzung - {fileStamp}.log.txt");
     }
 }
 

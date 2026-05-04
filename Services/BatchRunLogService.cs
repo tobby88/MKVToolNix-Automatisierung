@@ -153,7 +153,7 @@ public sealed class BatchRunLogService
         int warningCount,
         int errorCount)
     {
-        var normalizedLogText = NormalizeLogText(logText);
+        var normalizedLogText = PersistedLogTextCleaner.Clean(logText);
         var builder = new StringBuilder();
         builder.AppendLine($"MKVToolNix-Automatisierung - {runLabel}-Log");
         builder.AppendLine($"Erstellt am: {createdAt:dd.MM.yyyy HH:mm:ss}");
@@ -205,21 +205,6 @@ public sealed class BatchRunLogService
         builder.AppendLine("Batch-Protokoll:");
         builder.AppendLine(string.IsNullOrWhiteSpace(normalizedLogText) ? "(leer)" : normalizedLogText.TrimEnd());
         return builder.ToString();
-    }
-
-    private static string NormalizeLogText(string logText)
-    {
-        if (string.IsNullOrWhiteSpace(logText))
-        {
-            return logText;
-        }
-
-        return string.Join(
-            Environment.NewLine,
-            logText
-                .Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Split('\n')
-                .Select(MojibakeRepair.NormalizeLikelyMojibake));
     }
 
     private static IReadOnlyList<string> BuildNewOutputFileReportLines(
