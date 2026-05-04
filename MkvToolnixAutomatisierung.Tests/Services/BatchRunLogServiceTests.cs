@@ -212,9 +212,43 @@ public sealed class BatchRunLogServiceTests
             errorCount: 0,
             runLabel: "Einzel");
 
-        Assert.Contains("Einzel - ", Path.GetFileName(result.BatchLogPath), StringComparison.Ordinal);
+        Assert.StartsWith("Mux - ", Path.GetFileName(result.BatchLogPath), StringComparison.Ordinal);
         var batchLogText = File.ReadAllText(result.BatchLogPath);
+        Assert.Contains("MKVToolNix-Automatisierung - Mux-Sitzungsprotokoll", batchLogText, StringComparison.Ordinal);
         Assert.Contains("MKVToolNix-Automatisierung - Einzel-Log", batchLogText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SaveBatchRunArtifacts_AppendsMultipleMuxRunsToOneSessionLog()
+    {
+        var service = new BatchRunLogService();
+        var outputDirectory = CreateDirectory("output");
+        var sourceDirectory = CreateDirectory("source");
+
+        var first = service.SaveBatchRunArtifacts(
+            sourceDirectory,
+            outputDirectory,
+            "MUX: erster Lauf",
+            [],
+            successCount: 1,
+            warningCount: 0,
+            errorCount: 0,
+            runLabel: "Einzel");
+        var second = service.SaveBatchRunArtifacts(
+            sourceDirectory,
+            outputDirectory,
+            "MUX: zweiter Lauf",
+            [],
+            successCount: 1,
+            warningCount: 0,
+            errorCount: 0,
+            runLabel: "Einzel");
+
+        Assert.Equal(first.BatchLogPath, second.BatchLogPath);
+        var batchLogText = File.ReadAllText(first.BatchLogPath);
+        Assert.Equal(2, CountOccurrences(batchLogText, "MKVToolNix-Automatisierung - Einzel-Log"));
+        Assert.Contains("MUX: erster Lauf", batchLogText, StringComparison.Ordinal);
+        Assert.Contains("MUX: zweiter Lauf", batchLogText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -237,5 +271,18 @@ public sealed class BatchRunLogServiceTests
         var path = Path.Combine(Path.GetTempPath(), "mkv-auto-tests", Guid.NewGuid().ToString("N"), name);
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var startIndex = 0;
+        while ((startIndex = text.IndexOf(value, startIndex, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            startIndex += value.Length;
+        }
+
+        return count;
     }
 }

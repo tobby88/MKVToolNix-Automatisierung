@@ -17,6 +17,7 @@ internal static class EpisodeMetadataMatchingHeuristics
         var normalized = ReplaceGermanTransliterations(value.ToLowerInvariant());
         normalized = NormalizeMultipartEpisodeMarkers(normalized);
         normalized = RemoveDiacritics(normalized);
+        normalized = NormalizeKnownProviderTitleVariants(normalized);
         normalized = normalized.Replace("&", " und ");
         normalized = new string(normalized.Select(character => char.IsLetterOrDigit(character) ? character : ' ').ToArray());
         normalized = string.Join(" ", normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -52,6 +53,14 @@ internal static class EpisodeMetadataMatchingHeuristics
         var normalized = Regex.Replace(value, @"\b(?<number>\d+)\s*\.?\s*teil\b", "teil ${number}", RegexOptions.IgnoreCase);
         normalized = Regex.Replace(normalized, @"\bteil\s*(?<number>\d+)\b", "teil ${number}", RegexOptions.IgnoreCase);
         return normalized;
+    }
+
+    private static string NormalizeKnownProviderTitleVariants(string value)
+    {
+        // ORF benennt die Pippi-Folgen aktuell mit "auf der Walze", während TVDB und IMDb
+        // den etablierten deutschen Titel "auf der Walz" führen. Das ist keine andere
+        // Episode, sondern eine providerseitige Schreibvariante.
+        return Regex.Replace(value, @"\bwalze\b", "walz", RegexOptions.IgnoreCase);
     }
 
     public static TvdbSeriesSearchResult? FindPreferredSeriesResult(

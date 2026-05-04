@@ -3,11 +3,20 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Lokale Schätzung einer Episode vor dem TVDB-Abgleich.
 /// </summary>
+/// <param name="SeriesName">Lokal erkannter Serienname.</param>
+/// <param name="EpisodeTitle">Lokal erkannter Episodentitel.</param>
+/// <param name="SeasonNumber">Lokal erkannte Staffelnummer oder <c>xx</c>.</param>
+/// <param name="EpisodeNumber">Lokal erkannte Episodennummer oder <c>xx</c>.</param>
+/// <param name="SourceFileName">
+/// Optionaler ursprünglicher Dateiname der ausgewählten Haupt-/Seed-Quelle. Der Dialog zeigt ihn
+/// nur zur Orientierung; er darf das automatische Matching nicht beeinflussen.
+/// </param>
 public sealed record EpisodeMetadataGuess(
     string SeriesName,
     string EpisodeTitle,
     string SeasonNumber,
-    string EpisodeNumber);
+    string EpisodeNumber,
+    string? SourceFileName = null);
 
 /// <summary>
 /// Minimales TVDB-Suchergebnis, das für Serienauswahl und Mapping ausreicht.

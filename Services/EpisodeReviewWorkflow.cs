@@ -163,7 +163,8 @@ internal sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
             item.SeriesName,
             item.Title,
             item.SeasonNumber,
-            item.EpisodeNumber);
+            item.EpisodeNumber,
+            Path.GetFileName(item.DetectionSeedPath));
 
         var dialog = new TvdbLookupWindow(_episodeMetadata, guess, _settingsDialog)
         {

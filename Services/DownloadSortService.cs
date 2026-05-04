@@ -481,6 +481,7 @@ internal sealed class DownloadSortService
                 if (MoveFileSafely(filePath, destinationPath, targetFolderName, logLines))
                 {
                     movedCount++;
+                    logLines.Add($"VERSCHOBEN: '{Path.GetFileName(filePath)}' -> '{targetFolderName}\\{Path.GetFileName(destinationPath)}'");
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

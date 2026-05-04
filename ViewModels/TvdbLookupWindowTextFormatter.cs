@@ -10,7 +10,10 @@ internal static class TvdbLookupWindowTextFormatter
 {
     public static string BuildGuessSummaryText(EpisodeMetadataGuess guess)
     {
-        return $"Lokal erkannt: {guess.SeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(guess.SeasonNumber, guess.EpisodeNumber)} - {guess.EpisodeTitle}";
+        var summary = $"Lokal erkannt: {guess.SeriesName} - {EpisodeFileNameHelper.BuildEpisodeCode(guess.SeasonNumber, guess.EpisodeNumber)} - {guess.EpisodeTitle}";
+        return string.IsNullOrWhiteSpace(guess.SourceFileName)
+            ? summary
+            : summary + $"{Environment.NewLine}Quelle: {guess.SourceFileName}";
     }
 
     public static string BuildComparisonSummaryText(

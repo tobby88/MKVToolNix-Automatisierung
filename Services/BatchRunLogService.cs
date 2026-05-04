@@ -4,14 +4,19 @@ using System.Text;
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
-/// Persistiert den Abschluss eines Batch-Laufs als menschenlesbares Log plus separate Liste neuer Ausgabedateien.
+/// Persistiert abgeschlossene Einzel- und Batch-Mux-Läufe in ein gemeinsames Sitzungslog
+/// plus optionale separate Reports neuer Ausgabedateien.
 /// </summary>
 public sealed class BatchRunLogService
 {
     private static readonly UTF8Encoding Utf8Encoding = new(encoderShouldEmitUTF8Identifier: false);
+    private readonly object _sync = new();
+    private readonly DateTimeOffset _sessionStartedAt = DateTimeOffset.Now;
+    private string? _sessionLogPath;
 
     /// <summary>
-    /// Schreibt Batch-Log und optionale Reportliste neuer Ausgabedateien in den portablen Log-Ordner.
+    /// Hängt den abgeschlossenen Mux-Lauf an das aktuelle Sitzungslog an und schreibt
+    /// optionale Reportlisten neuer Ausgabedateien in den portablen Log-Ordner.
     /// </summary>
     /// <param name="sourceDirectory">Verarbeiteter Quellordner.</param>
     /// <param name="outputDirectory">Tatsächlicher Ausgabeordner des Batch-Laufs.</param>
@@ -48,21 +53,30 @@ public sealed class BatchRunLogService
 
         var artifactPaths = CreateUniqueArtifactPaths(fileStamp, normalizedRunLabel, normalizedNewFiles.Count > 0);
 
-        File.WriteAllText(
-            artifactPaths.BatchLogPath,
-            BuildBatchLogText(
-                now,
-                sourceDirectory,
-                outputDirectory,
-                logText,
-                normalizedNewFiles,
-                normalizedMetadata,
-                artifactPaths.NewOutputMetadataReportPath,
-                normalizedRunLabel,
-                successCount,
-                warningCount,
-                errorCount),
-            Utf8Encoding);
+        var runLogText = BuildBatchLogText(
+            now,
+            sourceDirectory,
+            outputDirectory,
+            logText,
+            normalizedNewFiles,
+            normalizedMetadata,
+            artifactPaths.NewOutputMetadataReportPath,
+            normalizedRunLabel,
+            successCount,
+            warningCount,
+            errorCount);
+
+        string batchLogPath;
+        lock (_sync)
+        {
+            _sessionLogPath ??= CreateSessionLogPath(_sessionStartedAt);
+            EnsureSessionHeader(_sessionLogPath, _sessionStartedAt);
+            File.AppendAllText(
+                _sessionLogPath,
+                BuildRunSection(runLogText),
+                Utf8Encoding);
+            batchLogPath = _sessionLogPath;
+        }
 
         if (artifactPaths.NewOutputListPath is not null)
         {
@@ -89,10 +103,61 @@ public sealed class BatchRunLogService
         }
 
         return new BatchRunLogSaveResult(
-            artifactPaths.BatchLogPath,
+            batchLogPath,
             artifactPaths.NewOutputListPath,
             artifactPaths.NewOutputMetadataReportPath,
             normalizedNewFiles);
+    }
+
+    private static void EnsureSessionHeader(string filePath, DateTimeOffset sessionStartedAt)
+    {
+        if (File.Exists(filePath))
+        {
+            return;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("MKVToolNix-Automatisierung - Mux-Sitzungsprotokoll");
+        builder.AppendLine($"Gestartet am: {sessionStartedAt:dd.MM.yyyy HH:mm:ss}");
+        builder.AppendLine();
+        File.WriteAllText(filePath, builder.ToString(), Utf8Encoding);
+    }
+
+    private static string CreateSessionLogPath(DateTimeOffset sessionStartedAt)
+    {
+        var fileStamp = sessionStartedAt.LocalDateTime.ToString("yyyy-MM-dd HH-mm-ss", CultureInfo.InvariantCulture);
+        return GetUniqueLogPath($"Mux - {fileStamp}.log.txt");
+    }
+
+    private static string BuildRunSection(string runLogText)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("---");
+        builder.Append(runLogText.TrimEnd());
+        builder.AppendLine();
+        builder.AppendLine();
+        return builder.ToString();
+    }
+
+    private static string GetUniqueLogPath(string fileName)
+    {
+        var path = Path.Combine(PortableAppStorage.LogsDirectory, fileName);
+        if (!File.Exists(path))
+        {
+            return path;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(fileName));
+        for (var index = 2; index < 10_000; index++)
+        {
+            var candidate = Path.Combine(PortableAppStorage.LogsDirectory, $"{stem} ({index}).log.txt");
+            if (!File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return Path.Combine(PortableAppStorage.LogsDirectory, $"{stem} - {Guid.NewGuid():N}.log.txt");
     }
 
     internal static BatchRunArtifactPathSet CreateUniqueArtifactPaths(

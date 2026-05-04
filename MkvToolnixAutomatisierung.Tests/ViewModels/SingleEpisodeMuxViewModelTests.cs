@@ -474,7 +474,7 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
-    public void PersistSingleEpisodeArtifactsIfNeeded_WritesEinzelLogAndMetadataReport_ForNewOutput()
+    public void PersistSingleEpisodeArtifactsIfNeeded_WritesMuxSessionLogAndMetadataReport_ForNewOutput()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), "single-artifact-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(outputDirectory);
@@ -500,11 +500,12 @@ public sealed class SingleEpisodeMuxViewModelTests
                     false
                 ]);
 
-            var einzelLogPath = Directory.EnumerateFiles(PortableAppStorage.LogsDirectory, "Einzel - *.log.txt").Single();
+            var einzelLogPath = Directory.EnumerateFiles(PortableAppStorage.LogsDirectory, "Mux - *.log.txt").Single();
             var metadataReportPath = Directory.EnumerateFiles(PortableAppStorage.LogsDirectory, "*.metadata.json").Single();
 
             Assert.True(File.Exists(einzelLogPath));
             Assert.True(File.Exists(metadataReportPath));
+            Assert.Contains("Mux-Sitzungsprotokoll", File.ReadAllText(einzelLogPath), StringComparison.Ordinal);
             Assert.Contains("Einzel-Log", File.ReadAllText(einzelLogPath), StringComparison.Ordinal);
 
             using var metadataDocument = JsonDocument.Parse(File.ReadAllText(metadataReportPath));

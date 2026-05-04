@@ -450,6 +450,39 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_SubtitleOnly_RemovesRepeatedPippiPrefix_FromOrfTxtTitle()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-pippi-subtitle-only");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-pippi-subtitle-only");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var subtitleAssPath = CreateFile(sourceDirectory, "Pippi Langstrumpf-Pippi Langstrumpf_ Mit Pippi Langstrumpf auf der Walze - 1. Teil-1830973604.ass", "ass");
+        var subtitleSrtPath = CreateFile(sourceDirectory, "Pippi Langstrumpf-Pippi Langstrumpf_ Mit Pippi Langstrumpf auf der Walze - 1. Teil-1830973604.srt", "srt");
+        var metadataPath = CreateFile(
+            sourceDirectory,
+            "Pippi Langstrumpf-Pippi Langstrumpf_ Mit Pippi Langstrumpf auf der Walze - 1. Teil-1830973604.txt",
+            "Sender: ORF\r\nThema: Pippi Langstrumpf\r\nTitel: Pippi Langstrumpf: Mit Pippi Langstrumpf auf der Walze - 1. Teil\r\nDauer: 00:27:44");
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        Assert.Equal([subtitleAssPath], directoryContext.MainVideoFiles);
+
+        var detected = await service.DetectFromSelectedVideoAsync(subtitleAssPath, directoryContext);
+
+        Assert.False(detected.HasPrimaryVideoSource);
+        Assert.Equal("Pippi Langstrumpf", detected.SeriesName);
+        Assert.Equal("Mit Pippi Langstrumpf auf der Walze - 1. Teil", detected.SuggestedTitle);
+        Assert.Equal([subtitleAssPath, subtitleSrtPath], detected.SubtitlePaths);
+        Assert.Contains(detected.RelatedFilePaths, path => string.Equals(path, metadataPath, StringComparison.OrdinalIgnoreCase));
+        Assert.EndsWith(
+            Path.Combine("Pippi Langstrumpf", "Season xx", "Pippi Langstrumpf - SxxExx - Mit Pippi Langstrumpf auf der Walze - 1. Teil.mkv"),
+            detected.SuggestedOutputFilePath,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task DetectFromSelectedVideoAsync_GroupsBuettenwarderOpPlattWithNormalAndAdSources()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "Neues aus Büttenwarder");

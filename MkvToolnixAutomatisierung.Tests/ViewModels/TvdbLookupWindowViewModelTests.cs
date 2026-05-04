@@ -28,6 +28,24 @@ public sealed class TvdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public void Constructor_ShowsSourceFileNameInGuessSummary_WhenProvided()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var service = new EpisodeMetadataLookupService(store, new FakeTvdbClient());
+        var viewModel = new TvdbLookupWindowViewModel(
+            service,
+            new EpisodeMetadataGuess(
+                "Pippi Langstrumpf",
+                "Mit Pippi Langstrumpf auf der Walze - 1. Teil",
+                "xx",
+                "xx",
+                "Pippi Langstrumpf-Pippi Langstrumpf_ Mit Pippi Langstrumpf auf der Walze - 1. Teil-1830973604.mp4"));
+
+        Assert.Contains("Quelle:", viewModel.GuessSummaryText, StringComparison.Ordinal);
+        Assert.Contains("Pippi Langstrumpf-Pippi Langstrumpf_", viewModel.GuessSummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SearchSeriesAsync_AutoSelectsPreferredSeriesAndEpisode()
     {
         var store = new FakeMetadataStore(new AppMetadataSettings

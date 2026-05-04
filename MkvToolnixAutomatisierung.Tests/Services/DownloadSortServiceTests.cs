@@ -908,6 +908,24 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Contains(applyResult.LogLines, line => line.Contains("reserviert", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Apply_LogsEachMovedFile_WithDestinationFolderAndFileName()
+    {
+        var videoPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.mp4");
+        var textPath = Path.Combine(_rootDirectory, "Serie-Folge-1234.txt");
+        CreateEmptyFile(videoPath);
+        CreateCompanionText(textPath, "Serie", "Folge");
+
+        var applyResult = _service.Apply(
+            _rootDirectory,
+            [new DownloadSortMoveRequest("Serie-Folge", [videoPath, textPath], "Serie")],
+            []);
+
+        Assert.Equal(2, applyResult.MovedFileCount);
+        Assert.Contains(applyResult.LogLines, line => line == "VERSCHOBEN: 'Serie-Folge-1234.mp4' -> 'Serie\\Serie-Folge-1234.mp4'");
+        Assert.Contains(applyResult.LogLines, line => line == "VERSCHOBEN: 'Serie-Folge-1234.txt' -> 'Serie\\Serie-Folge-1234.txt'");
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_rootDirectory))
