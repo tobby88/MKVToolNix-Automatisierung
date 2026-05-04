@@ -53,7 +53,7 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task OfferBatchDoneCleanupAsync_KeepsSelectedSourceDirectory_WhenDoneFolderIsEmpty()
+    public async Task OfferBatchDoneCleanupAsync_DeletesEmptySelectedSourceDirectory_WhenDoneFolderIsEmpty()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "batch-source");
         var doneDirectory = Path.Combine(sourceDirectory, "done");
@@ -72,7 +72,7 @@ public sealed class CleanupCancellationViewModelTests : IDisposable
             new BatchRunProgressTracker(1, static (_, _) => { }));
 
         Assert.Contains(doneDirectory, cleanup.DeletedEmptyDirectories);
-        Assert.DoesNotContain(sourceDirectory, cleanup.DeletedEmptyDirectories);
+        Assert.Contains(sourceDirectory, cleanup.DeletedEmptyDirectories);
     }
 
     [Fact]

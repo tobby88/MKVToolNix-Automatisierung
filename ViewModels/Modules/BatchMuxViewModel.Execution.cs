@@ -299,16 +299,35 @@ internal sealed partial class BatchMuxViewModel
     }
 
     /// <summary>
-    /// Der Done-Ordner ist ein internes Zwischenziel und darf verschwinden. Der gewählte
-    /// Batch-Quellordner bleibt dagegen erhalten, damit die Ansicht nach dem Cleanup weiter
-    /// scan- und bedienbar bleibt.
+    /// Der Done-Ordner ist ein internes Zwischenziel und darf verschwinden. Danach darf auch
+    /// der gewählte Batch-Quellordner verschwinden, wenn er durch den Lauf leer geworden ist
+    /// (typisch: ein vorher einsortierter Serien-Unterordner unterhalb der MediathekView-Downloads).
+    /// Nicht leere Ordner bleiben durch <see cref="IEpisodeCleanupService.DeleteDirectoryIfEmpty(string?)"/>
+    /// automatisch erhalten.
     /// </summary>
     private void DeleteEmptyBatchCleanupDirectory(string doneDirectory)
     {
         _services.Cleanup.DeleteDirectoryIfEmpty(doneDirectory);
-        if (!string.IsNullOrWhiteSpace(SourceDirectory) && !Directory.Exists(SourceDirectory))
+        if (!string.IsNullOrWhiteSpace(SourceDirectory) && !IsFileSystemRoot(SourceDirectory))
         {
-            Directory.CreateDirectory(SourceDirectory);
+            _services.Cleanup.DeleteDirectoryIfEmpty(SourceDirectory);
+        }
+    }
+
+    private static bool IsFileSystemRoot(string directoryPath)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(directoryPath);
+            var rootPath = Path.GetPathRoot(fullPath);
+            return string.Equals(
+                fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                rootPath?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return true;
         }
     }
 
