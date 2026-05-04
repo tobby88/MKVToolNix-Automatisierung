@@ -112,50 +112,31 @@ internal static class Program
         int height)
     {
         var host = CreateScreenshotHost(selectedModuleTitle, view);
-        var window = new Window
-        {
-            Content = host,
-            Width = width,
-            Height = height,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            ShowInTaskbar = false,
-            ShowActivated = false,
-            Background = Brushes.Transparent,
-            AllowsTransparency = false,
-            Left = -20000,
-            Top = -20000
-        };
+        host.Width = width;
+        host.Height = height;
 
-        try
-        {
-            window.Show();
-            window.UpdateLayout();
-            DrainDispatcher();
+        // Do not attach the visual tree to a hidden Window. GitHub's hosted Windows
+        // runners can expose a smaller virtual desktop than our target screenshot
+        // size, which makes WPF arrange the content too small and leaves transparent
+        // pixels on the right and bottom of the PNG.
+        host.Measure(new Size(width, height));
+        host.Arrange(new Rect(0, 0, width, height));
+        host.UpdateLayout();
+        DrainDispatcher();
 
-            host.Measure(new Size(width, height));
-            host.Arrange(new Rect(0, 0, width, height));
-            host.UpdateLayout();
-            DrainDispatcher();
+        var renderBitmap = new RenderTargetBitmap(
+            width,
+            height,
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        renderBitmap.Render(host);
 
-            var renderBitmap = new RenderTargetBitmap(
-                width,
-                height,
-                96,
-                96,
-                PixelFormats.Pbgra32);
-            renderBitmap.Render(host);
-
-            var outputPath = Path.Combine(outputDirectory, fileName);
-            using var stream = File.Create(outputPath);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
-            encoder.Save(stream);
-        }
-        finally
-        {
-            window.Close();
-        }
+        var outputPath = Path.Combine(outputDirectory, fileName);
+        using var stream = File.Create(outputPath);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
+        encoder.Save(stream);
     }
 
     /// <summary>
