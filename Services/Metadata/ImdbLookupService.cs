@@ -21,6 +21,8 @@ internal sealed class ImdbLookupService
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbSeriesSearchResult>> _seriesSearchCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Task<IReadOnlyList<ImdbSeriesSearchResult>>> _seriesSearchInFlight = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbSeasonRecord>> _seasonCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Task<IReadOnlyList<ImdbSeasonRecord>>> _seasonLoadsInFlight = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbEpisodeRecord>> _episodeCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Task<IReadOnlyList<ImdbEpisodeRecord>>> _episodeLoadsInFlight = new(StringComparer.OrdinalIgnoreCase);
 
@@ -88,6 +90,40 @@ internal sealed class ImdbLookupService
                 _episodeCache,
                 _episodeLoadsInFlight,
                 () => FetchEpisodesAsync(seriesId, normalizedPreferredSeason, CancellationToken.None)));
+
+        return await requestTask.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Lädt die von IMDb gemeldeten Staffeln einer Serie.
+    /// </summary>
+    /// <remarks>
+    /// Der Dialog nutzt diese Liste, um bei großen Serien nur tatsächlich vorhandene IMDb-Staffeln
+    /// zur Navigation anzubieten. Der Dienst cached die Antwort getrennt von den Episodenlisten,
+    /// damit die UI nicht zusätzliche Provider-Anfragen erzeugt, wenn anschließend Episoden geladen werden.
+    /// </remarks>
+    public async Task<IReadOnlyList<ImdbSeasonRecord>> LoadSeasonsAsync(
+        string seriesId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(seriesId))
+        {
+            return [];
+        }
+
+        var normalizedSeriesId = seriesId.Trim();
+        if (_seasonCache.TryGetValue(normalizedSeriesId, out var cachedResults))
+        {
+            return cachedResults;
+        }
+
+        var requestTask = _seasonLoadsInFlight.GetOrAdd(
+            normalizedSeriesId,
+            _ => ExecuteSharedLookupAsync(
+                normalizedSeriesId,
+                _seasonCache,
+                _seasonLoadsInFlight,
+                () => FetchSeasonsAsync(normalizedSeriesId, CancellationToken.None)));
 
         return await requestTask.WaitAsync(cancellationToken);
     }
@@ -196,7 +232,7 @@ internal sealed class ImdbLookupService
         return episodes;
     }
 
-    private async Task<IReadOnlyList<ImdbSeasonRecord>> LoadSeasonsAsync(
+    private async Task<IReadOnlyList<ImdbSeasonRecord>> FetchSeasonsAsync(
         string seriesId,
         CancellationToken cancellationToken)
     {
@@ -210,6 +246,7 @@ internal sealed class ImdbLookupService
 
         return payload.Seasons
             .Where(static season => !string.IsNullOrWhiteSpace(season.Season))
+            .Select(static season => new ImdbSeasonRecord(season.Season!.Trim(), season.EpisodeCount))
             .OrderBy(static season => ParseSortableSeason(season.Season))
             .ToList();
     }
@@ -233,7 +270,7 @@ internal sealed class ImdbLookupService
         // Bei sehr großen Serien ist ein vollständiger Abruf oft teurer als der freie Provider erlaubt.
         // Wenn IMDb die erkannte Staffel nicht in der Season-Liste meldet, versuchen wir genau diese
         // Staffel direkt statt dutzende andere Staffeln spekulativ zu laden.
-        return [new ImdbSeasonRecord { Season = preferredSeason }];
+        return [new ImdbSeasonRecord(preferredSeason, EpisodeCount: null)];
     }
 
     private static Uri BuildEpisodesRequestUri(string seriesId, string season, string? pageToken)
@@ -307,12 +344,14 @@ internal sealed class ImdbLookupService
 
     private sealed class ImdbSeasonsResponse
     {
-        public List<ImdbSeasonRecord> Seasons { get; init; } = [];
+        public List<ImdbSeasonPayload> Seasons { get; init; } = [];
     }
 
-    private sealed class ImdbSeasonRecord
+    private sealed class ImdbSeasonPayload
     {
         public string? Season { get; init; }
+
+        public int? EpisodeCount { get; init; }
     }
 
     private sealed class ImdbEpisodesResponse

@@ -181,6 +181,73 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public async Task LoadNextEpisodeSeasonAsync_SkipsSeasonsMissingFromApiList()
+    {
+        var requestedUris = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestedUris.Add(request.RequestUri!.ToString());
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/search/titles?query=Versatzserie" => CreateJsonResponse(
+                    """
+                    {
+                      "titles": [
+                        { "id": "tt0100002", "type": "tvSeries", "primaryTitle": "Versatzserie", "originalTitle": "Versatzserie", "startYear": 2000, "endYear": null }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100002/seasons" => CreateJsonResponse(
+                    """
+                    {
+                      "seasons": [
+                        { "season": "1", "episodeCount": 1 },
+                        { "season": "3", "episodeCount": 1 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100002/episodes?season=1" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000101", "title": "Ziel", "season": "1", "episodeNumber": 1 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0100002/episodes?season=3" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt0000301", "title": "Ziel", "season": "3", "episodeNumber": 1 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            new EpisodeMetadataGuess("Versatzserie", "Ziel", "01", "01"),
+            currentImdbId: null);
+
+        await vm.InitializeAsync();
+
+        Assert.Equal(["1", "3"], vm.AvailableEpisodeSeasons);
+        Assert.Equal("1", vm.EpisodeSeasonText);
+        Assert.True(vm.CanLoadNextEpisodeSeason);
+
+        await vm.LoadNextEpisodeSeasonAsync();
+
+        Assert.Equal("3", vm.EpisodeSeasonText);
+        Assert.Equal("tt0000301", vm.ImdbInput);
+        Assert.False(vm.CanLoadNextEpisodeSeason);
+        Assert.DoesNotContain(
+            "https://api.imdbapi.dev/titles/tt0100002/episodes?season=2",
+            requestedUris);
+    }
+
+    [Fact]
     public async Task InitializeAsync_FallsBackToBrowser_WhenApiUnavailableInAutoMode()
     {
         using var httpClient = new HttpClient(new FailingHttpMessageHandler());

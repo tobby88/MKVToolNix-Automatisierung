@@ -121,10 +121,11 @@
                                     Content="Staffel -"
                                     IsEnabled="{Binding CanLoadPreviousEpisodeSeason}"
                                     ToolTip="Lädt die vorherige IMDb-Staffel der ausgewählten Serie." />
-                            <TextBox Grid.Column="4"
-                                     HorizontalContentAlignment="Center"
-                                     Text="{Binding EpisodeSeasonText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="IMDb-Staffel, die gezielt über die API geladen wird. Bei Serien mit IMDb-Versatz hier korrigieren." />
+                            <ComboBox Grid.Column="4"
+                                      HorizontalContentAlignment="Center"
+                                      ItemsSource="{Binding AvailableEpisodeSeasons}"
+                                      SelectedItem="{Binding EpisodeSeasonText, Mode=TwoWay}"
+                                      ToolTip="IMDb-Staffel, die gezielt über die API geladen wird. Es werden nur Staffeln angeboten, die IMDb für die Serie meldet." />
                             <Button Grid.Column="6"
                                     Padding="8,4"
                                     Click="LoadSeasonButton_Click"

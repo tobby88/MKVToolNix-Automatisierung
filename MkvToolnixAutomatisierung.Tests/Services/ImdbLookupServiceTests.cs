@@ -153,6 +153,46 @@ public sealed class ImdbLookupServiceTests
     }
 
     [Fact]
+    public async Task LoadSeasonsAsync_ReturnsSortedSeasonList()
+    {
+        var requestedUris = new List<string>();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            requestedUris.Add(request.RequestUri!.ToString());
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/titles/tt0108778/seasons" => CreateJsonResponse(
+                    """
+                    {
+                      "seasons": [
+                        { "season": "3", "episodeCount": 8 },
+                        { "season": "1", "episodeCount": 10 },
+                        { "season": "2", "episodeCount": 9 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var service = new ImdbLookupService(httpClient);
+
+        var firstLoad = await service.LoadSeasonsAsync("tt0108778");
+        var secondLoad = await service.LoadSeasonsAsync("tt0108778");
+
+        Assert.Collection(
+            firstLoad,
+            first =>
+            {
+                Assert.Equal("1", first.Season);
+                Assert.Equal(10, first.EpisodeCount);
+            },
+            second => Assert.Equal("2", second.Season),
+            third => Assert.Equal("3", third.Season));
+        Assert.Same(firstLoad, secondLoad);
+        Assert.Single(requestedUris);
+    }
+
+    [Fact]
     public async Task LoadEpisodesAsync_Stops_WhenPageTokenRepeats()
     {
         using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>

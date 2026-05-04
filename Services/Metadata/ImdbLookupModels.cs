@@ -19,3 +19,10 @@ internal sealed record ImdbEpisodeRecord(
     string Title,
     string Season,
     int? EpisodeNumber);
+
+/// <summary>
+/// Minimaler Staffeleintrag aus der freien IMDb-API.
+/// </summary>
+internal sealed record ImdbSeasonRecord(
+    string Season,
+    int? EpisodeCount);

@@ -27,11 +27,13 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private readonly ImdbLookupMode _lookupMode;
     private readonly List<ImdbSeriesSearchResult> _seriesResults = [];
     private readonly List<ImdbEpisodeRecord> _episodes = [];
+    private readonly List<string> _availableEpisodeSeasons = [];
     private string _episodeSeasonText;
     private bool _isBusy;
     private bool _isInitialized;
     private bool _suppressSeriesSelectionChanged;
     private bool _browserFallbackActive;
+    private string? _loadedSeasonSeriesId;
     private string _seriesSearchText;
     private string _episodeSearchText;
     private string _searchText;
@@ -145,6 +147,11 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<SelectableEpisodeItem> EpisodeResults { get; } = [];
 
     /// <summary>
+    /// Von IMDb gemeldete Staffeln der aktuell gewählten Serie.
+    /// </summary>
+    public ObservableCollection<string> AvailableEpisodeSeasons { get; } = [];
+
+    /// <summary>
     /// Sichtbare Browserhilfen für den manuellen IMDb-Abgleich.
     /// </summary>
     public ObservableCollection<SearchOptionItem> SearchOptions { get; } = [];
@@ -184,6 +191,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
             if (!_suppressSeriesSelectionChanged)
             {
+                ClearEpisodeSeasonResults();
                 ReplaceItems(EpisodeResults, []);
                 SelectedEpisodeItem = null;
                 UpdateComparisonSummary();
@@ -320,14 +328,13 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         || !string.IsNullOrWhiteSpace(SearchText);
 
     public bool CanLoadEpisodeSeason => SelectedSeriesItem is not null
-        && NormalizeSeasonText(EpisodeSeasonText) is not null;
+        && ResolveAvailableEpisodeSeason(EpisodeSeasonText) is not null;
 
     public bool CanLoadPreviousEpisodeSeason => SelectedSeriesItem is not null
-        && TryParseEpisodeSeason(EpisodeSeasonText, out var season)
-        && season > 0;
+        && TryFindAdjacentEpisodeSeason(-1, out _);
 
     public bool CanLoadNextEpisodeSeason => SelectedSeriesItem is not null
-        && TryParseEpisodeSeason(EpisodeSeasonText, out _);
+        && TryFindAdjacentEpisodeSeason(1, out _);
 
     public bool CanApply => TryNormalizeImdbId(ImdbInput, out _);
 
@@ -372,6 +379,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             ReplaceItems(SeriesResults, _seriesResults.Select(result => new SelectableSeriesItem(result)));
 
             _episodes.Clear();
+            ClearEpisodeSeasonResults();
             ReplaceItems(EpisodeResults, []);
             SelectedEpisodeItem = null;
 
@@ -561,10 +569,20 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         try
         {
+            SetBusy(true, "Lade IMDb-Staffelliste...");
+            await EnsureEpisodeSeasonsLoadedForSelectedSeriesAsync();
+            if (!NormalizeEpisodeSeasonSelection())
+            {
+                ReplaceItems(EpisodeResults, []);
+                SelectedEpisodeItem = null;
+                UpdateComparisonSummary();
+                return;
+            }
+
             SetBusy(true, BuildEpisodeLoadStatus(EpisodeSeasonText));
             var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, EpisodeSeasonText);
             _episodes.Clear();
-            _episodes.AddRange(episodes);
+            _episodes.AddRange(FilterEpisodesBySelectedSeason(episodes, EpisodeSeasonText));
             ApplyEpisodeFilter(autoSelectBest);
 
             if (SelectedEpisodeItem is null)
@@ -600,32 +618,69 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         if (offset != 0)
         {
-            if (!TryParseEpisodeSeason(EpisodeSeasonText, out var season))
+            if (!TryFindAdjacentEpisodeSeason(offset, out var adjacentSeason))
             {
-                StatusText = "Bitte zuerst eine numerische IMDb-Staffel eingeben.";
+                StatusText = offset < 0
+                    ? "Vor der aktuell gewählten IMDb-Staffel gibt es laut API keine weitere Staffel."
+                    : "Nach der aktuell gewählten IMDb-Staffel gibt es laut API keine weitere Staffel.";
                 return;
             }
 
-            var targetSeason = season + offset;
-            if (targetSeason < 0)
-            {
-                StatusText = "Vor Staffel 0 kann keine IMDb-Staffel geladen werden.";
-                return;
-            }
-
-            EpisodeSeasonText = targetSeason.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            EpisodeSeasonText = adjacentSeason;
         }
-        else if (NormalizeSeasonText(EpisodeSeasonText) is string normalizedSeason)
+        else if (ResolveAvailableEpisodeSeason(EpisodeSeasonText) is string selectedSeason)
         {
-            EpisodeSeasonText = normalizedSeason;
+            EpisodeSeasonText = selectedSeason;
         }
         else
         {
-            StatusText = "Bitte zuerst eine IMDb-Staffel eingeben.";
+            StatusText = "Bitte zuerst eine von IMDb gemeldete Staffel auswählen.";
             return;
         }
 
         await LoadEpisodesForSelectedSeriesAsync(autoSelectBest);
+    }
+
+    private async Task EnsureEpisodeSeasonsLoadedForSelectedSeriesAsync()
+    {
+        if (SelectedSeriesItem is null)
+        {
+            ClearEpisodeSeasonResults();
+            return;
+        }
+
+        var seriesId = SelectedSeriesItem.Series.Id;
+        if (string.Equals(_loadedSeasonSeriesId, seriesId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var seasons = await _lookupService.LoadSeasonsAsync(seriesId);
+        _loadedSeasonSeriesId = seriesId;
+        _availableEpisodeSeasons.Clear();
+        _availableEpisodeSeasons.AddRange(seasons
+            .Select(season => NormalizeSeasonText(season.Season))
+            .Where(season => !string.IsNullOrWhiteSpace(season))
+            .Select(season => season!)
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+        ReplaceItems(AvailableEpisodeSeasons, _availableEpisodeSeasons);
+        NotifyEpisodeSeasonCommandPropertiesChanged();
+    }
+
+    private bool NormalizeEpisodeSeasonSelection()
+    {
+        var selectedSeason = ResolveAvailableEpisodeSeason(EpisodeSeasonText)
+                             ?? SelectClosestAvailableEpisodeSeason(EpisodeSeasonText)
+                             ?? _availableEpisodeSeasons.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(selectedSeason))
+        {
+            StatusText = "IMDb meldet für diese Serie keine Staffeln.";
+            NotifyEpisodeSeasonCommandPropertiesChanged();
+            return false;
+        }
+
+        EpisodeSeasonText = selectedSeason;
+        return true;
     }
 
     private void ApplyEpisodeFilter(bool autoSelectBest)
@@ -678,6 +733,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     {
         _seriesResults.Clear();
         _episodes.Clear();
+        ClearEpisodeSeasonResults();
         ReplaceItems(SeriesResults, []);
         ReplaceItems(EpisodeResults, []);
         _suppressSeriesSelectionChanged = true;
@@ -685,6 +741,14 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         _suppressSeriesSelectionChanged = false;
         SelectedEpisodeItem = null;
         UpdateComparisonSummary();
+    }
+
+    private void ClearEpisodeSeasonResults()
+    {
+        _loadedSeasonSeriesId = null;
+        _availableEpisodeSeasons.Clear();
+        ReplaceItems(AvailableEpisodeSeasons, []);
+        NotifyEpisodeSeasonCommandPropertiesChanged();
     }
 
     private void UpdateComparisonSummary()
@@ -897,6 +961,24 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             .ToList();
     }
 
+    private static IReadOnlyList<ImdbEpisodeRecord> FilterEpisodesBySelectedSeason(
+        IEnumerable<ImdbEpisodeRecord> episodes,
+        string selectedSeason)
+    {
+        var normalizedSelectedSeason = NormalizeSeasonText(selectedSeason);
+        if (string.IsNullOrWhiteSpace(normalizedSelectedSeason))
+        {
+            return episodes.ToList();
+        }
+
+        return episodes
+            .Where(episode => string.Equals(
+                NormalizeSeasonText(episode.Season),
+                normalizedSelectedSeason,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     private static string BuildDefaultSearchText(EpisodeMetadataGuess? guess)
     {
         return guess is null
@@ -1019,6 +1101,71 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private static bool TryParseEpisodeSeason(string seasonText, out int season)
     {
         return int.TryParse(NormalizeSeasonText(seasonText), out season);
+    }
+
+    private string? ResolveAvailableEpisodeSeason(string? seasonText)
+    {
+        var normalizedSeason = NormalizeSeasonText(seasonText);
+        if (string.IsNullOrWhiteSpace(normalizedSeason))
+        {
+            return null;
+        }
+
+        return _availableEpisodeSeasons.Count == 0
+            ? null
+            : _availableEpisodeSeasons.FirstOrDefault(season =>
+                string.Equals(season, normalizedSeason, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string? SelectClosestAvailableEpisodeSeason(string? seasonText)
+    {
+        if (_availableEpisodeSeasons.Count == 0 || !TryParseEpisodeSeason(seasonText ?? string.Empty, out var preferredSeason))
+        {
+            return null;
+        }
+
+        return _availableEpisodeSeasons
+            .Select((season, index) => new
+            {
+                Season = season,
+                Index = index,
+                SortValue = ParseSortableSeason(season)
+            })
+            .Where(item => item.SortValue != int.MaxValue)
+            .OrderBy(item => Math.Abs(item.SortValue - preferredSeason))
+            .ThenBy(item => item.SortValue)
+            .ThenBy(item => item.Index)
+            .Select(item => item.Season)
+            .FirstOrDefault();
+    }
+
+    private bool TryFindAdjacentEpisodeSeason(int offset, out string season)
+    {
+        season = string.Empty;
+        if (_availableEpisodeSeasons.Count == 0 || offset == 0)
+        {
+            return false;
+        }
+
+        var currentSeason = ResolveAvailableEpisodeSeason(EpisodeSeasonText)
+                            ?? SelectClosestAvailableEpisodeSeason(EpisodeSeasonText);
+        var currentIndex = string.IsNullOrWhiteSpace(currentSeason)
+            ? -1
+            : _availableEpisodeSeasons.FindIndex(candidate =>
+                string.Equals(candidate, currentSeason, StringComparison.OrdinalIgnoreCase));
+        if (currentIndex < 0)
+        {
+            return false;
+        }
+
+        var adjacentIndex = currentIndex + offset;
+        if (adjacentIndex < 0 || adjacentIndex >= _availableEpisodeSeasons.Count)
+        {
+            return false;
+        }
+
+        season = _availableEpisodeSeasons[adjacentIndex];
+        return true;
     }
 
     private static string? NormalizeSeasonText(string? seasonText)
