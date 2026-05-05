@@ -293,7 +293,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         OnPropertyChanged(nameof(NfoPath));
         SupportsProviderIdSync = true;
         _nfoProviderIds = analysis.NfoProviderIds;
-        _embyProviderIds = BuildProviderIdsFromEmbyItem(analysis.EmbyItem);
+        var freshEmbyItem = analysis.EmbyItem;
+        if (freshEmbyItem is not null)
+        {
+            _embyProviderIds = BuildProviderIdsFromEmbyItem(freshEmbyItem);
+            EmbyItemId = freshEmbyItem.Id;
+        }
 
         var providerIds = ProviderIds
             .MergeFallback(_reportedProviderIds)
@@ -309,7 +314,6 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
         RefreshProviderReviewStateFromCurrentSources();
 
-        EmbyItemId = analysis.EmbyItem?.Id ?? string.Empty;
         if (!analysis.MediaFileExists)
         {
             SetStatus("Fehlt", "Die MKV-Datei wurde nicht gefunden.");
@@ -345,10 +349,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         var providerMismatchNote = BuildProviderMismatchNote(
             analysis.NfoProviderIds.TvdbId,
-            analysis.EmbyItem?.GetProviderId("Tvdb") ?? analysis.EmbyItem?.GetProviderId("TvdbSeries"),
+            freshEmbyItem?.GetProviderId("Tvdb") ?? freshEmbyItem?.GetProviderId("TvdbSeries") ?? _embyProviderIds.TvdbId,
             analysis.NfoProviderIds.ImdbId,
-            analysis.EmbyItem?.GetProviderId("Imdb"));
-        if (analysis.EmbyItem is null)
+            freshEmbyItem?.GetProviderId("Imdb") ?? _embyProviderIds.ImdbId);
+        var embyItemKnown = freshEmbyItem is not null || !string.IsNullOrWhiteSpace(EmbyItemId);
+        if (!embyItemKnown)
         {
             SetStatus(
                 HasPendingProviderReview ? "Prüfung offen" : HasCompleteProviderIds ? "Lokal bereit" : "IDs fehlen",

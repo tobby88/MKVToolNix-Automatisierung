@@ -537,6 +537,69 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task RunSyncCommand_ReusesPreviouslyKnownEmbyItem_WhenLaterAnalysisMissesPath()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, "<episodedetails><title>Pilot</title></episodedetails>");
+
+            var embyClient = new RecordingRefreshEmbyClient();
+            var vm = CreateViewModel(
+                embyClient: embyClient,
+                configuredEmbySettings: new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+            var item = new EmbySyncItemViewModel(mediaPath, new EmbyProviderIds("12345", "tt1234567"));
+            item.ApplyAnalysis(new EmbyFileAnalysis(
+                item.MediaFilePath,
+                nfoPath,
+                MediaFileExists: true,
+                NfoExists: true,
+                NfoProviderIds: EmbyProviderIds.Empty,
+                EmbyItem: new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    mediaPath,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)),
+                WarningMessage: null));
+            item.ApplyAnalysis(new EmbyFileAnalysis(
+                item.MediaFilePath,
+                nfoPath,
+                MediaFileExists: true,
+                NfoExists: true,
+                NfoProviderIds: EmbyProviderIds.Empty,
+                EmbyItem: null,
+                WarningMessage: null));
+            item.ApplyImdbSelection("tt1234567");
+            vm.Items.Add(item);
+            vm.SelectedItem = item;
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("Aktualisiert", item.StatusText);
+            Assert.Equal("emby-1", item.EmbyItemId);
+            Assert.Equal(1, embyClient.RefreshCallCount);
+            Assert.Equal("emby-1", embyClient.LastRefreshItemId);
+            Assert.DoesNotContain("erneuter Pfadsuche", item.Note, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_WritesNoImdbDecision_WhenNoOtherProviderIdIsSet()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
