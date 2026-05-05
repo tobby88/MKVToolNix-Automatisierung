@@ -703,8 +703,8 @@ public sealed class EmbySyncViewModelTests
             const string originalNfo = """
                 <episodedetails>
                   <title>Pilot</title>
-                  <uniqueid type="tvdb" default="true">12345</uniqueid>
-                  <uniqueid type="imdb">tt1234567</uniqueid>
+                  <uniqueid type="tvdb">12345</uniqueid>
+                  <uniqueid type="imdb" default="true">tt1234567</uniqueid>
                 </episodedetails>
                 """;
             File.WriteAllText(nfoPath, originalNfo);

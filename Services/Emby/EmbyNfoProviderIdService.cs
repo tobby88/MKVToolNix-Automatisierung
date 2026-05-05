@@ -284,6 +284,11 @@ internal sealed class EmbyNfoProviderIdService
                 "uniqueid",
                 new XAttribute("type", type),
                 value);
+            if (isDefault)
+            {
+                uniqueId.SetAttributeValue("default", "true");
+            }
+
             root.Add(uniqueId);
             changed = true;
         }
@@ -302,20 +307,9 @@ internal sealed class EmbyNfoProviderIdService
             }
         }
 
-        var currentDefaultValue = (string?)uniqueId.Attribute("default");
-        if (isDefault
-            && !string.Equals(currentDefaultValue, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            uniqueId.SetAttributeValue("default", "true");
-            changed = true;
-        }
-        else if (!isDefault
-                 && string.Equals(currentDefaultValue, "true", StringComparison.OrdinalIgnoreCase))
-        {
-            uniqueId.SetAttributeValue("default", null);
-            changed = true;
-        }
-
+        // Emby may rewrite the provider-default marker during metadata refreshes. For this
+        // sync step the provider ID value is authoritative; touching only "default" would
+        // create an endless local-write/server-refresh loop without changing metadata.
         return changed;
     }
 

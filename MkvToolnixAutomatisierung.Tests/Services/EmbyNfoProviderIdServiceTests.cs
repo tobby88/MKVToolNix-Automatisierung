@@ -126,7 +126,7 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.True(result.NfoChanged);
 
             var updatedText = File.ReadAllText(nfoPath);
-            Assert.Contains("""<uniqueid type="tvdb" default="true">12345</uniqueid>""", updatedText);
+            Assert.Contains("""<uniqueid type="tvdb">12345</uniqueid>""", updatedText);
             Assert.Contains("""<uniqueid type="imdb">tt9876543</uniqueid>""", updatedText);
             Assert.Contains("<tvdbid>12345</tvdbid>", updatedText);
             Assert.Contains("<imdbid>tt9876543</imdbid>", updatedText);
@@ -150,8 +150,8 @@ public sealed class EmbyNfoProviderIdServiceTests
             const string originalNfo = """
                 <episodedetails>
                   <title>Episode</title>
-                  <uniqueid type="tvdb" default="true">12345</uniqueid>
-                  <uniqueid type="imdb" default="false">tt9876543</uniqueid>
+                  <uniqueid type="tvdb">12345</uniqueid>
+                  <uniqueid type="imdb" default="true">tt9876543</uniqueid>
                 </episodedetails>
                 """;
             File.WriteAllText(nfoPath, originalNfo);
@@ -231,7 +231,7 @@ public sealed class EmbyNfoProviderIdServiceTests
             Assert.Single(uniqueIds, element => (string?)element.Attribute("type") == "tvdb");
             Assert.Single(uniqueIds, element => (string?)element.Attribute("type") == "imdb");
             Assert.Equal("true", uniqueIds.Single(element => (string?)element.Attribute("type") == "tvdb").Attribute("default")?.Value);
-            Assert.Null(uniqueIds.Single(element => (string?)element.Attribute("type") == "imdb").Attribute("default"));
+            Assert.Equal("true", uniqueIds.Single(element => (string?)element.Attribute("type") == "imdb").Attribute("default")?.Value);
             Assert.Single(updatedDocument.Root.Elements("tvdbid"));
             Assert.Single(updatedDocument.Root.Elements("imdbid"));
         }
