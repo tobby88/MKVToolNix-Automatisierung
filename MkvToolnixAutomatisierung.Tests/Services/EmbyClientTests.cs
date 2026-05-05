@@ -154,6 +154,59 @@ public sealed class EmbyClientTests
     }
 
     [Fact]
+    public async Task FindItemByPathAsync_AcceptsEquivalentSmbPathReturnedForTranslatedPath()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "Id": "item-1",
+                      "Name": "Wunschkind",
+                      "Path": "smb://t-samba/raid/Videos/Serien/Der Alte/Season 55/Der Alte - S55E01 - Wunschkind.mkv"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var item = await client.FindItemByPathAsync(
+            CreateSettings(),
+            "/mnt/raid/Videos/Serien/Der Alte/Season 55/Der Alte - S55E01 - Wunschkind.mkv");
+
+        Assert.NotNull(item);
+        Assert.Equal("item-1", item!.Id);
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_ReturnsNull_WhenOnlyFileNameMatches()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse(
+                """
+                {
+                  "Items": [
+                    {
+                      "Id": "item-1",
+                      "Name": "Pilot",
+                      "Path": "smb://t-samba/other/Library/Pilot.mkv"
+                    }
+                  ]
+                }
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var item = await client.FindItemByPathAsync(CreateSettings(), "/mnt/raid/Videos/Serien/Pilot.mkv");
+
+        Assert.Null(item);
+    }
+
+    [Fact]
     public async Task GetLibrariesAsync_ParsesLocationsAndRefreshStatus()
     {
         using var httpClient = new HttpClient(new StubHttpMessageHandler

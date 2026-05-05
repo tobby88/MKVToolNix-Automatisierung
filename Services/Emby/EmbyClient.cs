@@ -153,7 +153,8 @@ internal sealed class EmbyClient : IEmbyClient
                 continue;
             }
 
-            if (AreSameEmbyPath(item.Path, mediaFilePath))
+            if (AreSameEmbyPath(item.Path, mediaFilePath)
+                || AreEquivalentEmbyPath(item.Path, mediaFilePath))
             {
                 return item;
             }
@@ -390,6 +391,67 @@ internal sealed class EmbyClient : IEmbyClient
         return string.IsNullOrWhiteSpace(path)
             ? null
             : path.Replace('\\', '/').TrimEnd('/');
+    }
+
+    private static bool AreEquivalentEmbyPath(string? left, string? right)
+    {
+        var leftSegments = GetComparablePathSegments(left);
+        var rightSegments = GetComparablePathSegments(right);
+        if (leftSegments.Count == 0 || rightSegments.Count == 0)
+        {
+            return false;
+        }
+
+        var commonSuffixSegmentCount = CountCommonSuffixSegments(leftSegments, rightSegments);
+        var requiredSuffixSegmentCount = Math.Min(3, Math.Min(leftSegments.Count, rightSegments.Count));
+        return commonSuffixSegmentCount >= requiredSuffixSegmentCount;
+    }
+
+    private static int CountCommonSuffixSegments(IReadOnlyList<string> leftSegments, IReadOnlyList<string> rightSegments)
+    {
+        var count = 0;
+        while (count < leftSegments.Count
+               && count < rightSegments.Count
+               && string.Equals(
+                   leftSegments[leftSegments.Count - 1 - count],
+                   rightSegments[rightSegments.Count - 1 - count],
+                   StringComparison.OrdinalIgnoreCase))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static IReadOnlyList<string> GetComparablePathSegments(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return [];
+        }
+
+        var comparablePath = path.Trim();
+        if (comparablePath.Contains("://", StringComparison.Ordinal)
+            && Uri.TryCreate(comparablePath, UriKind.Absolute, out var uri)
+            && !string.IsNullOrWhiteSpace(uri.AbsolutePath))
+        {
+            // Emby may resolve a /mnt/... lookup but return an smb://... item path.
+            // For equality purposes only the filesystem path below the share root is relevant.
+            comparablePath = Uri.UnescapeDataString(uri.AbsolutePath);
+        }
+
+        return comparablePath
+            .Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static segment => !LooksLikeWindowsDrive(segment))
+            .ToList();
+    }
+
+    private static bool LooksLikeWindowsDrive(string segment)
+    {
+        return segment.Length == 2
+               && char.IsLetter(segment[0])
+               && segment[1] == ':';
     }
 
     private static EmbyLibraryFolder? ParseLibraryFolder(JsonElement itemElement)
