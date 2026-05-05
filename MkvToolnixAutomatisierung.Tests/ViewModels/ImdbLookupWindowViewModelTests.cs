@@ -114,6 +114,106 @@ public sealed class ImdbLookupWindowViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_AutoSelectsUniqueFuzzyEpisodeTitle()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/search/titles?query=Der Alte" => CreateJsonResponse(
+                    """
+                    {
+                      "titles": [
+                        { "id": "tt0075474", "type": "tvSeries", "primaryTitle": "The Old Fox", "originalTitle": "Der Alte", "startYear": 1977, "endYear": null }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0075474/seasons" => CreateJsonResponse(
+                    """
+                    {
+                      "seasons": [
+                        { "season": "53", "episodeCount": 8 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0075474/episodes?season=53" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt40075198", "title": "Wunschkind", "season": "53", "episodeNumber": 1 },
+                        { "id": "tt40659530", "title": "Die Wahrheit im Dunklen", "season": "53", "episodeNumber": 2 },
+                        { "id": "tt40660083", "title": "Mia", "season": "53", "episodeNumber": 3 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02"),
+            currentImdbId: null);
+
+        await vm.InitializeAsync();
+
+        Assert.Equal("53", vm.EpisodeSeasonText);
+        var episode = Assert.Single(vm.EpisodeResults);
+        Assert.Equal("tt40659530", episode.Episode.Id);
+        Assert.Equal("tt40659530", vm.SelectedEpisodeItem?.Episode.Id);
+        Assert.Equal("tt40659530", vm.ImdbInput);
+        Assert.Contains("unscharfer Titel", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_DoesNotAutoSelectUnrelatedTitle_ByEpisodeNumberOnly()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(request =>
+        {
+            return request.RequestUri?.ToString() switch
+            {
+                "https://api.imdbapi.dev/search/titles?query=Der Alte" => CreateJsonResponse(
+                    """
+                    {
+                      "titles": [
+                        { "id": "tt0075474", "type": "tvSeries", "primaryTitle": "The Old Fox", "originalTitle": "Der Alte", "startYear": 1977, "endYear": null }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0075474/seasons" => CreateJsonResponse(
+                    """
+                    {
+                      "seasons": [
+                        { "season": "53", "episodeCount": 8 }
+                      ]
+                    }
+                    """),
+                "https://api.imdbapi.dev/titles/tt0075474/episodes?season=53" => CreateJsonResponse(
+                    """
+                    {
+                      "episodes": [
+                        { "id": "tt40659530", "title": "Völlig anderer Fall", "season": "53", "episodeNumber": 2 }
+                      ]
+                    }
+                    """),
+                _ => throw new Xunit.Sdk.XunitException($"Unexpected URI: {request.RequestUri}")
+            };
+        }));
+        var vm = new ImdbLookupWindowViewModel(
+            new ImdbLookupService(httpClient),
+            ImdbLookupMode.Auto,
+            new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02"),
+            currentImdbId: null);
+
+        await vm.InitializeAsync();
+
+        Assert.Empty(vm.EpisodeResults);
+        Assert.Null(vm.SelectedEpisodeItem);
+        Assert.Equal(string.Empty, vm.ImdbInput);
+        Assert.Contains("Keine Episode", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LoadNextEpisodeSeasonAsync_LoadsAdjacentSeasonForLargeSeries()
     {
         var requestedUris = new List<string>();

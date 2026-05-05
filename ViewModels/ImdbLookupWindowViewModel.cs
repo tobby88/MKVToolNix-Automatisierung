@@ -18,6 +18,9 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// </remarks>
 internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 {
+    private const int StrongFuzzyTitleScore = 88;
+    private const int EpisodeNumberAssistedFuzzyTitleScore = 78;
+    private const int FuzzyAutoSelectGap = 4;
     private static readonly Regex BareImdbIdPattern = new(@"^tt\d{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex StandaloneImdbIdPattern = new(@"(?<![A-Za-z0-9])(?<id>tt\d{7,10})(?![A-Za-z0-9])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex AbsoluteUrlPattern = new(@"https?://[^\s<>""]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -589,7 +592,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             {
                 StatusText = _episodes.Count == 0
                     ? BuildNoEpisodesLoadedStatus(EpisodeSeasonText)
-                    : $"{_episodes.Count} Episode(n) geladen. Bitte Episode auswählen.";
+                    : EpisodeResults.Count == 0
+                        ? "Keine Episode zum aktuellen Filter gefunden."
+                        : $"{EpisodeResults.Count} Episode(n) geladen. Bitte Episode auswählen.";
             }
         }
         catch (Exception ex) when (TryActivateBrowserFallback(ex))
@@ -720,10 +725,12 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         SelectedEpisodeItem = EpisodeResults.FirstOrDefault(item =>
-            string.Equals(item.Episode.Id, preferredEpisode.Id, StringComparison.OrdinalIgnoreCase));
+            string.Equals(item.Episode.Id, preferredEpisode.Episode.Id, StringComparison.OrdinalIgnoreCase));
         if (SelectedEpisodeItem is not null)
         {
-            StatusText = $"IMDb-Vorschlag: {SelectedEpisodeItem.DisplayText}";
+            StatusText = preferredEpisode.IsFuzzy
+                ? $"IMDb-Vorschlag (unscharfer Titel): {SelectedEpisodeItem.DisplayText}"
+                : $"IMDb-Vorschlag: {SelectedEpisodeItem.DisplayText}";
         }
 
         UpdateComparisonSummary();
@@ -810,7 +817,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             : null;
     }
 
-    private ImdbEpisodeRecord? TryFindPreferredEpisodeMatch(IReadOnlyList<ImdbEpisodeRecord> episodes)
+    private PreferredImdbEpisodeMatch? TryFindPreferredEpisodeMatch(IReadOnlyList<ImdbEpisodeRecord> episodes)
     {
         if (episodes.Count == 0)
         {
@@ -819,13 +826,13 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         if (_guess is null)
         {
-            return episodes.Count == 1 ? episodes[0] : null;
+            return episodes.Count == 1 ? new PreferredImdbEpisodeMatch(episodes[0], IsFuzzy: false) : null;
         }
 
         var normalizedEpisodeTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(_guess.EpisodeTitle);
         if (string.IsNullOrWhiteSpace(normalizedEpisodeTitle))
         {
-            return episodes.Count == 1 ? episodes[0] : null;
+            return episodes.Count == 1 ? new PreferredImdbEpisodeMatch(episodes[0], IsFuzzy: false) : null;
         }
 
         var exactMatches = episodes
@@ -837,7 +844,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         if (exactMatches.Count == 1)
         {
-            return exactMatches[0];
+            return new PreferredImdbEpisodeMatch(exactMatches[0], IsFuzzy: false);
         }
 
         if (exactMatches.Count > 1
@@ -849,11 +856,65 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
                 .ToList();
             if (tieBrokenMatches.Count == 1)
             {
-                return tieBrokenMatches[0];
+                return new PreferredImdbEpisodeMatch(tieBrokenMatches[0], IsFuzzy: false);
             }
         }
 
-        return null;
+        return TryFindPreferredFuzzyEpisodeMatch(episodes);
+    }
+
+    private PreferredImdbEpisodeMatch? TryFindPreferredFuzzyEpisodeMatch(IReadOnlyList<ImdbEpisodeRecord> episodes)
+    {
+        if (_guess is null)
+        {
+            return null;
+        }
+
+        var scoredMatches = episodes
+            .Select(episode =>
+            {
+                var titleScore = CalculateFuzzyTitleScore(_guess.EpisodeTitle, episode.Title);
+                var episodeNumberMatches = int.TryParse(_guess.EpisodeNumber, out var guessEpisode)
+                                           && episode.EpisodeNumber == guessEpisode;
+                return new
+                {
+                    Episode = episode,
+                    TitleScore = titleScore,
+                    EpisodeNumberMatches = episodeNumberMatches,
+                    IsCandidate = titleScore >= StrongFuzzyTitleScore
+                                  || (episodeNumberMatches && titleScore >= EpisodeNumberAssistedFuzzyTitleScore)
+                };
+            })
+            .Where(match => match.IsCandidate)
+            .OrderByDescending(match => match.TitleScore)
+            .ThenByDescending(match => match.EpisodeNumberMatches)
+            .ThenBy(match => ParseSortableSeason(match.Episode.Season))
+            .ThenBy(match => match.Episode.EpisodeNumber ?? int.MaxValue)
+            .ToList();
+        if (scoredMatches.Count == 0)
+        {
+            return null;
+        }
+
+        var bestMatch = scoredMatches[0];
+        if (bestMatch.EpisodeNumberMatches)
+        {
+            var sameEpisodeNumberMatches = scoredMatches
+                .Where(match => match.EpisodeNumberMatches)
+                .Where(match => bestMatch.TitleScore - match.TitleScore <= FuzzyAutoSelectGap)
+                .ToList();
+            if (sameEpisodeNumberMatches.Count == 1)
+            {
+                return new PreferredImdbEpisodeMatch(bestMatch.Episode, IsFuzzy: true);
+            }
+        }
+
+        var closeBestMatches = scoredMatches
+            .Where(match => bestMatch.TitleScore - match.TitleScore <= FuzzyAutoSelectGap)
+            .ToList();
+        return closeBestMatches.Count == 1 && bestMatch.TitleScore >= StrongFuzzyTitleScore
+            ? new PreferredImdbEpisodeMatch(bestMatch.Episode, IsFuzzy: true)
+            : null;
     }
 
     private bool TryActivateBrowserFallback(Exception ex)
@@ -956,9 +1017,82 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         return episodes
             .Where(episode =>
-                EpisodeMetadataMatchingHeuristics.NormalizeText(episode.Title).Contains(normalizedFilter, StringComparison.OrdinalIgnoreCase)
+                IsEpisodeTitleFilterMatch(normalizedFilter, episode.Title)
                 || BuildEpisodeCode(episode).Contains(filterText.Trim(), StringComparison.OrdinalIgnoreCase))
             .ToList();
+    }
+
+    private static bool IsEpisodeTitleFilterMatch(string normalizedFilter, string episodeTitle)
+    {
+        var normalizedTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(episodeTitle);
+        return normalizedTitle.Contains(normalizedFilter, StringComparison.OrdinalIgnoreCase)
+               || CalculateFuzzyTitleScore(normalizedFilter, normalizedTitle, inputsAreNormalized: true) >= EpisodeNumberAssistedFuzzyTitleScore;
+    }
+
+    private static int CalculateFuzzyTitleScore(string left, string right, bool inputsAreNormalized = false)
+    {
+        var normalizedLeft = inputsAreNormalized ? left : EpisodeMetadataMatchingHeuristics.NormalizeText(left);
+        var normalizedRight = inputsAreNormalized ? right : EpisodeMetadataMatchingHeuristics.NormalizeText(right);
+        if (string.IsNullOrWhiteSpace(normalizedLeft) || string.IsNullOrWhiteSpace(normalizedRight))
+        {
+            return 0;
+        }
+
+        if (string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase))
+        {
+            return 100;
+        }
+
+        if (normalizedLeft.Contains(normalizedRight, StringComparison.OrdinalIgnoreCase)
+            || normalizedRight.Contains(normalizedLeft, StringComparison.OrdinalIgnoreCase))
+        {
+            return 92;
+        }
+
+        var maximumLength = Math.Max(normalizedLeft.Length, normalizedRight.Length);
+        if (maximumLength < 6)
+        {
+            return 0;
+        }
+
+        var editDistance = CalculateLevenshteinDistance(normalizedLeft, normalizedRight);
+        return Math.Max(0, (int)Math.Round((1d - editDistance / (double)maximumLength) * 100));
+    }
+
+    private static int CalculateLevenshteinDistance(string left, string right)
+    {
+        if (left.Length == 0)
+        {
+            return right.Length;
+        }
+
+        if (right.Length == 0)
+        {
+            return left.Length;
+        }
+
+        var previousRow = new int[right.Length + 1];
+        var currentRow = new int[right.Length + 1];
+        for (var column = 0; column <= right.Length; column++)
+        {
+            previousRow[column] = column;
+        }
+
+        for (var row = 1; row <= left.Length; row++)
+        {
+            currentRow[0] = row;
+            for (var column = 1; column <= right.Length; column++)
+            {
+                var substitutionCost = left[row - 1] == right[column - 1] ? 0 : 1;
+                currentRow[column] = Math.Min(
+                    Math.Min(currentRow[column - 1] + 1, previousRow[column] + 1),
+                    previousRow[column - 1] + substitutionCost);
+            }
+
+            (previousRow, currentRow) = (currentRow, previousRow);
+        }
+
+        return previousRow[right.Length];
     }
 
     private static IReadOnlyList<ImdbEpisodeRecord> FilterEpisodesBySelectedSeason(
@@ -1258,4 +1392,6 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     }
 
     public sealed record SearchOptionItem(string DisplayText, string TargetUrl, string Description);
+
+    private sealed record PreferredImdbEpisodeMatch(ImdbEpisodeRecord Episode, bool IsFuzzy);
 }
