@@ -30,6 +30,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private bool _tvdbReviewWasManuallyResolved;
     private bool _isImdbReviewApproved;
     private bool _isImdbUnavailable;
+    private bool _embyLookupAttemptedWithoutItem;
     private string _tvdbId = string.Empty;
     private string _imdbId = string.Empty;
     private EmbyProviderIds _nfoProviderIds = EmbyProviderIds.Empty;
@@ -118,6 +119,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             OnPropertyChanged(nameof(RequiresImdbReview));
             OnPropertyChanged(nameof(HasPendingProviderReview));
             OnPropertyChanged(nameof(HasCompleteProviderIds));
+            OnPropertyChanged(nameof(HasMissingEmbyItem));
             OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
             OnPropertyChanged(nameof(ProviderIdEditTooltip));
             OnPropertyChanged(nameof(TvdbLookupTooltip));
@@ -149,6 +151,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
             _embyItemId = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasMissingEmbyItem));
             OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
             OnPropertyChanged(nameof(StatusTooltip));
         }
@@ -203,6 +206,13 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public bool RequiresImdbReview => SupportsProviderIdSync && !_isImdbReviewApproved;
 
     public bool HasPendingProviderReview => RequiresTvdbReview || RequiresImdbReview;
+
+    /// <summary>
+    /// Kennzeichnet, dass Emby in der letzten echten Serverprüfung kein Item zur MKV geliefert hat.
+    /// </summary>
+    public bool HasMissingEmbyItem => SupportsProviderIdSync
+        && _embyLookupAttemptedWithoutItem
+        && string.IsNullOrWhiteSpace(EmbyItemId);
 
     /// <summary>
     /// Kennzeichnet, ob der Provider-ID-Teil fachlich abgeschlossen ist.
@@ -297,7 +307,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         if (freshEmbyItem is not null)
         {
             _embyProviderIds = BuildProviderIdsFromEmbyItem(freshEmbyItem);
+            SetEmbyLookupMissing(false);
             EmbyItemId = freshEmbyItem.Id;
+        }
+        else if (!analysis.EmbyLookupAttempted && string.IsNullOrWhiteSpace(EmbyItemId))
+        {
+            SetEmbyLookupMissing(false);
         }
 
         var providerIds = ProviderIds
@@ -353,6 +368,16 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             analysis.NfoProviderIds.ImdbId,
             freshEmbyItem?.GetProviderId("Imdb") ?? _embyProviderIds.ImdbId);
         var embyItemKnown = freshEmbyItem is not null || !string.IsNullOrWhiteSpace(EmbyItemId);
+        var embyLookupMissed = analysis.EmbyLookupAttempted && !embyItemKnown;
+        if (embyLookupMissed)
+        {
+            SetEmbyLookupMissing(true);
+            SetStatus(
+                HasPendingProviderReview ? "Prüfung offen" : HasCompleteProviderIds ? "Emby fehlt" : "IDs fehlen",
+                BuildProviderStateNote(providerMismatchNote, embyItemKnown: false, embyLookupMissed: true));
+            return;
+        }
+
         if (!embyItemKnown)
         {
             SetStatus(
@@ -374,6 +399,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
 
         EmbyItemId = item.Id;
+        SetEmbyLookupMissing(false);
         var embyProviderIds = new EmbyProviderIds(
             item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
             item.GetProviderId("Imdb"));
@@ -423,6 +449,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         ArgumentNullException.ThrowIfNull(item);
 
         EmbyItemId = item.Id;
+        SetEmbyLookupMissing(false);
         _embyProviderIds = BuildProviderIdsFromEmbyItem(item);
         OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
     }
@@ -551,6 +578,17 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     }
 
     /// <summary>
+    /// Kennzeichnet eine unveränderte NFO, deren notwendige Emby-Zuordnung weiterhin fehlt.
+    /// </summary>
+    public void MarkCurrentRefreshPending(string reason)
+    {
+        var normalizedReason = string.IsNullOrWhiteSpace(reason)
+            ? "Emby-Item nicht gefunden."
+            : reason.Trim();
+        SetStatus("Refresh offen", $"NFO war bereits aktuell, {normalizedReason}");
+    }
+
+    /// <summary>
     /// Kennzeichnet, dass die NFO bereits geschrieben wurde, Emby den anschließenden Refresh aber nicht ausführen konnte.
     /// </summary>
     public void MarkRefreshFailed(string failureMessage)
@@ -672,19 +710,29 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             : $"{providerLabel} {preferredValue} vorgesehen ({string.Join(", ", mismatches)}).";
     }
 
-    private string BuildProviderStateNote(string? providerMismatchNote, bool embyItemKnown)
+    private string BuildProviderStateNote(string? providerMismatchNote, bool embyItemKnown, bool embyLookupMissed = false)
     {
         var providerCoverage = embyItemKnown
             ? BuildProviderCoverageNote()
             : BuildProviderCoverageNote(localOnly: true);
+        var embyLookupNote = embyLookupMissed
+            ? "Emby-Item nicht gefunden. Erst Emby scannen oder Pfadzuordnung prüfen."
+            : null;
         if (string.IsNullOrWhiteSpace(providerMismatchNote))
         {
-            return providerCoverage;
+            return string.IsNullOrWhiteSpace(embyLookupNote)
+                ? providerCoverage
+                : $"{embyLookupNote} {providerCoverage}";
         }
 
-        return HasCompleteProviderIds
-            ? providerMismatchNote
-            : $"{providerMismatchNote} {providerCoverage}";
+        if (HasCompleteProviderIds && string.IsNullOrWhiteSpace(embyLookupNote))
+        {
+            return providerMismatchNote;
+        }
+
+        return string.IsNullOrWhiteSpace(embyLookupNote)
+            ? $"{providerMismatchNote} {providerCoverage}"
+            : $"{embyLookupNote} {providerMismatchNote} {providerCoverage}";
     }
 
     private string BuildProviderCoverageNote(bool localOnly = false)
@@ -826,6 +874,17 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         NotifyProviderReviewPropertiesChanged();
     }
 
+    private void SetEmbyLookupMissing(bool value)
+    {
+        if (_embyLookupAttemptedWithoutItem == value)
+        {
+            return;
+        }
+
+        _embyLookupAttemptedWithoutItem = value;
+        OnPropertyChanged(nameof(HasMissingEmbyItem));
+    }
+
     private bool HasTvdbCandidateMismatch()
     {
         return BuildTvdbCandidateValues().Count > 1;
@@ -870,6 +929,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         OnPropertyChanged(nameof(RequiresImdbReview));
         OnPropertyChanged(nameof(HasPendingProviderReview));
         OnPropertyChanged(nameof(HasCompleteProviderIds));
+        OnPropertyChanged(nameof(HasMissingEmbyItem));
         OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
         OnPropertyChanged(nameof(StatusTooltip));
     }
@@ -948,7 +1008,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             "Bereit" or "TVDB gewählt" or "Lokal bereit" => "Ready",
             "NFO aktuell" or "Aktualisiert" => "Done",
             "Ohne NFO-Sync" => "Skipped",
-            "Prüfung offen" or "IDs fehlen" or "IDs prüfen" or "NFO fehlt" or "NFO prüfen" or "Refresh prüfen" or "Refresh offen" or "Übersprungen" => "Warning",
+            "Prüfung offen" or "IDs fehlen" or "IDs prüfen" or "NFO fehlt" or "NFO prüfen" or "Emby fehlt" or "Refresh prüfen" or "Refresh offen" or "Übersprungen" => "Warning",
             "Fehlt" => "Error",
             _ => "Neutral"
         };

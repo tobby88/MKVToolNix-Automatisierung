@@ -152,7 +152,7 @@ internal sealed class EmbyMetadataSyncService
             archiveRootPath,
             libraryMatch,
             cancellationToken);
-        return localAnalysis.WithEmbyItem(embyItem);
+        return localAnalysis.WithEmbyLookupResult(embyItem);
     }
 
     /// <summary>
@@ -800,6 +800,16 @@ internal sealed record EmbyFileAnalysis(
     string? WarningMessage)
 {
     /// <summary>
+    /// Kennzeichnet, dass Emby für diese Analyse tatsächlich per API nach dem Item gefragt wurde.
+    /// </summary>
+    /// <remarks>
+    /// Ein leeres <see cref="EmbyItem"/> ist nur dann fachlich aussagekräftig, wenn der Lookup
+    /// wirklich gelaufen ist. Bei reiner Lokalprüfung oder Netzwerk-Fallback darf daraus kein
+    /// "Emby-Item fehlt"-Status entstehen.
+    /// </remarks>
+    public bool EmbyLookupAttempted { get; init; }
+
+    /// <summary>
     /// Effektive Provider-IDs, bei denen vorhandene NFO-Werte Vorrang vor Emby-Daten haben.
     /// </summary>
     public EmbyProviderIds EffectiveProviderIds => NfoProviderIds.MergeFallback(EmbyProviderIdsFromItem(EmbyItem));
@@ -807,9 +817,9 @@ internal sealed record EmbyFileAnalysis(
     /// <summary>
     /// Erstellt eine Kopie mit aktualisiertem Emby-Item.
     /// </summary>
-    public EmbyFileAnalysis WithEmbyItem(EmbyItem? embyItem)
+    public EmbyFileAnalysis WithEmbyLookupResult(EmbyItem? embyItem)
     {
-        return this with { EmbyItem = embyItem };
+        return this with { EmbyItem = embyItem, EmbyLookupAttempted = true };
     }
 
     private static EmbyProviderIds EmbyProviderIdsFromItem(EmbyItem? item)

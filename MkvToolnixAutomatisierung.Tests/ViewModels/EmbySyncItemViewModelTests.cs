@@ -148,6 +148,55 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void ApplyAnalysis_WithCompleteLocalIdsAndMissedEmbyLookup_ShowsEmbyMissing()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("200", "tt1234567"));
+        vm.ApplyImdbSelection("tt1234567");
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", "tt1234567"),
+            EmbyItem: null,
+            WarningMessage: null)
+        {
+            EmbyLookupAttempted = true
+        };
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.Equal("Emby fehlt", vm.StatusText);
+        Assert.Equal("Warning", vm.StatusTone);
+        Assert.Contains("Emby-Item nicht gefunden", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("IDs lokal vorhanden", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyAnalysis_WithCompleteLocalIdsButNoEmbyLookup_StaysLocallyReady()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("200", "tt1234567"));
+        vm.ApplyImdbSelection("tt1234567");
+        var analysis = new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("200", "tt1234567"),
+            EmbyItem: null,
+            WarningMessage: null);
+
+        vm.ApplyAnalysis(analysis);
+
+        Assert.Equal("Lokal bereit", vm.StatusText);
+        Assert.Equal("Ready", vm.StatusTone);
+    }
+
+    [Fact]
     public void ApplyAnalysis_NormalEpisodeWithEmbyItemButWithoutNfo_RequiresLocalNfo()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", EmbyProviderIds.Empty);
@@ -354,6 +403,7 @@ public sealed class EmbySyncItemViewModelTests
     [InlineData("IDs fehlen", "Warning")]
     [InlineData("NFO fehlt", "Warning")]
     [InlineData("NFO prüfen", "Warning")]
+    [InlineData("Emby fehlt", "Warning")]
     [InlineData("Übersprungen", "Warning")]
     [InlineData("Fehlt", "Error")]
     [InlineData("Noch nicht geprüft", "Neutral")]

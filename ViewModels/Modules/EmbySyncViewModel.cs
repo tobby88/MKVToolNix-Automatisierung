@@ -538,6 +538,17 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 {
                     if (item.HasCompleteProviderIds)
                     {
+                        if (canRefreshEmby && string.IsNullOrWhiteSpace(item.EmbyItemId))
+                        {
+                            var currentNfoRefreshItemId = await ResolveRefreshItemIdAsync(settings, item, archiveRootPath, libraryMatch);
+                            if (string.IsNullOrWhiteSpace(currentNfoRefreshItemId))
+                            {
+                                refreshPendingCount++;
+                                item.MarkCurrentRefreshPending("Emby-Item auch bei erneuter Pfadsuche nicht gefunden.");
+                                continue;
+                            }
+                        }
+
                         if (canRefreshEmby && item.HasKnownEmbyProviderIdMismatch)
                         {
                             try

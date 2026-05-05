@@ -935,6 +935,66 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
+    public async Task RunSyncCommand_KeepsCurrentNfoOpen_WhenEmbyItemIsStillMissing()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+        try
+        {
+            var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(
+                nfoPath,
+                """
+                <episodedetails>
+                  <uniqueid type="tvdb" default="true">12345</uniqueid>
+                  <uniqueid type="imdb">tt1234567</uniqueid>
+                  <tvdbid>12345</tvdbid>
+                  <imdbid>tt1234567</imdbid>
+                </episodedetails>
+                """);
+            var reportPath = WriteMetadataReport(
+                tempDirectory,
+                "current-missing-emby.metadata.json",
+                mediaPath,
+                "12345",
+                imdbId: "tt1234567");
+            var dialogService = new SelectingDialogService([reportPath]);
+            var embyClient = new RecordingRefreshEmbyClient();
+            var vm = CreateViewModel(
+                dialogService,
+                embyClient,
+                new AppEmbySettings
+                {
+                    ServerUrl = "http://t-emby:8096",
+                    ApiKey = "token",
+                    ScanWaitTimeoutSeconds = 60
+                });
+
+            await vm.SelectReportCommand.ExecuteAsync();
+            var item = Assert.Single(vm.Items);
+            item.ApplyImdbSelection("tt1234567");
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("Refresh offen", item.StatusText);
+            Assert.Contains("NFO war bereits aktuell", item.Note, StringComparison.Ordinal);
+            Assert.Contains("Emby-Item auch bei erneuter Pfadsuche nicht gefunden", item.Note, StringComparison.Ordinal);
+            Assert.Equal(0, embyClient.RefreshCallCount);
+            Assert.True(File.Exists(reportPath));
+            Assert.False(File.Exists(Path.Combine(tempDirectory, "done", "current-missing-emby.metadata.json")));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task RunSyncCommand_SkipsInvalidProviderIds_BeforeWritingNfo()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
