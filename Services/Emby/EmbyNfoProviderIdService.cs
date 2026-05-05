@@ -133,14 +133,24 @@ internal sealed class EmbyNfoProviderIdService
             var changed = false;
             if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
             {
-                changed |= SetUniqueId(root, "tvdb", providerIds.TvdbId!, isDefault: true);
-                changed |= SetLegacyProviderElement(root, "tvdbid", providerIds.TvdbId!);
+                var uniqueIdChanged = SetUniqueId(root, "tvdb", providerIds.TvdbId!, isDefault: true);
+                changed |= uniqueIdChanged;
+                // Moderne Emby-NFOs nutzen oft nur <uniqueid>. Ein Legacy-Feld allein für Kompatibilität
+                // nachzutragen wäre fachlich ein No-Op, würde aber unnötig NFO-Schreiben und Refresh auslösen.
+                if (uniqueIdChanged || HasLegacyProviderElement(root, "tvdbid"))
+                {
+                    changed |= SetLegacyProviderElement(root, "tvdbid", providerIds.TvdbId!);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(providerIds.ImdbId))
             {
-                changed |= SetUniqueId(root, "imdb", providerIds.ImdbId!, isDefault: false);
-                changed |= SetLegacyProviderElement(root, "imdbid", providerIds.ImdbId!);
+                var uniqueIdChanged = SetUniqueId(root, "imdb", providerIds.ImdbId!, isDefault: false);
+                changed |= uniqueIdChanged;
+                if (uniqueIdChanged || HasLegacyProviderElement(root, "imdbid"))
+                {
+                    changed |= SetLegacyProviderElement(root, "imdbid", providerIds.ImdbId!);
+                }
             }
             else if (removeImdbId)
             {
@@ -292,11 +302,17 @@ internal sealed class EmbyNfoProviderIdService
             }
         }
 
-        var expectedDefaultValue = isDefault ? "true" : null;
         var currentDefaultValue = (string?)uniqueId.Attribute("default");
-        if (!string.Equals(currentDefaultValue, expectedDefaultValue, StringComparison.OrdinalIgnoreCase))
+        if (isDefault
+            && !string.Equals(currentDefaultValue, "true", StringComparison.OrdinalIgnoreCase))
         {
-            uniqueId.SetAttributeValue("default", expectedDefaultValue);
+            uniqueId.SetAttributeValue("default", "true");
+            changed = true;
+        }
+        else if (!isDefault
+                 && string.Equals(currentDefaultValue, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            uniqueId.SetAttributeValue("default", null);
             changed = true;
         }
 
@@ -327,6 +343,11 @@ internal sealed class EmbyNfoProviderIdService
 
         element.Value = value;
         return true;
+    }
+
+    private static bool HasLegacyProviderElement(XElement root, string elementName)
+    {
+        return root.Elements(elementName).Any();
     }
 
     private static bool SetTextElement(XElement root, string elementName, string value)

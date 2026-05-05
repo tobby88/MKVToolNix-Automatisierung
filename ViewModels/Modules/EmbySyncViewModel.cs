@@ -490,6 +490,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             var updatedCount = 0;
+            var currentCount = 0;
             var refreshOnlyCount = 0;
             var skippedCount = 0;
             var refreshFailureCount = 0;
@@ -569,6 +570,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                         }
 
                         item.SetStatus("NFO aktuell", updateResult.Message);
+                        currentCount++;
                         completedMediaFilePaths.Add(item.MediaFilePath);
                     }
                     else
@@ -612,7 +614,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = 100;
-            StatusText = BuildRunSyncSummary(updatedCount, refreshOnlyCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
+            StatusText = BuildRunSyncSummary(updatedCount, currentCount, refreshOnlyCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
             AppendLog(StatusText);
             MarkSelectedReportsDone(completedMediaFilePaths);
             RefreshSummaryAndCommands();
@@ -1250,16 +1252,32 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private static string BuildRunSyncSummary(
         int updatedCount,
+        int currentCount,
         int refreshOnlyCount,
         int skippedCount,
         int refreshFailureCount,
         int refreshPendingCount,
         bool canRefreshEmby)
     {
+        if (updatedCount == 0
+            && currentCount > 0
+            && refreshOnlyCount == 0
+            && skippedCount == 0
+            && refreshFailureCount == 0
+            && refreshPendingCount == 0)
+        {
+            return $"Keine Änderungen nötig: {currentCount} NFO-Datei(en) bereits aktuell.";
+        }
+
         var parts = new List<string>
         {
             $"Änderungen geschrieben: {updatedCount} aktualisiert, {skippedCount} übersprungen."
         };
+        if (currentCount > 0)
+        {
+            parts.Add($"{currentCount} bereits aktuell.");
+        }
+
         if (refreshOnlyCount > 0)
         {
             parts.Add($"{refreshOnlyCount} Emby-Refresh ohne NFO-Änderung.");

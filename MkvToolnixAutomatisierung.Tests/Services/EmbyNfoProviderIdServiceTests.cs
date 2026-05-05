@@ -139,6 +139,41 @@ public sealed class EmbyNfoProviderIdServiceTests
     }
 
     [Fact]
+    public void UpdateProviderIds_DoesNotRewriteNfo_WhenUniqueIdsAlreadyMatch()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            const string originalNfo = """
+                <episodedetails>
+                  <title>Episode</title>
+                  <uniqueid type="tvdb" default="true">12345</uniqueid>
+                  <uniqueid type="imdb" default="false">tt9876543</uniqueid>
+                </episodedetails>
+                """;
+            File.WriteAllText(nfoPath, originalNfo);
+            var lastWriteTimeUtc = File.GetLastWriteTimeUtc(nfoPath);
+
+            var result = new EmbyNfoProviderIdService().UpdateProviderIds(
+                mediaPath,
+                new EmbyProviderIds("12345", "tt9876543"));
+
+            Assert.True(result.Success);
+            Assert.False(result.NfoChanged);
+            Assert.Equal("NFO-Provider-IDs waren bereits aktuell.", result.Message);
+            Assert.Equal(originalNfo, File.ReadAllText(nfoPath));
+            Assert.Equal(lastWriteTimeUtc, File.GetLastWriteTimeUtc(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void UpdateProviderIds_DoesNotCreateMissingNfo()
     {
         var directory = CreateTempDirectory();
