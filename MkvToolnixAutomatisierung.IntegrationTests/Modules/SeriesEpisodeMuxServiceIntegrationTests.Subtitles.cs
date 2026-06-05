@@ -243,6 +243,77 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
     }
 
     [Fact]
+    public async Task DetectFromSelectedVideoAsync_DeduplicatesSubtitleOnlySupplement_WithSameKind()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-subtitle-only-dedup");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-subtitle-only-dedup");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie-Pilot (S05_E01)-1358865137.mp4");
+        var preferredSubtitlePath = CreateFile(sourceDirectory, "Beispielserie-Pilot (S05_E01)-1358865137.ass", "subtitle-primary");
+        CreateFile(sourceDirectory, "Beispielserie-Pilot (Staffel 5, Folge 25)-0880795506.ass", "subtitle-supplement");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie-Pilot (S05_E01)-1358865137.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (S05/E01)\r\nDauer: 00:48:00");
+        CreateFile(
+            sourceDirectory,
+            "Beispielserie-Pilot (Staffel 5, Folge 25)-0880795506.txt",
+            "Sender: ZDF\r\nThema: Beispielserie\r\nTitel: Pilot (Staffel 5, Folge 25)\r\nDauer: 00:48:05");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080", language: "de"),
+            CreateAudioTrack(1, "AAC", language: "de"));
+
+        var service = CreateMuxService(archiveDirectory);
+        var directoryContext = service.CreateDirectoryDetectionContext(sourceDirectory);
+
+        var detected = await service.DetectFromSelectedVideoAsync(mainVideoPath, directoryContext);
+
+        Assert.Equal([preferredSubtitlePath], detected.SubtitlePaths);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_ExistingArchiveAndDuplicateAssSources_UsesPreferredAssOnly()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-plan-subtitle-dedup");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-plan-subtitle-dedup");
+        Directory.CreateDirectory(sourceDirectory);
+        Directory.CreateDirectory(archiveDirectory);
+
+        var mainVideoPath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02).mp4");
+        var preferredSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-zdf.ass", "subtitle-preferred");
+        var duplicateSubtitlePath = CreateFile(sourceDirectory, "Beispielserie - Pilot (S01_E02)-ard.ass", "subtitle-duplicate");
+        var outputPath = Path.Combine(archiveDirectory, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+        CreateFile(Path.GetDirectoryName(outputPath)!, Path.GetFileName(outputPath), "archive");
+
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            mainVideoPath,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"),
+            CreateAudioTrack(1, "E-AC-3"));
+        FakeMkvMergeTestHelper.WriteProbeFile(
+            outputPath,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateAudioTrack(1, "E-AC-3"));
+
+        var service = CreateMuxService(archiveDirectory);
+
+        var plan = await service.CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            mainVideoPath,
+            AudioDescriptionPath: null,
+            SubtitlePaths: [preferredSubtitlePath, duplicateSubtitlePath],
+            AttachmentPaths: [],
+            outputPath,
+            Title: "Pilot"));
+
+        var externalSubtitle = Assert.Single(plan.SubtitleFiles, subtitle => !subtitle.IsEmbedded);
+        Assert.Equal(preferredSubtitlePath, externalSubtitle.FilePath);
+        Assert.DoesNotContain(duplicateSubtitlePath, plan.BuildArguments());
+    }
+
+    [Fact]
     public async Task CreatePlanAsync_PreservesMissingSubtitleKinds_FromNonSelectedDurationMatchedSource()
     {
         var sourceDirectory = Path.Combine(_tempDirectory, "source-supplement-subtitle-kinds");

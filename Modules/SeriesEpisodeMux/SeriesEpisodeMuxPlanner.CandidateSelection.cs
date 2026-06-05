@@ -373,24 +373,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var orderedCandidates = FilterByDuration(selectedVideoCandidates, primaryVideoCandidate.DurationSeconds)
             .Concat(OrderCandidatesByPreference(durationMatchedCandidates.Where(candidate => !selectedSourcePaths.Contains(candidate.FilePath))))
             .ToList();
-        var subtitlePathsByKind = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var candidate in orderedCandidates)
-        {
-            foreach (var subtitlePath in candidate.SubtitlePaths
+        return SubtitleSourceSelection.SelectPreferredPathsByKind(
+            orderedCandidates.SelectMany(candidate => candidate.SubtitlePaths
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase))
-            {
-                var subtitleKind = SubtitleKind.FromExtension(Path.GetExtension(subtitlePath));
-                subtitlePathsByKind.TryAdd(subtitleKind.DisplayName, subtitlePath);
-            }
-        }
-
-        return subtitlePathsByKind
-            .Values
-            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)))
             .ToList();
     }
 }

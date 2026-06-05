@@ -262,12 +262,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 [],
                 null,
                 [],
-                CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName)
-                    .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
+                SubtitleSourceSelection.SelectPreferredPathsByKind(
+                    CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName)
+                        .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))),
                 CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName)
                     .Concat(defectiveSeedCompanionCleanupPaths)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -290,13 +287,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
             [.. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds],
             candidateDurationsByPath,
             primaryVideoCandidate.DurationSeconds);
-        var subtitlePaths = CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
-            .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
-            .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Die Kandidatenreihenfolge enthält bereits die Qualitätspräferenz. Zusätzliche
+        // defekte oder subtitle-only Seeds dürfen danach keinen zweiten ASS/SRT/VTT-Slot
+        // derselben Episode wieder in die Auswahl einschleusen.
+        var subtitlePaths = SubtitleSourceSelection.SelectPreferredPathsByKind(
+            CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
+                .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
+                .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName)));
         var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. runtimeCompatibleCleanupVideoSeeds, .. runtimeCompatibleSupplementSeeds], companionFilesByBaseName);
 
         return new EpisodeDetectionContext(

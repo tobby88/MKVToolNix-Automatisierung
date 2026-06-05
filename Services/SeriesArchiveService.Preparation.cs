@@ -341,9 +341,11 @@ public sealed partial class SeriesArchiveService
 
         // Vorhandene Untertitel in der Ziel-MKV bleiben für denselben fachlichen Slot erhalten.
         // Ergänzt werden nur fehlende Slots, z. B. ASS zusätzlich zu vorhandenem SRT.
-        var requestedExternalSubtitlePlans = requestSubtitlePaths
-            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+        // Die Erkennung verdichtet bereits auf einen Pfad pro Untertiteltyp. Diese zweite
+        // Schranke schützt die gemeinsame Planebene zusätzlich vor manuellen, gecachten oder
+        // älteren Requests mit mehreren Dateien für denselben externen Untertitel-Slot.
+        var requestedExternalSubtitlePlans = SubtitleSourceSelection
+            .SelectPreferredPathsByKind(requestSubtitlePaths)
             .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .ToList();
         var externalSubtitlePlans = requestedExternalSubtitlePlans
