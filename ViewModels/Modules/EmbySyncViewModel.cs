@@ -13,6 +13,8 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// </summary>
 internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSettingsAwareModule
 {
+    private static readonly TimeSpan LibraryScanProgressStallHintDelay = TimeSpan.FromSeconds(5);
+
     private readonly EmbyModuleServices _services;
     private readonly IUserDialogService _dialogService;
     private readonly IEmbyProviderReviewDialogService _providerReviewDialogs;
@@ -24,6 +26,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private string _reportPath = string.Empty;
     private string _statusText = "Bereit";
     private string _logText = string.Empty;
+    private string? _progressDisplayTextOverride;
     private int _progressValue;
     private bool _isBusy;
     private CancellationTokenSource? _scanCancellationSource;
@@ -150,8 +153,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
             _progressValue = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ProgressDisplayText));
         }
     }
+
+    /// <summary>
+    /// Kurzer Text im Fortschrittsbalken. Beim Emby-Scan ergänzt er den reinen
+    /// Prozentwert um ein Lebenszeichen, wenn Emby längere Zeit bei etwa 90-99 % bleibt.
+    /// </summary>
+    public string ProgressDisplayText => _progressDisplayTextOverride
+        ?? $"{ProgressValue} %";
 
     public bool IsInteractive => !_isBusy;
 
@@ -389,6 +400,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         cancellationToken.ThrowIfCancellationRequested();
         StatusText = "Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
+        SetProgressDisplayTextOverride(serverScanConfirmedComplete
+            ? "100 % · NFO-Nachprüfung"
+            : null);
         ProgressValue = Math.Max(ProgressValue, 50);
         await ResolveEmbyItemsWithinBudgetAsync(
             settings,
@@ -407,6 +421,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         StatusText = serverScanConfirmedComplete
             ? "Emby-Scan und Nachprüfung abgeschlossen."
             : "Lokale Nachprüfung abgeschlossen. Der Abschluss des Emby-Scans konnte nicht bestätigt werden.";
+        SetProgressDisplayTextOverride(serverScanConfirmedComplete
+            ? "100 % · fertig"
+            : null);
         AppendLog(StatusText);
         RefreshSummaryAndCommands();
         SaveVisibleLog("Emby scannen");
@@ -752,8 +769,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = pendingItems.Count == 0
-                ? 70
-                : Math.Min(69, 50 + attempt * 4);
+                ? Math.Max(ProgressValue, 70)
+                : Math.Max(ProgressValue, Math.Min(69, 50 + attempt * 4));
 
             if (pendingItems.Count > 0)
             {
@@ -783,7 +800,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             cancellationToken.ThrowIfCancellationRequested();
             var item = selectedItems[index];
             StatusText = $"Prüfe NFO nach Emby-Scan {index + 1}/{selectedItems.Count}...";
-            ProgressValue = ScaleProgress(index, selectedItems.Count, 70, 80);
+            ProgressValue = Math.Max(
+                ProgressValue,
+                ScaleProgress(index, selectedItems.Count, 70, 80));
 
             // Nach einem Library-Scan kann Emby die NFO erst jetzt angelegt oder Provider-IDs
             // ergänzt haben. Diese zweite, kurze Prüfung verhindert, dass wir mit veraltetem
@@ -940,6 +959,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     {
         try
         {
+            SetProgressDisplayTextOverride(null);
             SetBusy(true);
             await action();
         }
@@ -1112,6 +1132,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         CancellationToken cancellationToken)
     {
         var activationDeadline = DateTime.UtcNow.AddSeconds(10);
+        var scanStartedAt = DateTime.UtcNow;
+        var lastProgressAt = scanStartedAt;
+        int? lastProgressPercent = null;
         var sawActiveServerProgress = false;
 
         while (true)
@@ -1127,14 +1150,32 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             if (TryGetActiveLibraryScanState(currentLibrary, out var progressPercent, out var refreshStatusText))
             {
                 sawActiveServerProgress = true;
-                ProgressValue = ScalePercent(progressPercent, 10, 50);
-                StatusText = string.IsNullOrWhiteSpace(refreshStatusText)
-                    ? $"Serienbibliothek scannt... {progressPercent}%"
-                    : $"Serienbibliothek scannt... {progressPercent}% ({refreshStatusText})";
+                var now = DateTime.UtcNow;
+                if (lastProgressPercent != progressPercent)
+                {
+                    lastProgressPercent = progressPercent;
+                    lastProgressAt = now;
+                }
+
+                var elapsed = now - scanStartedAt;
+                var unchangedFor = now - lastProgressAt;
+                // Während Emby scannt, muss der sichtbare Balken denselben Prozentwert
+                // zeigen. Eine Workflow-Skalierung würde zwei vermeintlich vergleichbare
+                // Fortschrittsanzeigen künstlich auseinanderlaufen lassen.
+                ProgressValue = progressPercent;
+                SetProgressDisplayTextOverride(unchangedFor >= LibraryScanProgressStallHintDelay
+                    ? $"{progressPercent} % · weiter aktiv"
+                    : $"{progressPercent} % · Emby scannt");
+                StatusText = BuildLibraryScanStatusText(
+                    progressPercent,
+                    refreshStatusText,
+                    elapsed,
+                    unchangedFor);
             }
             else if (sawActiveServerProgress)
             {
-                ProgressValue = 50;
+                ProgressValue = 100;
+                SetProgressDisplayTextOverride("100 % · Scan beendet");
                 StatusText = $"Serienbibliotheksscan abgeschlossen: {currentLibrary.Name}";
                 AppendLog(StatusText);
                 return true;
@@ -1143,11 +1184,51 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             {
                 AppendLog($"Emby meldet für '{currentLibrary.Name}' keinen expliziten Refresh-Fortschritt. Der Serverabschluss kann deshalb nicht bestätigt werden.");
                 ProgressValue = 50;
+                SetProgressDisplayTextOverride("Fortschritt unbekannt");
                 return false;
             }
 
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
+    }
+
+    private static string BuildLibraryScanStatusText(
+        int progressPercent,
+        string? refreshStatusText,
+        TimeSpan elapsed,
+        TimeSpan unchangedFor)
+    {
+        var status = $"Serienbibliothek scannt... {progressPercent}%";
+        if (!string.IsNullOrWhiteSpace(refreshStatusText))
+        {
+            status += $" ({refreshStatusText})";
+        }
+
+        status += $" · Laufzeit {FormatDuration(elapsed)}";
+        if (unchangedFor >= LibraryScanProgressStallHintDelay)
+        {
+            status += $" · seit {FormatDuration(unchangedFor)} unverändert, laut Emby weiterhin aktiv";
+        }
+
+        return status;
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}"
+            : $"{(int)duration.TotalMinutes}:{duration.Seconds:00}";
+    }
+
+    private void SetProgressDisplayTextOverride(string? text)
+    {
+        if (string.Equals(_progressDisplayTextOverride, text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _progressDisplayTextOverride = text;
+        OnPropertyChanged(nameof(ProgressDisplayText));
     }
 
     private static int ScaleProgress(int index, int count, int startPercent, int endPercent)
@@ -1187,12 +1268,6 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             || refreshStatusText.Contains("complete", StringComparison.OrdinalIgnoreCase)
             || refreshStatusText.Contains("finished", StringComparison.OrdinalIgnoreCase)
             || refreshStatusText.Contains("stopped", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static int ScalePercent(int progressPercent, int startPercent, int endPercent)
-    {
-        var fraction = Math.Clamp(progressPercent / 100d, 0, 1);
-        return startPercent + (int)Math.Round((endPercent - startPercent) * fraction);
     }
 
     private void SetReportPaths(IEnumerable<string> reportPaths)

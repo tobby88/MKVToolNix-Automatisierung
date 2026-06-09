@@ -346,7 +346,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="210" />
             </Grid.ColumnDefinitions>
 
             <TextBlock Grid.Column="0"
@@ -385,22 +385,29 @@
                     Content="Scan-Warten abbrechen"
                     ToolTip="{Binding CancelScanTooltip, Mode=OneWay}"
                     Visibility="{Binding CanCancelScan, Converter={StaticResource BooleanToVisibilityConverter}}" />
-            <ProgressBar Grid.Column="6"
-                         Height="18"
-                         Minimum="0"
-                         Maximum="100"
-                         Value="{Binding ProgressValue, Mode=OneWay}"
-                         ToolTip="{Binding StatusText, Mode=OneWay}">
-                <ProgressBar.Style>
-                    <Style TargetType="ProgressBar">
+            <StackPanel Grid.Column="6"
+                        Width="210"
+                        ToolTip="{Binding StatusText, Mode=OneWay}">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsInteractive}" Value="True">
                                 <Setter Property="Visibility" Value="Collapsed" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </ProgressBar.Style>
-            </ProgressBar>
+                </StackPanel.Style>
+                <TextBlock Margin="0,0,0,2"
+                           HorizontalAlignment="Center"
+                           FontSize="11"
+                           Foreground="#FF374151"
+                           Text="{Binding ProgressDisplayText, Mode=OneWay}"
+                           TextTrimming="CharacterEllipsis" />
+                <ProgressBar Height="18"
+                             Minimum="0"
+                             Maximum="100"
+                             Value="{Binding ProgressValue, Mode=OneWay}" />
+            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>

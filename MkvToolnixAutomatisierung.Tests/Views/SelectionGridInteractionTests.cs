@@ -511,6 +511,8 @@ public sealed class SelectionGridInteractionTests
                     viewModel.RunScanCommand.Execute(null);
 
                     Assert.True(await WaitUntilAsync(() => !viewModel.IsInteractive, TimeSpan.FromSeconds(2)));
+                    Assert.True(await WaitUntilAsync(() => viewModel.ProgressValue == 25, TimeSpan.FromSeconds(2)));
+                    Assert.Contains("25 %", viewModel.ProgressDisplayText, StringComparison.Ordinal);
                     await WpfTestHost.WaitForIdleAsync();
 
                     Assert.False(grid.IsEnabled);
@@ -524,6 +526,8 @@ public sealed class SelectionGridInteractionTests
 
                     Assert.False(viewModel.IsInteractive);
                     Assert.DoesNotContain("abgeschlossen", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("weiter aktiv", viewModel.ProgressDisplayText, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("weiterhin aktiv", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
 
                     pendingClient.ReleaseScan();
 
@@ -531,6 +535,7 @@ public sealed class SelectionGridInteractionTests
                     await WpfTestHost.WaitForIdleAsync();
 
                     Assert.True(grid.IsEnabled);
+                    Assert.Equal(100, viewModel.ProgressValue);
                 }
                 finally
                 {
