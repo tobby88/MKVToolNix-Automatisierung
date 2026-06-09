@@ -26,6 +26,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private string _logText = string.Empty;
     private int _progressValue;
     private bool _isBusy;
+    private CancellationTokenSource? _scanCancellationSource;
 
     public EmbySyncViewModel(
         EmbyModuleServices services,
@@ -41,6 +42,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
+        CancelScanCommand = new RelayCommand(CancelScan, () => CanCancelScan);
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, CanReviewSelectedImdb);
@@ -55,6 +57,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     public AsyncRelayCommand SelectReportCommand { get; }
 
     public AsyncRelayCommand RunScanCommand { get; }
+
+    public RelayCommand CancelScanCommand { get; }
 
     public RelayCommand ToggleSelectedItemSelectionCommand { get; }
 
@@ -150,6 +154,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     }
 
     public bool IsInteractive => !_isBusy;
+
+    public bool CanCancelScan => _scanCancellationSource is { IsCancellationRequested: false };
+
+    public string CancelScanTooltip => CanCancelScan
+        ? "Beendet das Warten und die lokale Nachprüfung. Der bereits gestartete Emby-Scan läuft auf dem Server weiter."
+        : "Derzeit läuft kein abbrechbarer Emby-Scan.";
 
     public int ItemCount => Items.Count;
 
@@ -321,44 +331,85 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        await RunBusyAsync(async () =>
+        using var scanCancellationSource = new CancellationTokenSource();
+        _scanCancellationSource = scanCancellationSource;
+        RefreshScanCancellationState();
+        try
         {
-            var settings = LoadConfiguredSettings();
-            var archiveSettings = _services.ArchiveSettings.Load();
-            EmbyLibraryMatch? libraryMatch = null;
-
-            StatusText = "Starte Emby-Scan...";
-            ProgressValue = 5;
-            var scanTrigger = await _services.Sync.TriggerSeriesLibraryScanAsync(
-                settings,
-                archiveSettings.DefaultSeriesArchiveRootPath);
-            ProgressValue = 10;
-            AppendLog(scanTrigger.Message);
-            if (scanTrigger.UsedGlobalLibraryScan)
-            {
-                StatusText = "Globaler Emby-Scan läuft (nicht bibliotheksscharf).";
-                AppendLog("Hinweis: Für den globalen Emby-Fallback ist derzeit kein bibliotheksscharfer Serverfortschritt verfügbar.");
-            }
-            else if (scanTrigger.Library is not null && !string.IsNullOrWhiteSpace(scanTrigger.MatchedLibraryPath))
-            {
-                StatusText = $"Emby-Serienbibliotheksscan läuft: {scanTrigger.Library.Name}";
-                libraryMatch = new EmbyLibraryMatch(scanTrigger.Library, scanTrigger.MatchedLibraryPath!);
-                await WaitForSeriesLibraryScanAsync(settings, scanTrigger.Library);
-            }
-
-            StatusText = "Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
-            ProgressValue = Math.Max(ProgressValue, 50);
-            await ResolveEmbyItemsWithinBudgetAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
-            await RefreshSelectedAnalysesAfterLibraryScanAsync(settings, selectedItems, archiveSettings.DefaultSeriesArchiveRootPath, libraryMatch);
-
-            ProgressValue = 100;
-            StatusText = scanTrigger.UsedGlobalLibraryScan
-                ? "Emby-Scan und Nachprüfung abgeschlossen. Der globale Server-Scan kann noch im Hintergrund weiterlaufen."
-                : "Emby-Scan und Nachprüfung abgeschlossen.";
+            await RunBusyAsync(() => RunScanWorkflowAsync(selectedItems, scanCancellationSource.Token));
+        }
+        catch (OperationCanceledException) when (scanCancellationSource.IsCancellationRequested)
+        {
+            StatusText = "Warten auf Emby-Scan abgebrochen. Der Server-Scan läuft gegebenenfalls weiter.";
             AppendLog(StatusText);
-            RefreshSummaryAndCommands();
-            SaveVisibleLog("Emby scannen");
-        });
+            SaveVisibleLog("Emby-Scan abgebrochen");
+        }
+        finally
+        {
+            if (ReferenceEquals(_scanCancellationSource, scanCancellationSource))
+            {
+                _scanCancellationSource = null;
+            }
+
+            RefreshScanCancellationState();
+        }
+    }
+
+    private async Task RunScanWorkflowAsync(
+        IReadOnlyList<EmbySyncItemViewModel> selectedItems,
+        CancellationToken cancellationToken)
+    {
+        var settings = LoadConfiguredSettings();
+        var archiveSettings = _services.ArchiveSettings.Load();
+        EmbyLibraryMatch? libraryMatch = null;
+        var serverScanConfirmedComplete = false;
+
+        StatusText = "Starte Emby-Scan...";
+        ProgressValue = 5;
+        var scanTrigger = await _services.Sync.TriggerSeriesLibraryScanAsync(
+            settings,
+            archiveSettings.DefaultSeriesArchiveRootPath,
+            cancellationToken);
+        ProgressValue = 10;
+        AppendLog(scanTrigger.Message);
+        if (scanTrigger.UsedGlobalLibraryScan)
+        {
+            StatusText = "Globaler Emby-Scan läuft (nicht bibliotheksscharf).";
+            AppendLog("Hinweis: Für den globalen Emby-Fallback ist derzeit kein bibliotheksscharfer Serverfortschritt verfügbar.");
+        }
+        else if (scanTrigger.Library is not null && !string.IsNullOrWhiteSpace(scanTrigger.MatchedLibraryPath))
+        {
+            StatusText = $"Emby-Serienbibliotheksscan läuft: {scanTrigger.Library.Name}";
+            libraryMatch = new EmbyLibraryMatch(scanTrigger.Library, scanTrigger.MatchedLibraryPath!);
+            serverScanConfirmedComplete = await WaitForSeriesLibraryScanAsync(
+                settings,
+                scanTrigger.Library,
+                cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        StatusText = "Warte auf neue Emby-Items für den lokalen NFO-Abgleich...";
+        ProgressValue = Math.Max(ProgressValue, 50);
+        await ResolveEmbyItemsWithinBudgetAsync(
+            settings,
+            selectedItems,
+            archiveSettings.DefaultSeriesArchiveRootPath,
+            libraryMatch,
+            cancellationToken);
+        await RefreshSelectedAnalysesAfterLibraryScanAsync(
+            settings,
+            selectedItems,
+            archiveSettings.DefaultSeriesArchiveRootPath,
+            libraryMatch,
+            cancellationToken);
+
+        ProgressValue = serverScanConfirmedComplete ? 100 : Math.Max(ProgressValue, 90);
+        StatusText = serverScanConfirmedComplete
+            ? "Emby-Scan und Nachprüfung abgeschlossen."
+            : "Lokale Nachprüfung abgeschlossen. Der Abschluss des Emby-Scans konnte nicht bestätigt werden.";
+        AppendLog(StatusText);
+        RefreshSummaryAndCommands();
+        SaveVisibleLog("Emby scannen");
     }
 
     private async Task ReviewSelectedMetadataAsync()
@@ -669,7 +720,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         AppEmbySettings settings,
         IReadOnlyList<EmbySyncItemViewModel> selectedItems,
         string? archiveRootPath,
-        EmbyLibraryMatch? libraryMatch)
+        EmbyLibraryMatch? libraryMatch,
+        CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600));
         var pendingItems = selectedItems
@@ -679,6 +731,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         while (pendingItems.Count > 0 && DateTime.UtcNow <= deadline)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             attempt++;
             StatusText = $"Suche neue Emby-Items ({selectedItems.Count - pendingItems.Count}/{selectedItems.Count})...";
             foreach (var item in pendingItems.ToList())
@@ -687,7 +740,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     settings,
                     item.MediaFilePath,
                     archiveRootPath,
-                    libraryMatch);
+                    libraryMatch,
+                    cancellationToken);
                 if (embyItem is null)
                 {
                     continue;
@@ -703,7 +757,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
             if (pendingItems.Count > 0)
             {
-                await Task.Delay(TimeSpan.FromSeconds(2));
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
             }
         }
 
@@ -721,10 +775,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         AppEmbySettings settings,
         IReadOnlyList<EmbySyncItemViewModel> selectedItems,
         string? archiveRootPath,
-        EmbyLibraryMatch? libraryMatch)
+        EmbyLibraryMatch? libraryMatch,
+        CancellationToken cancellationToken)
     {
         for (var index = 0; index < selectedItems.Count; index++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var item = selectedItems[index];
             StatusText = $"Prüfe NFO nach Emby-Scan {index + 1}/{selectedItems.Count}...";
             ProgressValue = ScaleProgress(index, selectedItems.Count, 70, 80);
@@ -738,7 +794,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 queryEmby: true,
                 archiveRootPath,
                 libraryMatch,
-                "Nach Emby-Scan");
+                "Nach Emby-Scan",
+                cancellationToken);
             item.ApplyAnalysis(analysis);
         }
     }
@@ -753,7 +810,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         bool queryEmby,
         string? archiveRootPath,
         EmbyLibraryMatch? libraryMatch,
-        string operationLabel)
+        string operationLabel,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -763,7 +821,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 queryEmby,
                 archiveRootPath,
                 libraryMatch,
-                CancellationToken.None);
+                cancellationToken);
         }
         catch (Exception ex) when (queryEmby && ex is not OperationCanceledException)
         {
@@ -949,6 +1007,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     {
         SelectReportCommand.RaiseCanExecuteChanged();
         RunScanCommand.RaiseCanExecuteChanged();
+        CancelScanCommand.RaiseCanExecuteChanged();
         ToggleSelectedItemSelectionCommand.RaiseCanExecuteChanged();
         ReviewSelectedMetadataCommand.RaiseCanExecuteChanged();
         ReviewSelectedImdbCommand.RaiseCanExecuteChanged();
@@ -956,6 +1015,26 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         RunSyncCommand.RaiseCanExecuteChanged();
         SelectAllCommand.RaiseCanExecuteChanged();
         DeselectAllCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshScanCancellationState()
+    {
+        OnPropertyChanged(nameof(CanCancelScan));
+        OnPropertyChanged(nameof(CancelScanTooltip));
+        CancelScanCommand.RaiseCanExecuteChanged();
+    }
+
+    private void CancelScan()
+    {
+        if (!CanCancelScan)
+        {
+            return;
+        }
+
+        StatusText = "Warten auf Emby-Scan wird abgebrochen...";
+        AppendLog("Abbruch des lokalen Emby-Scan-Workflows angefordert. Der Server-Scan wird dadurch nicht gestoppt.");
+        _scanCancellationSource?.Cancel();
+        RefreshScanCancellationState();
     }
 
     private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1021,20 +1100,28 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             : PortableAppStorage.AppDirectory;
     }
 
-    private async Task WaitForSeriesLibraryScanAsync(AppEmbySettings settings, EmbyLibraryFolder library)
+    /// <summary>
+    /// Wartet unabhängig vom Item-Nachladebudget, bis Emby den gezielten Bibliotheksscan
+    /// tatsächlich als beendet meldet. Das konfigurierbare Budget gilt erst anschließend
+    /// für neue Emby-Items und darf einen noch laufenden Server-Scan nicht als fertig ausgeben.
+    /// </summary>
+    /// <returns><see langword="true"/>, wenn Emby den Scanabschluss bestätigt hat.</returns>
+    private async Task<bool> WaitForSeriesLibraryScanAsync(
+        AppEmbySettings settings,
+        EmbyLibraryFolder library,
+        CancellationToken cancellationToken)
     {
-        var timeoutSeconds = Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600);
-        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
-        var activationDeadline = DateTime.UtcNow.AddSeconds(Math.Min(timeoutSeconds, 10));
+        var activationDeadline = DateTime.UtcNow.AddSeconds(10);
         var sawActiveServerProgress = false;
 
-        while (DateTime.UtcNow <= deadline)
+        while (true)
         {
-            var currentLibrary = await _services.Sync.GetLibraryByIdAsync(settings, library.Id, CancellationToken.None);
+            cancellationToken.ThrowIfCancellationRequested();
+            var currentLibrary = await _services.Sync.GetLibraryByIdAsync(settings, library.Id, cancellationToken);
             if (currentLibrary is null)
             {
                 AppendLog($"Serienbibliothek konnte nach dem Start nicht mehr von Emby gelesen werden: {library.Name}");
-                return;
+                return false;
             }
 
             if (TryGetActiveLibraryScanState(currentLibrary, out var progressPercent, out var refreshStatusText))
@@ -1050,20 +1137,17 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 ProgressValue = 50;
                 StatusText = $"Serienbibliotheksscan abgeschlossen: {currentLibrary.Name}";
                 AppendLog(StatusText);
-                return;
+                return true;
             }
             else if (DateTime.UtcNow >= activationDeadline)
             {
-                AppendLog($"Emby meldet für '{currentLibrary.Name}' keinen expliziten Refresh-Fortschritt. Fahre mit dem lokalen Abgleich fort.");
+                AppendLog($"Emby meldet für '{currentLibrary.Name}' keinen expliziten Refresh-Fortschritt. Der Serverabschluss kann deshalb nicht bestätigt werden.");
                 ProgressValue = 50;
-                return;
+                return false;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(2));
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
         }
-
-        AppendLog($"Timeout beim Warten auf den Emby-Serienbibliotheksscan: {library.Name}");
-        ProgressValue = 50;
     }
 
     private static int ScaleProgress(int index, int count, int startPercent, int endPercent)

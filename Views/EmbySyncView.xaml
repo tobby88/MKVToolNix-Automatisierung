@@ -2,6 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
         <Style x:Key="EditableIdTextBoxStyle" TargetType="TextBox">
             <Setter Property="Margin" Value="0" />
             <Setter Property="Padding" Value="4,2" />
@@ -343,6 +345,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="180" />
             </Grid.ColumnDefinitions>
 
@@ -375,7 +378,14 @@
                     Command="{Binding RunSyncCommand}"
                     ToolTip="{Binding RunSyncTooltip, Mode=OneWay}"
                     Content="NFO speichern + Emby aktualisieren" />
-            <ProgressBar Grid.Column="5"
+            <Button Grid.Column="5"
+                    Margin="0,0,12,0"
+                    Padding="10,6"
+                    Command="{Binding CancelScanCommand}"
+                    Content="Scan-Warten abbrechen"
+                    ToolTip="{Binding CancelScanTooltip, Mode=OneWay}"
+                    Visibility="{Binding CanCancelScan, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <ProgressBar Grid.Column="6"
                          Height="18"
                          Minimum="0"
                          Maximum="100"

@@ -514,6 +514,16 @@ public sealed class SelectionGridInteractionTests
                     await WpfTestHost.WaitForIdleAsync();
 
                     Assert.False(grid.IsEnabled);
+                    Assert.True(viewModel.CanCancelScan);
+
+                    // ScanWaitTimeoutSeconds begrenzt nur das spätere Suchen neuer Items.
+                    // Ein noch laufender Emby-Bibliotheksscan darf nach diesem Zeitraum
+                    // weder freigegeben noch als abgeschlossen dargestellt werden.
+                    await Task.Delay(TimeSpan.FromSeconds(6));
+                    await WpfTestHost.WaitForIdleAsync();
+
+                    Assert.False(viewModel.IsInteractive);
+                    Assert.DoesNotContain("abgeschlossen", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
 
                     pendingClient.ReleaseScan();
 
@@ -521,6 +531,75 @@ public sealed class SelectionGridInteractionTests
                     await WpfTestHost.WaitForIdleAsync();
 
                     Assert.True(grid.IsEnabled);
+                }
+                finally
+                {
+                    window.Close();
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        });
+    }
+
+    [Fact]
+    public async Task EmbySyncView_CancelsLocalWaitWithoutClaimingServerScanCompleted()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-cancel-tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDirectory);
+            try
+            {
+                var mediaPath = Path.Combine(tempDirectory, "Serie - S01E01 - Pilot.mkv");
+                File.WriteAllText(mediaPath, string.Empty);
+
+                var embyItem = new EmbyItem(
+                    "emby-1",
+                    "Pilot",
+                    mediaPath,
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+                var pendingClient = new PendingScanEmbyClient(tempDirectory, embyItem);
+                var viewModel = CreateEmbySyncViewModel(
+                    embyClient: pendingClient,
+                    embySettings: new AppEmbySettings
+                    {
+                        ServerUrl = "http://emby.local:8096",
+                        ApiKey = "api-key",
+                        ScanWaitTimeoutSeconds = 5
+                    },
+                    archiveRootPath: tempDirectory);
+                var item = new EmbySyncItemViewModel(mediaPath, EmbyProviderIds.Empty);
+                item.ApplyEmbyItem(embyItem);
+                viewModel.Items.Add(item);
+                viewModel.SelectedItem = item;
+
+                var view = new EmbySyncView
+                {
+                    DataContext = viewModel
+                };
+                var window = CreateHostWindow(view);
+
+                try
+                {
+                    window.Show();
+                    await WpfTestHost.WaitForIdleAsync();
+
+                    viewModel.RunScanCommand.Execute(null);
+                    Assert.True(await WaitUntilAsync(() => viewModel.CanCancelScan, TimeSpan.FromSeconds(2)));
+
+                    viewModel.CancelScanCommand.Execute(null);
+
+                    Assert.True(await WaitUntilAsync(() => viewModel.IsInteractive, TimeSpan.FromSeconds(2)));
+                    Assert.False(viewModel.CanCancelScan);
+                    Assert.Contains("abgebrochen", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("Server-Scan", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
+                    Assert.NotEqual(100, viewModel.ProgressValue);
                 }
                 finally
                 {
@@ -865,7 +944,7 @@ public sealed class SelectionGridInteractionTests
             => throw new NotSupportedException("Es sollte ein bibliotheksscharfer Scan verwendet werden.");
 
         public Task TriggerItemFileScanAsync(AppEmbySettings settings, string itemId, CancellationToken cancellationToken = default)
-            => _scanRelease.Task;
+            => Task.CompletedTask;
 
         public Task<EmbyItem?> FindItemByPathAsync(AppEmbySettings settings, string mediaFilePath, CancellationToken cancellationToken = default)
         {
