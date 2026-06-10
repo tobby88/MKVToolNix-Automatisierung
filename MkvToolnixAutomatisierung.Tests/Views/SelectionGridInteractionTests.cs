@@ -521,8 +521,11 @@ public sealed class SelectionGridInteractionTests
                     // ScanWaitTimeoutSeconds begrenzt nur das spätere Suchen neuer Items.
                     // Ein noch laufender Emby-Bibliotheksscan darf nach diesem Zeitraum
                     // weder freigegeben noch als abgeschlossen dargestellt werden.
-                    await Task.Delay(TimeSpan.FromSeconds(6));
-                    await WpfTestHost.WaitForIdleAsync();
+                    Assert.True(await WaitUntilAsync(
+                        () => viewModel.ProgressDisplayText.Contains(
+                            "weiter aktiv",
+                            StringComparison.OrdinalIgnoreCase),
+                        TimeSpan.FromSeconds(10)));
 
                     Assert.False(viewModel.IsInteractive);
                     Assert.DoesNotContain("abgeschlossen", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
