@@ -164,6 +164,18 @@ internal partial class EpisodeEditModel
         {
             _excludedSourcePaths.Add(excludedSourcePath);
         }
+
+        _rejectedManualCheckSourcePaths.RemoveWhere(path => !_excludedSourcePaths.Contains(path));
+    }
+
+    public void MarkCurrentReviewTargetRejectedForCleanup()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
+        {
+            return;
+        }
+
+        _rejectedManualCheckSourcePaths.Add(CurrentReviewTargetPath);
     }
 
     public virtual void ApproveCurrentReviewTarget()

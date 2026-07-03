@@ -55,6 +55,25 @@ public sealed class EpisodeEditModelManualCheckTests : IDisposable
         Assert.Equal(newAudioDescriptionPath, item.CurrentReviewTargetPath);
     }
 
+    [Fact]
+    public void ReplaceExcludedSourcePaths_RemovesRejectedCleanupCandidateWhenExclusionIsCleared()
+    {
+        var rejectedPath = CreateFile("rejected-srf.mp4");
+        var item = new TestEpisodeEditModel(
+            audioDescriptionPath: null,
+            requiresManualCheck: true,
+            manualCheckFilePaths: [rejectedPath]);
+
+        item.MarkCurrentReviewTargetRejectedForCleanup();
+        item.ReplaceExcludedSourcePaths([rejectedPath]);
+
+        Assert.Equal([rejectedPath], item.RejectedManualCheckSourcePaths);
+
+        item.ReplaceExcludedSourcePaths([]);
+
+        Assert.Empty(item.RejectedManualCheckSourcePaths);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

@@ -76,6 +76,32 @@ public sealed class EpisodeCleanupFilePlannerTests : IDisposable
         Assert.DoesNotContain(rejectedSubtitle, cleanupFiles);
     }
 
+    [Fact]
+    public void BuildRejectedSourceCleanupFileList_IncludesRejectedSourceAndExactCompanions()
+    {
+        var sourceRoot = Path.Combine(_tempDirectory, "source-root");
+        Directory.CreateDirectory(sourceRoot);
+
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+
+        var rejectedVideo = CreateFile(Path.Combine(sourceRoot, "srf-defekt.mp4"));
+        var rejectedText = CreateFile(Path.Combine(sourceRoot, "srf-defekt.txt"));
+        var rejectedSubtitle = CreateFile(Path.Combine(sourceRoot, "srf-defekt.ass"));
+        var unrelatedText = CreateFile(Path.Combine(sourceRoot, "andere-quelle.txt"));
+        var outputFile = CreateFile(Path.Combine(sourceRoot, "output.mkv"));
+
+        var cleanupFiles = planner.BuildRejectedSourceCleanupFileList(
+            [rejectedVideo],
+            outputFile,
+            sourceRoot: sourceRoot);
+
+        Assert.Contains(rejectedVideo, cleanupFiles);
+        Assert.Contains(rejectedText, cleanupFiles);
+        Assert.Contains(rejectedSubtitle, cleanupFiles);
+        Assert.DoesNotContain(unrelatedText, cleanupFiles);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

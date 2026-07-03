@@ -58,6 +58,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private string _metadataOriginalLanguage = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _rejectedManualCheckSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _approvedReviewPaths = new(StringComparer.OrdinalIgnoreCase);
 
     protected EpisodeEditModel()

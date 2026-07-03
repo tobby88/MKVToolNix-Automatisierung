@@ -398,6 +398,13 @@ internal partial class EpisodeEditModel
 
     public IReadOnlyCollection<string> ExcludedSourcePaths => _excludedSourcePaths;
 
+    /// <summary>
+    /// Quellen, die im manuellen Pflichtcheck explizit als nicht in Ordnung verworfen wurden.
+    /// Sie bleiben normale Excludes, dürfen nach erfolgreichem Ersatz-Mux aber mit in den
+    /// Done-Ordner, damit defekte SRF-Quellen nicht bei jedem neuen Scan erneut auftauchen.
+    /// </summary>
+    public IReadOnlyCollection<string> RejectedManualCheckSourcePaths => _rejectedManualCheckSourcePaths;
+
     public IReadOnlyList<string> RequestedSourcePaths => _requestedSourcePaths;
 
     public string RequestedSourcesDisplayText => EpisodeEditTextBuilder.FormatPaths(_requestedSourcePaths);

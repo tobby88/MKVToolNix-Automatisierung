@@ -80,6 +80,7 @@ public sealed class EpisodeReviewWorkflowTests
         ],
             dialogService.OpenedFilePaths);
         Assert.Contains(@"C:\Temp\episode-alt-1.mp4", item.ExcludedSourcePaths);
+        Assert.Contains(@"C:\Temp\episode-alt-1.mp4", item.RejectedManualCheckSourcePaths);
     }
 
     [Fact]
@@ -202,6 +203,7 @@ public sealed class EpisodeReviewWorkflowTests
         private readonly List<string> _manualCheckFilePaths;
         private readonly HashSet<string> _approvedPaths = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _rejectedManualCheckSourcePaths = new(StringComparer.OrdinalIgnoreCase);
 
         public FakeEpisodeReviewItem(params string[] manualCheckFilePaths)
         {
@@ -228,6 +230,8 @@ public sealed class EpisodeReviewWorkflowTests
 
         public IReadOnlyCollection<string> ExcludedSourcePaths => _excludedSourcePaths;
 
+        public IReadOnlyCollection<string> RejectedManualCheckSourcePaths => _rejectedManualCheckSourcePaths;
+
         public bool RequiresMetadataReview => false;
 
         public bool IsMetadataReviewApproved => true;
@@ -245,6 +249,14 @@ public sealed class EpisodeReviewWorkflowTests
             if (!string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
             {
                 _approvedPaths.Add(CurrentReviewTargetPath);
+            }
+        }
+
+        public void MarkCurrentReviewTargetRejectedForCleanup()
+        {
+            if (!string.IsNullOrWhiteSpace(CurrentReviewTargetPath))
+            {
+                _rejectedManualCheckSourcePaths.Add(CurrentReviewTargetPath);
             }
         }
 
@@ -274,6 +286,8 @@ public sealed class EpisodeReviewWorkflowTests
             {
                 _excludedSourcePaths.Add(filePath);
             }
+
+            _rejectedManualCheckSourcePaths.RemoveWhere(path => !_excludedSourcePaths.Contains(path));
         }
     }
 }

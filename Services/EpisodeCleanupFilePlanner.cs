@@ -5,6 +5,25 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal sealed class EpisodeCleanupFilePlanner
 {
+    private static readonly HashSet<string> CompanionExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".txt",
+        ".srt",
+        ".ass",
+        ".vtt",
+        ".ttml"
+    };
+
+    private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4",
+        ".mkv",
+        ".mov",
+        ".webm",
+        ".avi",
+        ".m4v"
+    };
+
     private readonly EpisodeOutputPathService _outputPaths;
 
     public EpisodeCleanupFilePlanner(EpisodeOutputPathService outputPaths)
@@ -45,6 +64,56 @@ internal sealed class EpisodeCleanupFilePlanner
             .ToList();
     }
 
+    /// <summary>
+    /// Baut Cleanup-Kandidaten für Quellen, die im Pflichtcheck ausdrücklich als nicht
+    /// in Ordnung verworfen wurden. Anders als normale Excludes dürfen diese Dateien
+    /// nach erfolgreichem Ersatz-Mux aufgeräumt werden, inklusive direkter Sidecars
+    /// mit demselben Basenamen.
+    /// </summary>
+    /// <param name="rejectedSourcePaths">Im Review verworfene Medienquellen.</param>
+    /// <param name="outputPath">Zieldatei des aktuellen Mux-Laufs.</param>
+    /// <param name="workingCopyPath">Optionaler Pfad einer temporären Arbeitskopie, die nicht verschoben werden darf.</param>
+    /// <param name="sourceRoot">Optionaler Quellwurzelpfad, auf den die Kandidaten eingeschränkt werden.</param>
+    /// <returns>Bereinigte Liste der verschiebbaren abgelehnten Quellen und Begleitdateien.</returns>
+    public List<string> BuildRejectedSourceCleanupFileList(
+        IEnumerable<string> rejectedSourcePaths,
+        string outputPath,
+        string? workingCopyPath = null,
+        string? sourceRoot = null)
+    {
+        return BuildCleanupFileList(
+            ExpandRejectedSourceCleanupCandidates(rejectedSourcePaths),
+            outputPath,
+            workingCopyPath,
+            sourceRoot,
+            excludedSourcePaths: null);
+    }
+
+    private static IEnumerable<string> ExpandRejectedSourceCleanupCandidates(IEnumerable<string> rejectedSourcePaths)
+    {
+        foreach (var rejectedSourcePath in rejectedSourcePaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            yield return rejectedSourcePath;
+
+            if (!MediaExtensions.Contains(Path.GetExtension(rejectedSourcePath)))
+            {
+                continue;
+            }
+
+            var directory = Path.GetDirectoryName(rejectedSourcePath);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                continue;
+            }
+
+            var stem = Path.GetFileNameWithoutExtension(rejectedSourcePath);
+            foreach (var companionExtension in CompanionExtensions)
+            {
+                yield return Path.Combine(directory, stem + companionExtension);
+            }
+        }
+    }
+
     private static IReadOnlyList<CleanupExclusion> BuildCleanupExclusions(IEnumerable<string>? excludedSourcePaths)
     {
         return excludedSourcePaths?
@@ -65,25 +134,6 @@ internal sealed class EpisodeCleanupFilePlanner
 
     private sealed class CleanupExclusion
     {
-        private static readonly HashSet<string> CompanionExtensions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ".txt",
-            ".srt",
-            ".ass",
-            ".vtt",
-            ".ttml"
-        };
-
-        private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ".mp4",
-            ".mkv",
-            ".mov",
-            ".webm",
-            ".avi",
-            ".m4v"
-        };
-
         private readonly string _sourcePath;
         private readonly string? _sourceDirectory;
         private readonly string _sourceStem;

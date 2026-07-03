@@ -237,12 +237,23 @@ internal sealed partial class BatchMuxViewModel
 
     private List<string> BuildBatchCleanupFileList(BatchEpisodeItemViewModel item, SeriesEpisodeMuxPlan plan)
     {
-        return _services.CleanupFiles.BuildCleanupFileList(
+        var regularCleanupFiles = _services.CleanupFiles.BuildCleanupFileList(
             item.RelatedEpisodeFilePaths.Concat(plan.GetReferencedInputFiles()),
             item.OutputPath,
             plan.WorkingCopy?.DestinationFilePath,
             SourceDirectory,
             item.ExcludedSourcePaths);
+        var rejectedSourceCleanupFiles = _services.CleanupFiles.BuildRejectedSourceCleanupFileList(
+            item.RejectedManualCheckSourcePaths,
+            item.OutputPath,
+            plan.WorkingCopy?.DestinationFilePath,
+            SourceDirectory);
+
+        return regularCleanupFiles
+            .Concat(rejectedSourceCleanupFiles)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private async Task OfferBatchDoneCleanupAsync(

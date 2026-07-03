@@ -19,6 +19,7 @@ internal interface IEpisodeReviewItem
     string? CurrentReviewTargetPath { get; }
     string DetectionSeedPath { get; }
     IReadOnlyCollection<string> ExcludedSourcePaths { get; }
+    IReadOnlyCollection<string> RejectedManualCheckSourcePaths { get; }
     bool RequiresMetadataReview { get; }
     bool IsMetadataReviewApproved { get; }
     string LocalSeriesName { get; }
@@ -26,6 +27,7 @@ internal interface IEpisodeReviewItem
     string LocalEpisodeNumber { get; }
     string LocalTitle { get; }
     void ApproveCurrentReviewTarget();
+    void MarkCurrentReviewTargetRejectedForCleanup();
     void ApplyLocalMetadataGuess();
     void ApplyTvdbSelection(TvdbEpisodeSelection selection);
     void ApproveMetadataReview(string statusText);
@@ -130,6 +132,7 @@ internal sealed class EpisodeReviewWorkflow : IEpisodeReviewWorkflow
             {
                 reviewTargetPath
             };
+            item.MarkCurrentReviewTargetRejectedForCleanup();
 
             var updated = await tryAlternativeAsync(tentativeExclusions);
             if (!updated)
