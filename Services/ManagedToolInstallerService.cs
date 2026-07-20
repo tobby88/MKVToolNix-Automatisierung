@@ -925,7 +925,8 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         }
 
         var currentDirectoryName = SanitizePathSegment(currentVersionToken);
-        foreach (var directory in Directory.EnumerateDirectories(toolRootDirectory))
+        var versionDirectories = Directory.EnumerateDirectories(toolRootDirectory).ToArray();
+        foreach (var directory in versionDirectories)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var directoryName = Path.GetFileName(directory);

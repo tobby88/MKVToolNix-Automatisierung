@@ -30,6 +30,12 @@ public sealed class PortableStorageFixture : IDisposable
 
     private static void DeleteDirectoryIfExists(string directoryPath)
     {
+        if (File.Exists(directoryPath))
+        {
+            File.Delete(directoryPath);
+            return;
+        }
+
         if (!Directory.Exists(directoryPath))
         {
             return;
