@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Services;
 
@@ -70,6 +71,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
             if (!string.IsNullOrWhiteSpace(durationMismatchHint))
             {
                 notes.Add(durationMismatchHint);
+            }
+
+            var cutMismatchHint = await TryBuildSourceCutMismatchHintAsync(
+                archiveDecision.OutputFilePath,
+                hintSourcePath,
+                "aktuelle Quelle",
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(cutMismatchHint))
+            {
+                notes.Add(cutMismatchHint);
             }
 
             return SeriesEpisodeMuxPlan.CreateSkip(
@@ -168,6 +179,13 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var subtitleFilesForPlan = archiveDecision.SubtitleFiles.Count > 0
             ? archiveDecision.SubtitleFiles
             : subtitleFiles;
+
+        notes.AddRange(await BuildSourceCutMismatchHintsAsync(
+            videoSources,
+            audioSources,
+            audioDescriptionSources,
+            subtitleFilesForPlan,
+            cancellationToken));
 
         var attachmentFilePaths = archiveDecision.AttachmentFilePaths.Count > 0
             ? archiveDecision.AttachmentFilePaths
@@ -496,6 +514,131 @@ public sealed partial class SeriesEpisodeMuxPlanner
         }
     }
 
+    /// <summary>
+    /// Vergleicht alle tatsächlich gemischten Medienquellen mit der gewählten Hauptvideodatei.
+    /// Kleine, aber präzise Laufzeitabweichungen sind ein typisches Signal für senderabhängige
+    /// Vor- oder Abspänne und müssen deshalb vor dem Muxen explizit geprüft werden.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> BuildSourceCutMismatchHintsAsync(
+        IReadOnlyList<VideoSourcePlan> videoSources,
+        IReadOnlyList<AudioSourcePlan> audioSources,
+        IReadOnlyList<AudioDescriptionSourcePlan> audioDescriptionSources,
+        IReadOnlyList<SubtitleFile> subtitleFiles,
+        CancellationToken cancellationToken)
+    {
+        if (_ffprobeDurationProbe is null || videoSources.Count == 0)
+        {
+            return [];
+        }
+
+        var primaryVideoPath = videoSources[0].FilePath;
+        var candidates = videoSources
+            .Skip(1)
+            .Select(source => new CutComparisonSource(source.FilePath, "zusätzliche Videoquelle"))
+            .Concat(audioSources.Select(source => new CutComparisonSource(source.FilePath, "Tonquelle")))
+            .Concat(audioDescriptionSources.Select(source => new CutComparisonSource(source.FilePath, "Audiodeskriptionsquelle")))
+            .Concat(subtitleFiles
+                .Where(subtitle => subtitle.IsEmbedded)
+                .Select(subtitle => new CutComparisonSource(subtitle.FilePath, "Archivquelle mit Untertiteln")))
+            .Where(source => !PathComparisonHelper.AreSamePath(source.FilePath, primaryVideoPath))
+            .GroupBy(source => source.FilePath, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new CutComparisonSource(
+                group.Key,
+                string.Join("/", group.Select(source => source.Role).Distinct(StringComparer.OrdinalIgnoreCase))))
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return [];
+        }
+
+        var primaryDuration = await TryReadDurationForHintAsync(primaryVideoPath, cancellationToken);
+        if (primaryDuration is null)
+        {
+            return [];
+        }
+
+        var hints = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var candidateDuration = await TryReadDurationForHintAsync(candidate.FilePath, cancellationToken);
+            var hint = BuildSourceCutMismatchHint(
+                primaryVideoPath,
+                primaryDuration,
+                candidate.FilePath,
+                candidateDuration,
+                candidate.Role);
+            if (!string.IsNullOrWhiteSpace(hint))
+            {
+                hints.Add(hint);
+            }
+        }
+
+        return hints.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private async Task<string?> TryBuildSourceCutMismatchHintAsync(
+        string primaryVideoPath,
+        string? comparisonSourcePath,
+        string comparisonRole,
+        CancellationToken cancellationToken)
+    {
+        if (_ffprobeDurationProbe is null
+            || string.IsNullOrWhiteSpace(comparisonSourcePath)
+            || PathComparisonHelper.AreSamePath(primaryVideoPath, comparisonSourcePath))
+        {
+            return null;
+        }
+
+        var primaryDuration = await TryReadDurationForHintAsync(primaryVideoPath, cancellationToken);
+        var comparisonDuration = await TryReadDurationForHintAsync(comparisonSourcePath, cancellationToken);
+        return BuildSourceCutMismatchHint(
+            primaryVideoPath,
+            primaryDuration,
+            comparisonSourcePath,
+            comparisonDuration,
+            comparisonRole);
+    }
+
+    /// <summary>
+    /// Baut den testbaren fachlichen Warnhinweis für zwei wahrscheinlich unterschiedliche
+    /// Schnittfassungen derselben Episode.
+    /// </summary>
+    /// <param name="primaryVideoPath">Datei der im Plan gewählten Hauptvideospur.</param>
+    /// <param name="primaryDuration">Präzise Laufzeit der Hauptvideoquelle.</param>
+    /// <param name="comparisonSourcePath">Andere Quelle, deren zeitgebundene Spur zugemischt werden soll.</param>
+    /// <param name="comparisonDuration">Präzise Laufzeit der Vergleichsquelle.</param>
+    /// <param name="comparisonRole">Lesbare Rolle der Vergleichsquelle im Mux-Plan.</param>
+    /// <returns>Verpflichtender Review-Hinweis oder <see langword="null"/> ohne belastbares Risikosignal.</returns>
+    internal static string? BuildSourceCutMismatchHint(
+        string primaryVideoPath,
+        TimeSpan? primaryDuration,
+        string comparisonSourcePath,
+        TimeSpan? comparisonDuration,
+        string comparisonRole)
+    {
+        if (primaryDuration is null
+            || comparisonDuration is null
+            || primaryDuration.Value < MinimumDurationForMultipartHint
+            || comparisonDuration.Value < MinimumDurationForMultipartHint)
+        {
+            return null;
+        }
+
+        var signedDifferenceSeconds = comparisonDuration.Value.TotalSeconds - primaryDuration.Value.TotalSeconds;
+        var differenceSeconds = Math.Abs(signedDifferenceSeconds);
+        var referenceSeconds = Math.Max(primaryDuration.Value.TotalSeconds, comparisonDuration.Value.TotalSeconds);
+        if (differenceSeconds < 2d || differenceSeconds / referenceSeconds > 0.08d)
+        {
+            return null;
+        }
+
+        var relation = signedDifferenceSeconds > 0 ? "länger" : "kürzer";
+        var formattedDifference = differenceSeconds.ToString("0.0", CultureInfo.GetCultureInfo("de-DE"));
+        return $"Synchronität prüfen: Die {comparisonRole} „{Path.GetFileName(comparisonSourcePath)}“ ist {formattedDifference} s {relation} als die gewählte Hauptvideoquelle „{Path.GetFileName(primaryVideoPath)}“. "
+            + "Das deutet auf unterschiedliche Schnittfassungen (z. B. einen zusätzlichen Vorspann) hin; beim Mischen können Tonspuren oder Untertitel asynchron werden.";
+    }
+
     private static bool IsShortDurationMultipartHintTooWeak(TimeSpan? sourceDuration, TimeSpan? archiveDuration)
     {
         if (sourceDuration is null || archiveDuration is null)
@@ -511,6 +654,8 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return sourceDuration.Value < MinimumDurationForMultipartHint
             || archiveDuration.Value < MinimumDurationForMultipartHint;
     }
+
+    private sealed record CutComparisonSource(string FilePath, string Role);
 
     private static bool HasConflictingDurationEvidence(TimeSpan? textDuration, TimeSpan? probedDuration)
     {

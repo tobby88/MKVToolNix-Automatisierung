@@ -16,6 +16,37 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void BuildSourceCutMismatchHint_FlagsThreeSecondBroadcastIntro()
+    {
+        var hint = SeriesEpisodeMuxPlanner.BuildSourceCutMismatchHint(
+            @"Z:\Videos\Serien\Die Toten vom Bodensee\Unter Wölfen.mkv",
+            TimeSpan.FromSeconds(5_365.88),
+            @"C:\Downloads\Unter Wölfen (Audiodeskription).mp4",
+            TimeSpan.FromSeconds(5_368.88),
+            "Audiodeskriptionsquelle");
+
+        Assert.NotNull(hint);
+        Assert.Contains("3,0 s länger", hint, StringComparison.Ordinal);
+        Assert.Contains("unterschiedliche Schnittfassungen", hint, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unter Wölfen (Audiodeskription).mp4", hint, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(0.5)]
+    [InlineData(1.99)]
+    public void BuildSourceCutMismatchHint_IgnoresNormalContainerRounding(double differenceSeconds)
+    {
+        var hint = SeriesEpisodeMuxPlanner.BuildSourceCutMismatchHint(
+            @"C:\Archive\episode.mkv",
+            TimeSpan.FromMinutes(90),
+            @"C:\Sources\episode-ad.mp4",
+            TimeSpan.FromMinutes(90) + TimeSpan.FromSeconds(differenceSeconds),
+            "Audiodeskriptionsquelle");
+
+        Assert.Null(hint);
+    }
+
+    [Fact]
     public void FindEpisodePattern_ParsesYearBasedSeasonNumbers()
     {
         var match = Assert.IsType<Match>(SeriesEpisodeMuxPlanner.FindEpisodePattern("Beispieltitel (S2001 / E03)"));

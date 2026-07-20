@@ -65,6 +65,27 @@ public sealed class SeriesArchiveServiceTests : IDisposable
         Assert.Empty(decision.PrimarySubtitleTrackIds);
     }
 
+    [Theory]
+    [InlineData(0.9, true, true)]
+    [InlineData(3.0, true, false)]
+    [InlineData(40.0, false, true)]
+    [InlineData(60.0, false, false)]
+    public void AreAudioDescriptionDurationsCompatible_UsesTightToleranceForPreciseDurations(
+        double differenceSeconds,
+        bool isPrecise,
+        bool expected)
+    {
+        var requestedDuration = TimeSpan.FromSeconds(5_368.88);
+        var existingDuration = requestedDuration - TimeSpan.FromSeconds(differenceSeconds);
+
+        var compatible = SeriesArchiveService.AreAudioDescriptionDurationsCompatible(
+            requestedDuration,
+            existingDuration,
+            isPrecise);
+
+        Assert.Equal(expected, compatible);
+    }
+
     [Fact]
     public void ConfigureArchiveRootDirectory_PersistsNormalizedPath()
     {

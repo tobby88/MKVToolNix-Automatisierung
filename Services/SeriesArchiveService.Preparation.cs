@@ -459,7 +459,15 @@ public sealed partial class SeriesArchiveService
                 hasPreciseRequestedDuration);
     }
 
-    private static bool AreAudioDescriptionDurationsCompatible(
+    /// <summary>
+    /// Prüft, ob eine vorhandene und eine angeforderte AD-Spur dieselbe zeitliche Fassung abdecken.
+    /// Präzise Trackwerte werden dabei deutlich strenger behandelt als gerundete TXT-Angaben.
+    /// </summary>
+    /// <param name="requestedDuration">Laufzeit der neu angeforderten AD-Spur.</param>
+    /// <param name="existingDuration">Laufzeit der vorhandenen Archiv-AD.</param>
+    /// <param name="hasPreciseRequestedDuration">Kennzeichnet einen Track- oder ffprobe-Wert statt eines TXT-Fallbacks.</param>
+    /// <returns><see langword="true"/>, wenn beide Laufzeiten denselben AD-Slot belastbar abdecken.</returns>
+    internal static bool AreAudioDescriptionDurationsCompatible(
         TimeSpan? requestedDuration,
         TimeSpan? existingDuration,
         bool hasPreciseRequestedDuration)
@@ -471,11 +479,13 @@ public sealed partial class SeriesArchiveService
 
         var differenceSeconds = Math.Abs((requestedDuration.Value - existingDuration.Value).TotalSeconds);
         var referenceSeconds = Math.Max(requestedDuration.Value.TotalSeconds, existingDuration.Value.TotalSeconds);
-        // Echte Container- oder ffprobe-Dauern sind präzise genug für eine enge Toleranz.
-        // Nur der letzte TXT-Fallback bekommt mehr Spielraum, weil Mediathek-TXT-Dateien
-        // haeufig auf volle Minuten gerundet sind.
-        var minimumToleranceSeconds = hasPreciseRequestedDuration ? 10d : 30d;
-        var toleranceSeconds = Math.Max(minimumToleranceSeconds, Math.Round(referenceSeconds * 0.01d));
+        // Präzise Track-/ffprobe-Dauern dürfen nicht über mehrere Sekunden hinweg als
+        // gleich gelten: Ein kurzer Sender-Vorspann reicht bereits aus, um eine neue AD
+        // gegen das vorhandene Archivvideo hörbar zu verschieben. Nur gerundete TXT-Werte
+        // benötigen weiterhin den großzügigeren relativen Toleranzbereich.
+        var toleranceSeconds = hasPreciseRequestedDuration
+            ? 1d
+            : Math.Max(30d, Math.Round(referenceSeconds * 0.01d));
         return differenceSeconds <= toleranceSeconds;
     }
 

@@ -43,6 +43,7 @@ public sealed class EpisodeUiStateTests
     [InlineData("Bitte diese Quelle prüfen.", false)]
     [InlineData("Begleit-TXT und ermittelte Dateilaufzeit widersprechen sich deutlich. Bitte Archivtreffer und Episodencode manuell prüfen.", true)]
     [InlineData("Mehrere getrennt erkannte Quellen zeigen auf dieselbe Ausgabedatei 'Pilot.mkv'. Bitte Episodencode und Ausgabeziel prüfen.", true)]
+    [InlineData("Synchronität prüfen: Die Audiodeskriptionsquelle ist 3,0 s länger; beim Mischen können Tonspuren asynchron werden.", true)]
     public void IsActionablePlanReviewNote_UsesExplicitPlannerSignals(string note, bool expected)
     {
         Assert.Equal(expected, EpisodeEditTextBuilder.IsActionablePlanReviewNote(note));
@@ -52,9 +53,22 @@ public sealed class EpisodeUiStateTests
     [InlineData("Begleit-TXT und ermittelte Dateilaufzeit widersprechen sich deutlich. Bitte Archivtreffer und Episodencode manuell prüfen.", "Archiv prüfen")]
     [InlineData("Mehrere getrennt erkannte Quellen zeigen auf dieselbe Ausgabedatei 'Pilot.mkv'. Bitte Episodencode und Ausgabeziel prüfen.", "Ziel prüfen")]
     [InlineData("In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S01E01-E02). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört.", "Mehrfachfolge prüfen")]
+    [InlineData("Synchronität prüfen: Unterschiedliche Schnittfassungen können beim Mischen asynchron werden.", "Synchronität prüfen")]
     public void BuildPlanReviewLabel_UsesExplicitReviewCategory(string note, string expectedLabel)
     {
         Assert.Equal(expectedLabel, EpisodeEditTextBuilder.BuildPlanReviewLabel([note]));
+    }
+
+    [Fact]
+    public void BuildPlanReviewLabel_PrioritizesSynchronizationRisk()
+    {
+        var label = EpisodeEditTextBuilder.BuildPlanReviewLabel(
+        [
+            "Bitte Archivtreffer und Episodencode manuell prüfen.",
+            "Synchronität prüfen: Unterschiedliche Schnittfassungen können asynchron werden."
+        ]);
+
+        Assert.Equal("Synchronität prüfen", label);
     }
 
     [Fact]

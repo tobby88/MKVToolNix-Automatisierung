@@ -25,6 +25,13 @@ internal static class EpisodeEditTextBuilder
         "episodencode und ausgabeziel"
     ];
 
+    private static readonly string[] CutPlanReviewMarkers =
+    [
+        "synchronität prüfen",
+        "unterschiedliche schnittfassungen",
+        "asynchron werden"
+    ];
+
     public static string BuildManualCheckText(bool requiresManualCheck, bool isManualCheckApproved)
     {
         if (!requiresManualCheck)
@@ -287,7 +294,8 @@ internal static class EpisodeEditTextBuilder
 
         return ContainsAny(note, MultipartPlanReviewMarkers)
             || ContainsAny(note, ArchivePlanReviewMarkers)
-            || ContainsAny(note, OutputTargetPlanReviewMarkers);
+            || ContainsAny(note, OutputTargetPlanReviewMarkers)
+            || ContainsAny(note, CutPlanReviewMarkers);
     }
 
     public static string? GetPrimaryActionablePlanReviewNote(IEnumerable<string> notes)
@@ -323,6 +331,11 @@ internal static class EpisodeEditTextBuilder
             return "Ziel prüfen";
         }
 
+        if (ContainsAny(primaryNote, CutPlanReviewMarkers))
+        {
+            return "Synchronität prüfen";
+        }
+
         return "Hinweis prüfen";
     }
 
@@ -347,22 +360,27 @@ internal static class EpisodeEditTextBuilder
 
     private static int GetPlanReviewPriority(string note)
     {
-        if (ContainsAny(note, MultipartPlanReviewMarkers))
+        if (ContainsAny(note, CutPlanReviewMarkers))
         {
             return 0;
         }
 
-        if (ContainsAny(note, ArchivePlanReviewMarkers))
+        if (ContainsAny(note, MultipartPlanReviewMarkers))
         {
             return 1;
         }
 
-        if (ContainsAny(note, OutputTargetPlanReviewMarkers))
+        if (ContainsAny(note, ArchivePlanReviewMarkers))
         {
             return 2;
         }
 
-        return 3;
+        if (ContainsAny(note, OutputTargetPlanReviewMarkers))
+        {
+            return 3;
+        }
+
+        return 4;
     }
 
     private static bool ContainsAny(string value, IEnumerable<string> needles)
