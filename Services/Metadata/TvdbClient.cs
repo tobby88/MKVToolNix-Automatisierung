@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
@@ -37,6 +38,21 @@ internal interface ITvdbClient : IDisposable
         int seriesId,
         string? language = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Liest die von TVDB an einer Episode hinterlegte IMDb-Verknüpfung.
+    /// </summary>
+    /// <param name="apiKey">TVDB-API-Key.</param>
+    /// <param name="pin">Optionaler TVDB-PIN.</param>
+    /// <param name="episodeId">TVDB-Episoden-ID.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>Normalisierte IMDb-ID oder <see langword="null"/>, wenn TVDB keine gültige Verknüpfung kennt.</returns>
+    Task<string?> GetEpisodeImdbIdAsync(
+        string apiKey,
+        string? pin,
+        int episodeId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<string?>(null);
 }
 
 /// <summary>
@@ -46,6 +62,9 @@ internal sealed class TvdbClient : ITvdbClient
 {
     private const int MaxEpisodePages = 100;
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
+    private static readonly Regex ImdbIdPattern = new(
+        @"^tt\d{7,10}$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
@@ -176,6 +195,55 @@ internal sealed class TvdbClient : ITvdbClient
         }
 
         return MergeEpisodeRecords(localizedResults, neutralResults);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string?> GetEpisodeImdbIdAsync(
+        string apiKey,
+        string? pin,
+        int episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (episodeId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(episodeId), "Die TVDB-Episoden-ID muss größer als null sein.");
+        }
+
+        using var response = await SendAuthorizedGetAsync(
+            apiKey,
+            pin,
+            $"episodes/{episodeId}/extended",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var document = await JsonDocument.ParseAsync(
+            await response.Content.ReadAsStreamAsync(cancellationToken),
+            cancellationToken: cancellationToken);
+        if (!document.RootElement.TryGetProperty("data", out var dataElement)
+            || dataElement.ValueKind != JsonValueKind.Object
+            || !dataElement.TryGetProperty("remoteIds", out var remoteIdsElement)
+            || remoteIdsElement.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var remoteIdElement in remoteIdsElement.EnumerateArray())
+        {
+            var sourceName = ReadString(remoteIdElement, "sourceName");
+            if (string.IsNullOrWhiteSpace(sourceName)
+                || !sourceName.Contains("imdb", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var candidate = ReadString(remoteIdElement, "id")?.Trim();
+            if (!string.IsNullOrWhiteSpace(candidate) && ImdbIdPattern.IsMatch(candidate))
+            {
+                return candidate.ToLowerInvariant();
+            }
+        }
+
+        return null;
     }
 
     private async Task<List<TvdbEpisodeRecord>> FetchSeriesEpisodesInternalAsync(

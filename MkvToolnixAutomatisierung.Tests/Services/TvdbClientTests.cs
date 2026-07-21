@@ -255,6 +255,48 @@ public sealed class TvdbClientTests
     }
 
     [Fact]
+    public async Task GetEpisodeImdbIdAsync_ReturnsNormalizedImdbRemoteId()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request => request.RequestUri!.AbsolutePath switch
+            {
+                "/v4/login" => JsonResponse("""{"data":{"token":"token-123"}}"""),
+                "/v4/episodes/123/extended" => JsonResponse(
+                    """{"data":{"remoteIds":[{"id":"123","sourceName":"TheMovieDB.com"},{"id":"TT1234567","sourceName":"IMDB"}]}}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var imdbId = await client.GetEpisodeImdbIdAsync("key", pin: null, 123);
+
+        Assert.Equal("tt1234567", imdbId);
+    }
+
+    [Theory]
+    [InlineData("{\"data\":{\"remoteIds\":[]}}")]
+    [InlineData("{\"data\":{\"remoteIds\":[{\"id\":\"episode-123\",\"sourceName\":\"IMDB\"}]}}")]
+    [InlineData("{\"data\":{}}")]
+    public async Task GetEpisodeImdbIdAsync_ReturnsNull_WhenNoValidImdbRemoteIdExists(string responseBody)
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request => request.RequestUri!.AbsolutePath switch
+            {
+                "/v4/login" => JsonResponse("""{"data":{"token":"token-123"}}"""),
+                "/v4/episodes/123/extended" => JsonResponse(responseBody),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var imdbId = await client.GetEpisodeImdbIdAsync("key", pin: null, 123);
+
+        Assert.Null(imdbId);
+    }
+
+    [Fact]
     public void Dispose_DoesNotDispose_InjectedHttpClient()
     {
         var handler = new StubHttpMessageHandler();

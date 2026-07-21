@@ -90,6 +90,32 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal(1, client.LoadEpisodesCallCount);
     }
 
+    [Theory]
+    [InlineData("tt1234567")]
+    [InlineData(null)]
+    public async Task LoadEpisodeImdbIdAsync_CachesPresentAndMissingResults(string? imdbId)
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            TvdbApiKey = "key",
+            TvdbPin = "pin"
+        });
+        var client = new FakeTvdbClient
+        {
+            EpisodeImdbIdResultFactory = _ => imdbId
+        };
+        var service = new EpisodeMetadataLookupService(store, client);
+
+        var first = await service.LoadEpisodeImdbIdAsync(123);
+        var second = await service.LoadEpisodeImdbIdAsync(123);
+
+        Assert.Equal(imdbId, first);
+        Assert.Equal(imdbId, second);
+        Assert.Equal(1, client.LoadEpisodeImdbIdCallCount);
+        Assert.Equal("key", client.LastApiKey);
+        Assert.Equal("pin", client.LastPin);
+    }
+
     [Fact]
     public async Task SearchSeriesAsync_DeduplicatesConcurrentRequests()
     {
@@ -608,6 +634,8 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
 
+        public Func<int, string?>? EpisodeImdbIdResultFactory { get; init; }
+
         public Func<string, CancellationToken, Task<IReadOnlyList<TvdbSeriesSearchResult>>>? SearchSeriesAsyncOverride { get; init; }
 
         public Func<int, CancellationToken, Task<IReadOnlyList<TvdbEpisodeRecord>>>? GetSeriesEpisodesAsyncOverride { get; init; }
@@ -617,6 +645,8 @@ public sealed class EpisodeMetadataLookupServiceTests
         public int SearchSeriesCallCount { get; private set; }
 
         public int LoadEpisodesCallCount { get; private set; }
+
+        public int LoadEpisodeImdbIdCallCount { get; private set; }
 
         public string? LastApiKey { get; private set; }
 
@@ -664,6 +694,18 @@ public sealed class EpisodeMetadataLookupServiceTests
 
             IReadOnlyList<TvdbEpisodeRecord> results = EpisodesResultFactory?.Invoke(seriesId) ?? [];
             return Task.FromResult(results);
+        }
+
+        public Task<string?> GetEpisodeImdbIdAsync(
+            string apiKey,
+            string? pin,
+            int episodeId,
+            CancellationToken cancellationToken = default)
+        {
+            LoadEpisodeImdbIdCallCount++;
+            LastApiKey = apiKey;
+            LastPin = pin;
+            return Task.FromResult(EpisodeImdbIdResultFactory?.Invoke(episodeId));
         }
 
         public void Dispose()

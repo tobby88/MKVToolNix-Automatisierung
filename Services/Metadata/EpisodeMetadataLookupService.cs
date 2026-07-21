@@ -12,8 +12,10 @@ internal sealed class EpisodeMetadataLookupService
     private readonly ITvdbClient _tvdbClient;
     private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
     private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeImdbCacheKey, string> _episodeImdbCache = new();
     private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, Task<IReadOnlyList<TvdbSeriesSearchResult>>> _seriesSearchInFlight = new();
     private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, Task<IReadOnlyList<TvdbEpisodeRecord>>> _episodeLoadsInFlight = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeImdbCacheKey, Task<string?>> _episodeImdbLoadsInFlight = new();
 
     /// <summary>
     /// Initialisiert den TVDB-Lookup-Service mit persistentem Settings-Store und API-Client.
@@ -154,6 +156,38 @@ internal sealed class EpisodeMetadataLookupService
                 _episodeLoadsInFlight,
                 () => _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, "deu", CancellationToken.None)));
 
+        return await requestTask.WaitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Lädt die von TVDB an einer Episode hinterlegte IMDb-ID und teilt identische Anfragen innerhalb der Sitzung.
+    /// </summary>
+    /// <param name="episodeId">TVDB-Episoden-ID aus Report, NFO oder manueller Auswahl.</param>
+    /// <param name="cancellationToken">Optionales Abbruchsignal.</param>
+    /// <returns>IMDb-ID oder <see langword="null"/>, wenn TVDB keine gültige IMDb-Verknüpfung liefert.</returns>
+    public async Task<string?> LoadEpisodeImdbIdAsync(
+        int episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (episodeId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(episodeId), "Die TVDB-Episoden-ID muss größer als null sein.");
+        }
+
+        var settings = LoadSettings();
+        EnsureApiKeyConfigured(settings);
+        var cacheKey = new TvdbEpisodeImdbCacheKey(
+            settings.TvdbApiKey.Trim(),
+            settings.TvdbPin?.Trim() ?? string.Empty,
+            episodeId);
+        if (_episodeImdbCache.TryGetValue(cacheKey, out var cachedImdbId))
+        {
+            return string.IsNullOrEmpty(cachedImdbId) ? null : cachedImdbId;
+        }
+
+        var requestTask = _episodeImdbLoadsInFlight.GetOrAdd(
+            cacheKey,
+            _ => ExecuteSharedEpisodeImdbLookupAsync(cacheKey, settings));
         return await requestTask.WaitAsync(cancellationToken);
     }
 
@@ -414,8 +448,32 @@ internal sealed class EpisodeMetadataLookupService
             inFlightCache.TryRemove(cacheKey, out _);
         }
     }
+
+    private async Task<string?> ExecuteSharedEpisodeImdbLookupAsync(
+        TvdbEpisodeImdbCacheKey cacheKey,
+        AppMetadataSettings settings)
+    {
+        try
+        {
+            var imdbId = await _tvdbClient.GetEpisodeImdbIdAsync(
+                settings.TvdbApiKey,
+                settings.TvdbPin,
+                cacheKey.EpisodeId,
+                CancellationToken.None);
+            // ConcurrentDictionary akzeptiert keine null-Werte. Ein leerer String ist hier der
+            // bewusst gecachte Zustand "TVDB kennt keine IMDb-Verknüpfung".
+            _episodeImdbCache[cacheKey] = imdbId ?? string.Empty;
+            return imdbId;
+        }
+        finally
+        {
+            _episodeImdbLoadsInFlight.TryRemove(cacheKey, out _);
+        }
+    }
 }
 
 internal readonly record struct TvdbSeriesSearchCacheKey(string ApiKey, string Pin, string Query);
 
 internal readonly record struct TvdbEpisodeCacheKey(string ApiKey, string Pin, int SeriesId);
+
+internal readonly record struct TvdbEpisodeImdbCacheKey(string ApiKey, string Pin, int EpisodeId);
