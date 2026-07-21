@@ -17,6 +17,7 @@ Das Projekt ist eine portable WPF-Anwendung zur halbautomatischen Aufbereitung e
 - `Services/Metadata`
   - kapselt TVDB-Zugriff, Caching und lokale Serien-Zuordnungen
   - legt identische gleichzeitige TVDB-Suchen, Episoden-Loads und IMDb-Remote-ID-Abfragen pro Cache-Schlüssel zusammen, damit Batch-Scans keine vermeidbaren Doppelanfragen erzeugen
+  - verwaltet optional einen lokalen SQLite-Index aus den offiziellen IMDb-TSV-Datensätzen; Import und produktiver Austausch sind getrennt, damit ein Abbruch nie den letzten funktionierenden Index zerstört
 - `Services/Emby`
   - kapselt den optionalen Emby-API-Zugriff für Verbindungstest, Library-Scan, Item-Suche und gezielten Metadaten-Refresh
   - trennt den NFO-Provider-ID-Abgleich von der UI, damit XML-Schreiblogik nicht in ViewModels landet
@@ -62,7 +63,7 @@ Wichtig dabei:
    - Allgemeine Modulprotokolle werden pro App-Sitzung fortgeschrieben; wiederholte Saves desselben Modulkontexts hängen nur neue Zeilen an.
 9. Das optionale Emby-Modul lädt den strukturierten JSON-Metadatenreport, fragt Emby nach den neuen Items und schreibt Provider-IDs in die nebenliegenden NFO-Dateien.
    - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
-   - Die bereits bekannte TVDB-Episoden-ID dient außerdem als eindeutiger Schlüssel für deren IMDb-Remote-ID. Nur wenn TVDB keine IMDb-Verknüpfung liefert oder Report, NFO beziehungsweise Emby widersprechen, bleibt der browsergestützte IMDb-Pflichtcheck offen.
+   - Die bereits bekannte TVDB-Episoden-ID dient außerdem als eindeutiger Schlüssel für deren IMDb-Remote-ID. Fehlt die TVDB-Verknüpfung oder ist TVDB nicht erreichbar, wird der optionale lokale IMDb-Index geprüft. Nur eindeutige exakte Titelkombinationen werden automatisch übernommen; danach bleibt der browsergestützte Pflichtcheck als letzter Fallback.
 
 ## Warum DocFX
 

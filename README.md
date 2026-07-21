@@ -67,6 +67,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
+- Ein lokaler IMDb-Episodenindex ist optional. Nach Aktivierung in den Einstellungen prüft die App beim Start höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem mehrere hundert MiB großen Download fragt sie ausdrücklich nach.
 - Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
 ## Portable Modus
@@ -88,6 +89,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
+   - optional automatische Verwaltung des lokalen IMDb-Episodenindex
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
 4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich` und optional `Archivpflege`.
@@ -170,7 +172,7 @@ Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/For
 2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
 3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
 4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Falls Emby die Bibliothek nicht eindeutig zuordnen kann, zeigt die App den globalen Fallback ausdrücklich an, statt ihn als bibliotheksscharfen Scan aussehen zu lassen. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
-5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft. Für IMDb liest das Tool zuerst die Remote-Verknüpfung der bereits bekannten TVDB-Episode: Übereinstimmende IDs werden automatisch bestätigt und fehlende IDs automatisch ergänzt. Nur fehlende TVDB-Verknüpfungen oder Widersprüche zwischen Report, NFO, Emby und TVDB bleiben zur manuellen Prüfung offen.
+5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft. Für IMDb liest das Tool zuerst die Remote-Verknüpfung der bereits bekannten TVDB-Episode. Fehlt diese oder ist TVDB vorübergehend nicht erreichbar, versucht es den optionalen lokalen IMDb-Index. Nur ein eindeutiger exakter Serien- und Episodentitel wird automatisch übernommen; Staffel/Folge dienen wegen abweichender IMDb-Nummerierungen nur als Zusatzsignal. Widersprüche und unsichere Treffer bleiben zur manuellen Prüfung offen.
 6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist.
 7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
@@ -178,7 +180,13 @@ Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby s
 
 Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
 
-Für die verbleibenden manuellen IMDb-Fälle öffnet der Dialog gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+
+### Optionaler IMDb-Offlineindex
+
+Der Offlineindex wird unter `./Data/IMDb/imdb-episodes.sqlite` gespeichert. Für einen Neuaufbau lädt die App `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` streamend in einen temporären Ordner, übernimmt nur Serien, Episoden und deutsche Aliase und löscht die großen Roharchive anschließend wieder. Ein vorhandener Index wird erst nach einem vollständig erfolgreichen Import atomar ersetzt. Wird die Nachfrage abgelehnt oder schlägt der Vorgang fehl, startet die App sofort mit dem bisherigen Stand weiter.
+
+Die IMDb-Datensätze sind ausschließlich für persönliche und nicht kommerzielle Nutzung vorgesehen. Quelle: [IMDb Non-Commercial Datasets](https://www.imdb.com/interfaces/). Information courtesy of IMDb ([https://www.imdb.com](https://www.imdb.com)). Used with permission.
 
 ## Unterstützte Dateien
 

@@ -27,6 +27,7 @@ Einige Tests sind bewusst auf die zuletzt fehleranfälligen Provider- und Emby-P
 - TVDB-Pagination ist mit Seitenlimits und Loop-Erkennung abgesichert, damit ein defekter Provider keine endlose Suche auslöst.
 - Der Emby-Abgleich prüft lokale `.nfo`-Dateien weiter, wenn Emby-Item- oder Library-Abfragen temporär fehlschlagen.
 - IMDb-Remote-IDs aus TVDB werden nur ohne widersprechende Report-, NFO- oder Emby-ID automatisch bestätigt beziehungsweise ergänzt; Konflikte bleiben im manuellen Browserdialog offen.
+- Der IMDb-Offlineindex wird aus kleinen echten GZip-TSV-Testdaten aufgebaut und anschließend per SQLite durchsucht. Tests decken abgelehnte Downloads, atomaren Neuaufbau, exakte und mehrdeutige Kandidaten sowie den TVDB-zu-Offlineindex-Fallback im Emby-Pflichtcheck ab.
 - Eine explizite Entscheidung `Keine IMDb-ID` wird auch ohne weitere Provider-ID in die NFO geschrieben.
 - Reports können als erledigt markiert werden, auch wenn kein Emby-Refresh nötig ist, weil die lokale NFO bereits aktuell war.
 - Der Scan-Status unterscheidet zwischen gezieltem Serienbibliotheksscan und sichtbar gemeldetem globalem Fallback.
