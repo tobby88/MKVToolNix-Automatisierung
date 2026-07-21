@@ -213,7 +213,8 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Contains(progress.Values, value =>
             value.StatusText.Contains("(1/3)", StringComparison.Ordinal)
             && value.DetailText?.Contains("Datei ", StringComparison.Ordinal) == true
-            && value.DetailText.Contains("Gesamt ", StringComparison.Ordinal)
+            && value.DetailText.Contains("Import ", StringComparison.Ordinal)
+            && !value.DetailText.Contains("Gesamt ", StringComparison.Ordinal)
             && value.IsIndeterminate == false);
         Assert.Contains(progress.Values, value =>
             value.StatusText.Contains("Suchindex", StringComparison.Ordinal)

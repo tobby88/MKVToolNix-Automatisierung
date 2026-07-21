@@ -263,7 +263,7 @@ internal sealed class ImdbDatasetManager
                 Report(
                     progress,
                     $"IMDb: {value.DatasetName} wird indexiert ({value.DatasetNumber}/{value.DatasetCount})...",
-                    $"{value.ProcessedRowCount:N0} Datensätze verarbeitet · Datei {value.DatasetProgressPercent:0.0}% · Gesamt {value.OverallProgressPercent:0.0}%",
+                    $"{value.ProcessedRowCount:N0} Datensätze verarbeitet · Datei {value.DatasetProgressPercent:0.0}% · Import {value.OverallProgressPercent:0.0}%",
                     importPercent,
                     false);
             });

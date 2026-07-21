@@ -1,3 +1,4 @@
+using System.Globalization;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.ViewModels;
 using Xunit;
@@ -21,7 +22,11 @@ public sealed class StartupProgressWindowViewModelTests
         Assert.Equal("12 MB / 24 MB", viewModel.DetailText);
         Assert.False(viewModel.IsIndeterminate);
         Assert.Equal(50d, viewModel.ProgressPercent);
-        Assert.Equal("50%", viewModel.ProgressText);
+        Assert.Equal($"Gesamt {50d.ToString("0.0", CultureInfo.CurrentCulture)}%", viewModel.ProgressText);
+
+        viewModel.Report(new ManagedToolStartupProgress("IMDb wird indexiert...", ProgressPercent: 64.4d, IsIndeterminate: false));
+
+        Assert.Equal($"Gesamt {64.4d.ToString("0.0", CultureInfo.CurrentCulture)}%", viewModel.ProgressText);
     }
 
     [Fact]

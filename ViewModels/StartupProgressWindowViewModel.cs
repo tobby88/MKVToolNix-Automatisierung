@@ -91,9 +91,10 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
     }
 
     /// <summary>
-    /// Benutzerlesbarer Fortschrittstext neben dem Balken.
+    /// Benutzerlesbarer Gesamtfortschritt neben dem Balken.
+    /// Eine feste Nachkommastelle verhindert Breitenwechsel zwischen ganzzahligen und gebrochenen Werten.
     /// </summary>
-    public string ProgressText => IsIndeterminate ? "läuft..." : $"{ProgressPercent:0.#}%";
+    public string ProgressText => IsIndeterminate ? "läuft..." : $"Gesamt {ProgressPercent:0.0}%";
 
     /// <inheritdoc />
     public void Report(ManagedToolStartupProgress value)
