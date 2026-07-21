@@ -8,11 +8,13 @@ using MkvToolnixAutomatisierung.Services.Metadata;
 namespace MkvToolnixAutomatisierung.ViewModels;
 
 /// <summary>
-/// Bereitet den browsergestützten IMDb-Abgleich für eine einzelne Episode vor.
+/// Bereitet den lokalen und browsergestützten IMDb-Abgleich für eine einzelne Episode vor.
 /// </summary>
 /// <remarks>
-/// IMDb stellt für diesen Anwendungsfall keine verlässlich nutzbare öffentliche API bereit. Der Dialog
-/// öffnet deshalb gezielte IMDb-Suchen und übernimmt anschließend eine kopierte IMDb-ID oder Titel-URL.
+/// Der Dialog zeigt zuerst Treffer aus dem optionalen lokalen Index der offiziellen IMDb-Datensätze.
+/// Wenn daraus keine eindeutige Auswahl möglich ist, öffnet er gezielte IMDb-Browsersuchen und übernimmt
+/// anschließend eine kopierte IMDb-ID oder Titel-URL. Der vorgelagerte Emby-Workflow versucht zusätzlich,
+/// die IMDb-Remote-ID direkt über die bereits bekannte TVDB-Episode aufzulösen.
 /// </remarks>
 internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 {
@@ -98,6 +100,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public ObservableCollection<ImdbEpisodeCandidate> LocalCandidates { get; } = [];
 
+    /// <summary>
+    /// Aktuell markierter lokaler Kandidat, der erst nach einer bewussten Benutzeraktion übernommen wird.
+    /// </summary>
     public ImdbEpisodeCandidate? SelectedLocalCandidate
     {
         get => _selectedLocalCandidate;
@@ -114,6 +119,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Erklärt, ob der lokale Index verfügbar ist und wie viele passende Kandidaten gefunden wurden.
+    /// </summary>
     public string LocalDatasetStatusText
     {
         get => _localDatasetStatusText;

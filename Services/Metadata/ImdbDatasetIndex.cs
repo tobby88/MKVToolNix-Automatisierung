@@ -319,10 +319,16 @@ internal sealed record ImdbEpisodeCandidate(
     int TitleSimilarity,
     bool SeriesTitleMatchedExactly)
 {
+    /// <summary>
+    /// Kompakter Staffel-/Folgecode für die Kandidatenliste; IMDb kann dabei bewusst von TVDB abweichen.
+    /// </summary>
     public string EpisodeCode => SeasonNumber is { } season && EpisodeNumber is { } episode
         ? $"S{season:00}E{episode:00}"
         : "ohne Nummer";
 
+    /// <summary>
+    /// Lesbare Einordnung des Titelanteils am Gesamtscore, damit der Benutzer Treffer nachvollziehen kann.
+    /// </summary>
     public string MatchQualityText => TitleSimilarity >= 30
         ? "Titel exakt"
         : TitleSimilarity >= 22
@@ -349,6 +355,9 @@ internal sealed class ImdbDatasetSearchService
         _databasePath = databasePath ?? PortableAppStorage.ImdbDatabaseFilePath;
     }
 
+    /// <summary>
+    /// Gibt an, ob ein fertig aufgebauter lokaler IMDb-Index gelesen werden kann.
+    /// </summary>
     public bool IsAvailable => File.Exists(_databasePath);
 
     /// <summary>
@@ -374,6 +383,13 @@ internal sealed class ImdbDatasetSearchService
             : null;
     }
 
+    /// <summary>
+    /// Sucht nachvollziehbar bewertete Episodenkandidaten. Titelähnlichkeit ist das Hauptsignal;
+    /// Staffel und Folge erhöhen den Score nur, weil IMDb- und TVDB-Nummerierungen abweichen können.
+    /// </summary>
+    /// <param name="guess">Lokale Serien-, Titel- und optionale Episodenerkennung.</param>
+    /// <param name="maximumResults">Maximale Anzahl zurückzugebender Kandidaten.</param>
+    /// <returns>Nach absteigendem Match-Score sortierte IMDb-Episoden.</returns>
     public IReadOnlyList<ImdbEpisodeCandidate> SearchEpisodeCandidates(EpisodeMetadataGuess guess, int maximumResults = 20)
     {
         ArgumentNullException.ThrowIfNull(guess);

@@ -67,7 +67,7 @@ public partial class TvdbLookupWindow : Window
             return;
         }
 
-        if (_settingsDialog.ShowDialog(this, AppSettingsPage.Tvdb))
+        if (_settingsDialog.ShowDialog(this, AppSettingsPage.Metadata))
         {
             _viewModel.ReloadStoredSettings();
         }

@@ -92,6 +92,19 @@ internal static class Program
                 1460,
                 900);
 
+            var settingsWindow = SettingsScreenshotFactory.CreateMetadataSettingsWindow();
+            try
+            {
+                RenderWindowScreenshot(
+                    outputDirectory,
+                    "settings-metadata.png",
+                    settingsWindow);
+            }
+            finally
+            {
+                settingsWindow.Close();
+            }
+
             return 0;
         }
         finally
@@ -131,6 +144,44 @@ internal static class Program
             96,
             PixelFormats.Pbgra32);
         renderBitmap.Render(host);
+
+        var outputPath = Path.Combine(outputDirectory, fileName);
+        using var stream = File.Create(outputPath);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
+        encoder.Save(stream);
+    }
+
+    /// <summary>
+    /// Rendert ein echtes WPF-Fenster ohne sichtbares Aktivieren. Das einmalige Offscreen-Öffnen ist
+    /// nötig, damit TabControl und Footer ihre produktiven Größen erhalten, bevor das Client-Visual
+    /// in die Bitmap geschrieben wird.
+    /// </summary>
+    private static void RenderWindowScreenshot(
+        string outputDirectory,
+        string fileName,
+        Window window)
+    {
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = -32000;
+        window.Top = -32000;
+        window.Height = 620;
+        window.Background = Brushes.White;
+        window.ShowActivated = false;
+        window.ShowInTaskbar = false;
+        window.Show();
+        DrainDispatcher();
+
+        window.UpdateLayout();
+        var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
+        var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
+        var renderBitmap = new RenderTargetBitmap(
+            width,
+            height,
+            96,
+            96,
+            PixelFormats.Pbgra32);
+        renderBitmap.Render(window);
 
         var outputPath = Path.Combine(outputDirectory, fileName);
         using var stream = File.Create(outputPath);

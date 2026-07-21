@@ -5,6 +5,7 @@ Diese DocFX-Seite ergänzt die portable App um strukturierte Entwicklerdokumenta
 ## Einstieg
 
 - [Architekturüberblick](articles/architecture.md)
+- [Metadaten- und Provider-Datenfluss](articles/metadata-providers.md)
 - [Teststrategie](articles/testing.md)
 - [Portable Daten und Logs](articles/portable-storage.md)
 

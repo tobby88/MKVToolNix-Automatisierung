@@ -11,7 +11,7 @@ internal enum AppSettingsPage
 {
     Archive,
     Tools,
-    Tvdb,
+    Metadata,
     Emby
 }
 

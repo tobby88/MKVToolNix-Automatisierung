@@ -1,5 +1,7 @@
 - name: Architektur
   href: architecture.md
+- name: Metadaten und Provider
+  href: metadata-providers.md
 - name: Tests
   href: testing.md
 - name: Portable Daten

@@ -60,6 +60,10 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 ![Archivpflege](docs/images/readme/archive-maintenance.png)
 
+### Einstellungen: Metadaten
+
+![Einstellungen: Metadaten](docs/images/readme/settings-metadata.png)
+
 ## Voraussetzungen
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
@@ -209,6 +213,7 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 
 - Es werden nur Quellen derselben Episode gemeinsam betrachtet.
 - Bei unterschiedlichen Laufzeiten bleibt nur die fachlich passende Laufzeitgruppe übrig. Kleinere Abweichungen werden toleriert, klar unpassende Dateien fliegen heraus.
+- Zusätzlich vergleicht die Planung die präzisen Medienlaufzeiten der gemeinsam verwendeten Video-, Audio-, AD- und Untertitelquellen über `ffprobe`. Abweichende Sendefassungen mit kurzem Zusatzvorspann oder -abspann werden als möglicher Schnittkonflikt hervorgehoben, bevor daraus asynchrone Spuren entstehen können.
 - Frische Videospuren werden pro Sprach-/Codec-Slot ausgewählt. Das bedeutet: Für `Deutsch + H.264`, `Deutsch + H.265`, `Plattdeutsch + H.264` oder `English + H.264` bleibt jeweils nur die beste Quelle übrig.
 - Innerhalb eines Slots gewinnt zuerst die höhere Auflösung, dann die größere Datei und danach die Sender-Priorität.
 - Die Ausgabereihenfolge der Videospuren ist sprachlich bewusst fest: `Deutsch`, `Plattdüütsch`, `English`.
@@ -223,6 +228,7 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 - Bei nicht eindeutig TVDB-zuordenbaren Sonder- oder Bonusfolgen sucht die App zusätzlich in typischen Sonderordnern der Serie, etwa `Specials`, `Season 0`, `Trailers` und `Backdrops`.
 - Wenn dort eine passende Archivdatei gefunden wird, kann sie als Ziel und Metadatenquelle dienen. Das spart manuelle Nacharbeit bei Bonusmaterial ohne sauberen TVDB- oder IMDb-Eintrag.
 - Hinweise wie Mehrfachfolge, Archivtreffer oder ungewöhnliche Quellen müssen vor dem Muxen bewusst geprüft werden, wenn sie als Pflichtprüfung angezeigt werden.
+- Eine im Pflichtcheck ausdrücklich verworfene Medienquelle bleibt zunächst ausgeschlossen. Wenn eine andere Quelle derselben Episode erfolgreich verarbeitet wird, räumt der Batch-Lauf die verworfene Datei samt direkter Sidecars ebenfalls auf, damit eine bekannte defekte Quelle beim nächsten Scan nicht erneut angeboten wird.
 
 ### Audio und Audiodeskription
 

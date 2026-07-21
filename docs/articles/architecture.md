@@ -54,8 +54,8 @@ Wichtig dabei:
    - Die Umsetzung ist zusätzlich entlang der Verantwortungen `Preparation`, `AttachmentReuse` und `UsageReporting` auf mehrere Partial-Dateien verteilt, damit Archivvergleich, TXT-heuristische Attachment-Zuordnung und GUI-/Diff-Aufbereitung unabhängig angepasst werden können.
 5. `SeriesEpisodeMuxPlan` beschreibt den vollständigen mkvmerge-Aufruf.
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
-7. `BatchRunLogService` schreibt bei Batch-Läufen Log- und Reportdateien in `.\Logs`.
-   - Der persistierte Log sammelt gezielt den aktuellen Batch-Lauf, damit Planung, Arbeitskopien und Mux-Ausführung zusammen diagnostizierbar bleiben.
+7. `BatchRunLogService` schreibt bei Einzel- und Batch-Läufen gemeinsame Sitzungslogs und separate Reportdateien in `.\Logs`.
+   - Das persistierte Sitzungslog sammelt gezielt zusammengehörige Mux-Läufe, damit Planung, Arbeitskopien und Ausführung zusammen diagnostizierbar bleiben, ohne für jede Episode ein kaum aussagekräftiges Kleinstprotokoll anzulegen.
    - Die bisherige TXT-Liste neuer Ausgabedateien bleibt als einfache menschenlesbare Prüfliste erhalten.
    - Der zusätzliche JSON-Metadatenreport enthält ein versioniertes Schema und importierbare Provider-IDs wie die bereits ausgewählte TVDB-Episoden-ID.
 8. `ModuleLogService` schreibt die sichtbaren Protokolle von Einsortieren, Emby-Abgleich und Archivpflege ebenfalls nach `.\Logs`.
@@ -64,6 +64,8 @@ Wichtig dabei:
 9. Das optionale Emby-Modul lädt den strukturierten JSON-Metadatenreport, fragt Emby nach den neuen Items und schreibt Provider-IDs in die nebenliegenden NFO-Dateien.
    - Die NFO wird dabei bewusst nur ergänzt, nicht aus dem Nichts neu modelliert. Emby bleibt für die initiale NFO-Erzeugung zuständig.
    - Die bereits bekannte TVDB-Episoden-ID dient außerdem als eindeutiger Schlüssel für deren IMDb-Remote-ID. Fehlt die TVDB-Verknüpfung oder ist TVDB nicht erreichbar, wird der optionale lokale IMDb-Index geprüft. Nur eindeutige exakte Titelkombinationen werden automatisch übernommen; danach bleibt der browsergestützte Pflichtcheck als letzter Fallback.
+
+Die Provider-Quellen, Konfliktregeln und Schreibgrenzen sind im Artikel [Metadaten- und Provider-Datenfluss](metadata-providers.md) detaillierter beschrieben.
 
 ## Warum DocFX
 
