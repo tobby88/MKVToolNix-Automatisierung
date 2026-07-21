@@ -480,11 +480,11 @@ public sealed partial class SeriesArchiveService
         var differenceSeconds = Math.Abs((requestedDuration.Value - existingDuration.Value).TotalSeconds);
         var referenceSeconds = Math.Max(requestedDuration.Value.TotalSeconds, existingDuration.Value.TotalSeconds);
         // Präzise Track-/ffprobe-Dauern dürfen nicht über mehrere Sekunden hinweg als
-        // gleich gelten: Ein kurzer Sender-Vorspann reicht bereits aus, um eine neue AD
-        // gegen das vorhandene Archivvideo hörbar zu verschieben. Nur gerundete TXT-Werte
-        // benötigen weiterhin den großzügigeren relativen Toleranzbereich.
+        // gleich gelten. Bis zu zwei Sekunden decken jedoch beobachtete Container- und
+        // Trackrundungen derselben Fassung ab; ein dreisekündiger Sender-Vorspann bleibt
+        // damit inkompatibel. Nur gerundete TXT-Werte benötigen den weiteren Bereich.
         var toleranceSeconds = hasPreciseRequestedDuration
-            ? 1d
+            ? 2d
             : Math.Max(30d, Math.Round(referenceSeconds * 0.01d));
         return differenceSeconds <= toleranceSeconds;
     }

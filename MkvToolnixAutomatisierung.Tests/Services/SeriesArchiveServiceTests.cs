@@ -67,6 +67,7 @@ public sealed class SeriesArchiveServiceTests : IDisposable
 
     [Theory]
     [InlineData(0.9, true, true)]
+    [InlineData(1.5, true, true)]
     [InlineData(3.0, true, false)]
     [InlineData(40.0, false, true)]
     [InlineData(60.0, false, false)]
