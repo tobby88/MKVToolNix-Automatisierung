@@ -246,13 +246,27 @@ internal sealed class ImdbDatasetManager
             }
 
             var stagedDatabasePath = Path.Combine(stagingDirectory, "imdb-episodes.sqlite");
-            var importProgress = new Progress<ImdbDatasetImportProgress>(value =>
+            var importProgress = new CallbackProgress<ImdbDatasetImportProgress>(value =>
+            {
+                if (value.IsFinalizing)
+                {
+                    Report(
+                        progress,
+                        "IMDb: SQLite-Suchindex wird fertiggestellt...",
+                        "Die drei Datendateien sind eingelesen; Suchindizes werden optimiert.",
+                        98d,
+                        false);
+                    return;
+                }
+
+                var importPercent = 55d + (value.OverallProgressPercent * 42d / 100d);
                 Report(
                     progress,
-                    $"IMDb: {value.DatasetName} wird indexiert...",
-                    $"{value.ProcessedRowCount:N0} Datensätze verarbeitet",
-                    null,
-                    true));
+                    $"IMDb: {value.DatasetName} wird indexiert ({value.DatasetNumber}/{value.DatasetCount})...",
+                    $"{value.ProcessedRowCount:N0} Datensätze verarbeitet · Datei {value.DatasetProgressPercent:0.0}% · Gesamt {value.OverallProgressPercent:0.0}%",
+                    importPercent,
+                    false);
+            });
             await _indexBuilder.BuildAsync(
                 stagedDatabasePath,
                 archivePaths["title.basics"],
@@ -368,4 +382,14 @@ internal sealed class ImdbDatasetManager
         long? ContentLength,
         DateTimeOffset? LastModifiedUtc,
         string? ETag);
+
+    /// <summary>
+    /// Leitet Builder-Updates synchron an den äußeren Fortschrittskanal weiter. Der äußere
+    /// <see cref="Progress{T}"/> übernimmt bereits das Marshalling zum WPF-Dispatcher; ein zweiter
+    /// Dispatcher-Hop würde nur veraltete Zwischenstände aufstauen.
+    /// </summary>
+    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
+    {
+        public void Report(T value) => callback(value);
+    }
 }

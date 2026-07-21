@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 using Xunit;
@@ -24,12 +25,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
     {
         var files = WriteSmallDatasetArchives();
         var databasePath = Path.Combine(_tempDirectory, "index.sqlite");
+        var progress = new RecordingProgress<ImdbDatasetImportProgress>();
         await new ImdbDatasetIndexBuilder().BuildAsync(
             databasePath,
             files.Basics,
             files.Episodes,
             files.Aliases,
-            "revision-1");
+            "revision-1",
+            progress);
 
         Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
         Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
@@ -66,6 +69,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Single(lookupViewModel.LocalCandidates);
         Assert.True(lookupViewModel.ApplySelectedLocalCandidate());
         Assert.Equal("tt2000001", lookupViewModel.ImdbInput);
+
+        var importReports = progress.Values.Where(value => !value.IsFinalizing).ToArray();
+        Assert.Equal([1, 2, 3], importReports.Select(value => value.DatasetNumber).Distinct().ToArray());
+        Assert.All(
+            importReports.GroupBy(value => value.DatasetNumber),
+            group => Assert.Equal(100d, group.Last().DatasetProgressPercent, precision: 5));
+        Assert.True(importReports.Zip(importReports.Skip(1), (left, right) => left.OverallProgressPercent <= right.OverallProgressPercent).All(value => value));
+        Assert.Equal(100d, Assert.Single(progress.Values, value => value.IsFinalizing).OverallProgressPercent);
     }
 
     [Fact]
@@ -160,8 +171,9 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             consent,
             _tempDirectory,
             databasePath);
+        var progress = new RecordingProgress<ManagedToolStartupProgress>();
 
-        var first = await manager.EnsureCurrentAsync();
+        var first = await manager.EnsureCurrentAsync(progress);
         var second = await manager.EnsureCurrentAsync();
 
         Assert.False(first.HasWarning);
@@ -173,6 +185,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastUpdatedUtc);
         Assert.Single(new ImdbDatasetSearchService(databasePath).SearchEpisodeCandidates(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02")));
+        Assert.Contains(progress.Values, value =>
+            value.StatusText.Contains("(1/3)", StringComparison.Ordinal)
+            && value.DetailText?.Contains("Datei ", StringComparison.Ordinal) == true
+            && value.DetailText.Contains("Gesamt ", StringComparison.Ordinal)
+            && value.IsIndeterminate == false);
+        Assert.Contains(progress.Values, value =>
+            value.StatusText.Contains("Suchindex", StringComparison.Ordinal)
+            && value.ProgressPercent == 98d);
     }
 
     private DatasetFiles WriteSmallDatasetArchives()
@@ -308,5 +328,12 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             updateAction(updated);
             CurrentSettings = updated.Clone();
         }
+    }
+
+    private sealed class RecordingProgress<T> : IProgress<T>
+    {
+        public List<T> Values { get; } = [];
+
+        public void Report(T value) => Values.Add(value);
     }
 }

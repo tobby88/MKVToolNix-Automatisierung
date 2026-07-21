@@ -190,6 +190,8 @@ Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidat
 
 Der Offlineindex wird unter `./Data/IMDb/imdb-episodes.sqlite` gespeichert. Für einen Neuaufbau lädt die App `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` streamend in einen temporären Ordner, übernimmt nur Serien, Episoden und deutsche Aliase und löscht die großen Roharchive anschließend wieder. Ein vorhandener Index wird erst nach einem vollständig erfolgreichen Import atomar ersetzt. Wird die Nachfrage abgelehnt oder schlägt der Vorgang fehl, startet die App sofort mit dem bisherigen Stand weiter.
 
+Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Datensätze auch die aktuelle Datei (`1/3` bis `3/3`), deren geschätzten Prozentstand und den über alle drei Archive gewichteten Gesamtstand. Die Prozentwerte basieren auf den tatsächlich gelesenen Archivbytes; ein zusätzlicher vollständiger Zähllauf wird bewusst vermieden.
+
 Die IMDb-Datensätze sind ausschließlich für persönliche und nicht kommerzielle Nutzung vorgesehen. Quelle: [IMDb Non-Commercial Datasets](https://www.imdb.com/interfaces/). Information courtesy of IMDb ([https://www.imdb.com](https://www.imdb.com)). Used with permission.
 
 ## Unterstützte Dateien

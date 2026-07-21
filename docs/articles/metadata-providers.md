@@ -24,6 +24,8 @@ Die Anwendung trennt lokale Erkennung, TVDB, IMDb, NFO und Emby bewusst voneinan
 
 Der optionale Index wird aus `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` aufgebaut. Die App lädt die großen Rohdaten nur nach ausdrücklicher Zustimmung, importiert sie streamend in eine temporäre SQLite-Datenbank und ersetzt den aktiven Index erst nach einem vollständig erfolgreichen Lauf.
 
+Der sichtbare Importfortschritt kombiniert den exakten Zeilenzähler mit dem Anteil bereits gelesener komprimierter Bytes. Dadurch können sowohl Datei- als auch Gesamtprozent über alle drei Archive angezeigt werden, ohne die großen TSV-Dateien vor dem eigentlichen Import ein zweites Mal vollständig zu dekomprimieren.
+
 Titelähnlichkeit ist das wichtigste Suchsignal. Staffel und Folge beeinflussen die Rangfolge, sind aber kein Ausschlusskriterium, weil IMDb und TVDB größere Serien häufig unterschiedlich nummerieren. Nur ein eindeutiger exakter Serien- und Episodentitel darf ohne Benutzerentscheidung übernommen werden.
 
 Der Index ist ein Fallback, keine zusätzliche Online-API. Er liegt portabel unter `Data/IMDb/imdb-episodes.sqlite`; die heruntergeladenen GZip-Dateien werden nach dem Aufbau wieder entfernt. Die IMDb-Datensätze dürfen nur entsprechend ihrer Bedingungen für persönliche, nichtkommerzielle Zwecke verwendet werden.

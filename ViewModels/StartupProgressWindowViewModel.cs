@@ -93,7 +93,7 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
     /// <summary>
     /// Benutzerlesbarer Fortschrittstext neben dem Balken.
     /// </summary>
-    public string ProgressText => IsIndeterminate ? "läuft..." : $"{ProgressPercent:0}%";
+    public string ProgressText => IsIndeterminate ? "läuft..." : $"{ProgressPercent:0.#}%";
 
     /// <inheritdoc />
     public void Report(ManagedToolStartupProgress value)

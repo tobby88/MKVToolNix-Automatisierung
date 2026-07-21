@@ -1,20 +1,36 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.IO.Compression;
 using Microsoft.Data.Sqlite;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
 /// <summary>
-/// Fortschritt beim streamenden Import eines offiziellen IMDb-TSV-Datensatzes.
+/// Fortschritt beim streamenden Import eines offiziellen IMDb-TSV-Datensatzes einschließlich
+/// dateibezogener und über alle drei Archive gewichteter Prozentwerte.
 /// </summary>
-internal sealed record ImdbDatasetImportProgress(string DatasetName, long ProcessedRowCount);
+/// <param name="DatasetName">Technischer Name der aktuell gelesenen IMDb-Datei.</param>
+/// <param name="DatasetNumber">Einbasierte Position der Datei im Importablauf.</param>
+/// <param name="DatasetCount">Gesamtzahl der einzulesenden Dateien.</param>
+/// <param name="ProcessedRowCount">Exakte Zahl der bisher gelesenen Datenzeilen der aktuellen Datei.</param>
+/// <param name="DatasetProgressPercent">Aus der gelesenen komprimierten Dateiposition geschätzter Dateifortschritt.</param>
+/// <param name="OverallProgressPercent">Nach Archivgröße gewichteter Fortschritt über alle Dateien.</param>
+/// <param name="IsFinalizing">Kennzeichnet den anschließenden Aufbau der SQLite-Suchindizes.</param>
+internal sealed record ImdbDatasetImportProgress(
+    string DatasetName,
+    int DatasetNumber,
+    int DatasetCount,
+    long ProcessedRowCount,
+    double DatasetProgressPercent,
+    double OverallProgressPercent,
+    bool IsFinalizing = false);
 
 /// <summary>
 /// Baut aus den offiziellen IMDb-Dateien einen auf Serien und Episoden begrenzten SQLite-Index.
 /// </summary>
 internal sealed class ImdbDatasetIndexBuilder
 {
-    private const int ProgressRowInterval = 25_000;
+    private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// Erstellt einen vollständig neuen Index. Die aufrufende Verwaltung entscheidet anschließend
@@ -74,9 +90,39 @@ internal sealed class ImdbDatasetIndexBuilder
             """,
             cancellationToken);
 
-        await ImportBasicsAsync(connection, basicsArchivePath, progress, cancellationToken);
-        await ImportEpisodesAsync(connection, episodesArchivePath, progress, cancellationToken);
-        await ImportGermanAliasesAsync(connection, aliasesArchivePath, progress, cancellationToken);
+        var archivePaths = new[] { basicsArchivePath, episodesArchivePath, aliasesArchivePath };
+        var archiveLengths = archivePaths.Select(path => new FileInfo(path).Length).ToArray();
+        var totalArchiveBytes = archiveLengths.Sum();
+        var completedArchiveBytes = 0L;
+
+        await ImportBasicsAsync(
+            connection,
+            basicsArchivePath,
+            CreateProgressContext("title.basics", 1, archiveLengths[0], completedArchiveBytes, totalArchiveBytes),
+            progress,
+            cancellationToken);
+        completedArchiveBytes += archiveLengths[0];
+        await ImportEpisodesAsync(
+            connection,
+            episodesArchivePath,
+            CreateProgressContext("title.episode", 2, archiveLengths[1], completedArchiveBytes, totalArchiveBytes),
+            progress,
+            cancellationToken);
+        completedArchiveBytes += archiveLengths[1];
+        await ImportGermanAliasesAsync(
+            connection,
+            aliasesArchivePath,
+            CreateProgressContext("title.akas", 3, archiveLengths[2], completedArchiveBytes, totalArchiveBytes),
+            progress,
+            cancellationToken);
+        progress?.Report(new ImdbDatasetImportProgress(
+            "SQLite-Suchindex",
+            3,
+            archivePaths.Length,
+            0,
+            100d,
+            100d,
+            IsFinalizing: true));
         await ExecuteNonQueryAsync(
             connection,
             """
@@ -99,6 +145,7 @@ internal sealed class ImdbDatasetIndexBuilder
     private static async Task ImportBasicsAsync(
         SqliteConnection connection,
         string archivePath,
+        ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -122,7 +169,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         await ReadGzipTsvAsync(
             archivePath,
-            "title.basics",
+            progressContext,
             progress,
             (columns, _) =>
             {
@@ -149,6 +196,7 @@ internal sealed class ImdbDatasetIndexBuilder
     private static async Task ImportEpisodesAsync(
         SqliteConnection connection,
         string archivePath,
+        ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -169,7 +217,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         await ReadGzipTsvAsync(
             archivePath,
-            "title.episode",
+            progressContext,
             progress,
             (columns, _) =>
             {
@@ -191,6 +239,7 @@ internal sealed class ImdbDatasetIndexBuilder
     private static async Task ImportGermanAliasesAsync(
         SqliteConnection connection,
         string archivePath,
+        ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -212,7 +261,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         await ReadGzipTsvAsync(
             archivePath,
-            "title.akas",
+            progressContext,
             progress,
             (columns, _) =>
             {
@@ -237,7 +286,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
     private static async Task ReadGzipTsvAsync(
         string archivePath,
-        string datasetName,
+        ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         Func<string[], long, SqliteCommand?> prepareCommand,
         CancellationToken cancellationToken)
@@ -248,6 +297,8 @@ internal sealed class ImdbDatasetIndexBuilder
         _ = await reader.ReadLineAsync(cancellationToken); // Kopfzeile
 
         long rowCount = 0;
+        var lastProgressTimestamp = Stopwatch.GetTimestamp();
+        ReportImportProgress(progress, progressContext, rowCount, fileStream.Position);
         while (await reader.ReadLineAsync(cancellationToken) is { } line)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -258,13 +309,49 @@ internal sealed class ImdbDatasetIndexBuilder
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            if (rowCount % ProgressRowInterval == 0)
+            if (Stopwatch.GetElapsedTime(lastProgressTimestamp) >= ProgressUpdateInterval)
             {
-                progress?.Report(new ImdbDatasetImportProgress(datasetName, rowCount));
+                ReportImportProgress(progress, progressContext, rowCount, fileStream.Position);
+                lastProgressTimestamp = Stopwatch.GetTimestamp();
             }
         }
 
-        progress?.Report(new ImdbDatasetImportProgress(datasetName, rowCount));
+        ReportImportProgress(progress, progressContext, rowCount, progressContext.ArchiveLength);
+    }
+
+    private static ImdbDatasetProgressContext CreateProgressContext(
+        string datasetName,
+        int datasetNumber,
+        long archiveLength,
+        long completedArchiveBytes,
+        long totalArchiveBytes) =>
+        new(datasetName, datasetNumber, 3, archiveLength, completedArchiveBytes, totalArchiveBytes);
+
+    private static void ReportImportProgress(
+        IProgress<ImdbDatasetImportProgress>? progress,
+        ImdbDatasetProgressContext context,
+        long processedRowCount,
+        long processedArchiveBytes)
+    {
+        if (progress is null)
+        {
+            return;
+        }
+
+        var boundedBytes = Math.Clamp(processedArchiveBytes, 0L, context.ArchiveLength);
+        var datasetPercent = context.ArchiveLength > 0
+            ? boundedBytes * 100d / context.ArchiveLength
+            : 100d;
+        var overallPercent = context.TotalArchiveBytes > 0
+            ? (context.CompletedArchiveBytes + boundedBytes) * 100d / context.TotalArchiveBytes
+            : datasetPercent;
+        progress.Report(new ImdbDatasetImportProgress(
+            context.DatasetName,
+            context.DatasetNumber,
+            context.DatasetCount,
+            processedRowCount,
+            Math.Clamp(datasetPercent, 0d, 100d),
+            Math.Clamp(overallPercent, 0d, 100d)));
     }
 
     private static bool TryMapTitleKind(string value, out int kind)
@@ -304,6 +391,14 @@ internal sealed class ImdbDatasetIndexBuilder
         command.CommandText = commandText;
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    private sealed record ImdbDatasetProgressContext(
+        string DatasetName,
+        int DatasetNumber,
+        int DatasetCount,
+        long ArchiveLength,
+        long CompletedArchiveBytes,
+        long TotalArchiveBytes);
 }
 
 /// <summary>
