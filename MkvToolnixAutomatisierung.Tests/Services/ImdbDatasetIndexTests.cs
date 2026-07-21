@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels;
 using Xunit;
 
@@ -101,7 +102,12 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             importReports.GroupBy(value => value.DatasetNumber),
             group => Assert.Equal(100d, group.Last().DatasetProgressPercent, precision: 5));
         Assert.True(importReports.Zip(importReports.Skip(1), (left, right) => left.OverallProgressPercent <= right.OverallProgressPercent).All(value => value));
-        Assert.Equal(100d, Assert.Single(progress.Values, value => value.IsFinalizing).OverallProgressPercent);
+        var finalizationReports = progress.Values.Where(value => value.IsFinalizing).ToArray();
+        Assert.Equal(7, finalizationReports.Length);
+        Assert.Equal(Enumerable.Range(1, 7), finalizationReports.Select(value => value.DatasetNumber));
+        Assert.All(finalizationReports, value => Assert.Equal(7, value.DatasetCount));
+        Assert.Contains(finalizationReports, value => value.DatasetName.Contains("Aliasnamen", StringComparison.Ordinal));
+        Assert.All(finalizationReports, value => Assert.Equal(100d, value.OverallProgressPercent));
     }
 
     [Fact]
@@ -215,10 +221,54 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             && value.DetailText?.Contains("Datei ", StringComparison.Ordinal) == true
             && value.DetailText.Contains("Import ", StringComparison.Ordinal)
             && !value.DetailText.Contains("Gesamt ", StringComparison.Ordinal)
+            && value.ProgressLabel == "Import"
             && value.IsIndeterminate == false);
         Assert.Contains(progress.Values, value =>
             value.StatusText.Contains("Suchindex", StringComparison.Ordinal)
-            && value.ProgressPercent == 98d);
+            && value.DetailText?.Contains("Index", StringComparison.Ordinal) == true
+            && value.ProgressLabel == "Index"
+            && value.IsIndeterminate);
+        Assert.Contains(progress.Values, value =>
+            value.StatusText.Contains("geladen", StringComparison.Ordinal)
+            && value.ProgressLabel == "Download"
+            && value.ProgressPercent == 100d);
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_BuildsIndexOutsideWpfDispatcherThread()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var uiThreadId = Environment.CurrentManagedThreadId;
+            var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+            using var httpClient = new HttpClient(handler);
+            var store = new FakeMetadataStore(new AppMetadataSettings
+            {
+                ImdbDataset = new ImdbDatasetSettings
+                {
+                    AutoManageEnabled = true,
+                    ManagementPreferenceConfigured = true
+                }
+            });
+            var manager = new ImdbDatasetManager(
+                store,
+                httpClient,
+                new ImdbDatasetIndexBuilder(),
+                new FixedConsent(true),
+                _tempDirectory,
+                Path.Combine(_tempDirectory, "dispatcher-index.sqlite"));
+            var progress = new RecordingProgress<ManagedToolStartupProgress>();
+
+            var result = await manager.EnsureCurrentAsync(progress);
+
+            Assert.False(result.HasWarning);
+            var buildReports = progress.Reports
+                .Where(report => report.Value.ProgressLabel == "Import"
+                    || report.Value.StatusText.Contains("Suchindex", StringComparison.Ordinal))
+                .ToArray();
+            Assert.NotEmpty(buildReports);
+            Assert.All(buildReports, report => Assert.NotEqual(uiThreadId, report.ThreadId));
+        });
     }
 
     private DatasetFiles WriteSmallDatasetArchives()
@@ -359,8 +409,12 @@ public sealed class ImdbDatasetIndexTests : IDisposable
 
     private sealed class RecordingProgress<T> : IProgress<T>
     {
-        public List<T> Values { get; } = [];
+        public List<RecordedProgress<T>> Reports { get; } = [];
 
-        public void Report(T value) => Values.Add(value);
+        public IReadOnlyList<T> Values => Reports.Select(report => report.Value).ToArray();
+
+        public void Report(T value) => Reports.Add(new RecordedProgress<T>(value, Environment.CurrentManagedThreadId));
     }
+
+    private sealed record RecordedProgress<T>(T Value, int ThreadId);
 }

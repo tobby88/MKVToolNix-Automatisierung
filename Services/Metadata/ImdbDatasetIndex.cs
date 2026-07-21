@@ -10,13 +10,13 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// Fortschritt beim streamenden Import eines offiziellen IMDb-TSV-Datensatzes einschließlich
 /// dateibezogener und über alle drei Archive gewichteter Prozentwerte.
 /// </summary>
-/// <param name="DatasetName">Technischer Name der aktuell gelesenen IMDb-Datei.</param>
-/// <param name="DatasetNumber">Einbasierte Position der Datei im Importablauf.</param>
-/// <param name="DatasetCount">Gesamtzahl der einzulesenden Dateien.</param>
+/// <param name="DatasetName">Technischer Datensatzname oder Beschreibung des aktuellen Abschluss-Schritts.</param>
+/// <param name="DatasetNumber">Einbasierte Position innerhalb der Import- oder Abschlussphase.</param>
+/// <param name="DatasetCount">Gesamtzahl der Schritte in der aktuellen Phase.</param>
 /// <param name="ProcessedRowCount">Exakte Zahl der bisher gelesenen Datenzeilen der aktuellen Datei.</param>
 /// <param name="DatasetProgressPercent">Aus der gelesenen komprimierten Dateiposition geschätzter Dateifortschritt.</param>
 /// <param name="OverallProgressPercent">Nach Archivgröße gewichteter Fortschritt über alle Dateien.</param>
-/// <param name="IsFinalizing">Kennzeichnet den anschließenden Aufbau der SQLite-Suchindizes.</param>
+/// <param name="IsFinalizing">Kennzeichnet einen nicht prozentual messbaren SQLite-Abschluss-Schritt.</param>
 internal sealed record ImdbDatasetImportProgress(
     string DatasetName,
     int DatasetNumber,
@@ -116,31 +116,44 @@ internal sealed class ImdbDatasetIndexBuilder
             CreateProgressContext("title.akas", 3, archiveLengths[2], completedArchiveBytes, totalArchiveBytes),
             progress,
             cancellationToken);
-        progress?.Report(new ImdbDatasetImportProgress(
-            "SQLite-Suchindex",
-            3,
-            archivePaths.Length,
-            0,
-            100d,
-            100d,
-            IsFinalizing: true));
-        await ExecuteNonQueryAsync(
-            connection,
-            """
-            DELETE FROM titles WHERE kind = 2 AND parent_id IS NULL;
-            CREATE INDEX ix_titles_kind_primary ON titles(kind, normalized_primary);
-            CREATE INDEX ix_titles_kind_original ON titles(kind, normalized_original);
-            CREATE INDEX ix_titles_parent ON titles(parent_id, season_number, episode_number);
-            CREATE INDEX ix_aliases_normalized ON aliases(normalized_title);
-            CREATE INDEX ix_aliases_title_id ON aliases(title_id);
-            """,
-            cancellationToken);
+        var finalizationSteps = new (string Name, string Sql)[]
+        {
+            ("Nicht zuordenbare Episoden werden entfernt.", "DELETE FROM titles WHERE kind = 2 AND parent_id IS NULL;"),
+            ("Der Primärtitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_primary ON titles(kind, normalized_primary);"),
+            ("Der Originaltitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_original ON titles(kind, normalized_original);"),
+            ("Der Episoden-Index wird aufgebaut.", "CREATE INDEX ix_titles_parent ON titles(parent_id, season_number, episode_number);"),
+            ("Der Aliasnamen-Index wird aufgebaut.", "CREATE INDEX ix_aliases_normalized ON aliases(normalized_title);"),
+            ("Der Aliasverknüpfungs-Index wird aufgebaut.", "CREATE INDEX ix_aliases_title_id ON aliases(title_id);")
+        };
+        var finalizationStepCount = finalizationSteps.Length + 1;
+        for (var index = 0; index < finalizationSteps.Length; index++)
+        {
+            ReportFinalizationProgress(progress, finalizationSteps[index].Name, index + 1, finalizationStepCount);
+            await ExecuteNonQueryAsync(connection, finalizationSteps[index].Sql, cancellationToken);
+        }
 
+        ReportFinalizationProgress(progress, "Versionsinformationen werden gespeichert.", finalizationStepCount, finalizationStepCount);
         await using var metadataCommand = connection.CreateCommand();
         metadataCommand.CommandText = "INSERT INTO metadata(key, value) VALUES ('version', $version), ('builtUtc', $builtUtc);";
         metadataCommand.Parameters.AddWithValue("$version", versionToken);
         metadataCommand.Parameters.AddWithValue("$builtUtc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         await metadataCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static void ReportFinalizationProgress(
+        IProgress<ImdbDatasetImportProgress>? progress,
+        string stepName,
+        int stepNumber,
+        int stepCount)
+    {
+        progress?.Report(new ImdbDatasetImportProgress(
+            stepName,
+            stepNumber,
+            stepCount,
+            0,
+            100d,
+            100d,
+            IsFinalizing: true));
     }
 
     private static async Task ImportBasicsAsync(

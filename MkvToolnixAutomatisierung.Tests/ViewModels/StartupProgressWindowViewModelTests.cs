@@ -24,9 +24,14 @@ public sealed class StartupProgressWindowViewModelTests
         Assert.Equal(50d, viewModel.ProgressPercent);
         Assert.Equal($"Gesamt {50d.ToString("0.0", CultureInfo.CurrentCulture)}%", viewModel.ProgressText);
 
-        viewModel.Report(new ManagedToolStartupProgress("IMDb wird indexiert...", ProgressPercent: 64.4d, IsIndeterminate: false));
+        viewModel.Report(new ManagedToolStartupProgress(
+            "IMDb wird indexiert...",
+            ProgressPercent: 64.4d,
+            IsIndeterminate: false,
+            ProgressLabel: "Import"));
 
-        Assert.Equal($"Gesamt {64.4d.ToString("0.0", CultureInfo.CurrentCulture)}%", viewModel.ProgressText);
+        Assert.Equal("Import", viewModel.ProgressLabel);
+        Assert.Equal($"Import {64.4d.ToString("0.0", CultureInfo.CurrentCulture)}%", viewModel.ProgressText);
     }
 
     [Fact]

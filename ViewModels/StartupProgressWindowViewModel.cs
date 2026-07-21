@@ -11,6 +11,7 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
 {
     private string _statusText = "Werkzeuge werden vorbereitet...";
     private string _detailText = "Initialisiere den Startvorgang.";
+    private string _progressLabel = "Gesamt";
     private double _progressPercent;
     private bool _isIndeterminate = true;
 
@@ -91,10 +92,29 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
     }
 
     /// <summary>
-    /// Benutzerlesbarer Gesamtfortschritt neben dem Balken.
+    /// Bezeichnet den Vorgang, dessen Prozentwert der Balken aktuell misst.
+    /// </summary>
+    public string ProgressLabel
+    {
+        get => _progressLabel;
+        private set
+        {
+            if (_progressLabel == value)
+            {
+                return;
+            }
+
+            _progressLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ProgressText));
+        }
+    }
+
+    /// <summary>
+    /// Benutzerlesbarer Fortschritt des aktuell bezeichneten Vorgangs neben dem Balken.
     /// Eine feste Nachkommastelle verhindert Breitenwechsel zwischen ganzzahligen und gebrochenen Werten.
     /// </summary>
-    public string ProgressText => IsIndeterminate ? "läuft..." : $"Gesamt {ProgressPercent:0.0}%";
+    public string ProgressText => IsIndeterminate ? "läuft..." : $"{ProgressLabel} {ProgressPercent:0.0}%";
 
     /// <inheritdoc />
     public void Report(ManagedToolStartupProgress value)
@@ -105,6 +125,9 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
         DetailText = string.IsNullOrWhiteSpace(value.DetailText)
             ? "Bitte warten..."
             : value.DetailText!;
+        ProgressLabel = string.IsNullOrWhiteSpace(value.ProgressLabel)
+            ? "Fortschritt"
+            : value.ProgressLabel;
         IsIndeterminate = value.IsIndeterminate;
         ProgressPercent = value.ProgressPercent ?? 0d;
     }

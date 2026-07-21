@@ -232,7 +232,7 @@ internal sealed class ImdbDatasetManager
                     bytes =>
                     {
                         downloadedBytes += bytes;
-                        var percent = totalBytes is > 0 ? Math.Min(55d, downloadedBytes * 55d / totalBytes.Value) : (double?)null;
+                        var percent = totalBytes is > 0 ? Math.Min(100d, downloadedBytes * 100d / totalBytes.Value) : (double?)null;
                         Report(
                             progress,
                             $"IMDb: {remoteFile.Descriptor.Name} wird geladen...",
@@ -240,7 +240,8 @@ internal sealed class ImdbDatasetManager
                                 ? $"{FormatBytes(downloadedBytes)} von {FormatBytes(totalBytes.Value)}"
                                 : $"{FormatBytes(downloadedBytes)} geladen",
                             percent,
-                            percent is null);
+                            percent is null,
+                            "Download");
                     },
                     cancellationToken);
             }
@@ -252,31 +253,43 @@ internal sealed class ImdbDatasetManager
                 {
                     Report(
                         progress,
-                        "IMDb: SQLite-Suchindex wird fertiggestellt...",
-                        "Die drei Datendateien sind eingelesen; Suchindizes werden optimiert.",
-                        98d,
-                        false);
+                        $"IMDb: SQLite-Suchindex wird fertiggestellt ({value.DatasetNumber}/{value.DatasetCount})...",
+                        value.DatasetName,
+                        null,
+                        true,
+                        "Index");
                     return;
                 }
 
-                var importPercent = 55d + (value.OverallProgressPercent * 42d / 100d);
                 Report(
                     progress,
                     $"IMDb: {value.DatasetName} wird indexiert ({value.DatasetNumber}/{value.DatasetCount})...",
                     $"{value.ProcessedRowCount:N0} Datensätze verarbeitet · Datei {value.DatasetProgressPercent:0.0}% · Import {value.OverallProgressPercent:0.0}%",
-                    importPercent,
-                    false);
+                    value.OverallProgressPercent,
+                    false,
+                    "Import");
             });
-            await _indexBuilder.BuildAsync(
-                stagedDatabasePath,
-                archivePaths["title.basics"],
-                archivePaths["title.episode"],
-                archivePaths["title.akas"],
-                versionToken,
-                importProgress,
+            // Microsoft.Data.Sqlite führt lange SQLite-Operationen trotz Task-API synchron aus.
+            // Der explizite Worker-Thread hält deshalb WPF-Dispatcher und Startdialog reaktionsfähig.
+            await Task.Run(
+                () => _indexBuilder.BuildAsync(
+                    stagedDatabasePath,
+                    archivePaths["title.basics"],
+                    archivePaths["title.episode"],
+                    archivePaths["title.akas"],
+                    versionToken,
+                    importProgress,
+                    cancellationToken),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
+            Report(
+                progress,
+                "IMDb: Neuer Offlineindex wird aktiviert...",
+                "Die bisherige Datenbank wird atomar ersetzt.",
+                null,
+                true,
+                "Index");
             ReplaceDatabaseAtomically(stagedDatabasePath, _databasePath);
         }
         finally
@@ -366,8 +379,9 @@ internal sealed class ImdbDatasetManager
         string status,
         string detail,
         double? percent,
-        bool indeterminate) =>
-        progress?.Report(new ManagedToolStartupProgress(status, detail, percent, indeterminate));
+        bool indeterminate,
+        string progressLabel = "Gesamt") =>
+        progress?.Report(new ManagedToolStartupProgress(status, detail, percent, indeterminate, progressLabel));
 
     private static string FormatBytes(long byteCount)
     {

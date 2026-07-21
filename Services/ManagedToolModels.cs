@@ -66,11 +66,13 @@ internal sealed record ManagedToolStartupResult(IReadOnlyList<string> Warnings)
 /// <param name="DetailText">Optionaler Detailtext, etwa Werkzeugname oder Bytefortschritt.</param>
 /// <param name="ProgressPercent">Optionaler Prozentwert für determinate Schritte.</param>
 /// <param name="IsIndeterminate">Kennzeichnet Schritte ohne belastbaren Prozentfortschritt.</param>
+/// <param name="ProgressLabel">Kurze Bezeichnung des gemessenen Vorgangs, beispielsweise Download oder Import.</param>
 internal sealed record ManagedToolStartupProgress(
     string StatusText,
     string? DetailText = null,
     double? ProgressPercent = null,
-    bool IsIndeterminate = true);
+    bool IsIndeterminate = true,
+    string ProgressLabel = "Gesamt");
 
 /// <summary>
 /// Fortschritt einer laufenden Archiv-Extraktion.
