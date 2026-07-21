@@ -15,10 +15,7 @@ internal interface IEmbyProviderReviewDialogService
         EpisodeMetadataLookupService episodeMetadata,
         IAppSettingsDialogService settingsDialog);
 
-    EmbyImdbReviewResult ReviewImdb(
-        EmbySyncItemViewModel item,
-        ImdbLookupService imdbLookup,
-        ImdbLookupMode lookupMode);
+    EmbyImdbReviewResult ReviewImdb(EmbySyncItemViewModel item);
 }
 
 /// <summary>
@@ -68,13 +65,10 @@ internal sealed class EmbyProviderReviewDialogService : IEmbyProviderReviewDialo
             : EmbyTvdbReviewResult.Apply(dialog.SelectedEpisodeSelection);
     }
 
-    public EmbyImdbReviewResult ReviewImdb(
-        EmbySyncItemViewModel item,
-        ImdbLookupService imdbLookup,
-        ImdbLookupMode lookupMode)
+    public EmbyImdbReviewResult ReviewImdb(EmbySyncItemViewModel item)
     {
         item.TryBuildMetadataGuess(out var guess);
-        var dialog = new ImdbLookupWindow(imdbLookup, lookupMode, guess, item.ImdbId)
+        var dialog = new ImdbLookupWindow(guess, item.ImdbId)
         {
             Owner = ResolveOwner()
         };

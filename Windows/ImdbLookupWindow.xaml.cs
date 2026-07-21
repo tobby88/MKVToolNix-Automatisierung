@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
@@ -14,16 +13,10 @@ namespace MkvToolnixAutomatisierung.Windows;
 public partial class ImdbLookupWindow : Window
 {
     private readonly ImdbLookupWindowViewModel _viewModel;
-    private bool _loadedOnce;
-
-    internal ImdbLookupWindow(
-        ImdbLookupService lookupService,
-        ImdbLookupMode lookupMode,
-        EpisodeMetadataGuess? guess,
-        string? currentImdbId)
+    internal ImdbLookupWindow(EpisodeMetadataGuess? guess, string? currentImdbId)
     {
         InitializeComponent();
-        _viewModel = new ImdbLookupWindowViewModel(lookupService, lookupMode, guess, currentImdbId);
+        _viewModel = new ImdbLookupWindowViewModel(guess, currentImdbId);
         DataContext = _viewModel;
     }
 
@@ -37,54 +30,8 @@ public partial class ImdbLookupWindow : Window
     /// </summary>
     public bool ImdbExplicitlyUnavailable { get; private set; }
 
-    private async void ImdbLookupWindow_Loaded(object sender, RoutedEventArgs e)
-    {
-        if (_loadedOnce)
-        {
-            return;
-        }
-
-        _loadedOnce = true;
-        await RunUiActionAsync(() => _viewModel.InitializeAsync(), "IMDb-Fehler");
-    }
-
-    private async void SearchSeriesButton_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiActionAsync(() => _viewModel.SearchSeriesAsync(autoLoadEpisodes: true), "IMDb-Fehler");
-    }
-
-    private async void SeriesResultsListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        await RunUiActionAsync(() => _viewModel.HandleSelectedSeriesSelectionChangedAsync(), "IMDb-Fehler");
-    }
-
-    private async void PreviousSeasonButton_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiActionAsync(() => _viewModel.LoadPreviousEpisodeSeasonAsync(), "IMDb-Fehler");
-    }
-
-    private async void LoadSeasonButton_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiActionAsync(() => _viewModel.LoadSelectedEpisodeSeasonAsync(), "IMDb-Fehler");
-    }
-
-    private async void NextSeasonButton_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiActionAsync(() => _viewModel.LoadNextEpisodeSeasonAsync(), "IMDb-Fehler");
-    }
-
     private void OpenSearchButton_Click(object sender, RoutedEventArgs e)
     {
-        OpenSelectedSearch();
-    }
-
-    private void OpenCurrentBrowserSearchButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (!_viewModel.PrepareBrowserSearchFromCurrentFields())
-        {
-            return;
-        }
-
         OpenSelectedSearch();
     }
 
@@ -217,18 +164,6 @@ public partial class ImdbLookupWindow : Window
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
-        }
-    }
-
-    private async Task RunUiActionAsync(Func<Task> action, string errorTitle)
-    {
-        try
-        {
-            await action();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, errorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 }

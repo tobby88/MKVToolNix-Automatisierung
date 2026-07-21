@@ -24,21 +24,6 @@ internal static class ProviderLookupErrorFormatter
         return $"TVDB-Automatik nicht möglich: {BuildReason(exception)}";
     }
 
-    public static string FormatImdbSearchFailure(Exception exception)
-    {
-        return $"IMDb-Suche über imdbapi.dev nicht möglich: {BuildReason(exception)}";
-    }
-
-    public static string FormatImdbEpisodeFailure(Exception exception)
-    {
-        return $"IMDb-Episodenliste über imdbapi.dev nicht möglich: {BuildReason(exception)}";
-    }
-
-    public static string FormatImdbFallbackReason(Exception exception)
-    {
-        return $"imdbapi.dev ist derzeit nicht erreichbar: {BuildReason(exception)}";
-    }
-
     private static string BuildReason(Exception exception)
     {
         if (exception is HttpRequestException httpException)

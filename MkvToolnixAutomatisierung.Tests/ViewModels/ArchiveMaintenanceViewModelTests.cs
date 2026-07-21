@@ -712,7 +712,6 @@ public sealed class ArchiveMaintenanceViewModelTests
                 new MuxExecutionService()),
             archiveSettingsStore,
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new TvdbClient()),
-            new ImdbLookupService(new HttpClient()),
             new NullSettingsDialogService());
         return new ArchiveMaintenanceViewModel(services, dialogService ?? new NullDialogService(), moduleLogs);
     }

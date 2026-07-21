@@ -31,7 +31,6 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private bool _autoManageMediathekView;
     private string _tvdbApiKey;
     private string _tvdbPin;
-    private ImdbLookupMode _imdbLookupMode;
     private string _embyServerUrl;
     private string _embyApiKey;
     private int _embyScanWaitTimeoutSeconds;
@@ -68,7 +67,6 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         _autoManageMediathekView = _managedMediathekViewSettings.AutoManageEnabled;
         _tvdbApiKey = metadataSettings.TvdbApiKey;
         _tvdbPin = metadataSettings.TvdbPin;
-        _imdbLookupMode = metadataSettings.ImdbLookupMode;
         _embyServerUrl = embySettings.ServerUrl;
         _embyApiKey = embySettings.ApiKey;
         _embyScanWaitTimeoutSeconds = embySettings.ScanWaitTimeoutSeconds;
@@ -259,33 +257,6 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             OnPropertyChanged();
         }
     }
-
-    public IReadOnlyList<ImdbLookupModeOption> ImdbLookupModeOptions { get; } =
-    [
-        new(ImdbLookupMode.Auto, "Automatisch (API, sonst Browser)", "Versucht zuerst imdbapi.dev. Nur wenn der Dienst insgesamt nicht erreichbar ist, fällt der Dialog auf die Browserhilfe zurück."),
-        new(ImdbLookupMode.ApiOnly, "Nur imdbapi.dev", "Erzwingt die freie API. Kein automatischer Browser-Fallback."),
-        new(ImdbLookupMode.BrowserOnly, "Nur Browserhilfe", "Nutzen der bisherigen browsergestützten IMDb-Suche ohne API-Abfrage.")
-    ];
-
-    public ImdbLookupMode SelectedImdbLookupMode
-    {
-        get => _imdbLookupMode;
-        set
-        {
-            if (_imdbLookupMode == value)
-            {
-                return;
-            }
-
-            _imdbLookupMode = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(ImdbLookupModeDescription));
-        }
-    }
-
-    public string ImdbLookupModeDescription => ImdbLookupModeOptions
-        .FirstOrDefault(option => option.Value == SelectedImdbLookupMode)?.Description
-        ?? string.Empty;
 
     public string EmbyServerUrl
     {
@@ -544,7 +515,6 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             settings.Metadata ??= new AppMetadataSettings();
             settings.Metadata.TvdbApiKey = TvdbApiKey;
             settings.Metadata.TvdbPin = TvdbPin;
-            settings.Metadata.ImdbLookupMode = SelectedImdbLookupMode;
 
             settings.Emby = BuildEmbySettings();
         });
@@ -959,8 +929,4 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 
-    public sealed record ImdbLookupModeOption(
-        ImdbLookupMode Value,
-        string DisplayText,
-        string Description);
 }

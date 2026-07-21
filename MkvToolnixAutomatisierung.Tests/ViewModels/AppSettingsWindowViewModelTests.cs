@@ -69,7 +69,6 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.AutoManageMediathekView = false;
         viewModel.TvdbApiKey = "  tvdb-key  ";
         viewModel.TvdbPin = "  1234  ";
-        viewModel.SelectedImdbLookupMode = ImdbLookupMode.BrowserOnly;
         viewModel.EmbyServerUrl = "  http://emby-test:8096  ";
         viewModel.EmbyApiKey = "  emby-key  ";
         viewModel.EmbyScanWaitTimeoutSeconds = 300;
@@ -92,7 +91,6 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal("14.5.0", savedSettings.ToolPaths?.ManagedMediathekView.InstalledVersion);
         Assert.Equal("tvdb-key", savedSettings.Metadata?.TvdbApiKey);
         Assert.Equal("1234", savedSettings.Metadata?.TvdbPin);
-        Assert.Equal(ImdbLookupMode.BrowserOnly, savedSettings.Metadata?.ImdbLookupMode);
         Assert.Equal("http://emby-test:8096", savedSettings.Emby?.ServerUrl);
         Assert.Equal("emby-key", savedSettings.Emby?.ApiKey);
         Assert.Equal(300, savedSettings.Emby?.ScanWaitTimeoutSeconds);

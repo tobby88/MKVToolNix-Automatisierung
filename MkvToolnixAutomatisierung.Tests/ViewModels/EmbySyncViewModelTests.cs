@@ -51,7 +51,6 @@ public sealed class EmbySyncViewModelTests
             archiveSettings,
             syncService,
             episodeMetadata,
-            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
             new NullSettingsDialogService());
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService(), providerReviewDialogs, moduleLogs);
     }
@@ -1267,10 +1266,7 @@ public sealed class EmbySyncViewModelTests
             return _tvdbResults.Count > 0 ? _tvdbResults.Dequeue() : EmbyTvdbReviewResult.Cancelled;
         }
 
-        public EmbyImdbReviewResult ReviewImdb(
-            EmbySyncItemViewModel item,
-            ImdbLookupService imdbLookup,
-            ImdbLookupMode lookupMode)
+        public EmbyImdbReviewResult ReviewImdb(EmbySyncItemViewModel item)
         {
             ImdbReviewCallCount++;
             return _imdbResults.Count > 0 ? _imdbResults.Dequeue() : EmbyImdbReviewResult.Cancelled;

@@ -2,17 +2,12 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="IMDb-Zuordnung"
-        Width="980"
-        Height="760"
-        MinWidth="860"
-        MinHeight="620"
-        Loaded="ImdbLookupWindow_Loaded"
+        Width="820"
+        Height="650"
+        MinWidth="720"
+        MinHeight="560"
         Activated="Window_OnActivated"
         WindowStartupLocation="CenterOwner">
-    <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-    </Window.Resources>
-
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -28,249 +23,87 @@
                 BorderBrush="#C7D1DC"
                 BorderThickness="1"
                 CornerRadius="6">
-            <Grid>
+            <StackPanel>
+                <TextBlock Margin="0,0,0,8" Text="{Binding GuessSummaryText}" TextWrapping="Wrap" />
+                <TextBlock Foreground="#334A62" Text="{Binding ComparisonSummaryText}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <GroupBox Grid.Row="1" Header="IMDb im Browser suchen">
+            <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <TextBlock Grid.Row="0"
-                           Margin="0,0,0,8"
-                           Text="{Binding GuessSummaryText}"
-                           TextWrapping="Wrap" />
-                <TextBlock Grid.Row="1"
-                           Foreground="#334A62"
-                           Text="{Binding ComparisonSummaryText}"
-                           TextWrapping="Wrap" />
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="1"
-              IsEnabled="{Binding IsInteractive}">
-            <Grid Visibility="{Binding IsApiWorkflowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="130" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <GroupBox Grid.Column="0" Header="Serie">
-                    <Grid Margin="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="140" />
-                        </Grid.ColumnDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serie" />
+                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4" Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Episodentitel" />
+                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Freier Suchtext" />
+                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,0,8" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-                        <TextBox Grid.Row="0"
-                                 Grid.Column="0"
-                                 Margin="0,0,12,8"
-                                 Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="Seriennamen für imdbapi.dev suchen oder anpassen." />
-                        <Button Grid.Row="0"
-                                Grid.Column="1"
-                                Padding="10,6"
-                                Click="SearchSeriesButton_Click"
-                                Content="Neu suchen" />
-
-                        <ListBox x:Name="SeriesResultsListBox"
-                                 Grid.Row="1"
-                                 Grid.Column="0"
-                                 Grid.ColumnSpan="2"
-                                 ItemsSource="{Binding SeriesResults}"
-                                 SelectedItem="{Binding SelectedSeriesItem, Mode=TwoWay}"
-                                 SelectionChanged="SeriesResultsListBox_SelectionChanged">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
-                </GroupBox>
-
-                <GroupBox Grid.Column="2" Header="Episode">
-                    <Grid Margin="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-
-                        <Grid Grid.Row="0"
-                              Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="6" />
-                                <ColumnDefinition Width="54" />
-                                <ColumnDefinition Width="6" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="6" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="Episodenliste filtern. Primär zählt der Episodentitel; Staffel/Folge dient nur als Tie-Breaker." />
-                            <Button Grid.Column="2"
-                                    Padding="8,4"
-                                    Click="PreviousSeasonButton_Click"
-                                    Content="Staffel -"
-                                    IsEnabled="{Binding CanLoadPreviousEpisodeSeason}"
-                                    ToolTip="Lädt die vorherige IMDb-Staffel der ausgewählten Serie." />
-                            <ComboBox Grid.Column="4"
-                                      HorizontalContentAlignment="Center"
-                                      ItemsSource="{Binding AvailableEpisodeSeasons}"
-                                      SelectedItem="{Binding EpisodeSeasonText, Mode=TwoWay}"
-                                      ToolTip="IMDb-Staffel, die gezielt über die API geladen wird. Es werden nur Staffeln angeboten, die IMDb für die Serie meldet." />
-                            <Button Grid.Column="6"
-                                    Padding="8,4"
-                                    Click="LoadSeasonButton_Click"
-                                    Content="Laden"
-                                    IsEnabled="{Binding CanLoadEpisodeSeason}"
-                                    ToolTip="Lädt genau die eingetragene IMDb-Staffel." />
-                            <Button Grid.Column="8"
-                                    Padding="8,4"
-                                    Click="NextSeasonButton_Click"
-                                    Content="Staffel +"
-                                    IsEnabled="{Binding CanLoadNextEpisodeSeason}"
-                                    ToolTip="Lädt die nächste IMDb-Staffel der ausgewählten Serie." />
-                        </Grid>
-
-                        <ListBox Grid.Row="1"
-                                 ItemsSource="{Binding EpisodeResults}"
-                                 SelectedItem="{Binding SelectedEpisodeItem, Mode=TwoWay}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </Grid>
-                </GroupBox>
-            </Grid>
-
-            <GroupBox Header="Browserhilfe"
-                      Visibility="{Binding IsBrowserWorkflowVisible, Converter={StaticResource BoolToVisibilityConverter}}">
-                <Grid Margin="8">
+                <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="150" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBox Grid.Row="0"
-                             Grid.Column="0"
-                             Margin="0,0,12,8"
-                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             ToolTip="Suchtext für die browsergestützte IMDb-Suche." />
-                    <Button Grid.Row="0"
-                            Grid.Column="1"
-                            Padding="10,6"
-                            Click="OpenSearchButton_Click"
-                            Content="Im Browser öffnen"
-                            IsEnabled="{Binding CanOpenSelectedSearch}" />
-
-                    <ListBox Grid.Row="1"
-                             Grid.Column="0"
-                             Grid.ColumnSpan="2"
+                    <ListBox Grid.Row="0"
                              ItemsSource="{Binding SearchOptions}"
                              SelectedItem="{Binding SelectedSearchOption, Mode=TwoWay}"
                              MouseDoubleClick="SearchOptionsListBox_OnMouseDoubleClick">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,2">
-                                    <TextBlock FontWeight="SemiBold"
-                                               Text="{Binding DisplayText}" />
-                                    <TextBlock Margin="0,2,0,0"
-                                               Foreground="#4B5563"
-                                               Text="{Binding Description}"
-                                               TextWrapping="Wrap" />
+                                <StackPanel Margin="2,4">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayText}" />
+                                    <TextBlock Margin="0,2,0,0" Foreground="#4B5563" Text="{Binding Description}" TextWrapping="Wrap" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                    <Button Grid.Row="1"
+                            HorizontalAlignment="Right"
+                            Margin="0,8,0,0"
+                            Padding="14,7"
+                            Click="OpenSearchButton_Click"
+                            Content="Ausgewählte Suche öffnen"
+                            IsEnabled="{Binding CanOpenSelectedSearch}" />
                 </Grid>
-            </GroupBox>
-        </Grid>
+            </Grid>
+        </GroupBox>
 
-        <GroupBox Grid.Row="2"
-                  Margin="0,12,0,0"
-                  Header="IMDb-ID übernehmen">
+        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="IMDb-ID übernehmen">
             <Grid Margin="8">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="130" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0"
-                           Grid.Column="0"
-                           Margin="0,8,12,8"
-                           VerticalAlignment="Center"
-                           Text="IMDb-ID / URL" />
-                <TextBox Grid.Row="0"
-                         Grid.Column="1"
+                <TextBlock Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="IMDb-ID / URL" />
+                <TextBox Grid.Column="1"
                          Margin="0,4,12,4"
                          Text="{Binding ImdbInput, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="Akzeptiert sowohl eine IMDb-ID wie tt1234567 als auch eine komplette IMDb-URL." />
-                <Button Grid.Row="0"
-                        Grid.Column="2"
-                        Margin="0,4,0,4"
+                         ToolTip="Akzeptiert eine IMDb-ID wie tt1234567 oder eine vollständige IMDb-Titel-URL." />
+                <Button Grid.Column="2"
+                        Margin="0,4"
                         Padding="10,6"
                         Click="ImportClipboardButton_Click"
                         Content="Zwischenablage übernehmen" />
-
-                <TextBlock Grid.Row="1"
-                           Grid.Column="1"
-                           Grid.ColumnSpan="2"
-                           Margin="0,4,0,0"
-                           Foreground="#4B5563"
-                           Text="Gültig sind eine IMDb-ID oder eine komplette IMDb-URL. Beim Zurückkehren aus dem Browser übernimmt der Dialog die Zwischenablage automatisch."
-                           TextWrapping="Wrap" />
             </Grid>
         </GroupBox>
 
         <DockPanel Grid.Row="3" Margin="0,12,0,0" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left"
-                       VerticalAlignment="Center"
-                       Text="{Binding StatusText}"
-                       TextWrapping="Wrap" />
+            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Width="180"
-                        Margin="0,0,12,0"
-                        Padding="10,6"
-                        Click="OpenCurrentBrowserSearchButton_Click"
-                        Content="IMDb im Browser suchen"
-                        IsEnabled="{Binding CanOpenBrowserSearch}"
-                        Visibility="{Binding IsApiWorkflowVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                        ToolTip="Öffnet die IMDb-Suche im Browser mit den aktuell eingetragenen Serien- und Episodentexten. Beim Zurückkehren übernimmt der Dialog eine kopierte IMDb-URL automatisch." />
-                <Button Width="150"
-                        Margin="0,0,12,0"
-                        Padding="10,6"
-                        Click="NoImdbButton_Click"
-                        Content="Keine IMDb-ID"
-                        ToolTip="Bestätigt bewusst, dass für diese Episode kein passender IMDb-Eintrag vergeben werden soll." />
-                <Button Width="120"
-                        Margin="0,0,12,0"
-                        Padding="10,6"
-                        Click="CancelButton_Click"
-                        Content="Abbrechen" />
-                <Button Width="140"
-                        Padding="10,6"
-                        IsEnabled="{Binding CanApply}"
-                        Click="ApplyButton_Click"
-                        Content="Übernehmen" />
+                <Button Width="150" Margin="0,0,12,0" Padding="10,6" Click="NoImdbButton_Click" Content="Keine IMDb-ID" />
+                <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
+                <Button Width="140" Padding="10,6" IsEnabled="{Binding CanApply}" Click="ApplyButton_Click" Content="Übernehmen" />
             </StackPanel>
         </DockPanel>
     </Grid>

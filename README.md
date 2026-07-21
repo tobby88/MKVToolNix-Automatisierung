@@ -179,7 +179,7 @@ Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby s
 
 Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
 
-Für IMDb nutzt der Dialog je nach Einstellung bevorzugt `imdbapi.dev`, ausschließlich `imdbapi.dev` oder ausschließlich die Browserhilfe. Im Automatikmodus fällt der Dialog nur dann auf die Browserhilfe zurück, wenn der freie API-Dienst insgesamt nicht erreichbar ist. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. Netzwerk- oder Dienstfehler bei TVDB und IMDb werden im Dialog als verständliche Statusmeldung angezeigt; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+Für IMDb öffnet der Dialog gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden im Dialog als verständliche Statusmeldung angezeigt; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
 
 ## Unterstützte Dateien
 

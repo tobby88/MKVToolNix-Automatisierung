@@ -840,7 +840,6 @@ public sealed class SelectionGridInteractionTests
             new AppArchiveSettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient ?? new ThrowingEmbyClient(), new EmbyNfoProviderIdService()),
             new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
-            new ImdbLookupService(new HttpClient(new StubHttpMessageHandler())),
             new NullSettingsDialogService());
         return new EmbySyncViewModel(services, new NullDialogService());
     }

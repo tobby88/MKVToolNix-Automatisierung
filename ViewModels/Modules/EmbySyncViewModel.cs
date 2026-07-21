@@ -494,7 +494,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
             if (!ApplyImdbReviewResult(
                     item,
-                    _providerReviewDialogs.ReviewImdb(item, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
+                    _providerReviewDialogs.ReviewImdb(item),
                     isBatchReview: true))
             {
                 StatusText = "Provider-ID-Pflichtprüfung abgebrochen.";
@@ -1321,7 +1321,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         var reviewApplied = ApplyImdbReviewResult(
             SelectedItem,
-            _providerReviewDialogs.ReviewImdb(SelectedItem, _services.ImdbLookup, _services.EpisodeMetadata.LoadSettings().ImdbLookupMode),
+            _providerReviewDialogs.ReviewImdb(SelectedItem),
             isBatchReview: false);
         SaveVisibleLog("IMDb prüfen");
         if (reviewApplied)
