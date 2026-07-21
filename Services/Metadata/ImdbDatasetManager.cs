@@ -120,6 +120,15 @@ internal sealed class ImdbDatasetManager
     {
         var settings = _metadataStore.Load();
         var datasetSettings = settings.ImdbDataset ?? new ImdbDatasetSettings();
+        if (!datasetSettings.ManagementPreferenceConfigured)
+        {
+            // Migration für Installationen, deren settings.json vor Einführung des IMDb-Index
+            // entstanden ist. Ein später bewusst deaktivierter Index bleibt dagegen deaktiviert.
+            datasetSettings.AutoManageEnabled = true;
+            datasetSettings.ManagementPreferenceConfigured = true;
+            PersistDatasetSettings(datasetSettings);
+        }
+
         if (!datasetSettings.AutoManageEnabled)
         {
             return new ImdbDatasetStartupResult([]);

@@ -67,7 +67,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
-- Ein lokaler IMDb-Episodenindex ist optional. Nach Aktivierung in den Einstellungen prüft die App beim Start höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem mehrere hundert MiB großen Download fragt sie ausdrücklich nach.
+- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem mehrere hundert MiB großen Download fragt sie ausdrücklich nach. Die Verwaltung kann in den Einstellungen deaktiviert werden.
 - Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
 ## Portable Modus
@@ -89,7 +89,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
-   - optional automatische Verwaltung des lokalen IMDb-Episodenindex
+   - automatische Verwaltung des lokalen IMDb-Episodenindex bei Bedarf deaktivieren
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
 4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich` und optional `Archivpflege`.

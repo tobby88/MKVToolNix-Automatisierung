@@ -90,10 +90,49 @@ public sealed class AppSettingsWindowTests
         });
     }
 
+    [Fact]
+    public async Task Window_SeparatesArchiveAndMetadataRows_AndProvidesScrollContainers()
+    {
+        await WpfTestHost.RunAsync(() =>
+        {
+            var viewModel = CreateViewModel(new PendingEmbyClient(Task.FromResult(new EmbyServerInfo("Test", "1.0", "id"))));
+            var window = new AppSettingsWindow(viewModel);
+            try
+            {
+                var archiveScroller = Assert.IsType<ScrollViewer>(window.FindName("ArchiveSettingsScrollViewer"));
+                var archivePath = Assert.IsType<TextBlock>(window.FindName("ArchiveSettingsPathText"));
+                var archiveGrid = Assert.IsType<Grid>(archivePath.Parent);
+                var metadataScroller = Assert.IsType<ScrollViewer>(window.FindName("MetadataSettingsScrollViewer"));
+                var imdbGroup = Assert.IsType<GroupBox>(window.FindName("ImdbDatasetGroup"));
+                var metadataGrid = Assert.IsType<Grid>(imdbGroup.Parent);
+
+                Assert.Equal(ScrollBarVisibility.Auto, archiveScroller.VerticalScrollBarVisibility);
+                Assert.Equal(3, archiveGrid.RowDefinitions.Count);
+                Assert.Equal(2, Grid.GetRow(archivePath));
+                Assert.True(archiveGrid.RowDefinitions[2].Height.IsAuto);
+                Assert.Equal(ScrollBarVisibility.Auto, metadataScroller.VerticalScrollBarVisibility);
+                Assert.Equal(4, metadataGrid.RowDefinitions.Count);
+                Assert.Equal(3, Grid.GetRow(imdbGroup));
+                Assert.True(metadataGrid.RowDefinitions[3].Height.IsAuto);
+            }
+            finally
+            {
+                window.Close();
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
     private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient)
     {
         var settingsStore = new AppSettingsStore();
         var metadataStore = new AppMetadataStore(settingsStore);
+        metadataStore.Update(settings => settings.ImdbDataset = new ImdbDatasetSettings
+        {
+            AutoManageEnabled = false,
+            ManagementPreferenceConfigured = true
+        });
         var services = new AppSettingsModuleServices(
             settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),

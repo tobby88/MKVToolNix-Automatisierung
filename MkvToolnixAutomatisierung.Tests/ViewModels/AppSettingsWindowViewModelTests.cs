@@ -93,6 +93,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.False(savedSettings.ToolPaths?.ManagedFfprobe.AutoManageEnabled);
         Assert.False(savedSettings.ToolPaths?.ManagedMediathekView.AutoManageEnabled);
         Assert.True(savedSettings.Metadata?.ImdbDataset.AutoManageEnabled);
+        Assert.True(savedSettings.Metadata?.ImdbDataset.ManagementPreferenceConfigured);
         Assert.Equal("imdb-revision", savedSettings.Metadata?.ImdbDataset.InstalledVersion);
         Assert.Equal(@"C:\managed\mkvtoolnix", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledPath);
         Assert.Equal("98.0", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledVersion);
@@ -430,6 +431,11 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     {
         settingsStore ??= new AppSettingsStore();
         var metadataStore = new AppMetadataStore(settingsStore);
+        metadataStore.Update(settings =>
+        {
+            settings.ImdbDataset.AutoManageEnabled = false;
+            settings.ImdbDataset.ManagementPreferenceConfigured = true;
+        });
         var services = new AppSettingsModuleServices(
             settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),

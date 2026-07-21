@@ -554,6 +554,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             settings.Metadata.TvdbPin = TvdbPin;
             settings.Metadata.ImdbDataset = _imdbDatasetSettings.Clone();
             settings.Metadata.ImdbDataset.AutoManageEnabled = AutoManageImdbDataset;
+            settings.Metadata.ImdbDataset.ManagementPreferenceConfigured = true;
 
             settings.Emby = BuildEmbySettings();
         });

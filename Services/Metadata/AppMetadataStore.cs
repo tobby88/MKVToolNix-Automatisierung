@@ -146,7 +146,13 @@ public sealed class ImdbDatasetSettings
     /// <summary>
     /// Aktiviert die tägliche, aber vor jedem großen Download bestätigungspflichtige Updateprüfung.
     /// </summary>
-    public bool AutoManageEnabled { get; set; }
+    public bool AutoManageEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Unterscheidet den neuen Standardwert von einer später bewusst deaktivierten Verwaltung.
+    /// Bestehende Settings ohne dieses Feld erhalten dadurch genau einmal das initiale Downloadangebot.
+    /// </summary>
+    public bool ManagementPreferenceConfigured { get; set; }
 
     /// <summary>
     /// Gemeinsamer Revisionsschlüssel der zuletzt vollständig importierten IMDb-Dateien.
@@ -169,6 +175,7 @@ public sealed class ImdbDatasetSettings
     public ImdbDatasetSettings Clone() => new()
     {
         AutoManageEnabled = AutoManageEnabled,
+        ManagementPreferenceConfigured = ManagementPreferenceConfigured,
         InstalledVersion = InstalledVersion?.Trim() ?? string.Empty,
         LastCheckedUtc = LastCheckedUtc,
         LastUpdatedUtc = LastUpdatedUtc

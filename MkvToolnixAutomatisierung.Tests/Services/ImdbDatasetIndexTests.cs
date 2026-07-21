@@ -86,10 +86,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         var datasetBytes = BuildSmallDatasetByteMap();
         var handler = new DatasetHttpHandler(datasetBytes);
         using var httpClient = new HttpClient(handler);
-        var store = new FakeMetadataStore(new AppMetadataSettings
-        {
-            ImdbDataset = new ImdbDatasetSettings { AutoManageEnabled = true }
-        });
+        var store = new FakeMetadataStore(new AppMetadataSettings());
         var consent = new FixedConsent(false);
         var manager = new ImdbDatasetManager(
             store,
@@ -106,6 +103,38 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(3, handler.HeadRequestCount);
         Assert.Equal(0, handler.GetRequestCount);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastCheckedUtc);
+        Assert.True(store.CurrentSettings.ImdbDataset.AutoManageEnabled);
+        Assert.True(store.CurrentSettings.ImdbDataset.ManagementPreferenceConfigured);
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_DoesNotCheck_WhenUserExplicitlyDisabledManagement()
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var httpClient = new HttpClient(handler);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                AutoManageEnabled = false,
+                ManagementPreferenceConfigured = true
+            }
+        });
+        var consent = new FixedConsent(true);
+        var manager = new ImdbDatasetManager(
+            store,
+            httpClient,
+            new ImdbDatasetIndexBuilder(),
+            consent,
+            _tempDirectory,
+            Path.Combine(_tempDirectory, "disabled.sqlite"));
+
+        var result = await manager.EnsureCurrentAsync();
+
+        Assert.False(result.HasWarning);
+        Assert.Equal(0, consent.CallCount);
+        Assert.Equal(0, handler.HeadRequestCount);
+        Assert.Equal(0, handler.GetRequestCount);
     }
 
     [Fact]
@@ -116,7 +145,11 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         using var httpClient = new HttpClient(handler);
         var store = new FakeMetadataStore(new AppMetadataSettings
         {
-            ImdbDataset = new ImdbDatasetSettings { AutoManageEnabled = true }
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                AutoManageEnabled = true,
+                ManagementPreferenceConfigured = true
+            }
         });
         var consent = new FixedConsent(true);
         var databasePath = Path.Combine(_tempDirectory, "index.sqlite");
