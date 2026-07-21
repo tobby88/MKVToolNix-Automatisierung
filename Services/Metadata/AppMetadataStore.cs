@@ -114,6 +114,11 @@ public sealed class AppMetadataSettings
     public List<SeriesMetadataMapping> SeriesMappings { get; set; } = [];
 
     /// <summary>
+    /// Persistenter Zustand des optional verwalteten IMDb-Offlineindex.
+    /// </summary>
+    public ImdbDatasetSettings ImdbDataset { get; set; } = new();
+
+    /// <summary>
     /// Erzeugt eine tiefe Kopie der Metadaten-Einstellungen.
     /// </summary>
     /// <returns>Geklonter Einstellungssatz.</returns>
@@ -123,12 +128,51 @@ public sealed class AppMetadataSettings
         {
             TvdbApiKey = TvdbApiKey?.Trim() ?? string.Empty,
             TvdbPin = TvdbPin?.Trim() ?? string.Empty,
+            ImdbDataset = ImdbDataset?.Clone() ?? new ImdbDatasetSettings(),
             SeriesMappings = (SeriesMappings ?? [])
                 .Where(mapping => mapping is not null)
                 .Select(mapping => mapping.Clone())
                 .ToList()
         };
     }
+}
+
+/// <summary>
+/// Speichert ausschließlich Steuer- und Revisionsdaten des optionalen IMDb-Offlineindex.
+/// Die große Datenbank selbst bleibt portabel unter <c>Data\IMDb</c> und wird nicht in JSON eingebettet.
+/// </summary>
+public sealed class ImdbDatasetSettings
+{
+    /// <summary>
+    /// Aktiviert die tägliche, aber vor jedem großen Download bestätigungspflichtige Updateprüfung.
+    /// </summary>
+    public bool AutoManageEnabled { get; set; }
+
+    /// <summary>
+    /// Gemeinsamer Revisionsschlüssel der zuletzt vollständig importierten IMDb-Dateien.
+    /// </summary>
+    public string InstalledVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Zeitpunkt der letzten erfolgreichen, kleinen HEAD-Prüfung der offiziellen Dateien.
+    /// </summary>
+    public DateTimeOffset? LastCheckedUtc { get; set; }
+
+    /// <summary>
+    /// Zeitpunkt des letzten vollständig erfolgreichen Indexaufbaus.
+    /// </summary>
+    public DateTimeOffset? LastUpdatedUtc { get; set; }
+
+    /// <summary>
+    /// Erzeugt eine unabhängige Kopie für atomare Settings-Updates.
+    /// </summary>
+    public ImdbDatasetSettings Clone() => new()
+    {
+        AutoManageEnabled = AutoManageEnabled,
+        InstalledVersion = InstalledVersion?.Trim() ?? string.Empty,
+        LastCheckedUtc = LastCheckedUtc,
+        LastUpdatedUtc = LastUpdatedUtc
+    };
 }
 
 /// <summary>

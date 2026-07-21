@@ -164,6 +164,7 @@ internal sealed record EmbyModuleServices(
 /// <param name="EmbySettings">Persistenter Store für Emby-Serveradresse und API-Key.</param>
 /// <param name="EmbySync">Fachservice für Emby-Verbindungstest und nachgelagerten NFO-/Refresh-Abgleich.</param>
 /// <param name="ManagedTools">Installer für direkt nach dem Speichern aktivierte automatische Werkzeugverwaltung.</param>
+/// <param name="ImdbDataset">Verwaltung des optionalen lokalen IMDb-Episodenindex.</param>
 internal sealed record AppSettingsModuleServices(
     AppSettingsStore Settings,
     SeriesArchiveService Archive,
@@ -171,7 +172,8 @@ internal sealed record AppSettingsModuleServices(
     EpisodeMetadataLookupService EpisodeMetadata,
     AppEmbySettingsStore EmbySettings,
     EmbyMetadataSyncService EmbySync,
-    IManagedToolInstallerService ManagedTools);
+    IManagedToolInstallerService ManagedTools,
+    ImdbDatasetManager ImdbDataset);
 
 /// <summary>
 /// Bündelt nur die globalen Shell-Services des Hauptfensters für Toolstatus und Archivkonfiguration.

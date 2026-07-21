@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels;
 
 namespace MkvToolnixAutomatisierung;
@@ -36,9 +37,21 @@ internal sealed class AppCompositionRoot
         return await CreateAsync(
             progress,
             cancellationToken,
-            static (provider, startupProgress, startupCancellationToken) => provider
-                .GetRequiredService<ManagedToolInstallerService>()
-                .EnsureManagedToolsAsync(startupProgress, startupCancellationToken));
+            EnsureStartupResourcesAsync);
+    }
+
+    private static async Task<ManagedToolStartupResult> EnsureStartupResourcesAsync(
+        ServiceProvider provider,
+        IProgress<ManagedToolStartupProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var toolResult = await provider
+            .GetRequiredService<ManagedToolInstallerService>()
+            .EnsureManagedToolsAsync(progress, cancellationToken);
+        var imdbResult = await provider
+            .GetRequiredService<ImdbDatasetManager>()
+            .EnsureCurrentAsync(progress, cancellationToken);
+        return new ManagedToolStartupResult(toolResult.Warnings.Concat(imdbResult.Warnings).ToArray());
     }
 
     /// <summary>

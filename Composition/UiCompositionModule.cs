@@ -27,7 +27,8 @@ internal static class UiCompositionModule
             provider.GetRequiredService<EpisodeMetadataLookupService>(),
             provider.GetRequiredService<AppEmbySettingsStore>(),
             provider.GetRequiredService<EmbyMetadataSyncService>(),
-            provider.GetRequiredService<IManagedToolInstallerService>()));
+            provider.GetRequiredService<IManagedToolInstallerService>(),
+            provider.GetRequiredService<ImdbDatasetManager>()));
         services.AddSingleton<IAppSettingsDialogService>(provider => new AppSettingsDialogService(
             provider.GetRequiredService<AppSettingsModuleServices>(),
             provider.GetRequiredService<IUserDialogService>()));

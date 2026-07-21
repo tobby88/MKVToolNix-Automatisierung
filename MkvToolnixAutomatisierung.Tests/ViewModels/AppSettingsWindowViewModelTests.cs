@@ -56,6 +56,14 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
                     InstalledPath = @"C:\managed\MediathekView_Portable.exe",
                     InstalledVersion = "14.5.0"
                 }
+            },
+            Metadata = new AppMetadataSettings
+            {
+                ImdbDataset = new ImdbDatasetSettings
+                {
+                    AutoManageEnabled = false,
+                    InstalledVersion = "imdb-revision"
+                }
             }
         });
         var viewModel = CreateViewModel(settingsStore: settingsStore);
@@ -67,6 +75,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         viewModel.AutoManageMkvToolNix = false;
         viewModel.AutoManageFfprobe = false;
         viewModel.AutoManageMediathekView = false;
+        viewModel.AutoManageImdbDataset = true;
         viewModel.TvdbApiKey = "  tvdb-key  ";
         viewModel.TvdbPin = "  1234  ";
         viewModel.EmbyServerUrl = "  http://emby-test:8096  ";
@@ -83,6 +92,8 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.False(savedSettings.ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
         Assert.False(savedSettings.ToolPaths?.ManagedFfprobe.AutoManageEnabled);
         Assert.False(savedSettings.ToolPaths?.ManagedMediathekView.AutoManageEnabled);
+        Assert.True(savedSettings.Metadata?.ImdbDataset.AutoManageEnabled);
+        Assert.Equal("imdb-revision", savedSettings.Metadata?.ImdbDataset.InstalledVersion);
         Assert.Equal(@"C:\managed\mkvtoolnix", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledPath);
         Assert.Equal("98.0", savedSettings.ToolPaths?.ManagedMkvToolNix.InstalledVersion);
         Assert.Equal(@"C:\managed\ffprobe.exe", savedSettings.ToolPaths?.ManagedFfprobe.InstalledPath);
@@ -418,15 +429,25 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         IManagedToolInstallerService? managedToolInstaller = null)
     {
         settingsStore ??= new AppSettingsStore();
+        var metadataStore = new AppMetadataStore(settingsStore);
         var services = new AppSettingsModuleServices(
             settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),
             new AppToolPathStore(settingsStore),
-            new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
+            new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()),
-            managedToolInstaller ?? new RecordingManagedToolInstaller());
+            managedToolInstaller ?? new RecordingManagedToolInstaller(),
+            CreateDisabledImdbDatasetManager(metadataStore));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Archive);
+    }
+
+    private static ImdbDatasetManager CreateDisabledImdbDatasetManager(IAppMetadataStore metadataStore)
+        => new(metadataStore, new HttpClient(), new ImdbDatasetIndexBuilder(), new DecliningImdbDatasetConsent());
+
+    private sealed class DecliningImdbDatasetConsent : IImdbDatasetUpdateConsent
+    {
+        public bool ConfirmUpdate(ImdbDatasetUpdateOffer offer) => false;
     }
 
     private string CreateDirectory(string relativePath)

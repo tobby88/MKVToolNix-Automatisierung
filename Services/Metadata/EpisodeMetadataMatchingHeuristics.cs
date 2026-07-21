@@ -371,7 +371,10 @@ internal static class EpisodeMetadataMatchingHeuristics
         return score;
     }
 
-    private static int CalculateTitleSimilarity(string left, string right)
+    /// <summary>
+    /// Bewertet zwei normalisierte oder rohe Episodentitel mit denselben Regeln für TVDB- und IMDb-Kandidaten.
+    /// </summary>
+    internal static int CalculateTitleSimilarity(string left, string right)
     {
         var normalizedLeft = NormalizeText(left);
         var normalizedRight = NormalizeText(right);

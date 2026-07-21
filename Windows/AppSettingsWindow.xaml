@@ -19,6 +19,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="16" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
@@ -225,6 +227,25 @@
                                  Grid.Column="1"
                                  Margin="0,4,0,4"
                                  PasswordChanged="TvdbPinBox_PasswordChanged" />
+
+                    <GroupBox Grid.Row="3"
+                              Grid.Column="0"
+                              Grid.ColumnSpan="2"
+                              Header="IMDb-Offlineindex (optional)">
+                        <StackPanel Margin="12">
+                            <CheckBox Content="Offizielle IMDb-Datensätze lokal verwalten"
+                                      IsChecked="{Binding AutoManageImdbDataset}"
+                                      ToolTip="Prüft beim Start höchstens täglich auf neue Daten. Vor jedem mehrere hundert MiB großen Download wird ausdrücklich nachgefragt." />
+                            <TextBlock Margin="24,8,0,0"
+                                       Foreground="#4D5B68"
+                                       Text="{Binding ImdbDatasetStatusText}"
+                                       ToolTip="{Binding ImdbDatasetStatusTooltip}" />
+                            <TextBlock Margin="24,4,0,0"
+                                       Foreground="#4D5B68"
+                                       Text="Lokaler Fallback für fehlende TVDB-IMDb-Verknüpfungen. Rohdateien werden nach dem Indexaufbau entfernt. Nur für persönliche, nichtkommerzielle Nutzung."
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </GroupBox>
                 </Grid>
             </TabItem>
 

@@ -11,6 +11,8 @@ internal static class PortableAppStorage
     private const string LogsDirectoryName = "Logs";
     private const string ToolsDirectoryName = "Tools";
     private const string SettingsFileName = "settings.json";
+    private const string ImdbDirectoryName = "IMDb";
+    private const string ImdbDatabaseFileName = "imdb-episodes.sqlite";
     private const string ReadmeFileName = "README.md";
     private const string EmbeddedReadmeResourceName = "README.md";
 
@@ -27,6 +29,16 @@ internal static class PortableAppStorage
     public static string SettingsFilePath => Path.Combine(DataDirectory, SettingsFileName);
 
     public static string SettingsBackupFilePath => SettingsFilePath + ".bak";
+
+    /// <summary>
+    /// Portabler Ablageordner für den optionalen, lokal aufgebauten IMDb-Episodenindex.
+    /// </summary>
+    public static string ImdbDataDirectory => Path.Combine(DataDirectory, ImdbDirectoryName);
+
+    /// <summary>
+    /// Aktive SQLite-Datenbank des optionalen IMDb-Offlineindex.
+    /// </summary>
+    public static string ImdbDatabaseFilePath => Path.Combine(ImdbDataDirectory, ImdbDatabaseFileName);
 
     public static string? PrepareForStartup()
     {

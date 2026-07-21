@@ -29,6 +29,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private bool _autoManageMkvToolNix;
     private bool _autoManageFfprobe;
     private bool _autoManageMediathekView;
+    private bool _autoManageImdbDataset;
+    private readonly ImdbDatasetSettings _imdbDatasetSettings;
     private string _tvdbApiKey;
     private string _tvdbPin;
     private string _embyServerUrl;
@@ -65,6 +67,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         _autoManageMkvToolNix = _managedMkvToolNixSettings.AutoManageEnabled;
         _autoManageFfprobe = _managedFfprobeSettings.AutoManageEnabled;
         _autoManageMediathekView = _managedMediathekViewSettings.AutoManageEnabled;
+        _imdbDatasetSettings = metadataSettings.ImdbDataset.Clone();
+        _autoManageImdbDataset = _imdbDatasetSettings.AutoManageEnabled;
         _tvdbApiKey = metadataSettings.TvdbApiKey;
         _tvdbPin = metadataSettings.TvdbPin;
         _embyServerUrl = embySettings.ServerUrl;
@@ -225,6 +229,39 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             OnPropertyChanged(nameof(MkvToolNixStatusTooltip));
         }
     }
+
+    /// <summary>
+    /// Aktiviert den optionalen lokalen IMDb-Index. Große Updates werden trotzdem niemals ohne Nachfrage geladen.
+    /// </summary>
+    public bool AutoManageImdbDataset
+    {
+        get => _autoManageImdbDataset;
+        set
+        {
+            if (_autoManageImdbDataset == value)
+            {
+                return;
+            }
+
+            _autoManageImdbDataset = value;
+            _imdbDatasetSettings.AutoManageEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ImdbDatasetStatusText));
+            OnPropertyChanged(nameof(ImdbDatasetStatusTooltip));
+        }
+    }
+
+    public string ImdbDatasetStatusText => !AutoManageImdbDataset
+        ? "Offlineindex deaktiviert"
+        : File.Exists(PortableAppStorage.ImdbDatabaseFilePath)
+            ? "Offlineindex bereit"
+            : "Offlineindex noch nicht installiert";
+
+    public string ImdbDatasetStatusTooltip => !File.Exists(PortableAppStorage.ImdbDatabaseFilePath)
+        ? "Noch keine lokale IMDb-Datenbank vorhanden. Nach dem Übernehmen wird vor dem großen Download gefragt."
+        : _imdbDatasetSettings.LastUpdatedUtc is { } updated
+            ? $"Lokaler IMDb-Episodenindex: {PortableAppStorage.ImdbDatabaseFilePath}{Environment.NewLine}Zuletzt aktualisiert: {updated.ToLocalTime():g}"
+            : $"Lokaler IMDb-Episodenindex: {PortableAppStorage.ImdbDatabaseFilePath}";
 
     public string TvdbApiKey
     {
@@ -515,6 +552,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             settings.Metadata ??= new AppMetadataSettings();
             settings.Metadata.TvdbApiKey = TvdbApiKey;
             settings.Metadata.TvdbPin = TvdbPin;
+            settings.Metadata.ImdbDataset = _imdbDatasetSettings.Clone();
+            settings.Metadata.ImdbDataset.AutoManageEnabled = AutoManageImdbDataset;
 
             settings.Emby = BuildEmbySettings();
         });
@@ -548,12 +587,16 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             var result = await _services.ManagedTools.EnsureManagedToolsAsync(
                 new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
                 linkedCancellation.Token);
+            var imdbResult = await _services.ImdbDataset.EnsureCurrentAsync(
+                new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
+                linkedCancellation.Token);
             RefreshDerivedState();
 
-            if (result.HasWarning)
+            var warnings = result.Warnings.Concat(imdbResult.Warnings).ToArray();
+            if (warnings.Length > 0)
             {
                 StatusText = "Einstellungen gespeichert; Werkzeugprüfung mit Warnungen.";
-                _dialogService.ShowWarning("Werkzeugverwaltung", result.WarningMessage!);
+                _dialogService.ShowWarning("Ressourcenverwaltung", string.Join(Environment.NewLine + Environment.NewLine, warnings));
             }
             else
             {
@@ -598,6 +641,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         OnPropertyChanged(nameof(MediathekViewStatusText));
         OnPropertyChanged(nameof(MediathekViewStatusTooltip));
         OnPropertyChanged(nameof(AutoManageMediathekView));
+        OnPropertyChanged(nameof(AutoManageImdbDataset));
+        OnPropertyChanged(nameof(ImdbDatasetStatusText));
+        OnPropertyChanged(nameof(ImdbDatasetStatusTooltip));
         OnPropertyChanged(nameof(SettingsFilePath));
         RefreshValidationState(nameof(EmbyScanWaitTimeoutSecondsText));
     }

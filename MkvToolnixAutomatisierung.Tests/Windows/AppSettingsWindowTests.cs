@@ -93,15 +93,25 @@ public sealed class AppSettingsWindowTests
     private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient)
     {
         var settingsStore = new AppSettingsStore();
+        var metadataStore = new AppMetadataStore(settingsStore);
         var services = new AppSettingsModuleServices(
             settingsStore,
             new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(settingsStore)),
             new AppToolPathStore(settingsStore),
-            new EpisodeMetadataLookupService(new AppMetadataStore(settingsStore), new ThrowingTvdbClient()),
+            new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient()),
             new AppEmbySettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()),
-            new NoOpManagedToolInstaller());
+            new NoOpManagedToolInstaller(),
+            CreateDisabledImdbDatasetManager(metadataStore));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Emby);
+    }
+
+    private static ImdbDatasetManager CreateDisabledImdbDatasetManager(IAppMetadataStore metadataStore)
+        => new(metadataStore, new HttpClient(), new ImdbDatasetIndexBuilder(), new DecliningImdbDatasetConsent());
+
+    private sealed class DecliningImdbDatasetConsent : IImdbDatasetUpdateConsent
+    {
+        public bool ConfirmUpdate(ImdbDatasetUpdateOffer offer) => false;
     }
 
     private sealed class NoOpManagedToolInstaller : IManagedToolInstallerService

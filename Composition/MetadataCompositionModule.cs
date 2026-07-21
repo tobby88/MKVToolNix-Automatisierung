@@ -19,6 +19,10 @@ internal static class MetadataCompositionModule
         services.AddSingleton<EpisodeMetadataLookupService>(provider => new EpisodeMetadataLookupService(
             provider.GetRequiredService<IAppMetadataStore>(),
             provider.GetRequiredService<ITvdbClient>()));
+        services.AddSingleton<ImdbDatasetIndexBuilder>();
+        services.AddSingleton<ImdbDatasetSearchService>();
+        services.AddSingleton<IImdbDatasetUpdateConsent, ImdbDatasetUpdateConsent>();
+        services.AddSingleton<ImdbDatasetManager>();
         services.AddSingleton<MetadataServices>(provider => new MetadataServices(provider.GetRequiredService<EpisodeMetadataLookupService>()));
     }
 }
