@@ -290,6 +290,9 @@ public sealed class TvdbLookupWindowViewModelTests
             return Task.FromResult(results);
         }
 
+        public Task<string?> GetEpisodeImdbIdAsync(string apiKey, string? pin, int episodeId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public void Dispose()
         {
         }

@@ -27,13 +27,15 @@ public sealed class EmbySyncViewModelTests
         IEmbyClient? embyClient = null,
         AppEmbySettings? configuredEmbySettings = null,
         IEmbyProviderReviewDialogService? providerReviewDialogs = null,
-        IModuleLogService? moduleLogs = null)
+        IModuleLogService? moduleLogs = null,
+        AppMetadataSettings? configuredMetadataSettings = null,
+        ITvdbClient? tvdbClient = null)
     {
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
         {
             Archive = new AppArchiveSettings(),
-            Metadata = new AppMetadataSettings(),
+            Metadata = configuredMetadataSettings?.Clone() ?? new AppMetadataSettings(),
             Emby = configuredEmbySettings?.Clone() ?? new AppEmbySettings
             {
                 ServerUrl = AppEmbySettings.DefaultServerUrl,
@@ -44,7 +46,7 @@ public sealed class EmbySyncViewModelTests
         var embySettingsStore = new AppEmbySettingsStore(settingsStore);
         var archiveSettings = new AppArchiveSettingsStore(settingsStore);
         var metadataStore = new AppMetadataStore(settingsStore);
-        var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, new ThrowingTvdbClient());
+        var episodeMetadata = new EpisodeMetadataLookupService(metadataStore, tvdbClient ?? new ThrowingTvdbClient());
         var syncService = new EmbyMetadataSyncService(embyClient ?? new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
         var services = new EmbyModuleServices(
             embySettingsStore,
@@ -217,6 +219,74 @@ public sealed class EmbySyncViewModelTests
         Assert.Equal("Emby-Abgleich", log.ModuleLabel);
         Assert.Equal("Pflichtchecks", log.OperationLabel);
         Assert.Contains("Provider-ID-Pflichtprüfungen abgeschlossen", log.LogText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReviewPendingProviderIdsCommand_SkipsImdbDialog_WhenTvdbConfirmsExistingId()
+    {
+        var reviewDialogs = new QueueingProviderReviewDialogs(tvdbResults: [], imdbResults: []);
+        var tvdbClient = new FixedEpisodeImdbTvdbClient(new Dictionary<int, string?>
+        {
+            [12345] = "tt1234567"
+        });
+        var vm = CreateViewModel(
+            providerReviewDialogs: reviewDialogs,
+            configuredMetadataSettings: new AppMetadataSettings { TvdbApiKey = "key" },
+            tvdbClient: tvdbClient);
+        var item = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", "tt1234567"));
+        item.ApplyAnalysis(new EmbyFileAnalysis(
+            item.MediaFilePath,
+            Path.ChangeExtension(item.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", "tt1234567"),
+            EmbyItem: null,
+            WarningMessage: null));
+        vm.Items.Add(item);
+
+        await vm.ReviewPendingProviderIdsCommand.ExecuteAsync();
+
+        Assert.Equal(1, tvdbClient.EpisodeImdbCallCount);
+        Assert.Equal(0, reviewDialogs.ImdbReviewCallCount);
+        Assert.False(item.HasPendingProviderReview);
+        Assert.Contains("abgeschlossen", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReviewPendingProviderIdsCommand_OpensImdbDialog_WhenTvdbConflictsWithLocalId()
+    {
+        var reviewDialogs = new QueueingProviderReviewDialogs(
+            tvdbResults: [],
+            imdbResults: [EmbyImdbReviewResult.Apply("tt2222222")]);
+        var tvdbClient = new FixedEpisodeImdbTvdbClient(new Dictionary<int, string?>
+        {
+            [12345] = "tt1111111"
+        });
+        var vm = CreateViewModel(
+            providerReviewDialogs: reviewDialogs,
+            configuredMetadataSettings: new AppMetadataSettings { TvdbApiKey = "key" },
+            tvdbClient: tvdbClient);
+        var item = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", "tt2222222"));
+        item.ApplyAnalysis(new EmbyFileAnalysis(
+            item.MediaFilePath,
+            Path.ChangeExtension(item.MediaFilePath, ".nfo"),
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", "tt2222222"),
+            EmbyItem: null,
+            WarningMessage: null));
+        vm.Items.Add(item);
+
+        await vm.ReviewPendingProviderIdsCommand.ExecuteAsync();
+
+        Assert.Equal(1, tvdbClient.EpisodeImdbCallCount);
+        Assert.Equal(1, reviewDialogs.ImdbReviewCallCount);
+        Assert.Equal("tt2222222", item.ImdbId);
+        Assert.False(item.HasPendingProviderReview);
     }
 
     [Fact]
@@ -1179,6 +1249,43 @@ public sealed class EmbySyncViewModelTests
 
         public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(string apiKey, string? pin, int seriesId, string? language = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public Task<string?> GetEpisodeImdbIdAsync(string apiKey, string? pin, int episodeId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class FixedEpisodeImdbTvdbClient(IReadOnlyDictionary<int, string?> imdbIds) : ITvdbClient
+    {
+        public int EpisodeImdbCallCount { get; private set; }
+
+        public Task<IReadOnlyList<TvdbSeriesSearchResult>> SearchSeriesAsync(
+            string apiKey,
+            string? pin,
+            string query,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(
+            string apiKey,
+            string? pin,
+            int seriesId,
+            string? language = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<string?> GetEpisodeImdbIdAsync(
+            string apiKey,
+            string? pin,
+            int episodeId,
+            CancellationToken cancellationToken = default)
+        {
+            EpisodeImdbCallCount++;
+            return Task.FromResult(imdbIds.GetValueOrDefault(episodeId));
+        }
 
         public void Dispose()
         {

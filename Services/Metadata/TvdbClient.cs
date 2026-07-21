@@ -51,8 +51,7 @@ internal interface ITvdbClient : IDisposable
         string apiKey,
         string? pin,
         int episodeId,
-        CancellationToken cancellationToken = default)
-        => Task.FromResult<string?>(null);
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

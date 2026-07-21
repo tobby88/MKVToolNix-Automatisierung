@@ -88,7 +88,6 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
    - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
    - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
    - optional TVDB-API-Key und PIN
-   - optional IMDb-Abgleichmodus für den Emby-Dialog
    - optional Emby-Server und API-Key
 3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
 4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich` und optional `Archivpflege`.
@@ -171,7 +170,7 @@ Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/For
 2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
 3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
 4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Falls Emby die Bibliothek nicht eindeutig zuordnen kann, zeigt die App den globalen Fallback ausdrücklich an, statt ihn als bibliotheksscharfen Scan aussehen zu lassen. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
-5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft; IMDb wird für jede NFO-fähige Episode bewusst bestätigt, korrigiert oder als nicht vorhanden markiert.
+5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft. Für IMDb liest das Tool zuerst die Remote-Verknüpfung der bereits bekannten TVDB-Episode: Übereinstimmende IDs werden automatisch bestätigt und fehlende IDs automatisch ergänzt. Nur fehlende TVDB-Verknüpfungen oder Widersprüche zwischen Report, NFO, Emby und TVDB bleiben zur manuellen Prüfung offen.
 6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist.
 7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
@@ -179,7 +178,7 @@ Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby s
 
 Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
 
-Für IMDb öffnet der Dialog gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden im Dialog als verständliche Statusmeldung angezeigt; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+Für die verbleibenden manuellen IMDb-Fälle öffnet der Dialog gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
 
 ## Unterstützte Dateien
 

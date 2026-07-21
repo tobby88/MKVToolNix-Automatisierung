@@ -148,6 +148,9 @@ public sealed class AppSettingsWindowTests
         public Task<IReadOnlyList<TvdbEpisodeRecord>> GetSeriesEpisodesAsync(string apiKey, string? pin, int seriesId, string? language = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<string?> GetEpisodeImdbIdAsync(string apiKey, string? pin, int episodeId, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public void Dispose()
         {
         }

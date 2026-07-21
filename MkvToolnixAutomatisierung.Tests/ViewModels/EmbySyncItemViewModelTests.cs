@@ -351,6 +351,125 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void ApplyTvdbImdbCandidate_ConfirmsMatchingExistingIdsWithoutManualReview()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", "tt1234567"));
+        vm.ApplyAnalysis(new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", "tt1234567"),
+            EmbyItem: null,
+            WarningMessage: null));
+
+        var result = vm.ApplyTvdbImdbCandidate(12345, "TT1234567");
+
+        Assert.Equal(TvdbImdbComparisonKind.Confirmed, result.Kind);
+        Assert.Equal("tt1234567", vm.ImdbId);
+        Assert.False(vm.RequiresImdbReview);
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.Equal("Lokal bereit", vm.StatusText);
+        Assert.Contains("durch TVDB bestätigt", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyTvdbImdbCandidate_AddsMissingIdWithoutManualReview()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", null));
+        vm.ApplyAnalysis(new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", null),
+            EmbyItem: null,
+            WarningMessage: null));
+
+        var result = vm.ApplyTvdbImdbCandidate(12345, "tt7654321");
+
+        Assert.Equal(TvdbImdbComparisonKind.Added, result.Kind);
+        Assert.Equal("tt7654321", vm.ImdbId);
+        Assert.False(vm.RequiresImdbReview);
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.Contains("aus TVDB ergänzt", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyTvdbImdbCandidate_KeepsManualReviewOpenForAnySourceConflict()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", "tt1111111"));
+        vm.ApplyAnalysis(new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", "tt2222222"),
+            EmbyItem: new EmbyItem(
+                "emby-1",
+                "Pilot",
+                vm.MediaFilePath,
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Tvdb"] = "12345",
+                    ["Imdb"] = "tt3333333"
+                }),
+            WarningMessage: null));
+
+        var result = vm.ApplyTvdbImdbCandidate(12345, "tt1111111");
+
+        Assert.Equal(TvdbImdbComparisonKind.Conflict, result.Kind);
+        Assert.Equal(["tt2222222", "tt3333333"], result.ConflictingIds);
+        Assert.Equal("tt1111111", vm.ImdbId);
+        Assert.True(vm.RequiresImdbReview);
+        Assert.Equal("Prüfung offen", vm.StatusText);
+        Assert.Contains("IMDb-Konflikt", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyTvdbImdbCandidate_WithoutLinkKeepsManualReviewOpen()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", null));
+        vm.ApplyAnalysis(new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", null),
+            EmbyItem: null,
+            WarningMessage: null));
+
+        var result = vm.ApplyTvdbImdbCandidate(12345, tvdbImdbId: null);
+
+        Assert.Equal(TvdbImdbComparisonKind.NotLinked, result.Kind);
+        Assert.True(vm.RequiresImdbReview);
+        Assert.Contains("keine IMDb-Verknüpfung", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyTvdbImdbCandidate_DoesNotOverrideManualDecision()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", null));
+        vm.ApplyImdbSelection("tt9999999");
+
+        var result = vm.ApplyTvdbImdbCandidate(12345, "tt1234567");
+
+        Assert.Equal(TvdbImdbComparisonKind.ManualDecisionPreserved, result.Kind);
+        Assert.Equal("tt9999999", vm.ImdbId);
+        Assert.False(vm.RequiresImdbReview);
+    }
+
+    [Fact]
     public void MarkImdbUnavailable_CompletesProviderIdsWithoutImdbId()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null));

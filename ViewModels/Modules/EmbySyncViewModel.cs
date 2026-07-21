@@ -213,7 +213,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Treffer erneut ein. Wenn keine passende Serienbibliothek erkannt wird, ist der globale Fallback im Status und Protokoll ausdrücklich als nicht bibliotheksscharf markiert.";
 
-    public string ReviewPendingProviderIdsTooltip => "Arbeitet die offenen Provider-ID-Pflichtprüfungen der ausgewählten Zeilen sequenziell ab: TVDB nur bei widersprüchlichen Quellen, IMDb grundsätzlich pro Episode.";
+    public string ReviewPendingProviderIdsTooltip => "Arbeitet offene Provider-ID-Prüfungen sequenziell ab. IMDb wird zuvor automatisch mit der TVDB-Episodenverknüpfung verglichen; nur fehlende oder widersprüchliche Zuordnungen bleiben manuell offen.";
 
     public string RunSyncTooltip => "Letzter Schritt: Schreibt die aktuell ausgewählten TVDB-/IMDB-Änderungen ohne zusätzlichen Bibliotheksscan in die lokalen NFO-Dateien. Wenn Emby-Zugangsdaten vorhanden sind und das Emby-Item bekannt oder anhand des Pfads auffindbar ist, wird danach nur für tatsächlich geänderte Einträge ein gezielter Metadatenrefresh angestoßen.";
 
@@ -324,6 +324,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     "Reports prüfen");
                 item.ApplyAnalysis(analysis);
             }
+
+            await ResolveTvdbImdbLinksAsync(items, CancellationToken.None);
 
             ProgressValue = 100;
             StatusText = $"Prüfung abgeschlossen: {items.Count} Datei(en), {MissingIdCount} ohne Provider-ID";
@@ -451,6 +453,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         SaveVisibleLog("TVDB prüfen");
         if (reviewApplied)
         {
+            await ResolveTvdbImdbLinksAsync([SelectedItem], CancellationToken.None);
             RefreshSummaryAndCommands();
         }
     }
@@ -485,6 +488,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
             await Task.Yield();
         }
+
+        processedAny |= await ResolveTvdbImdbLinksAsync(selectedItems, CancellationToken.None) > 0;
 
         foreach (var item in selectedItems.Where(item => item.RequiresImdbReview).ToList())
         {
@@ -816,6 +821,84 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 "Nach Emby-Scan",
                 cancellationToken);
             item.ApplyAnalysis(analysis);
+        }
+
+        await ResolveTvdbImdbLinksAsync(selectedItems, cancellationToken);
+    }
+
+    /// <summary>
+    /// Nutzt die bereits zugeordnete TVDB-Episoden-ID, um IMDb-Verknüpfungen ohne erneutes
+    /// Titel-Matching zu bestätigen oder zu ergänzen. Netzwerk- oder Datenfehler lassen die
+    /// manuelle Prüfung bewusst offen, statt den restlichen Emby-Workflow abzubrechen.
+    /// </summary>
+    /// <returns>Anzahl fachlich ausgewerteter TVDB-Verknüpfungen.</returns>
+    private async Task<int> ResolveTvdbImdbLinksAsync(
+        IReadOnlyList<EmbySyncItemViewModel> items,
+        CancellationToken cancellationToken)
+    {
+        var metadataSettings = _services.EpisodeMetadata.LoadSettings();
+        if (string.IsNullOrWhiteSpace(metadataSettings.TvdbApiKey))
+        {
+            AppendLog("IMDb-Automatik übersprungen: Kein TVDB-API-Key konfiguriert.");
+            return 0;
+        }
+
+        var candidates = items
+            .Where(item => item.SupportsProviderIdSync && item.RequiresImdbReview)
+            .Select(item => new
+            {
+                Item = item,
+                HasEpisodeId = int.TryParse(item.TvdbId, out var episodeId) && episodeId > 0,
+                EpisodeId = episodeId
+            })
+            .Where(candidate => candidate.HasEpisodeId)
+            .ToList();
+        var processedCount = 0;
+        for (var index = 0; index < candidates.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var candidate = candidates[index];
+            StatusText = $"Vergleiche IMDb-Verknüpfung aus TVDB {index + 1}/{candidates.Count}...";
+            try
+            {
+                var tvdbImdbId = await _services.EpisodeMetadata.LoadEpisodeImdbIdAsync(
+                    candidate.EpisodeId,
+                    cancellationToken);
+                var result = candidate.Item.ApplyTvdbImdbCandidate(candidate.EpisodeId, tvdbImdbId);
+                processedCount++;
+                AppendTvdbImdbComparisonLog(candidate.Item, result);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppendLog(
+                    $"IMDb-Verknüpfung aus TVDB konnte für {candidate.Item.MediaFileName} "
+                    + $"nicht geladen werden: {ex.Message}. Manuelle Prüfung bleibt offen.");
+            }
+        }
+
+        return processedCount;
+    }
+
+    private void AppendTvdbImdbComparisonLog(
+        EmbySyncItemViewModel item,
+        TvdbImdbComparisonResult result)
+    {
+        switch (result.Kind)
+        {
+            case TvdbImdbComparisonKind.Added:
+                AppendLog($"IMDb aus TVDB ergänzt: {item.MediaFileName} -> {result.TvdbImdbId}");
+                break;
+            case TvdbImdbComparisonKind.Confirmed:
+                AppendLog($"IMDb durch TVDB bestätigt: {item.MediaFileName} -> {result.TvdbImdbId}");
+                break;
+            case TvdbImdbComparisonKind.Conflict:
+                AppendLog(
+                    $"IMDb-Konflikt bei {item.MediaFileName}: TVDB {result.TvdbImdbId}, "
+                    + $"andere Quelle(n) {string.Join(", ", result.ConflictingIds)}. Manuelle Prüfung bleibt offen.");
+                break;
+            case TvdbImdbComparisonKind.NotLinked:
+                AppendLog($"TVDB kennt für {item.MediaFileName} keine IMDb-Verknüpfung. Manuelle Prüfung bleibt offen.");
+                break;
         }
     }
 

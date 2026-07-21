@@ -29,10 +29,13 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private bool _isTvdbReviewApproved = true;
     private bool _tvdbReviewWasManuallyResolved;
     private bool _isImdbReviewApproved;
+    private bool _imdbReviewWasManuallyResolved;
     private bool _isImdbUnavailable;
     private bool _embyLookupAttemptedWithoutItem;
     private string _tvdbId = string.Empty;
     private string _imdbId = string.Empty;
+    private int? _tvdbImdbEpisodeId;
+    private string? _tvdbImdbId;
     private EmbyProviderIds _nfoProviderIds = EmbyProviderIds.Empty;
     private EmbyProviderIds _embyProviderIds = EmbyProviderIds.Empty;
     private string _embyItemId = string.Empty;
@@ -201,7 +204,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     public bool RequiresTvdbReview => SupportsProviderIdSync && !_isTvdbReviewApproved && HasTvdbCandidateMismatch();
 
     /// <summary>
-    /// IMDb wird bewusst immer geprüft, weil Emby diese ID häufig nicht oder falsch erkennt.
+    /// IMDb bleibt offen, solange weder eine manuelle Entscheidung noch eine widerspruchsfreie
+    /// IMDb-Verknüpfung des zugeordneten TVDB-Episodensatzes vorliegt.
     /// </summary>
     public bool RequiresImdbReview => SupportsProviderIdSync && !_isImdbReviewApproved;
 
@@ -519,12 +523,83 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         SetImdbId(string.Empty, markReviewResolved: false);
         _isImdbUnavailable = true;
         _isImdbReviewApproved = true;
+        _imdbReviewWasManuallyResolved = true;
         NotifyProviderReviewPropertiesChanged();
         SetStatus(
             HasPendingProviderReview ? "Prüfung offen" : HasCompleteProviderIds ? "Bereit" : "IDs fehlen",
             HasApprovedEmptyProviderIds
                 ? "Provider-IDs geprüft: keine TVDB-/IMDb-ID vergeben."
                 : "IMDb geprüft: keine IMDb-ID vergeben.");
+    }
+
+    /// <summary>
+    /// Vergleicht die IMDb-Verknüpfung des TVDB-Episodensatzes mit Report, NFO und Emby.
+    /// </summary>
+    /// <remarks>
+    /// Eine TVDB-ID wird nur dann automatisch bestätigt oder ergänzt, wenn keine bekannte Quelle
+    /// widerspricht. Manuelle IMDb-Entscheidungen haben Vorrang und werden durch spätere Abfragen
+    /// nicht überschrieben.
+    /// </remarks>
+    /// <param name="tvdbEpisodeId">TVDB-Episoden-ID, zu der die Verknüpfung geladen wurde.</param>
+    /// <param name="tvdbImdbId">Von TVDB gelieferte IMDb-ID oder <see langword="null"/>.</param>
+    /// <returns>Ergebnis für Protokoll und Workflowsteuerung.</returns>
+    public TvdbImdbComparisonResult ApplyTvdbImdbCandidate(int tvdbEpisodeId, string? tvdbImdbId)
+    {
+        if (!int.TryParse(TvdbId, out var currentTvdbEpisodeId) || currentTvdbEpisodeId != tvdbEpisodeId)
+        {
+            return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.Stale, null, []);
+        }
+
+        var normalizedCandidate = NormalizeImdbId(tvdbImdbId);
+        _tvdbImdbEpisodeId = tvdbEpisodeId;
+        _tvdbImdbId = normalizedCandidate;
+
+        if (_imdbReviewWasManuallyResolved)
+        {
+            return new TvdbImdbComparisonResult(
+                TvdbImdbComparisonKind.ManualDecisionPreserved,
+                normalizedCandidate,
+                BuildImdbCandidateValues().ToArray());
+        }
+
+        if (normalizedCandidate is null)
+        {
+            _isImdbReviewApproved = false;
+            NotifyProviderReviewPropertiesChanged();
+            RefreshStatusAfterAutomaticImdbComparison("TVDB enthält keine IMDb-Verknüpfung. IMDb prüfen.");
+            return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.NotLinked, null, []);
+        }
+
+        var conflictingIds = BuildImdbCandidateValues()
+            .Where(value => !string.Equals(value, normalizedCandidate, StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (conflictingIds.Length > 0)
+        {
+            _isImdbReviewApproved = false;
+            NotifyProviderReviewPropertiesChanged();
+            RefreshStatusAfterAutomaticImdbComparison(
+                $"IMDb-Konflikt: TVDB {normalizedCandidate}, andere Quelle(n) {string.Join(", ", conflictingIds)}. Manuell prüfen.");
+            return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.Conflict, normalizedCandidate, conflictingIds);
+        }
+
+        var hadImdbId = HasImdbId;
+        if (!hadImdbId)
+        {
+            SetImdbId(normalizedCandidate, markReviewResolved: false);
+        }
+
+        _isImdbUnavailable = false;
+        _isImdbReviewApproved = true;
+        NotifyProviderReviewPropertiesChanged();
+        RefreshStatusAfterAutomaticImdbComparison(
+            hadImdbId
+                ? $"IMDb-ID durch TVDB bestätigt: {normalizedCandidate}."
+                : $"IMDb-ID aus TVDB ergänzt: {normalizedCandidate}.");
+        return new TvdbImdbComparisonResult(
+            hadImdbId ? TvdbImdbComparisonKind.Confirmed : TvdbImdbComparisonKind.Added,
+            normalizedCandidate,
+            []);
     }
 
     public void SetStatus(string statusText, string note)
@@ -797,6 +872,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         if (changed)
         {
             _tvdbId = normalized;
+            _tvdbImdbEpisodeId = null;
+            _tvdbImdbId = null;
+            if (!_imdbReviewWasManuallyResolved)
+            {
+                _isImdbReviewApproved = false;
+            }
             OnPropertyChanged(nameof(TvdbId));
             OnPropertyChanged(nameof(HasTvdbId));
             OnPropertyChanged(nameof(HasValidTvdbId));
@@ -836,6 +917,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         {
             _isImdbUnavailable = false;
             _isImdbReviewApproved = true;
+            _imdbReviewWasManuallyResolved = true;
         }
         else if (changed && !string.IsNullOrWhiteSpace(normalized))
         {
@@ -857,10 +939,19 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
 
         _isTvdbReviewApproved = !HasTvdbCandidateMismatch() || _tvdbReviewWasManuallyResolved;
-        if (HasImdbId && !_isImdbReviewApproved)
+        if (!_imdbReviewWasManuallyResolved)
         {
-            // IMDb bleibt trotz vorhandener ID offen; der Benutzer muss sie bewusst bestätigen.
-            _isImdbUnavailable = false;
+            var hasCurrentTvdbCandidate = _tvdbImdbEpisodeId is not null
+                && int.TryParse(TvdbId, out var currentEpisodeId)
+                && currentEpisodeId == _tvdbImdbEpisodeId;
+            _isImdbReviewApproved = hasCurrentTvdbCandidate
+                && _tvdbImdbId is not null
+                && BuildImdbCandidateValues().All(value =>
+                    string.Equals(value, _tvdbImdbId, StringComparison.OrdinalIgnoreCase));
+            if (HasImdbId)
+            {
+                _isImdbUnavailable = false;
+            }
         }
 
         NotifyProviderReviewPropertiesChanged();
@@ -897,6 +988,43 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         AddIfPresent(values, _nfoProviderIds.TvdbId);
         AddIfPresent(values, _embyProviderIds.TvdbId);
         return values;
+    }
+
+    private HashSet<string> BuildImdbCandidateValues()
+    {
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddIfPresent(values, _reportedProviderIds.ImdbId);
+        AddIfPresent(values, _nfoProviderIds.ImdbId);
+        AddIfPresent(values, _embyProviderIds.ImdbId);
+        return values;
+    }
+
+    private static string? NormalizeImdbId(string? value)
+    {
+        var normalized = value?.Trim();
+        return !string.IsNullOrWhiteSpace(normalized) && ImdbIdPattern.IsMatch(normalized)
+            ? normalized.ToLowerInvariant()
+            : null;
+    }
+
+    private void RefreshStatusAfterAutomaticImdbComparison(string note)
+    {
+        if (StatusText is not ("Prüfung offen" or "IDs fehlen" or "Bereit" or "Lokal bereit" or "Emby fehlt"))
+        {
+            return;
+        }
+
+        var status = HasPendingProviderReview
+            ? "Prüfung offen"
+            : HasMissingEmbyItem
+                ? "Emby fehlt"
+                : string.IsNullOrWhiteSpace(EmbyItemId)
+                    ? "Lokal bereit"
+                    : "Bereit";
+        var statusNote = RequiresTvdbReview
+            ? $"{note} TVDB-Zuordnung muss wegen widersprüchlicher Quellen geprüft werden."
+            : note;
+        SetStatus(status, statusNote);
     }
 
     private static EmbyProviderIds BuildProviderIdsFromEmbyItem(EmbyItem? item)
@@ -1023,3 +1151,24 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         }
     }
 }
+
+/// <summary>
+/// Ergebnis des automatischen Abgleichs einer TVDB-IMDb-Verknüpfung mit den lokalen und Emby-seitigen Quellen.
+/// </summary>
+internal enum TvdbImdbComparisonKind
+{
+    Stale,
+    NotLinked,
+    Confirmed,
+    Added,
+    Conflict,
+    ManualDecisionPreserved
+}
+
+/// <summary>
+/// Transportiert den Vergleichszustand und gegebenenfalls widersprechende vorhandene IMDb-IDs.
+/// </summary>
+internal sealed record TvdbImdbComparisonResult(
+    TvdbImdbComparisonKind Kind,
+    string? TvdbImdbId,
+    IReadOnlyList<string> ConflictingIds);
