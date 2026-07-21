@@ -26,12 +26,19 @@ try {
     Remove-GeneratedDocsOutput -Path $siteOutputPath
 
     dotnet tool restore
+    if ($LASTEXITCODE -ne 0) {
+        throw "DocFX-Toolrestore wurde mit Exit-Code $LASTEXITCODE beendet."
+    }
 
     if ($Serve) {
         dotnet tool run docfx docs/docfx.json --serve
     }
     else {
         dotnet tool run docfx docs/docfx.json
+    }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "DocFX wurde mit Exit-Code $LASTEXITCODE beendet."
     }
 }
 finally {
