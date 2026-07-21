@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using MkvToolnixAutomatisierung.Services.Metadata;
+using MkvToolnixAutomatisierung.ViewModels;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
@@ -57,6 +58,26 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(55, candidate.SeasonNumber);
         Assert.Equal(2, candidate.EpisodeNumber);
         Assert.True(candidate.IsStrongAutomaticMatch);
+
+        var lookupViewModel = new ImdbLookupWindowViewModel(
+            new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02"),
+            currentImdbId: null,
+            new ImdbDatasetSearchService(databasePath));
+        Assert.Single(lookupViewModel.LocalCandidates);
+        Assert.True(lookupViewModel.ApplySelectedLocalCandidate());
+        Assert.Equal("tt2000001", lookupViewModel.ImdbInput);
+    }
+
+    [Fact]
+    public void SelectAutomaticCandidate_RejectsAmbiguousOrInexactMatches()
+    {
+        var exact = new ImdbEpisodeCandidate("tt1000001", "Serie", "Folge", 1, 1, 80, 30, true);
+        var closeSecond = new ImdbEpisodeCandidate("tt1000002", "Serie", "Folge", 2, 1, 75, 30, true);
+        var inexact = new ImdbEpisodeCandidate("tt1000003", "Serie", "Folge ähnlich", 1, 1, 90, 22, true);
+
+        Assert.Same(exact, ImdbDatasetSearchService.SelectAutomaticCandidate([exact]));
+        Assert.Null(ImdbDatasetSearchService.SelectAutomaticCandidate([exact, closeSecond]));
+        Assert.Null(ImdbDatasetSearchService.SelectAutomaticCandidate([inexact]));
     }
 
     [Fact]

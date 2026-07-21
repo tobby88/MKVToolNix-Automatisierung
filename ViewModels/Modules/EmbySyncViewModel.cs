@@ -39,7 +39,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     {
         _services = services;
         _dialogService = dialogService;
-        _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService();
+        _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService(_services.ImdbDatasetSearch);
         _moduleLogs = moduleLogs;
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
@@ -837,10 +837,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         CancellationToken cancellationToken)
     {
         var metadataSettings = _services.EpisodeMetadata.LoadSettings();
-        if (string.IsNullOrWhiteSpace(metadataSettings.TvdbApiKey))
+        var canQueryTvdb = !string.IsNullOrWhiteSpace(metadataSettings.TvdbApiKey);
+        if (!canQueryTvdb)
         {
-            AppendLog("IMDb-Automatik übersprungen: Kein TVDB-API-Key konfiguriert.");
-            return 0;
+            AppendLog("IMDb-Abgleich über TVDB übersprungen: Kein TVDB-API-Key konfiguriert. Lokaler IMDb-Index wird versucht.");
         }
 
         var candidates = items
@@ -851,32 +851,74 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 HasEpisodeId = int.TryParse(item.TvdbId, out var episodeId) && episodeId > 0,
                 EpisodeId = episodeId
             })
-            .Where(candidate => candidate.HasEpisodeId)
             .ToList();
         var processedCount = 0;
         for (var index = 0; index < candidates.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var candidate = candidates[index];
-            StatusText = $"Vergleiche IMDb-Verknüpfung aus TVDB {index + 1}/{candidates.Count}...";
-            try
+            var tryLocalIndex = !canQueryTvdb || !candidate.HasEpisodeId;
+            if (canQueryTvdb && candidate.HasEpisodeId)
             {
-                var tvdbImdbId = await _services.EpisodeMetadata.LoadEpisodeImdbIdAsync(
-                    candidate.EpisodeId,
-                    cancellationToken);
-                var result = candidate.Item.ApplyTvdbImdbCandidate(candidate.EpisodeId, tvdbImdbId);
-                processedCount++;
-                AppendTvdbImdbComparisonLog(candidate.Item, result);
+                StatusText = $"Vergleiche IMDb-Verknüpfung aus TVDB {index + 1}/{candidates.Count}...";
+                try
+                {
+                    var tvdbImdbId = await _services.EpisodeMetadata.LoadEpisodeImdbIdAsync(
+                        candidate.EpisodeId,
+                        cancellationToken);
+                    var result = candidate.Item.ApplyTvdbImdbCandidate(candidate.EpisodeId, tvdbImdbId);
+                    processedCount++;
+                    AppendTvdbImdbComparisonLog(candidate.Item, result);
+                    tryLocalIndex = result.Kind == TvdbImdbComparisonKind.NotLinked;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    AppendLog(
+                        $"IMDb-Verknüpfung aus TVDB konnte für {candidate.Item.MediaFileName} "
+                        + $"nicht geladen werden: {ex.Message}. Lokaler IMDb-Index wird versucht.");
+                    tryLocalIndex = true;
+                }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+
+            if (!tryLocalIndex
+                || !candidate.Item.TryBuildMetadataGuess(out var guess)
+                || guess is null
+                || !_services.ImdbDatasetSearch.TryFindAutomaticEpisode(guess, out var localMatch)
+                || localMatch is null)
             {
-                AppendLog(
-                    $"IMDb-Verknüpfung aus TVDB konnte für {candidate.Item.MediaFileName} "
-                    + $"nicht geladen werden: {ex.Message}. Manuelle Prüfung bleibt offen.");
+                continue;
             }
+
+            var localResult = candidate.Item.ApplyOfflineImdbCandidate(localMatch.ImdbId);
+            processedCount++;
+            AppendOfflineImdbComparisonLog(candidate.Item, localMatch, localResult);
         }
 
         return processedCount;
+    }
+
+    private void AppendOfflineImdbComparisonLog(
+        EmbySyncItemViewModel item,
+        ImdbEpisodeCandidate candidate,
+        TvdbImdbComparisonResult result)
+    {
+        var episodeLabel = candidate.SeasonNumber is { } season && candidate.EpisodeNumber is { } episode
+            ? $"S{season:00}E{episode:00} - {candidate.EpisodeTitle}"
+            : candidate.EpisodeTitle;
+        switch (result.Kind)
+        {
+            case TvdbImdbComparisonKind.Added:
+                AppendLog($"IMDb aus lokalem Index ergänzt: {item.MediaFileName} -> {candidate.ImdbId} ({episodeLabel})");
+                break;
+            case TvdbImdbComparisonKind.Confirmed:
+                AppendLog($"IMDb durch lokalen Index bestätigt: {item.MediaFileName} -> {candidate.ImdbId} ({episodeLabel})");
+                break;
+            case TvdbImdbComparisonKind.Conflict:
+                AppendLog(
+                    $"IMDb-Konflikt bei {item.MediaFileName}: lokaler Index {candidate.ImdbId}, "
+                    + $"andere Quelle(n) {string.Join(", ", result.ConflictingIds)}. Manuelle Prüfung bleibt offen.");
+                break;
+        }
     }
 
     private void AppendTvdbImdbComparisonLog(

@@ -172,7 +172,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.True(closedWithAcceptedResult);
         Assert.True(viewModel.IsInteractive);
         Assert.True(settingsStore.Load().ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
-        Assert.Contains("Werkzeuge bereit", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("Ressourcen bereit", viewModel.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => saveTask);
         Assert.True(viewModel.IsInteractive);
         Assert.False(closeRequested);
-        Assert.Contains("Werkzeugprüfung abgebrochen", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("Ressourcenprüfung abgebrochen", viewModel.StatusText, StringComparison.Ordinal);
         Assert.True(settingsStore.Load().ToolPaths?.ManagedMkvToolNix.AutoManageEnabled);
     }
 

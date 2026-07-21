@@ -470,6 +470,43 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
+    public void ApplyOfflineImdbCandidate_AddsMissingIdWithoutManualReview()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", null));
+        vm.ApplyAnalysis(new EmbyFileAnalysis(
+            vm.MediaFilePath,
+            @"C:\Videos\Serie - S01E01 - Pilot.nfo",
+            MediaFileExists: true,
+            NfoExists: true,
+            NfoProviderIds: new EmbyProviderIds("12345", null),
+            EmbyItem: null,
+            WarningMessage: null));
+
+        var result = vm.ApplyOfflineImdbCandidate("TT7654321");
+
+        Assert.Equal(TvdbImdbComparisonKind.Added, result.Kind);
+        Assert.Equal("tt7654321", vm.ImdbId);
+        Assert.False(vm.RequiresImdbReview);
+        Assert.Contains("lokalen IMDb-Index", vm.Note, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyOfflineImdbCandidate_DoesNotOverrideExistingSourceConflict()
+    {
+        var vm = new EmbySyncItemViewModel(
+            @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+            new EmbyProviderIds("12345", "tt1111111"));
+
+        var result = vm.ApplyOfflineImdbCandidate("tt2222222");
+
+        Assert.Equal(TvdbImdbComparisonKind.Conflict, result.Kind);
+        Assert.Equal("tt1111111", vm.ImdbId);
+        Assert.True(vm.RequiresImdbReview);
+    }
+
+    [Fact]
     public void MarkImdbUnavailable_CompletesProviderIdsWithoutImdbId()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S01E01 - Pilot.mkv", new EmbyProviderIds("12345", null));

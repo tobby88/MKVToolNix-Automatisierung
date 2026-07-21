@@ -319,6 +319,16 @@ internal sealed record ImdbEpisodeCandidate(
     int TitleSimilarity,
     bool SeriesTitleMatchedExactly)
 {
+    public string EpisodeCode => SeasonNumber is { } season && EpisodeNumber is { } episode
+        ? $"S{season:00}E{episode:00}"
+        : "ohne Nummer";
+
+    public string MatchQualityText => TitleSimilarity >= 30
+        ? "Titel exakt"
+        : TitleSimilarity >= 22
+            ? "Titel ähnlich"
+            : "Nummerntreffer";
+
     /// <summary>
     /// Nur ein exakter Serien- und Episodentitel ist ohne Benutzerentscheidung stark genug.
     /// Der aufrufende Workflow prüft zusätzlich den Abstand zum zweitbesten Treffer.
@@ -331,6 +341,7 @@ internal sealed record ImdbEpisodeCandidate(
 /// </summary>
 internal sealed class ImdbDatasetSearchService
 {
+    private const int MinimumAutomaticScoreGap = 8;
     private readonly string _databasePath;
 
     public ImdbDatasetSearchService(string? databasePath = null)
@@ -339,6 +350,29 @@ internal sealed class ImdbDatasetSearchService
     }
 
     public bool IsAvailable => File.Exists(_databasePath);
+
+    /// <summary>
+    /// Liefert nur dann einen automatisch verwendbaren Treffer, wenn Titel und Serie exakt passen
+    /// und kein nahezu gleich guter Kandidat die Zuordnung mehrdeutig macht.
+    /// </summary>
+    public bool TryFindAutomaticEpisode(EpisodeMetadataGuess guess, out ImdbEpisodeCandidate? candidate)
+    {
+        var candidates = SearchEpisodeCandidates(guess, maximumResults: 2);
+        candidate = SelectAutomaticCandidate(candidates);
+        return candidate is not null;
+    }
+
+    internal static ImdbEpisodeCandidate? SelectAutomaticCandidate(IReadOnlyList<ImdbEpisodeCandidate> candidates)
+    {
+        if (candidates.Count == 0 || !candidates[0].IsStrongAutomaticMatch)
+        {
+            return null;
+        }
+
+        return candidates.Count == 1 || candidates[0].Score - candidates[1].Score >= MinimumAutomaticScoreGap
+            ? candidates[0]
+            : null;
+    }
 
     public IReadOnlyList<ImdbEpisodeCandidate> SearchEpisodeCandidates(EpisodeMetadataGuess guess, int maximumResults = 20)
     {

@@ -27,7 +27,7 @@ internal sealed class AppCompositionRoot
     /// <summary>
     /// Erstellt die komplette Objektstruktur der Anwendung asynchron und meldet sichtbaren Startfortschritt.
     /// </summary>
-    /// <param name="progress">Optionaler Fortschrittskanal für Werkzeugprüfung und Erstversorgung.</param>
+    /// <param name="progress">Optionaler Fortschrittskanal für Werkzeug- und IMDb-Datenprüfung.</param>
     /// <param name="cancellationToken">Abbruchsignal für Startvorgänge mit Netzwerkzugriff.</param>
     /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
     public async Task<AppComposition> CreateAsync(
@@ -55,11 +55,11 @@ internal sealed class AppCompositionRoot
     }
 
     /// <summary>
-    /// Erstellt die Komposition mit austauschbarer Werkzeugprüfung, damit Tests einen echten
+    /// Erstellt die Komposition mit austauschbarer Startressourcenprüfung, damit Tests einen echten
     /// asynchronen Threadwechsel erzwingen können, ohne Netzwerk- oder Downloadpfade zu starten.
     /// </summary>
     /// <remarks>
-    /// Nach der Werkzeugprüfung darf hier bewusst kein <c>ConfigureAwait(false)</c> verwendet werden:
+    /// Nach der Startressourcenprüfung darf hier bewusst kein <c>ConfigureAwait(false)</c> verwendet werden:
     /// die anschließend aufgelösten ViewModels erzeugen WPF-CollectionViews und müssen deshalb auf
     /// dem aufrufenden UI-Dispatcher entstehen.
     /// </remarks>
@@ -95,7 +95,7 @@ internal sealed class AppCompositionRoot
     /// Löst die Startdienste aus einem bereits gebauten Root-Provider auf und kapselt den Fehlerpfad einschließlich Dispose.
     /// </summary>
     /// <param name="serviceProvider">Vollständig gebauter Root-Provider der Anwendung.</param>
-    /// <param name="managedToolStartupResult">Vorher bereits ermitteltes Ergebnis der Werkzeugprüfung.</param>
+    /// <param name="managedToolStartupResult">Vorher bereits ermitteltes Ergebnis der Startressourcenprüfung.</param>
     /// <returns>Fertig aufgelöste Anwendungs-Komposition.</returns>
     internal static AppComposition CreateComposition(
         ServiceProvider serviceProvider,
@@ -160,7 +160,7 @@ internal sealed class AppComposition : IDisposable
     public AppSettingsLoadResult SettingsLoadResult { get; }
 
     /// <summary>
-    /// Ergebnis der automatischen Toolprüfung und gegebenenfalls erfolgten Toolaktualisierung beim Start.
+    /// Ergebnis der automatischen Werkzeug- und optionalen IMDb-Datenprüfung beim Start.
     /// </summary>
     public ManagedToolStartupResult ManagedToolStartupResult { get; }
 

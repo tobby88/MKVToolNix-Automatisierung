@@ -116,11 +116,13 @@ internal sealed record BatchModuleServices(
 /// <param name="ArchiveMaintenance">Fachservice für Scan, Headeranalyse und freigegebene Korrekturen.</param>
 /// <param name="ArchiveSettings">Persistenter Store für die Serienbibliothek als Startordner.</param>
 /// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Archivdateien.</param>
+/// <param name="ImdbDatasetSearch">Suche im optionalen lokalen IMDb-Episodenindex.</param>
 /// <param name="SettingsDialog">Zentraler Einstellungsdialog für TVDB-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record ArchiveMaintenanceModuleServices(
     IArchiveMaintenanceService ArchiveMaintenance,
     AppArchiveSettingsStore ArchiveSettings,
     EpisodeMetadataLookupService EpisodeMetadata,
+    ImdbDatasetSearchService ImdbDatasetSearch,
     IAppSettingsDialogService SettingsDialog);
 
 /// <summary>
@@ -146,12 +148,14 @@ internal sealed record DownloadModuleServices(
 /// <param name="ArchiveSettings">Persistenter Store für den Standardpfad der Serienbibliothek.</param>
 /// <param name="Sync">Fachservice für JSON-Metadatenreport-Import, NFO-Provider-IDs und Emby-API-Aktionen.</param>
 /// <param name="EpisodeMetadata">TVDB-Such- und Mappinglogik für manuelle Korrekturen einzelner Emby-Zeilen.</param>
+/// <param name="ImdbDatasetSearch">Suche im optionalen lokalen IMDb-Episodenindex.</param>
 /// <param name="SettingsDialog">Zentraler Einstellungsdialog für Emby-Zugangsdaten und gemeinsame App-Konfiguration.</param>
 internal sealed record EmbyModuleServices(
     AppEmbySettingsStore Settings,
     AppArchiveSettingsStore ArchiveSettings,
     EmbyMetadataSyncService Sync,
     EpisodeMetadataLookupService EpisodeMetadata,
+    ImdbDatasetSearchService ImdbDatasetSearch,
     IAppSettingsDialogService SettingsDialog);
 
 /// <summary>

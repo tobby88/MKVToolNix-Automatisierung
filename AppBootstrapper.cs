@@ -31,7 +31,7 @@ internal sealed class AppBootstrapper : IDisposable
     }
 
     /// <summary>
-    /// Baut das Hauptfenster asynchron, damit Werkzeug-Downloads nicht den ersten sichtbaren UI-Frame blockieren.
+    /// Baut das Hauptfenster asynchron, damit Downloads verwalteter Startressourcen nicht den ersten sichtbaren UI-Frame blockieren.
     /// </summary>
     /// <param name="progress">Optionaler Fortschrittskanal für einen vorgeschalteten Startdialog.</param>
     /// <param name="cancellationToken">Abbruchsignal für Startvorgänge mit Netzwerkzugriff.</param>
@@ -57,7 +57,7 @@ internal sealed class AppBootstrapper : IDisposable
 
         if (_composition?.ManagedToolStartupResult.HasWarning == true)
         {
-            _composition.DialogService.ShowWarning("Werkzeuge", _composition.ManagedToolStartupResult.WarningMessage!);
+            _composition.DialogService.ShowWarning("Startressourcen", _composition.ManagedToolStartupResult.WarningMessage!);
         }
     }
 

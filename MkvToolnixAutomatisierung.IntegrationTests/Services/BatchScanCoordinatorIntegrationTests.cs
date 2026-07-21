@@ -457,6 +457,12 @@ public sealed class BatchScanCoordinatorIntegrationTests : IDisposable
             return Task.FromResult(Episodes);
         }
 
+        public Task<string?> GetEpisodeImdbIdAsync(
+            string apiKey,
+            string? pin,
+            int episodeId,
+            CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+
         public void Dispose()
         {
         }

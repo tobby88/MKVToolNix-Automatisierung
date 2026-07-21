@@ -517,7 +517,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         if (_toolCheckCancellationSource is not null)
         {
             _toolCheckCancellationSource.Cancel();
-            StatusText = "Abbruch der Werkzeugprüfung angefordert...";
+            StatusText = "Abbruch der Ressourcenprüfung angefordert...";
             return;
         }
 
@@ -564,11 +564,11 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     }
 
     /// <summary>
-    /// Speichert die Dialogwerte und startet danach direkt die automatische Tool-Bereitstellung.
+    /// Speichert die Dialogwerte und startet danach direkt die automatische Ressourcenbereitstellung.
     /// </summary>
     /// <remarks>
-    /// Dadurch ist nach dem Aktivieren von MKVToolNix, ffprobe oder MediathekView kein App-Neustart mehr
-    /// nötig. Der Dialog bleibt währenddessen offen, damit Download- und Entpackstatus sichtbar bleiben.
+    /// Dadurch ist nach dem Aktivieren von MKVToolNix, ffprobe, MediathekView oder IMDb-Offlineindex kein
+    /// App-Neustart nötig. Der Dialog bleibt offen, damit Download-, Import- und Entpackstatus sichtbar bleiben.
     /// </remarks>
     public async Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
     {
@@ -582,7 +582,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             SetBusy(true, "Einstellungen werden gespeichert...");
             SaveSettings();
             settingsWereSaved = true;
-            StatusText = "Werkzeuge werden geprüft...";
+            StatusText = "Ressourcen werden geprüft...";
 
             var result = await _services.ManagedTools.EnsureManagedToolsAsync(
                 new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
@@ -595,25 +595,25 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             var warnings = result.Warnings.Concat(imdbResult.Warnings).ToArray();
             if (warnings.Length > 0)
             {
-                StatusText = "Einstellungen gespeichert; Werkzeugprüfung mit Warnungen.";
+                StatusText = "Einstellungen gespeichert; Ressourcenprüfung mit Warnungen.";
                 _dialogService.ShowWarning("Ressourcenverwaltung", string.Join(Environment.NewLine + Environment.NewLine, warnings));
             }
             else
             {
-                StatusText = "Einstellungen gespeichert; Werkzeuge bereit.";
+                StatusText = "Einstellungen gespeichert; Ressourcen bereit.";
             }
         }
         catch (OperationCanceledException) when (linkedCancellation.IsCancellationRequested)
         {
             StatusText = settingsWereSaved
-                ? "Einstellungen gespeichert; Werkzeugprüfung abgebrochen."
+                ? "Einstellungen gespeichert; Ressourcenprüfung abgebrochen."
                 : "Einstellungen konnten nicht gespeichert werden.";
             throw;
         }
         catch
         {
             StatusText = settingsWereSaved
-                ? "Einstellungen gespeichert; Werkzeugprüfung fehlgeschlagen."
+                ? "Einstellungen gespeichert; Ressourcenprüfung fehlgeschlagen."
                 : "Einstellungen konnten nicht gespeichert werden.";
             throw;
         }

@@ -13,10 +13,13 @@ namespace MkvToolnixAutomatisierung.Windows;
 public partial class ImdbLookupWindow : Window
 {
     private readonly ImdbLookupWindowViewModel _viewModel;
-    internal ImdbLookupWindow(EpisodeMetadataGuess? guess, string? currentImdbId)
+    internal ImdbLookupWindow(
+        EpisodeMetadataGuess? guess,
+        string? currentImdbId,
+        ImdbDatasetSearchService? imdbDatasetSearch = null)
     {
         InitializeComponent();
-        _viewModel = new ImdbLookupWindowViewModel(guess, currentImdbId);
+        _viewModel = new ImdbLookupWindowViewModel(guess, currentImdbId, imdbDatasetSearch);
         DataContext = _viewModel;
     }
 
@@ -73,6 +76,11 @@ public partial class ImdbLookupWindow : Window
     private void ImportClipboardButton_Click(object sender, RoutedEventArgs e)
     {
         TryImportClipboard(showInvalidMessage: true);
+    }
+
+    private void ApplyLocalCandidateButton_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.ApplySelectedLocalCandidate();
     }
 
     private void Window_OnActivated(object? sender, EventArgs e)

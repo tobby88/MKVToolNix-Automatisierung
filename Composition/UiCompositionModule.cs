@@ -60,14 +60,16 @@ internal static class UiCompositionModule
         services.AddSingleton<EmbyModuleServices>(provider => new EmbyModuleServices(
             provider.GetRequiredService<AppEmbySettingsStore>(),
             provider.GetRequiredService<AppArchiveSettingsStore>(),
-            provider.GetRequiredService<EmbyMetadataSyncService>(),
-            provider.GetRequiredService<EpisodeMetadataLookupService>(),
-            provider.GetRequiredService<IAppSettingsDialogService>()));
+              provider.GetRequiredService<EmbyMetadataSyncService>(),
+              provider.GetRequiredService<EpisodeMetadataLookupService>(),
+              provider.GetRequiredService<ImdbDatasetSearchService>(),
+              provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<ArchiveMaintenanceModuleServices>(provider => new ArchiveMaintenanceModuleServices(
             provider.GetRequiredService<ArchiveMaintenanceService>(),
-            provider.GetRequiredService<AppArchiveSettingsStore>(),
-            provider.GetRequiredService<EpisodeMetadataLookupService>(),
-            provider.GetRequiredService<IAppSettingsDialogService>()));
+              provider.GetRequiredService<AppArchiveSettingsStore>(),
+              provider.GetRequiredService<EpisodeMetadataLookupService>(),
+              provider.GetRequiredService<ImdbDatasetSearchService>(),
+              provider.GetRequiredService<IAppSettingsDialogService>()));
         services.AddSingleton<MainWindowModuleServices>(provider => new MainWindowModuleServices(
             provider.GetRequiredService<SeriesArchiveService>(),
             provider.GetRequiredService<AppToolPathStore>(),

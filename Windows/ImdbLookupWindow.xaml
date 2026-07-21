@@ -3,13 +3,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="IMDb-Zuordnung"
         Width="820"
-        Height="650"
+        Height="780"
         MinWidth="720"
-        MinHeight="560"
+        MinHeight="680"
         Activated="Window_OnActivated"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -29,7 +30,42 @@
             </StackPanel>
         </Border>
 
-        <GroupBox Grid.Row="1" Header="IMDb im Browser suchen">
+        <GroupBox Grid.Row="1" Header="Lokalen IMDb-Index durchsuchen">
+            <Grid Margin="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ListView Grid.Row="0"
+                          MaxHeight="150"
+                          ItemsSource="{Binding LocalCandidates}"
+                          SelectedItem="{Binding SelectedLocalCandidate, Mode=TwoWay}">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Width="105" Header="IMDb-ID" DisplayMemberBinding="{Binding ImdbId}" />
+                            <GridViewColumn Width="150" Header="Serie" DisplayMemberBinding="{Binding SeriesTitle}" />
+                            <GridViewColumn Width="270" Header="Episode" DisplayMemberBinding="{Binding EpisodeTitle}" />
+                            <GridViewColumn Width="85" Header="IMDb S/E" DisplayMemberBinding="{Binding EpisodeCode}" />
+                            <GridViewColumn Width="95" Header="Treffer" DisplayMemberBinding="{Binding MatchQualityText}" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                <DockPanel Grid.Row="1" Margin="0,8,0,0" LastChildFill="True">
+                    <Button DockPanel.Dock="Right"
+                            Margin="12,0,0,0"
+                            Padding="12,6"
+                            Click="ApplyLocalCandidateButton_Click"
+                            Content="Kandidat übernehmen"
+                            IsEnabled="{Binding CanApplyLocalCandidate}" />
+                    <TextBlock VerticalAlignment="Center"
+                               Foreground="#4B5563"
+                               Text="{Binding LocalDatasetStatusText}"
+                               TextWrapping="Wrap" />
+                </DockPanel>
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="IMDb im Browser suchen">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -78,7 +114,7 @@
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="IMDb-ID übernehmen">
+        <GroupBox Grid.Row="3" Margin="0,12,0,0" Header="IMDb-ID übernehmen">
             <Grid Margin="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="130" />
@@ -98,7 +134,7 @@
             </Grid>
         </GroupBox>
 
-        <DockPanel Grid.Row="3" Margin="0,12,0,0" LastChildFill="False">
+        <DockPanel Grid.Row="4" Margin="0,12,0,0" LastChildFill="False">
             <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Width="150" Margin="0,0,12,0" Padding="10,6" Click="NoImdbButton_Click" Content="Keine IMDb-ID" />

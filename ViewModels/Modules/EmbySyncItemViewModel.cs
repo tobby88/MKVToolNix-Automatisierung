@@ -554,20 +554,43 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         _tvdbImdbEpisodeId = tvdbEpisodeId;
         _tvdbImdbId = normalizedCandidate;
 
-        if (_imdbReviewWasManuallyResolved)
-        {
-            return new TvdbImdbComparisonResult(
-                TvdbImdbComparisonKind.ManualDecisionPreserved,
-                normalizedCandidate,
-                BuildImdbCandidateValues().ToArray());
-        }
-
         if (normalizedCandidate is null)
         {
             _isImdbReviewApproved = false;
             NotifyProviderReviewPropertiesChanged();
             RefreshStatusAfterAutomaticImdbComparison("TVDB enthält keine IMDb-Verknüpfung. IMDb prüfen.");
             return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.NotLinked, null, []);
+        }
+
+        return ApplyAutomaticImdbCandidate(normalizedCandidate, "TVDB", "TVDB");
+    }
+
+    /// <summary>
+    /// Übernimmt einen eindeutigen Treffer aus dem optionalen lokalen IMDb-Index, sofern keine
+    /// Report-, NFO-, Emby- oder manuelle Entscheidung widerspricht.
+    /// </summary>
+    public TvdbImdbComparisonResult ApplyOfflineImdbCandidate(string imdbId)
+    {
+        var normalizedCandidate = NormalizeImdbId(imdbId);
+        if (normalizedCandidate is null)
+        {
+            return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.NotLinked, null, []);
+        }
+
+        return ApplyAutomaticImdbCandidate(normalizedCandidate, "lokaler IMDb-Index", "dem lokalen IMDb-Index");
+    }
+
+    private TvdbImdbComparisonResult ApplyAutomaticImdbCandidate(
+        string normalizedCandidate,
+        string sourceLabel,
+        string sourceOrigin)
+    {
+        if (_imdbReviewWasManuallyResolved)
+        {
+            return new TvdbImdbComparisonResult(
+                TvdbImdbComparisonKind.ManualDecisionPreserved,
+                normalizedCandidate,
+                BuildImdbCandidateValues().ToArray());
         }
 
         var conflictingIds = BuildImdbCandidateValues()
@@ -579,7 +602,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             _isImdbReviewApproved = false;
             NotifyProviderReviewPropertiesChanged();
             RefreshStatusAfterAutomaticImdbComparison(
-                $"IMDb-Konflikt: TVDB {normalizedCandidate}, andere Quelle(n) {string.Join(", ", conflictingIds)}. Manuell prüfen.");
+                $"IMDb-Konflikt: {sourceLabel} {normalizedCandidate}, andere Quelle(n) {string.Join(", ", conflictingIds)}. Manuell prüfen.");
             return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.Conflict, normalizedCandidate, conflictingIds);
         }
 
@@ -594,8 +617,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         NotifyProviderReviewPropertiesChanged();
         RefreshStatusAfterAutomaticImdbComparison(
             hadImdbId
-                ? $"IMDb-ID durch TVDB bestätigt: {normalizedCandidate}."
-                : $"IMDb-ID aus TVDB ergänzt: {normalizedCandidate}.");
+                ? $"IMDb-ID durch {sourceLabel} bestätigt: {normalizedCandidate}."
+                : $"IMDb-ID aus {sourceOrigin} ergänzt: {normalizedCandidate}.");
         return new TvdbImdbComparisonResult(
             hadImdbId ? TvdbImdbComparisonKind.Confirmed : TvdbImdbComparisonKind.Added,
             normalizedCandidate,

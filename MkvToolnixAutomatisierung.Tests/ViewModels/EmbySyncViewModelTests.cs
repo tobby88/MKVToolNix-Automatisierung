@@ -1,5 +1,7 @@
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
@@ -29,7 +31,8 @@ public sealed class EmbySyncViewModelTests
         IEmbyProviderReviewDialogService? providerReviewDialogs = null,
         IModuleLogService? moduleLogs = null,
         AppMetadataSettings? configuredMetadataSettings = null,
-        ITvdbClient? tvdbClient = null)
+        ITvdbClient? tvdbClient = null,
+        ImdbDatasetSearchService? imdbDatasetSearch = null)
     {
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
@@ -53,6 +56,7 @@ public sealed class EmbySyncViewModelTests
             archiveSettings,
             syncService,
             episodeMetadata,
+            imdbDatasetSearch ?? new ImdbDatasetSearchService(),
             new NullSettingsDialogService());
         return new EmbySyncViewModel(services, dialogService ?? new NullDialogService(), providerReviewDialogs, moduleLogs);
     }
@@ -287,6 +291,37 @@ public sealed class EmbySyncViewModelTests
         Assert.Equal(1, reviewDialogs.ImdbReviewCallCount);
         Assert.Equal("tt2222222", item.ImdbId);
         Assert.False(item.HasPendingProviderReview);
+    }
+
+    [Fact]
+    public async Task ReviewPendingProviderIdsCommand_UsesLocalIndex_WhenTvdbHasNoImdbLink()
+    {
+        var (imdbSearch, directory) = await CreateLocalImdbIndexAsync();
+        try
+        {
+            var reviewDialogs = new QueueingProviderReviewDialogs(tvdbResults: [], imdbResults: []);
+            var tvdbClient = new FixedEpisodeImdbTvdbClient(new Dictionary<int, string?> { [12345] = null });
+            var vm = CreateViewModel(
+                providerReviewDialogs: reviewDialogs,
+                configuredMetadataSettings: new AppMetadataSettings { TvdbApiKey = "key" },
+                tvdbClient: tvdbClient,
+                imdbDatasetSearch: imdbSearch);
+            var item = new EmbySyncItemViewModel(
+                @"C:\Videos\Serie - S01E01 - Pilot.mkv",
+                new EmbyProviderIds("12345", null));
+            vm.Items.Add(item);
+
+            await vm.ReviewPendingProviderIdsCommand.ExecuteAsync();
+
+            Assert.Equal("tt2000001", item.ImdbId);
+            Assert.False(item.HasPendingProviderReview);
+            Assert.Equal(0, reviewDialogs.ImdbReviewCallCount);
+            Assert.Contains("lokalem Index ergänzt", vm.LogText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
@@ -1410,6 +1445,37 @@ public sealed class EmbySyncViewModelTests
                 ]
             }));
         return reportPath;
+    }
+
+    private static async Task<(ImdbDatasetSearchService Search, string Directory)> CreateLocalImdbIndexAsync()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-imdb", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string WriteArchive(string fileName, string text)
+        {
+            var path = Path.Combine(directory, fileName);
+            using var file = File.Create(path);
+            using var gzip = new GZipStream(file, CompressionLevel.SmallestSize);
+            gzip.Write(Encoding.UTF8.GetBytes(text));
+            return path;
+        }
+
+        var basics = WriteArchive(
+            "title.basics.tsv.gz",
+            "tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres\n"
+            + "tt1000001\ttvSeries\tSerie\tSerie\t0\t2020\t\\N\t45\tCrime\n"
+            + "tt2000001\ttvEpisode\tPilot\tPilot\t0\t2020\t\\N\t45\tCrime\n");
+        var episodes = WriteArchive(
+            "title.episode.tsv.gz",
+            "tconst\tparentTconst\tseasonNumber\tepisodeNumber\n"
+            + "tt2000001\t" + "tt1000001\t1\t1\n");
+        var aliases = WriteArchive(
+            "title.akas.tsv.gz",
+            "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n"
+            + "tt2000001\t1\tPilot\tDE\tde\timdbDisplay\t\\N\t0\n");
+        var databasePath = Path.Combine(directory, "imdb.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(databasePath, basics, episodes, aliases, "test");
+        return (new ImdbDatasetSearchService(databasePath), directory);
     }
 
     private sealed class RecordingRefreshEmbyClient : IEmbyClient

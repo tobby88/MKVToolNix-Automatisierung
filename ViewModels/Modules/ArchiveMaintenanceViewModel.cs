@@ -581,7 +581,7 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         }
 
         item.TryBuildMetadataGuess(out var guess);
-        var dialog = new ImdbLookupWindow(guess, item.TargetImdbId)
+        var dialog = new ImdbLookupWindow(guess, item.TargetImdbId, _services.ImdbDatasetSearch)
         {
             Owner = ResolveOwner()
         };

@@ -23,6 +23,13 @@ internal interface IEmbyProviderReviewDialogService
 /// </summary>
 internal sealed class EmbyProviderReviewDialogService : IEmbyProviderReviewDialogService
 {
+    private readonly ImdbDatasetSearchService _imdbDatasetSearch;
+
+    public EmbyProviderReviewDialogService(ImdbDatasetSearchService imdbDatasetSearch)
+    {
+        _imdbDatasetSearch = imdbDatasetSearch;
+    }
+
     public EmbyTvdbReviewResult ReviewTvdb(
         EmbySyncItemViewModel item,
         EpisodeMetadataLookupService episodeMetadata,
@@ -68,7 +75,7 @@ internal sealed class EmbyProviderReviewDialogService : IEmbyProviderReviewDialo
     public EmbyImdbReviewResult ReviewImdb(EmbySyncItemViewModel item)
     {
         item.TryBuildMetadataGuess(out var guess);
-        var dialog = new ImdbLookupWindow(guess, item.ImdbId)
+        var dialog = new ImdbLookupWindow(guess, item.ImdbId, _imdbDatasetSearch)
         {
             Owner = ResolveOwner()
         };

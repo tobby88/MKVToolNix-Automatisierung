@@ -21,6 +21,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private static readonly Regex AbsoluteUrlPattern = new(@"https?://[^\s<>""]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex ImdbTitlePathPattern = new(@"^/(?:[a-z]{2}(?:-[a-z]{2})?/)?title/(?<id>tt\d{7,10})(?:[/?#]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private readonly EpisodeMetadataGuess? _guess;
+    private readonly ImdbDatasetSearchService? _imdbDatasetSearch;
     private string _seriesSearchText;
     private string _episodeSearchText;
     private string _searchText;
@@ -28,10 +29,16 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private string _comparisonSummaryText;
     private string _statusText;
     private SearchOptionItem? _selectedSearchOption;
+    private ImdbEpisodeCandidate? _selectedLocalCandidate;
+    private string _localDatasetStatusText;
 
-    internal ImdbLookupWindowViewModel(EpisodeMetadataGuess? guess, string? currentImdbId)
+    internal ImdbLookupWindowViewModel(
+        EpisodeMetadataGuess? guess,
+        string? currentImdbId,
+        ImdbDatasetSearchService? imdbDatasetSearch = null)
     {
         _guess = guess;
+        _imdbDatasetSearch = imdbDatasetSearch;
         _seriesSearchText = guess?.SeriesName ?? string.Empty;
         _episodeSearchText = guess?.EpisodeTitle ?? string.Empty;
         _searchText = BuildDefaultSearchText(guess);
@@ -39,9 +46,11 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             ? normalizedImdbId!
             : (currentImdbId ?? string.Empty).Trim();
         _comparisonSummaryText = "Noch keine gültige IMDb-ID eingetragen.";
+        _localDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
         _statusText = BuildInitialStatusText(guess, _imdbInput);
         GuessSummaryText = BuildGuessSummaryText(guess, _imdbInput);
         RebuildSearchOptions();
+        RebuildLocalCandidates();
         UpdateComparisonSummary();
     }
 
@@ -83,6 +92,42 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     /// Verfügbare direkte IMDb-Ziele und Suchvarianten.
     /// </summary>
     public ObservableCollection<SearchOptionItem> SearchOptions { get; } = [];
+
+    /// <summary>
+    /// Treffer aus den optional lokal installierten offiziellen IMDb-Datensätzen.
+    /// </summary>
+    public ObservableCollection<ImdbEpisodeCandidate> LocalCandidates { get; } = [];
+
+    public ImdbEpisodeCandidate? SelectedLocalCandidate
+    {
+        get => _selectedLocalCandidate;
+        set
+        {
+            if (ReferenceEquals(_selectedLocalCandidate, value))
+            {
+                return;
+            }
+
+            _selectedLocalCandidate = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanApplyLocalCandidate));
+        }
+    }
+
+    public string LocalDatasetStatusText
+    {
+        get => _localDatasetStatusText;
+        private set
+        {
+            if (_localDatasetStatusText == value)
+            {
+                return;
+            }
+
+            _localDatasetStatusText = value;
+            OnPropertyChanged();
+        }
+    }
 
     public SearchOptionItem? SelectedSearchOption
     {
@@ -157,6 +202,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
     public bool CanOpenSelectedSearch => SelectedSearchOption is not null;
 
+    public bool CanApplyLocalCandidate => SelectedLocalCandidate is not null;
+
     public bool CanApply => TryNormalizeImdbId(ImdbInput, out _);
 
     public void MarkSelectedSearchOpened()
@@ -195,6 +242,21 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
         ImdbInput = imdbId!;
         StatusText = $"IMDb-ID aus Zwischenablage erkannt: {imdbId}";
+        return true;
+    }
+
+    /// <summary>
+    /// Überträgt den ausgewählten Offline-Treffer in das weiterhin explizit zu bestätigende ID-Feld.
+    /// </summary>
+    public bool ApplySelectedLocalCandidate()
+    {
+        if (SelectedLocalCandidate is not { } candidate)
+        {
+            return false;
+        }
+
+        ImdbInput = candidate.ImdbId;
+        StatusText = $"Lokalen IMDb-Treffer übernommen: {candidate.ImdbId}";
         return true;
     }
 
@@ -251,6 +313,39 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         RebuildSearchOptions();
     }
 
+    private void RebuildLocalCandidates()
+    {
+        if (_imdbDatasetSearch?.IsAvailable != true)
+        {
+            ReplaceItems(LocalCandidates, []);
+            SelectedLocalCandidate = null;
+            LocalDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
+            return;
+        }
+
+        if (_guess is null || string.IsNullOrWhiteSpace(SeriesSearchText) || string.IsNullOrWhiteSpace(EpisodeSearchText))
+        {
+            ReplaceItems(LocalCandidates, []);
+            SelectedLocalCandidate = null;
+            LocalDatasetStatusText = "Für die lokale Suche fehlen Serienname oder Episodentitel.";
+            return;
+        }
+
+        var localGuess = _guess with
+        {
+            SeriesName = SeriesSearchText.Trim(),
+            EpisodeTitle = EpisodeSearchText.Trim()
+        };
+        var previousId = SelectedLocalCandidate?.ImdbId;
+        ReplaceItems(LocalCandidates, _imdbDatasetSearch.SearchEpisodeCandidates(localGuess));
+        SelectedLocalCandidate = LocalCandidates.FirstOrDefault(candidate =>
+                                     string.Equals(candidate.ImdbId, previousId, StringComparison.OrdinalIgnoreCase))
+                                 ?? LocalCandidates.FirstOrDefault();
+        LocalDatasetStatusText = LocalCandidates.Count == 0
+            ? "Im lokalen IMDb-Index wurde kein ausreichend ähnlicher Treffer gefunden."
+            : $"{LocalCandidates.Count} lokale(r) Kandidat(en). Bitte den passenden Eintrag auswählen.";
+    }
+
     private void SetStructuredSearchField(ref string field, string? value, [CallerMemberName] string? propertyName = null)
     {
         var normalized = value ?? string.Empty;
@@ -271,6 +366,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         RebuildSearchOptions();
+        RebuildLocalCandidates();
     }
 
     private void RebuildSearchOptions()
