@@ -7,6 +7,8 @@
         MinWidth="720"
         MinHeight="680"
         Activated="Window_OnActivated"
+        Loaded="Window_OnLoaded"
+        Closed="Window_OnClosed"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -51,12 +53,19 @@
                     </ListView.View>
                 </ListView>
                 <DockPanel Grid.Row="1" Margin="0,8,0,0" LastChildFill="True">
-                    <Button DockPanel.Dock="Right"
-                            Margin="12,0,0,0"
-                            Padding="12,6"
-                            Click="ApplyLocalCandidateButton_Click"
-                            Content="Kandidat übernehmen"
-                            IsEnabled="{Binding CanApplyLocalCandidate}" />
+                    <StackPanel DockPanel.Dock="Right" Margin="12,0,0,0" Orientation="Horizontal">
+                        <Button x:Name="RefreshLocalCandidatesButton"
+                                Padding="12,6"
+                                Click="RefreshLocalCandidatesButton_Click"
+                                Content="Lokal neu suchen"
+                                IsEnabled="{Binding CanRefreshLocalCandidates}"
+                                ToolTip="Durchsucht den Offlineindex erneut mit dem unten eingetragenen Seriennamen und Episodentitel." />
+                        <Button Margin="8,0,0,0"
+                                Padding="12,6"
+                                Click="ApplyLocalCandidateButton_Click"
+                                Content="Kandidat übernehmen"
+                                IsEnabled="{Binding CanApplyLocalCandidate}" />
+                    </StackPanel>
                     <TextBlock VerticalAlignment="Center"
                                Foreground="#4B5563"
                                Text="{Binding LocalDatasetStatusText}"
@@ -65,7 +74,7 @@
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="IMDb im Browser suchen">
+        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="Suchangaben und IMDb im Browser suchen">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />

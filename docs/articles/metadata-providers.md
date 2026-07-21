@@ -28,6 +28,8 @@ Der sichtbare Importfortschritt kombiniert den exakten Zeilenzähler mit dem Ant
 
 Titelähnlichkeit ist das wichtigste Suchsignal. Staffel und Folge beeinflussen die Rangfolge, sind aber kein Ausschlusskriterium, weil IMDb und TVDB größere Serien häufig unterschiedlich nummerieren. Nur ein eindeutiger exakter Serien- und Episodentitel darf ohne Benutzerentscheidung übernommen werden.
 
+Der manuelle Dialog lädt lokale Kandidaten asynchron und hält bereits gelesene Serien- und Episodenkataloge für weitere Folgen derselben Serie im Speicher. Korrigierte Serien- oder Episodentexte werden erst über `Lokal neu suchen` erneut gegen SQLite geprüft; dadurch löst nicht jeder einzelne Tastendruck eine große Datenbankabfrage auf dem UI-Thread aus.
+
 Der Index ist ein Fallback, keine zusätzliche Online-API. Er liegt portabel unter `Data/IMDb/imdb-episodes.sqlite`; die heruntergeladenen GZip-Dateien werden nach dem Aufbau wieder entfernt. Die IMDb-Datensätze dürfen nur entsprechend ihrer Bedingungen für persönliche, nichtkommerzielle Zwecke verwendet werden.
 
 ## NFO-Schreibgrenzen

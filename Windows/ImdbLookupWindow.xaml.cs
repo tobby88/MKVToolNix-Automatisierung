@@ -13,6 +13,7 @@ namespace MkvToolnixAutomatisierung.Windows;
 public partial class ImdbLookupWindow : Window
 {
     private readonly ImdbLookupWindowViewModel _viewModel;
+    private readonly CancellationTokenSource _localSearchCancellationSource = new();
     internal ImdbLookupWindow(
         EpisodeMetadataGuess? guess,
         string? currentImdbId,
@@ -81,6 +82,22 @@ public partial class ImdbLookupWindow : Window
     private void ApplyLocalCandidateButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.ApplySelectedLocalCandidate();
+    }
+
+    private async void RefreshLocalCandidatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.RefreshLocalCandidatesAsync(_localSearchCancellationSource.Token);
+    }
+
+    private async void Window_OnLoaded(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.RefreshLocalCandidatesAsync(_localSearchCancellationSource.Token);
+    }
+
+    private void Window_OnClosed(object? sender, EventArgs e)
+    {
+        _localSearchCancellationSource.Cancel();
+        _localSearchCancellationSource.Dispose();
     }
 
     private void Window_OnActivated(object? sender, EventArgs e)

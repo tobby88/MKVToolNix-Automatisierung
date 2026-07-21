@@ -1,5 +1,6 @@
-using System.Globalization;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Compression;
 using Microsoft.Data.Sqlite;
 
@@ -444,6 +445,10 @@ internal sealed class ImdbDatasetSearchService
 {
     private const int MinimumAutomaticScoreGap = 8;
     private readonly string _databasePath;
+    private readonly object _cacheSync = new();
+    private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbSeriesCandidate>> _seriesCandidateCache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbEpisodeCatalogEntry>> _episodeCatalogCache = new(StringComparer.OrdinalIgnoreCase);
+    private ImdbDatabaseStamp? _cacheDatabaseStamp;
 
     public ImdbDatasetSearchService(string? databasePath = null)
     {
@@ -465,6 +470,19 @@ internal sealed class ImdbDatasetSearchService
         candidate = SelectAutomaticCandidate(candidates);
         return candidate is not null;
     }
+
+    /// <summary>
+    /// Führt die potenziell größere SQLite-Suche außerhalb des aufrufenden UI-Threads aus.
+    /// </summary>
+    /// <param name="guess">Aktuell im Dialog sichtbare Suchangaben.</param>
+    /// <param name="maximumResults">Maximale Zahl zurückzugebender Kandidaten.</param>
+    /// <param name="cancellationToken">Abbruchsignal für das Starten oder Übernehmen der Hintergrundsuche.</param>
+    /// <returns>Nach Match-Score sortierte lokale IMDb-Kandidaten.</returns>
+    public Task<IReadOnlyList<ImdbEpisodeCandidate>> SearchEpisodeCandidatesAsync(
+        EpisodeMetadataGuess guess,
+        int maximumResults = 20,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => SearchEpisodeCandidates(guess, maximumResults), cancellationToken);
 
     internal static ImdbEpisodeCandidate? SelectAutomaticCandidate(IReadOnlyList<ImdbEpisodeCandidate> candidates)
     {
@@ -499,6 +517,7 @@ internal sealed class ImdbDatasetSearchService
             return [];
         }
 
+        EnsureCachesMatchCurrentDatabase();
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = _databasePath,
@@ -507,11 +526,16 @@ internal sealed class ImdbDatasetSearchService
             Pooling = false
         }.ToString());
         connection.Open();
-        var seriesCandidates = LoadSeriesCandidates(connection, normalizedSeries);
+        var seriesCandidates = _seriesCandidateCache.GetOrAdd(
+            normalizedSeries,
+            query => LoadSeriesCandidates(connection, query));
         var results = new List<ImdbEpisodeCandidate>();
         foreach (var series in seriesCandidates)
         {
-            results.AddRange(LoadAndScoreEpisodes(connection, series, guess));
+            var episodeCatalog = _episodeCatalogCache.GetOrAdd(
+                series.Id,
+                parentId => LoadEpisodeCatalog(connection, parentId));
+            results.AddRange(ScoreEpisodes(episodeCatalog, series, guess));
         }
 
         return results
@@ -526,23 +550,34 @@ internal sealed class ImdbDatasetSearchService
     private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(SqliteConnection connection, string normalizedSeries)
     {
         using var command = connection.CreateCommand();
+        // Getrennte Indexbereiche verhindern, dass SQLite bei einem großen OR/EXISTS-Ausdruck
+        // zuerst Millionen Aliaszeilen mit der Titeltabelle verknüpft. INDEXED BY hält dabei
+        // gerade den Aliaszweig zuverlässig auf dem selektiven normalized_title-Index.
         command.CommandText =
             """
-            SELECT DISTINCT t.id, t.primary_title,
-                CASE WHEN t.normalized_primary = $query OR t.normalized_original = $query
-                          OR EXISTS (SELECT 1 FROM aliases a WHERE a.title_id = t.id AND a.normalized_title = $query)
-                     THEN 1 ELSE 0 END AS exact_match
-            FROM titles t
-            WHERE t.kind = 1 AND (
-                t.normalized_primary = $query OR t.normalized_original = $query
-                OR t.normalized_primary LIKE $prefix OR t.normalized_original LIKE $prefix
-                OR EXISTS (SELECT 1 FROM aliases a WHERE a.title_id = t.id
-                           AND (a.normalized_title = $query OR a.normalized_title LIKE $prefix)))
+            WITH candidate_ids(id, exact_match) AS (
+                SELECT id, normalized_primary = $query
+                FROM titles
+                WHERE kind = 1 AND normalized_primary >= $query AND normalized_primary < $prefixUpper
+                UNION ALL
+                SELECT id, normalized_original = $query
+                FROM titles
+                WHERE kind = 1 AND normalized_original >= $query AND normalized_original < $prefixUpper
+                UNION ALL
+                SELECT a.title_id, a.normalized_title = $query
+                FROM aliases a INDEXED BY ix_aliases_normalized
+                INNER JOIN titles t ON t.id = a.title_id
+                WHERE t.kind = 1 AND a.normalized_title >= $query AND a.normalized_title < $prefixUpper
+            )
+            SELECT t.id, t.primary_title, MAX(candidate_ids.exact_match) AS exact_match
+            FROM candidate_ids
+            INNER JOIN titles t ON t.id = candidate_ids.id
+            GROUP BY t.id, t.primary_title
             ORDER BY exact_match DESC, t.primary_title
             LIMIT 8;
             """;
         command.Parameters.AddWithValue("$query", normalizedSeries);
-        command.Parameters.AddWithValue("$prefix", normalizedSeries + "%");
+        command.Parameters.AddWithValue("$prefixUpper", normalizedSeries + '\uffff');
         using var reader = command.ExecuteReader();
         var results = new List<ImdbSeriesCandidate>();
         while (reader.Read())
@@ -553,10 +588,9 @@ internal sealed class ImdbDatasetSearchService
         return results;
     }
 
-    private static IEnumerable<ImdbEpisodeCandidate> LoadAndScoreEpisodes(
+    private static IReadOnlyList<ImdbEpisodeCatalogEntry> LoadEpisodeCatalog(
         SqliteConnection connection,
-        ImdbSeriesCandidate series,
-        EpisodeMetadataGuess guess)
+        string parentId)
     {
         using var command = connection.CreateCommand();
         command.CommandText =
@@ -567,7 +601,7 @@ internal sealed class ImdbDatasetSearchService
             WHERE t.kind = 2 AND t.parent_id = $parent
             ORDER BY t.id;
             """;
-        command.Parameters.AddWithValue("$parent", series.Id);
+        command.Parameters.AddWithValue("$parent", parentId);
         using var reader = command.ExecuteReader();
         var episodes = new Dictionary<string, MutableEpisodeCandidate>(StringComparer.OrdinalIgnoreCase);
         while (reader.Read())
@@ -589,7 +623,22 @@ internal sealed class ImdbDatasetSearchService
             }
         }
 
-        foreach (var episode in episodes.Values)
+        return episodes.Values
+            .Select(episode => new ImdbEpisodeCatalogEntry(
+                episode.Id,
+                episode.PrimaryTitle,
+                episode.SeasonNumber,
+                episode.EpisodeNumber,
+                episode.Titles.ToArray()))
+            .ToArray();
+    }
+
+    private static IEnumerable<ImdbEpisodeCandidate> ScoreEpisodes(
+        IReadOnlyList<ImdbEpisodeCatalogEntry> episodes,
+        ImdbSeriesCandidate series,
+        EpisodeMetadataGuess guess)
+    {
+        foreach (var episode in episodes)
         {
             var titleSimilarity = episode.Titles
                 .Append(episode.PrimaryTitle)
@@ -619,7 +668,38 @@ internal sealed class ImdbDatasetSearchService
         }
     }
 
+    private void EnsureCachesMatchCurrentDatabase()
+    {
+        var file = new FileInfo(_databasePath);
+        var currentStamp = new ImdbDatabaseStamp(file.Length, file.LastWriteTimeUtc.Ticks);
+        if (_cacheDatabaseStamp == currentStamp)
+        {
+            return;
+        }
+
+        lock (_cacheSync)
+        {
+            if (_cacheDatabaseStamp == currentStamp)
+            {
+                return;
+            }
+
+            _seriesCandidateCache.Clear();
+            _episodeCatalogCache.Clear();
+            _cacheDatabaseStamp = currentStamp;
+        }
+    }
+
     private sealed record ImdbSeriesCandidate(string Id, string Title, bool ExactTitleMatch);
+
+    private sealed record ImdbEpisodeCatalogEntry(
+        string Id,
+        string PrimaryTitle,
+        int? SeasonNumber,
+        int? EpisodeNumber,
+        IReadOnlyList<string> Titles);
+
+    private sealed record ImdbDatabaseStamp(long Length, long LastWriteTimeUtcTicks);
 
     private sealed record MutableEpisodeCandidate(
         string Id,

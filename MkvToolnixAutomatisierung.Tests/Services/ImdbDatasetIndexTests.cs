@@ -36,10 +36,10 @@ public sealed class ImdbDatasetIndexTests : IDisposable
 
         Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
         Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
-        Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+        Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
         Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE kind = 2;"));
         Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE kind = 1;"));
-        Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases;"));
+        Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
         Assert.Equal(
             1,
             ReadScalar(
@@ -62,13 +62,38 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(2, candidate.EpisodeNumber);
         Assert.True(candidate.IsStrongAutomaticMatch);
 
+        var seriesAliasCandidate = Assert.Single(new ImdbDatasetSearchService(databasePath).SearchEpisodeCandidates(
+            new EpisodeMetadataGuess("Der alte Kommissar", "Die Wahrheit im Dunkeln", "55", "02")));
+        Assert.Equal("tt2000001", seriesAliasCandidate.ImdbId);
+        Assert.True(seriesAliasCandidate.SeriesTitleMatchedExactly);
+
         var lookupViewModel = new ImdbLookupWindowViewModel(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02"),
             currentImdbId: null,
             new ImdbDatasetSearchService(databasePath));
+        Assert.Empty(lookupViewModel.LocalCandidates);
+        await lookupViewModel.RefreshLocalCandidatesAsync();
         Assert.Single(lookupViewModel.LocalCandidates);
         Assert.True(lookupViewModel.ApplySelectedLocalCandidate());
         Assert.Equal("tt2000001", lookupViewModel.ImdbInput);
+
+        lookupViewModel.EpisodeSearchText = "Anderer Titel";
+        Assert.Empty(lookupViewModel.LocalCandidates);
+        Assert.Contains("Lokal neu suchen", lookupViewModel.LocalDatasetStatusText, StringComparison.Ordinal);
+        lookupViewModel.EpisodeSearchText = "Die Wahrheit im Dunkeln";
+        await lookupViewModel.RefreshLocalCandidatesAsync();
+        Assert.Single(lookupViewModel.LocalCandidates);
+
+        var manuallyEnteredViewModel = new ImdbLookupWindowViewModel(
+            guess: null,
+            currentImdbId: null,
+            new ImdbDatasetSearchService(databasePath))
+        {
+            SeriesSearchText = "Der Alte",
+            EpisodeSearchText = "Die Wahrheit im Dunkeln"
+        };
+        await manuallyEnteredViewModel.RefreshLocalCandidatesAsync();
+        Assert.Single(manuallyEnteredViewModel.LocalCandidates);
 
         var importReports = progress.Values.Where(value => !value.IsFinalizing).ToArray();
         Assert.Equal([1, 2, 3], importReports.Select(value => value.DatasetNumber).Distinct().ToArray());
@@ -223,6 +248,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             + "tt2000001\t" + "tt1000001\t55\t2\n"),
         ["title.akas.tsv.gz"] = Gzip(
             "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n"
+            + "tt1000001\t1\tDer alte Kommissar\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000001\t1\tDie Wahrheit im Dunkeln\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000001\t2\tLa vérité\tFR\tfr\timdbDisplay\t\\N\t0\n")
     };

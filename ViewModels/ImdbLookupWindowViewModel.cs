@@ -33,6 +33,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
     private SearchOptionItem? _selectedSearchOption;
     private ImdbEpisodeCandidate? _selectedLocalCandidate;
     private string _localDatasetStatusText;
+    private bool _isLocalSearchRunning;
+    private int _localSearchRevision;
 
     internal ImdbLookupWindowViewModel(
         EpisodeMetadataGuess? guess,
@@ -48,11 +50,12 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
             ? normalizedImdbId!
             : (currentImdbId ?? string.Empty).Trim();
         _comparisonSummaryText = "Noch keine gültige IMDb-ID eingetragen.";
-        _localDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
+        _localDatasetStatusText = _imdbDatasetSearch?.IsAvailable == true
+            ? "Die lokale Suche startet beim Öffnen des Dialogs."
+            : "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
         _statusText = BuildInitialStatusText(guess, _imdbInput);
         GuessSummaryText = BuildGuessSummaryText(guess, _imdbInput);
         RebuildSearchOptions();
-        RebuildLocalCandidates();
         UpdateComparisonSummary();
     }
 
@@ -212,7 +215,102 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
 
     public bool CanApplyLocalCandidate => SelectedLocalCandidate is not null;
 
+    /// <summary>
+    /// Kennzeichnet eine laufende SQLite-Suche, während der die Schaltfläche gegen Doppelklicks gesperrt bleibt.
+    /// </summary>
+    public bool IsLocalSearchRunning
+    {
+        get => _isLocalSearchRunning;
+        private set
+        {
+            if (_isLocalSearchRunning == value)
+            {
+                return;
+            }
+
+            _isLocalSearchRunning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRefreshLocalCandidates));
+        }
+    }
+
+    /// <summary>
+    /// Gibt an, ob die aktuell sichtbaren Serien- und Episodentexte lokal gesucht werden können.
+    /// </summary>
+    public bool CanRefreshLocalCandidates =>
+        _imdbDatasetSearch?.IsAvailable == true
+        && !IsLocalSearchRunning
+        && !string.IsNullOrWhiteSpace(SeriesSearchText)
+        && !string.IsNullOrWhiteSpace(EpisodeSearchText);
+
     public bool CanApply => TryNormalizeImdbId(ImdbInput, out _);
+
+    /// <summary>
+    /// Sucht die aktuell eingetragenen Serien- und Episodentexte im lokalen Index, ohne den UI-Thread zu blockieren.
+    /// Änderungen während einer laufenden Suche verwerfen deren inzwischen veraltetes Ergebnis.
+    /// </summary>
+    public async Task RefreshLocalCandidatesAsync(CancellationToken cancellationToken = default)
+    {
+        if (_imdbDatasetSearch?.IsAvailable != true)
+        {
+            ReplaceItems(LocalCandidates, []);
+            SelectedLocalCandidate = null;
+            LocalDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
+            OnPropertyChanged(nameof(CanRefreshLocalCandidates));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SeriesSearchText) || string.IsNullOrWhiteSpace(EpisodeSearchText))
+        {
+            ReplaceItems(LocalCandidates, []);
+            SelectedLocalCandidate = null;
+            LocalDatasetStatusText = "Für die lokale Suche fehlen Serienname oder Episodentitel.";
+            OnPropertyChanged(nameof(CanRefreshLocalCandidates));
+            return;
+        }
+
+        var searchRevision = _localSearchRevision;
+        var localGuess = new EpisodeMetadataGuess(
+            SeriesSearchText.Trim(),
+            EpisodeSearchText.Trim(),
+            _guess?.SeasonNumber ?? string.Empty,
+            _guess?.EpisodeNumber ?? string.Empty);
+        var previousId = SelectedLocalCandidate?.ImdbId;
+        IsLocalSearchRunning = true;
+        LocalDatasetStatusText = "Lokaler IMDb-Index wird durchsucht...";
+        try
+        {
+            var candidates = await _imdbDatasetSearch.SearchEpisodeCandidatesAsync(
+                localGuess,
+                cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (searchRevision != _localSearchRevision)
+            {
+                return;
+            }
+
+            ReplaceItems(LocalCandidates, candidates);
+            SelectedLocalCandidate = LocalCandidates.FirstOrDefault(candidate =>
+                                         string.Equals(candidate.ImdbId, previousId, StringComparison.OrdinalIgnoreCase))
+                                     ?? LocalCandidates.FirstOrDefault();
+            LocalDatasetStatusText = LocalCandidates.Count == 0
+                ? "Im lokalen IMDb-Index wurde kein ausreichend ähnlicher Treffer gefunden."
+                : $"{LocalCandidates.Count} lokale(r) Kandidat(en). Bitte den passenden Eintrag auswählen.";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ReplaceItems(LocalCandidates, []);
+            SelectedLocalCandidate = null;
+            LocalDatasetStatusText = $"Lokale IMDb-Suche fehlgeschlagen: {ex.Message}";
+        }
+        finally
+        {
+            IsLocalSearchRunning = false;
+        }
+    }
 
     public void MarkSelectedSearchOpened()
     {
@@ -321,37 +419,25 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         RebuildSearchOptions();
     }
 
-    private void RebuildLocalCandidates()
+    private void MarkLocalCandidatesDirty()
     {
+        _localSearchRevision++;
+        ReplaceItems(LocalCandidates, []);
+        SelectedLocalCandidate = null;
         if (_imdbDatasetSearch?.IsAvailable != true)
         {
-            ReplaceItems(LocalCandidates, []);
-            SelectedLocalCandidate = null;
             LocalDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
-            return;
         }
-
-        if (_guess is null || string.IsNullOrWhiteSpace(SeriesSearchText) || string.IsNullOrWhiteSpace(EpisodeSearchText))
+        else if (string.IsNullOrWhiteSpace(SeriesSearchText) || string.IsNullOrWhiteSpace(EpisodeSearchText))
         {
-            ReplaceItems(LocalCandidates, []);
-            SelectedLocalCandidate = null;
             LocalDatasetStatusText = "Für die lokale Suche fehlen Serienname oder Episodentitel.";
-            return;
+        }
+        else
+        {
+            LocalDatasetStatusText = "Suchangaben geändert. Mit „Lokal neu suchen“ den Offlineindex aktualisieren.";
         }
 
-        var localGuess = _guess with
-        {
-            SeriesName = SeriesSearchText.Trim(),
-            EpisodeTitle = EpisodeSearchText.Trim()
-        };
-        var previousId = SelectedLocalCandidate?.ImdbId;
-        ReplaceItems(LocalCandidates, _imdbDatasetSearch.SearchEpisodeCandidates(localGuess));
-        SelectedLocalCandidate = LocalCandidates.FirstOrDefault(candidate =>
-                                     string.Equals(candidate.ImdbId, previousId, StringComparison.OrdinalIgnoreCase))
-                                 ?? LocalCandidates.FirstOrDefault();
-        LocalDatasetStatusText = LocalCandidates.Count == 0
-            ? "Im lokalen IMDb-Index wurde kein ausreichend ähnlicher Treffer gefunden."
-            : $"{LocalCandidates.Count} lokale(r) Kandidat(en). Bitte den passenden Eintrag auswählen.";
+        OnPropertyChanged(nameof(CanRefreshLocalCandidates));
     }
 
     private void SetStructuredSearchField(ref string field, string? value, [CallerMemberName] string? propertyName = null)
@@ -374,7 +460,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged
         }
 
         RebuildSearchOptions();
-        RebuildLocalCandidates();
+        MarkLocalCandidatesDirty();
     }
 
     private void RebuildSearchOptions()
