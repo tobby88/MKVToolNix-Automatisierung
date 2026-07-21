@@ -442,13 +442,34 @@ internal sealed record ImdbEpisodeCandidate(
         ? "Titel exakt"
         : TitleSimilarity >= 22
             ? "Titel ähnlich"
-            : "Nummerntreffer";
+            : TitleSimilarity >= 12
+                ? "Titel unscharf"
+                : "Weitere Folge";
 
     /// <summary>
     /// Nur ein exakter Serien- und Episodentitel ist ohne Benutzerentscheidung stark genug.
     /// Der aufrufende Workflow prüft zusätzlich den Abstand zum zweitbesten Treffer.
     /// </summary>
     public bool IsStrongAutomaticMatch => SeriesTitleMatchedExactly && TitleSimilarity >= 30;
+}
+
+/// <summary>
+/// Eine im Offlineindex gefundene IMDb-Serie mit dem zur Suchanfrage passendsten, bevorzugt deutschen Titel.
+/// </summary>
+internal sealed record ImdbSeriesCandidate(
+    string ImdbId,
+    string DisplayTitle,
+    string PrimaryTitle,
+    int? StartYear,
+    int TitleSimilarity,
+    bool ExactTitleMatch)
+{
+    /// <summary>
+    /// Kompakte Beschriftung für die manuelle Serienauswahl im IMDb-Dialog.
+    /// </summary>
+    public string DisplayText => StartYear is { } year
+        ? $"{DisplayTitle} ({year}) · {ImdbId}"
+        : $"{DisplayTitle} · {ImdbId}";
 }
 
 /// <summary>
@@ -496,6 +517,35 @@ internal sealed class ImdbDatasetSearchService
         int maximumResults = 20,
         CancellationToken cancellationToken = default) =>
         Task.Run(() => SearchEpisodeCandidates(guess, maximumResults), cancellationToken);
+
+    /// <summary>
+    /// Sucht Seriennamen asynchron und berücksichtigt dabei deutsche IMDb-Aliase sowie begrenzte Tippfehler-Toleranz.
+    /// </summary>
+    public Task<IReadOnlyList<ImdbSeriesCandidate>> SearchSeriesCandidatesAsync(
+        string seriesQuery,
+        int maximumResults = 12,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => SearchSeriesCandidates(seriesQuery, maximumResults), cancellationToken);
+
+    /// <summary>
+    /// Lädt alle Episoden einer gewählten Serie oder Staffel und sortiert ähnliche Titel nach vorne.
+    /// Anders als die automatische Zuordnung verwirft diese Browse-Ansicht schwache Treffer nicht.
+    /// </summary>
+    public Task<IReadOnlyList<ImdbEpisodeCandidate>> BrowseSeriesEpisodesAsync(
+        ImdbSeriesCandidate series,
+        string episodeQuery,
+        int? seasonNumber,
+        string? guessedSeasonNumber,
+        string? guessedEpisodeNumber,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(
+            () => BrowseSeriesEpisodes(
+                series,
+                episodeQuery,
+                seasonNumber,
+                guessedSeasonNumber,
+                guessedEpisodeNumber),
+            cancellationToken);
 
     internal static ImdbEpisodeCandidate? SelectAutomaticCandidate(IReadOnlyList<ImdbEpisodeCandidate> candidates)
     {
@@ -546,9 +596,9 @@ internal sealed class ImdbDatasetSearchService
         foreach (var series in seriesCandidates)
         {
             var episodeCatalog = _episodeCatalogCache.GetOrAdd(
-                series.Id,
+                series.ImdbId,
                 parentId => LoadEpisodeCatalog(connection, parentId));
-            results.AddRange(ScoreEpisodes(episodeCatalog, series, guess));
+            results.AddRange(ScoreEpisodes(episodeCatalog, series, guess, includeUnmatched: false));
         }
 
         return results
@@ -560,45 +610,176 @@ internal sealed class ImdbDatasetSearchService
             .ToArray();
     }
 
-    private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(SqliteConnection connection, string normalizedSeries)
+    /// <summary>
+    /// Sucht Serien synchron für automatische Workflows und Tests. Die SQL-Abfrage bleibt durch
+    /// Präfixbereiche indexgestützt; ein kurzer stabiler Präfix liefert zusätzliche Kandidaten für
+    /// die anschließende Fuzzy-Bewertung, ohne die große Alias-Tabelle vollständig zu scannen.
+    /// </summary>
+    public IReadOnlyList<ImdbSeriesCandidate> SearchSeriesCandidates(string seriesQuery, int maximumResults = 12)
     {
-        using var command = connection.CreateCommand();
-        // Getrennte Indexbereiche verhindern, dass SQLite bei einem großen OR/EXISTS-Ausdruck
-        // zuerst Millionen Aliaszeilen mit der Titeltabelle verknüpft. INDEXED BY hält dabei
-        // gerade den Aliaszweig zuverlässig auf dem selektiven normalized_title-Index.
-        command.CommandText =
-            """
-            WITH candidate_ids(id, exact_match) AS (
-                SELECT id, normalized_primary = $query
-                FROM titles
-                WHERE kind = 1 AND normalized_primary >= $query AND normalized_primary < $prefixUpper
-                UNION ALL
-                SELECT id, normalized_original = $query
-                FROM titles
-                WHERE kind = 1 AND normalized_original >= $query AND normalized_original < $prefixUpper
-                UNION ALL
-                SELECT a.title_id, a.normalized_title = $query
-                FROM aliases a INDEXED BY ix_aliases_normalized
-                INNER JOIN titles t ON t.id = a.title_id
-                WHERE t.kind = 1 AND a.normalized_title >= $query AND a.normalized_title < $prefixUpper
-            )
-            SELECT t.id, t.primary_title, MAX(candidate_ids.exact_match) AS exact_match
-            FROM candidate_ids
-            INNER JOIN titles t ON t.id = candidate_ids.id
-            GROUP BY t.id, t.primary_title
-            ORDER BY exact_match DESC, t.primary_title
-            LIMIT 8;
-            """;
-        command.Parameters.AddWithValue("$query", normalizedSeries);
-        command.Parameters.AddWithValue("$prefixUpper", normalizedSeries + '\uffff');
-        using var reader = command.ExecuteReader();
-        var results = new List<ImdbSeriesCandidate>();
-        while (reader.Read())
+        if (!IsAvailable || maximumResults <= 0)
         {
-            results.Add(new ImdbSeriesCandidate(reader.GetString(0), reader.GetString(1), reader.GetInt32(2) == 1));
+            return [];
         }
 
-        return results;
+        var normalizedSeries = EpisodeMetadataMatchingHeuristics.NormalizeText(seriesQuery);
+        if (normalizedSeries.Length < 2)
+        {
+            return [];
+        }
+
+        EnsureCachesMatchCurrentDatabase();
+        using var connection = OpenReadOnlyConnection();
+        return _seriesCandidateCache
+            .GetOrAdd(normalizedSeries, query => LoadSeriesCandidates(connection, query))
+            .Take(maximumResults)
+            .ToArray();
+    }
+
+    private IReadOnlyList<ImdbEpisodeCandidate> BrowseSeriesEpisodes(
+        ImdbSeriesCandidate series,
+        string episodeQuery,
+        int? seasonNumber,
+        string? guessedSeasonNumber,
+        string? guessedEpisodeNumber)
+    {
+        ArgumentNullException.ThrowIfNull(series);
+        if (!IsAvailable)
+        {
+            return [];
+        }
+
+        EnsureCachesMatchCurrentDatabase();
+        using var connection = OpenReadOnlyConnection();
+        var episodeCatalog = _episodeCatalogCache.GetOrAdd(
+            series.ImdbId,
+            parentId => LoadEpisodeCatalog(connection, parentId));
+        var guess = new EpisodeMetadataGuess(
+            series.DisplayTitle,
+            episodeQuery ?? string.Empty,
+            guessedSeasonNumber ?? string.Empty,
+            guessedEpisodeNumber ?? string.Empty);
+        var candidates = ScoreEpisodes(
+                episodeCatalog.Where(episode => seasonNumber is null || episode.SeasonNumber == seasonNumber),
+                series,
+                guess,
+                includeUnmatched: true)
+            .ToArray();
+
+        return string.IsNullOrWhiteSpace(episodeQuery)
+            ? candidates
+                .OrderBy(candidate => candidate.SeasonNumber ?? int.MaxValue)
+                .ThenBy(candidate => candidate.EpisodeNumber ?? int.MaxValue)
+                .ThenBy(candidate => candidate.EpisodeTitle, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : candidates
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.SeasonNumber ?? int.MaxValue)
+                .ThenBy(candidate => candidate.EpisodeNumber ?? int.MaxValue)
+                .ThenBy(candidate => candidate.EpisodeTitle, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+    }
+
+    private SqliteConnection OpenReadOnlyConnection()
+    {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = _databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
+        }.ToString());
+        connection.Open();
+        return connection;
+    }
+
+    private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(SqliteConnection connection, string normalizedSeries)
+    {
+        var rows = new List<ImdbSeriesTitleRow>();
+        foreach (var prefix in BuildSeriesSearchPrefixes(normalizedSeries))
+        {
+            using var command = connection.CreateCommand();
+            // Jede Quelle nutzt einen passenden Präfixindex. Der Aliaszweig liefert den deutschen
+            // Anzeigenamen, während Primär- und Originaltitel weiterhin englische Suchtexte finden.
+            command.CommandText =
+                """
+                WITH candidate_titles(id, title, normalized_title, source_priority) AS (
+                    SELECT id, primary_title, normalized_primary, 1
+                    FROM titles
+                    WHERE kind = 1 AND normalized_primary >= $prefix AND normalized_primary < $prefixUpper
+                    UNION ALL
+                    SELECT id, original_title, normalized_original, 0
+                    FROM titles
+                    WHERE kind = 1 AND normalized_original >= $prefix AND normalized_original < $prefixUpper
+                    UNION ALL
+                    SELECT a.title_id, a.title, a.normalized_title, 2
+                    FROM aliases a INDEXED BY ix_aliases_normalized
+                    INNER JOIN titles t ON t.id = a.title_id
+                    WHERE t.kind = 1 AND a.normalized_title >= $prefix AND a.normalized_title < $prefixUpper
+                )
+                SELECT candidate_titles.id,
+                       candidate_titles.title,
+                       candidate_titles.normalized_title,
+                       candidate_titles.source_priority,
+                       titles.primary_title,
+                       titles.start_year
+                FROM candidate_titles
+                INNER JOIN titles ON titles.id = candidate_titles.id
+                ORDER BY candidate_titles.normalized_title
+                LIMIT 256;
+                """;
+            command.Parameters.AddWithValue("$prefix", prefix);
+            command.Parameters.AddWithValue("$prefixUpper", prefix + '\uffff');
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(new ImdbSeriesTitleRow(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetInt32(3),
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetInt32(5)));
+            }
+        }
+
+        var rankedCandidates = rows
+            .GroupBy(row => row.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .Select(row => new
+                {
+                    Row = row,
+                    Similarity = CalculateFuzzyTitleSimilarity(normalizedSeries, row.NormalizedTitle),
+                    Exact = string.Equals(normalizedSeries, row.NormalizedTitle, StringComparison.Ordinal)
+                })
+                .OrderByDescending(candidate => candidate.Exact)
+                .ThenByDescending(candidate => candidate.Similarity)
+                .ThenByDescending(candidate => candidate.Row.SourcePriority)
+                .ThenBy(candidate => candidate.Row.Title, StringComparer.OrdinalIgnoreCase)
+                .First())
+            .Select(candidate => new ImdbSeriesCandidate(
+                candidate.Row.Id,
+                candidate.Row.Title,
+                candidate.Row.PrimaryTitle,
+                candidate.Row.StartYear,
+                candidate.Similarity,
+                candidate.Exact))
+            .OrderByDescending(candidate => candidate.ExactTitleMatch)
+            .ThenByDescending(candidate => candidate.TitleSimilarity)
+            .ThenBy(candidate => candidate.DisplayTitle, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var exactCandidates = rankedCandidates.Where(candidate => candidate.ExactTitleMatch).ToArray();
+        if (exactCandidates.Length > 0)
+        {
+            return exactCandidates.Take(12).ToArray();
+        }
+
+        var bestSimilarity = rankedCandidates.FirstOrDefault()?.TitleSimilarity ?? 0;
+        return rankedCandidates
+            .Where(candidate => candidate.TitleSimilarity >= 12
+                && candidate.TitleSimilarity >= bestSimilarity - 6)
+            .Take(12)
+            .ToArray();
     }
 
     private static IReadOnlyList<ImdbEpisodeCatalogEntry> LoadEpisodeCatalog(
@@ -647,38 +828,140 @@ internal sealed class ImdbDatasetSearchService
     }
 
     private static IEnumerable<ImdbEpisodeCandidate> ScoreEpisodes(
-        IReadOnlyList<ImdbEpisodeCatalogEntry> episodes,
+        IEnumerable<ImdbEpisodeCatalogEntry> episodes,
         ImdbSeriesCandidate series,
-        EpisodeMetadataGuess guess)
+        EpisodeMetadataGuess guess,
+        bool includeUnmatched)
     {
         foreach (var episode in episodes)
         {
-            var titleSimilarity = episode.Titles
-                .Append(episode.PrimaryTitle)
-                .Select(title => EpisodeMetadataMatchingHeuristics.CalculateTitleSimilarity(guess.EpisodeTitle, title))
-                .DefaultIfEmpty(0)
-                .Max();
+            var titleCandidates = episode.Titles
+                .Select(title => new ImdbEpisodeTitleCandidate(title, IsLocalizedAlias: true))
+                .Append(new ImdbEpisodeTitleCandidate(episode.PrimaryTitle, IsLocalizedAlias: false))
+                .Select(title => new
+                {
+                    title.Title,
+                    title.IsLocalizedAlias,
+                    Similarity = CalculateFuzzyTitleSimilarity(guess.EpisodeTitle, title.Title)
+                })
+                .OrderByDescending(title => title.Similarity)
+                .ThenByDescending(title => title.IsLocalizedAlias)
+                .ThenBy(title => title.Title, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var preferredTitle = string.IsNullOrWhiteSpace(guess.EpisodeTitle)
+                ? titleCandidates
+                    .OrderByDescending(title => title.IsLocalizedAlias)
+                    .ThenBy(title => title.Title, StringComparer.OrdinalIgnoreCase)
+                    .First()
+                : titleCandidates[0];
+            var titleSimilarity = preferredTitle.Similarity;
             var seasonMatched = int.TryParse(guess.SeasonNumber, out var season) && episode.SeasonNumber == season;
             var episodeMatched = int.TryParse(guess.EpisodeNumber, out var number) && episode.EpisodeNumber == number;
-            if (titleSimilarity < 22 && !(seasonMatched && episodeMatched))
+            if (!includeUnmatched && titleSimilarity < 12 && !(seasonMatched && episodeMatched))
             {
                 continue;
             }
 
             var score = titleSimilarity
-                + (series.ExactTitleMatch ? 35 : 12)
+                + (series.ExactTitleMatch ? 35 : Math.Max(8, series.TitleSimilarity))
                 + (seasonMatched ? 8 : 0)
                 + (episodeMatched ? 12 : 0);
             yield return new ImdbEpisodeCandidate(
                 episode.Id,
-                series.Title,
-                episode.PrimaryTitle,
+                series.DisplayTitle,
+                preferredTitle.Title,
                 episode.SeasonNumber,
                 episode.EpisodeNumber,
                 score,
                 titleSimilarity,
                 series.ExactTitleMatch);
         }
+    }
+
+    private static IReadOnlyList<string> BuildSeriesSearchPrefixes(string normalizedSeries)
+    {
+        var prefixes = new List<string> { normalizedSeries };
+        if (normalizedSeries.Length >= 4)
+        {
+            var stablePrefix = normalizedSeries[..Math.Min(4, normalizedSeries.Length)].TrimEnd();
+            if (stablePrefix.Length >= 2 && !string.Equals(stablePrefix, normalizedSeries, StringComparison.Ordinal))
+            {
+                prefixes.Add(stablePrefix);
+            }
+        }
+
+        return prefixes;
+    }
+
+    /// <summary>
+    /// Ergänzt die etablierte Tokenbewertung um eine zurückhaltende Damerau-Levenshtein-Komponente.
+    /// Tippfehler werden damit sichtbar, erreichen aber nie die Schwelle eines automatischen exakten Treffers.
+    /// </summary>
+    private static int CalculateFuzzyTitleSimilarity(string left, string right)
+    {
+        var establishedScore = EpisodeMetadataMatchingHeuristics.CalculateTitleSimilarity(left, right);
+        if (establishedScore >= 22)
+        {
+            return establishedScore;
+        }
+
+        var normalizedLeft = EpisodeMetadataMatchingHeuristics.NormalizeText(left);
+        var normalizedRight = EpisodeMetadataMatchingHeuristics.NormalizeText(right);
+        if (normalizedLeft.Length < 4 || normalizedRight.Length < 4)
+        {
+            return establishedScore;
+        }
+
+        var maximumLength = Math.Max(normalizedLeft.Length, normalizedRight.Length);
+        var distance = CalculateDamerauLevenshteinDistance(normalizedLeft, normalizedRight);
+        var ratio = 1d - (distance / (double)maximumLength);
+        var fuzzyScore = ratio switch
+        {
+            >= 0.90d => 20,
+            >= 0.80d => 16,
+            >= 0.70d => 12,
+            _ => 0
+        };
+        return Math.Max(establishedScore, fuzzyScore);
+    }
+
+    private static int CalculateDamerauLevenshteinDistance(string left, string right)
+    {
+        var distances = new int[left.Length + 1, right.Length + 1];
+        for (var leftIndex = 0; leftIndex <= left.Length; leftIndex++)
+        {
+            distances[leftIndex, 0] = leftIndex;
+        }
+
+        for (var rightIndex = 0; rightIndex <= right.Length; rightIndex++)
+        {
+            distances[0, rightIndex] = rightIndex;
+        }
+
+        for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
+        {
+            for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
+            {
+                var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
+                distances[leftIndex, rightIndex] = Math.Min(
+                    Math.Min(
+                        distances[leftIndex - 1, rightIndex] + 1,
+                        distances[leftIndex, rightIndex - 1] + 1),
+                    distances[leftIndex - 1, rightIndex - 1] + substitutionCost);
+
+                if (leftIndex > 1
+                    && rightIndex > 1
+                    && left[leftIndex - 1] == right[rightIndex - 2]
+                    && left[leftIndex - 2] == right[rightIndex - 1])
+                {
+                    distances[leftIndex, rightIndex] = Math.Min(
+                        distances[leftIndex, rightIndex],
+                        distances[leftIndex - 2, rightIndex - 2] + 1);
+                }
+            }
+        }
+
+        return distances[left.Length, right.Length];
     }
 
     private void EnsureCachesMatchCurrentDatabase()
@@ -703,14 +986,22 @@ internal sealed class ImdbDatasetSearchService
         }
     }
 
-    private sealed record ImdbSeriesCandidate(string Id, string Title, bool ExactTitleMatch);
-
     private sealed record ImdbEpisodeCatalogEntry(
         string Id,
         string PrimaryTitle,
         int? SeasonNumber,
         int? EpisodeNumber,
         IReadOnlyList<string> Titles);
+
+    private sealed record ImdbEpisodeTitleCandidate(string Title, bool IsLocalizedAlias);
+
+    private sealed record ImdbSeriesTitleRow(
+        string Id,
+        string Title,
+        string NormalizedTitle,
+        int SourcePriority,
+        string PrimaryTitle,
+        int? StartYear);
 
     private sealed record ImdbDatabaseStamp(long Length, long LastWriteTimeUtcTicks);
 

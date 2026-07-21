@@ -84,9 +84,9 @@ public partial class ImdbLookupWindow : Window
         _viewModel.ApplySelectedLocalCandidate();
     }
 
-    private async void RefreshLocalCandidatesButton_Click(object sender, RoutedEventArgs e)
+    private void LocalCandidatesListView_OnMouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        await _viewModel.RefreshLocalCandidatesAsync(_localSearchCancellationSource.Token);
+        _viewModel.ApplySelectedLocalCandidate();
     }
 
     private async void Window_OnLoaded(object sender, RoutedEventArgs e)
@@ -98,6 +98,7 @@ public partial class ImdbLookupWindow : Window
     {
         _localSearchCancellationSource.Cancel();
         _localSearchCancellationSource.Dispose();
+        _viewModel.Dispose();
     }
 
     private void Window_OnActivated(object? sender, EventArgs e)

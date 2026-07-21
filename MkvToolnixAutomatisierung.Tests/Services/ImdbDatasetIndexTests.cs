@@ -35,10 +35,10 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             "revision-1",
             progress);
 
-        Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
-        Assert.Equal(1, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
-        Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
-        Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE kind = 2;"));
+        Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
+        Assert.Equal(3, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
+        Assert.Equal(5, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+        Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt2000001';"));
         Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE kind = 1;"));
         Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
         Assert.Equal(
@@ -68,6 +68,28 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal("tt2000001", seriesAliasCandidate.ImdbId);
         Assert.True(seriesAliasCandidate.SeriesTitleMatchedExactly);
 
+        var searchService = new ImdbDatasetSearchService(databasePath);
+        var localizedSeries = Assert.Single(searchService.SearchSeriesCandidates("SOKO Leipzig"));
+        Assert.Equal("SOKO Leipzig", localizedSeries.DisplayTitle);
+        Assert.Equal("Leipzig Homicide", localizedSeries.PrimaryTitle);
+        Assert.True(localizedSeries.ExactTitleMatch);
+
+        var fuzzySeries = Assert.Single(searchService.SearchSeriesCandidates("SOKO Leipzgi"));
+        Assert.Equal("SOKO Leipzig", fuzzySeries.DisplayTitle);
+        Assert.False(fuzzySeries.ExactTitleMatch);
+        Assert.True(fuzzySeries.TitleSimilarity >= 16);
+
+        var browsedEpisodes = await searchService.BrowseSeriesEpisodesAsync(
+            localizedSeries,
+            "Dunkle Warheit",
+            seasonNumber: null,
+            guessedSeasonNumber: "01",
+            guessedEpisodeNumber: "01");
+        Assert.Equal(2, browsedEpisodes.Count);
+        Assert.Equal("Dunkle Wahrheit", browsedEpisodes[0].EpisodeTitle);
+        Assert.Equal("Titel unscharf", browsedEpisodes[0].MatchQualityText);
+        Assert.Contains(browsedEpisodes, episode => episode.EpisodeTitle == "Zweite Folge" && episode.SeasonNumber == 2);
+
         var lookupViewModel = new ImdbLookupWindowViewModel(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02"),
             currentImdbId: null,
@@ -78,12 +100,10 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.True(lookupViewModel.ApplySelectedLocalCandidate());
         Assert.Equal("tt2000001", lookupViewModel.ImdbInput);
 
-        lookupViewModel.EpisodeSearchText = "Anderer Titel";
-        Assert.Empty(lookupViewModel.LocalCandidates);
-        Assert.Contains("Lokal neu suchen", lookupViewModel.LocalDatasetStatusText, StringComparison.Ordinal);
-        lookupViewModel.EpisodeSearchText = "Die Wahrheit im Dunkeln";
-        await lookupViewModel.RefreshLocalCandidatesAsync();
+        lookupViewModel.EpisodeSearchText = "Die Warheit im Dunkeln";
+        await lookupViewModel.WaitForPendingLocalSearchAsync();
         Assert.Single(lookupViewModel.LocalCandidates);
+        Assert.Equal("Die Wahrheit im Dunkeln", lookupViewModel.LocalCandidates[0].EpisodeTitle);
 
         var manuallyEnteredViewModel = new ImdbLookupWindowViewModel(
             guess: null,
@@ -93,8 +113,25 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             SeriesSearchText = "Der Alte",
             EpisodeSearchText = "Die Wahrheit im Dunkeln"
         };
-        await manuallyEnteredViewModel.RefreshLocalCandidatesAsync();
+        await manuallyEnteredViewModel.WaitForPendingLocalSearchAsync();
         Assert.Single(manuallyEnteredViewModel.LocalCandidates);
+
+        var browsableViewModel = new ImdbLookupWindowViewModel(
+            new EpisodeMetadataGuess("SOKO Leipzig", "Dunkle Warheit", "01", "01"),
+            currentImdbId: null,
+            searchService);
+        await browsableViewModel.RefreshLocalCandidatesAsync();
+        Assert.Equal("SOKO Leipzig", browsableViewModel.SelectedLocalSeries?.DisplayTitle);
+        Assert.Equal(new int?[] { null, 1, 2 }, browsableViewModel.SeasonFilters.Select(filter => filter.SeasonNumber));
+        Assert.Equal(2, browsableViewModel.LocalCandidates.Count);
+        browsableViewModel.SelectedSeasonFilter = browsableViewModel.SeasonFilters.Single(filter => filter.SeasonNumber == 2);
+        Assert.Single(browsableViewModel.LocalCandidates);
+        Assert.Equal("Zweite Folge", browsableViewModel.LocalCandidates[0].EpisodeTitle);
+
+        browsableViewModel.SeriesSearchText = "SOKO Leipzgi";
+        await browsableViewModel.WaitForPendingLocalSearchAsync();
+        Assert.Equal("SOKO Leipzig", browsableViewModel.SelectedLocalSeries?.DisplayTitle);
+        Assert.False(browsableViewModel.IsLocalSearchRunning);
 
         var importReports = progress.Values.Where(value => !value.IsFinalizing).ToArray();
         Assert.Equal([1, 2, 3], importReports.Select(value => value.DatasetNumber).Distinct().ToArray());
@@ -293,14 +330,22 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             "tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres\n"
             + "tt1000001\ttvSeries\tDer Alte\tDer Alte\t0\t1977\t\\N\t60\tCrime\n"
             + "tt2000001\ttvEpisode\tTruth in the Dark\tTruth in the Dark\t0\t2026\t\\N\t60\tCrime\n"
+            + "tt1000002\ttvSeries\tLeipzig Homicide\tSOKO Leipzig\t0\t2001\t\\N\t45\tCrime\n"
+            + "tt2000002\ttvEpisode\tDark Truth\tDark Truth\t0\t2025\t\\N\t45\tCrime\n"
+            + "tt2000003\ttvEpisode\tSecond Episode\tSecond Episode\t0\t2025\t\\N\t45\tCrime\n"
             + "tt3000001\tmovie\tIgnored Movie\tIgnored Movie\t0\t2026\t\\N\t90\tDrama\n"),
         ["title.episode.tsv.gz"] = Gzip(
             "tconst\tparentTconst\tseasonNumber\tepisodeNumber\n"
-            + "tt2000001\t" + "tt1000001\t55\t2\n"),
+            + "tt2000001\ttt1000001\t55\t2\n"
+            + "tt2000002\ttt1000002\t1\t1\n"
+            + "tt2000003\ttt1000002\t2\t1\n"),
         ["title.akas.tsv.gz"] = Gzip(
             "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n"
             + "tt1000001\t1\tDer alte Kommissar\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000001\t1\tDie Wahrheit im Dunkeln\tDE\tde\timdbDisplay\t\\N\t0\n"
+            + "tt1000002\t1\tSOKO Leipzig\tDE\tde\timdbDisplay\t\\N\t0\n"
+            + "tt2000002\t1\tDunkle Wahrheit\tDE\tde\timdbDisplay\t\\N\t0\n"
+            + "tt2000003\t1\tZweite Folge\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000001\t2\tLa vérité\tFR\tfr\timdbDisplay\t\\N\t0\n")
     };
 

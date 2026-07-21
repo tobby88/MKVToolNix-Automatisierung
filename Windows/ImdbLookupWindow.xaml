@@ -2,9 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="IMDb-Zuordnung"
-        Width="820"
-        Height="780"
-        MinWidth="720"
+        Width="980"
+        Height="800"
+        MinWidth="820"
         MinHeight="680"
         Activated="Window_OnActivated"
         Loaded="Window_OnLoaded"
@@ -13,8 +13,8 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -32,40 +32,82 @@
             </StackPanel>
         </Border>
 
-        <GroupBox Grid.Row="1" Header="Lokalen IMDb-Index durchsuchen">
+        <GroupBox Grid.Row="1" Header="IMDb-Offlineindex">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <ListView Grid.Row="0"
-                          MaxHeight="150"
+
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Margin="0,6,10,6" VerticalAlignment="Center" Text="Serie" />
+                    <TextBox x:Name="LocalSeriesSearchTextBox"
+                             Grid.Column="1"
+                             Margin="0,2,16,2"
+                             Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Die lokale Seriensuche aktualisiert sich nach kurzer Eingabepause automatisch." />
+                    <TextBlock Grid.Column="2" Margin="0,6,10,6" VerticalAlignment="Center" Text="Episodentitel" />
+                    <TextBox x:Name="LocalEpisodeSearchTextBox"
+                             Grid.Column="3"
+                             Margin="0,2"
+                             Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Filtert und sortiert alle Folgen der ausgewählten Serie unscharf nach Titel." />
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="220" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Margin="0,6,10,6" VerticalAlignment="Center" Text="IMDb-Serie" />
+                    <ComboBox x:Name="LocalSeriesCandidatesComboBox"
+                              Grid.Column="1"
+                              Margin="0,2,16,2"
+                              ItemsSource="{Binding LocalSeriesCandidates}"
+                              SelectedItem="{Binding SelectedLocalSeries, Mode=TwoWay}"
+                              DisplayMemberPath="DisplayText"
+                              ToolTip="Zeigt bevorzugt den zur Suche passenden deutschen IMDb-Alias." />
+                    <TextBlock Grid.Column="2" Margin="0,6,10,6" VerticalAlignment="Center" Text="Umfang" />
+                    <ComboBox x:Name="SeasonFilterComboBox"
+                              Grid.Column="3"
+                              Margin="0,2"
+                              ItemsSource="{Binding SeasonFilters}"
+                              SelectedItem="{Binding SelectedSeasonFilter, Mode=TwoWay}"
+                              DisplayMemberPath="DisplayText" />
+                </Grid>
+
+                <ListView x:Name="LocalCandidatesListView"
+                          Grid.Row="2"
                           ItemsSource="{Binding LocalCandidates}"
-                          SelectedItem="{Binding SelectedLocalCandidate, Mode=TwoWay}">
+                          SelectedItem="{Binding SelectedLocalCandidate, Mode=TwoWay}"
+                          MouseDoubleClick="LocalCandidatesListView_OnMouseDoubleClick">
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Width="105" Header="IMDb-ID" DisplayMemberBinding="{Binding ImdbId}" />
-                            <GridViewColumn Width="150" Header="Serie" DisplayMemberBinding="{Binding SeriesTitle}" />
-                            <GridViewColumn Width="270" Header="Episode" DisplayMemberBinding="{Binding EpisodeTitle}" />
+                            <GridViewColumn Width="190" Header="Serie" DisplayMemberBinding="{Binding SeriesTitle}" />
+                            <GridViewColumn Width="360" Header="Episode" DisplayMemberBinding="{Binding EpisodeTitle}" />
                             <GridViewColumn Width="85" Header="IMDb S/E" DisplayMemberBinding="{Binding EpisodeCode}" />
-                            <GridViewColumn Width="95" Header="Treffer" DisplayMemberBinding="{Binding MatchQualityText}" />
+                            <GridViewColumn Width="110" Header="Ähnlichkeit" DisplayMemberBinding="{Binding MatchQualityText}" />
                         </GridView>
                     </ListView.View>
                 </ListView>
-                <DockPanel Grid.Row="1" Margin="0,8,0,0" LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right" Margin="12,0,0,0" Orientation="Horizontal">
-                        <Button x:Name="RefreshLocalCandidatesButton"
-                                Padding="12,6"
-                                Click="RefreshLocalCandidatesButton_Click"
-                                Content="Lokal neu suchen"
-                                IsEnabled="{Binding CanRefreshLocalCandidates}"
-                                ToolTip="Durchsucht den Offlineindex erneut mit dem unten eingetragenen Seriennamen und Episodentitel." />
-                        <Button Margin="8,0,0,0"
-                                Padding="12,6"
-                                Click="ApplyLocalCandidateButton_Click"
-                                Content="Kandidat übernehmen"
-                                IsEnabled="{Binding CanApplyLocalCandidate}" />
-                    </StackPanel>
+                <DockPanel Grid.Row="3" Margin="0,8,0,0" LastChildFill="True">
+                    <Button DockPanel.Dock="Right"
+                            Margin="12,0,0,0"
+                            Padding="12,6"
+                            Click="ApplyLocalCandidateButton_Click"
+                            Content="Ausgewählte Episode übernehmen"
+                            IsEnabled="{Binding CanApplyLocalCandidate}" />
                     <TextBlock VerticalAlignment="Center"
                                Foreground="#4B5563"
                                Text="{Binding LocalDatasetStatusText}"
@@ -74,11 +116,9 @@
             </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="Suchangaben und IMDb im Browser suchen">
+        <GroupBox Grid.Row="2" Margin="0,12,0,0" Header="IMDb im Browser suchen (Fallback)">
             <Grid Margin="8">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
@@ -87,14 +127,10 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Serie" />
-                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4" Text="{Binding SeriesSearchText, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Episodentitel" />
-                <TextBox Grid.Row="1" Grid.Column="1" Margin="0,4" Text="{Binding EpisodeSearchText, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Freier Suchtext" />
-                <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4,0,8" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,8,12,8" VerticalAlignment="Center" Text="Freier Suchtext" />
+                <TextBox Grid.Row="0" Grid.Column="1" Margin="0,4,0,8" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-                <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
+                <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" MaxHeight="150">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />

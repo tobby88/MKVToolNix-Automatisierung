@@ -9,7 +9,7 @@ namespace MkvToolnixAutomatisierung.Tests.Windows;
 public sealed class ImdbLookupWindowTests
 {
     [Fact]
-    public async Task Window_OffersExplicitLocalRefreshForEditedSearchFields()
+    public async Task Window_OffersLiveSeriesSeasonAndEpisodeBrowser()
     {
         await WpfTestHost.RunAsync(async () =>
         {
@@ -21,10 +21,18 @@ public sealed class ImdbLookupWindowTests
                 window.Show();
                 await WpfTestHost.WaitForIdleAsync();
 
-                var refreshButton = Assert.IsType<Button>(window.FindName("RefreshLocalCandidatesButton"));
-                Assert.Equal("Lokal neu suchen", refreshButton.Content);
-                Assert.False(refreshButton.IsEnabled);
-                Assert.Contains("Offlineindex", refreshButton.ToolTip?.ToString(), StringComparison.Ordinal);
+                var seriesSearch = Assert.IsType<TextBox>(window.FindName("LocalSeriesSearchTextBox"));
+                var episodeSearch = Assert.IsType<TextBox>(window.FindName("LocalEpisodeSearchTextBox"));
+                var seriesCandidates = Assert.IsType<ComboBox>(window.FindName("LocalSeriesCandidatesComboBox"));
+                var seasonFilter = Assert.IsType<ComboBox>(window.FindName("SeasonFilterComboBox"));
+                var episodeCandidates = Assert.IsType<ListView>(window.FindName("LocalCandidatesListView"));
+
+                Assert.Contains("automatisch", seriesSearch.ToolTip?.ToString(), StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("unscharf", episodeSearch.ToolTip?.ToString(), StringComparison.OrdinalIgnoreCase);
+                Assert.Null(window.FindName("RefreshLocalCandidatesButton"));
+                Assert.NotNull(seriesCandidates.ItemsSource);
+                Assert.NotNull(seasonFilter.ItemsSource);
+                Assert.NotNull(episodeCandidates.ItemsSource);
             }
             finally
             {
