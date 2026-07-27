@@ -21,6 +21,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         var usesDirectorySeriesFallback = TryExtractSeriesFromDirectoryTitle(
             filePath,
+            fileNameParts.SeriesName,
             textMetadata.Topic,
             textMetadata.Title,
             out var directorySeriesName,
@@ -278,6 +279,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     // stabilere Reihenidentität für Quellen verschiedener Sender.
     private static bool TryExtractSeriesFromDirectoryTitle(
         string filePath,
+        string parsedSeriesName,
         string? rawTopic,
         string? rawTitle,
         out string seriesName,
@@ -286,8 +288,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         seriesName = string.Empty;
         titleDetails = new TitleDetails("Unbekannter Titel", "xx", "xx");
 
+        var hasGenericTopic = IsGenericMetadataTopic(rawTopic);
         if (string.IsNullOrWhiteSpace(rawTitle)
-            || (!IsGenericMetadataTopic(rawTopic)
+            || (!hasGenericTopic
                 && !string.Equals(
                     BuildSeriesIdentityKey(rawTopic ?? string.Empty),
                     BuildTitleIdentityKey(rawTitle),
@@ -303,27 +306,39 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var normalizedSeriesName = NormalizeSeriesName(directoryName);
         var normalizedTitle = NormalizeEpisodeTitle(rawTitle);
         if (string.IsNullOrWhiteSpace(normalizedSeriesName)
-            || IsGenericMetadataTopic(normalizedSeriesName)
-            || normalizedTitle.Length <= normalizedSeriesName.Length
-            || !normalizedTitle.StartsWith(normalizedSeriesName, StringComparison.OrdinalIgnoreCase))
+            || IsGenericMetadataTopic(normalizedSeriesName))
         {
             return false;
         }
 
-        var titleRemainder = normalizedTitle[normalizedSeriesName.Length..];
-        if (!Regex.IsMatch(titleRemainder, @"^\s+|^\s*[-:_]\s*"))
+        if (normalizedTitle.Length > normalizedSeriesName.Length
+            && normalizedTitle.StartsWith(normalizedSeriesName, StringComparison.OrdinalIgnoreCase))
         {
-            return false;
+            var titleRemainder = normalizedTitle[normalizedSeriesName.Length..];
+            if (Regex.IsMatch(titleRemainder, @"^\s+|^\s*[-:_]\s*"))
+            {
+                titleRemainder = Regex.Replace(titleRemainder, @"^\s*[-:_]?\s*", string.Empty);
+                if (!string.IsNullOrWhiteSpace(titleRemainder))
+                {
+                    seriesName = normalizedSeriesName;
+                    titleDetails = ParseTitleDetails(titleRemainder);
+                    return true;
+                }
+            }
         }
 
-        titleRemainder = Regex.Replace(titleRemainder, @"^\s*[-:_]?\s*", string.Empty);
-        if (string.IsNullOrWhiteSpace(titleRemainder))
+        // Bei "Filme-Die Mucklas" enthält weder Rubrik noch Dateiname eine Reihe.
+        // Nach dem Einsortieren ist dann der Serienordner die einzige stabile Quelle.
+        if (!hasGenericTopic
+            || (!string.IsNullOrWhiteSpace(parsedSeriesName)
+                && !string.Equals(parsedSeriesName, "Unbekannte Serie", StringComparison.OrdinalIgnoreCase)
+                && !IsGenericMetadataTopic(parsedSeriesName)))
         {
             return false;
         }
 
         seriesName = normalizedSeriesName;
-        titleDetails = ParseTitleDetails(titleRemainder);
+        titleDetails = ParseTitleDetails(normalizedTitle);
         return true;
     }
 

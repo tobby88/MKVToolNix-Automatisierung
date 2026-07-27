@@ -255,6 +255,15 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return true;
         }
 
+        if (!HasKnownEpisodeCode(left.Identity)
+            && !HasKnownEpisodeCode(right.Identity)
+            && HaveSameSeries(left.Identity, right.Identity)
+            && HaveMatchingAbbreviatedMovieTitles(left, right)
+            && HaveCompatibleDeclaredDurations(left.TextMetadata.Duration, right.TextMetadata.Duration))
+        {
+            return true;
+        }
+
         if (!HaveSameSeriesAndTitle(left.Identity, right.Identity)
             || !HasAmbiguousMediathekEpisodeCodePair(left.Identity, right.Identity))
         {
@@ -284,14 +293,48 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
     private static bool HaveSameSeriesAndTitle(EpisodeIdentity left, EpisodeIdentity right)
     {
-        return string.Equals(BuildSeriesIdentityKey(left.SeriesName), BuildSeriesIdentityKey(right.SeriesName), StringComparison.Ordinal)
+        return HaveSameSeries(left, right)
             && string.Equals(BuildTitleIdentityKey(left.Title), BuildTitleIdentityKey(right.Title), StringComparison.Ordinal);
     }
 
     private static bool HaveSameSeriesAndLooselyEquivalentTitle(EpisodeIdentity left, EpisodeIdentity right)
     {
-        return string.Equals(BuildSeriesIdentityKey(left.SeriesName), BuildSeriesIdentityKey(right.SeriesName), StringComparison.Ordinal)
+        return HaveSameSeries(left, right)
             && string.Equals(BuildLooseTitleIdentityKey(left.Title), BuildLooseTitleIdentityKey(right.Title), StringComparison.Ordinal);
+    }
+
+    private static bool HaveSameSeries(EpisodeIdentity left, EpisodeIdentity right)
+    {
+        return string.Equals(
+            BuildSeriesIdentityKey(left.SeriesName),
+            BuildSeriesIdentityKey(right.SeriesName),
+            StringComparison.Ordinal);
+    }
+
+    private static bool HaveMatchingAbbreviatedMovieTitles(CandidateSeed left, CandidateSeed right)
+    {
+        if (!IsGenericMetadataTopic(left.TextMetadata.Topic)
+            || !IsGenericMetadataTopic(right.TextMetadata.Topic))
+        {
+            return false;
+        }
+
+        var leftTitle = BuildTitleIdentityKey(left.Identity.Title);
+        var rightTitle = BuildTitleIdentityKey(right.Identity.Title);
+        return IsEllipsisContinuation(leftTitle, rightTitle)
+            || IsEllipsisContinuation(rightTitle, leftTitle);
+    }
+
+    private static bool IsEllipsisContinuation(string shortTitle, string longTitle)
+    {
+        if (shortTitle.Length < 4
+            || longTitle.Length <= shortTitle.Length
+            || !longTitle.StartsWith(shortTitle, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(longTitle[shortTitle.Length..], @"^(?:\.{3}|…)(?:\s|$)");
     }
 
     private static string BuildLooseTitleIdentityKey(string title)

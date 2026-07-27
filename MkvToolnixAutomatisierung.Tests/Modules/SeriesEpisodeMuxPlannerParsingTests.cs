@@ -398,6 +398,71 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_MergesMucklasShortAndExtendedMovieTitles()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+        var sourceDirectory = Path.Combine(tempDirectory, "Pettersson und Findus");
+        Directory.CreateDirectory(sourceDirectory);
+
+        try
+        {
+            var shortNormalPath = CreateMovieSource(
+                sourceDirectory,
+                "Filme-Die Mucklas-0225295181.mp4",
+                "Die Mucklas");
+            var extendedNormalPath = CreateMovieSource(
+                sourceDirectory,
+                "Filme-Die Mucklas... und wie sie zu Pettersson und Findus kamen-1864316966.mp4",
+                "Die Mucklas... und wie sie zu Pettersson und Findus kamen");
+            var shortAudioDescriptionPath = CreateMovieSource(
+                sourceDirectory,
+                "Filme-Die Mucklas (Audiodeskription)-1708469321.mp4",
+                "Die Mucklas (Audiodeskription)");
+            var extendedAudioDescriptionPath = CreateMovieSource(
+                sourceDirectory,
+                "Filme-Die Mucklas... und wie sie zu Pettersson und Findus kamen (Hörfassung)-0947476190.mp4",
+                "Die Mucklas... und wie sie zu Pettersson und Findus kamen (Hörfassung)");
+
+            var context = planner.CreateDirectoryDetectionContext(sourceDirectory);
+
+            var mainVideoPath = Assert.Single(context.MainVideoFiles);
+            var selectedSeed = context.GetSelectedSeed(mainVideoPath);
+            Assert.Equal("Pettersson und Findus", selectedSeed.Identity.SeriesName);
+
+            var episodeSeeds = context.GetEpisodeSeeds(selectedSeed);
+            Assert.Contains(
+                episodeSeeds.NormalVideoSeeds,
+                seed => string.Equals(seed.FilePath, shortNormalPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                episodeSeeds.NormalVideoSeeds,
+                seed => string.Equals(seed.FilePath, extendedNormalPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                episodeSeeds.AudioDescriptionSeeds,
+                seed => string.Equals(seed.FilePath, shortAudioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                episodeSeeds.AudioDescriptionSeeds,
+                seed => string.Equals(seed.FilePath, extendedAudioDescriptionPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+
+        static string CreateMovieSource(string directory, string fileName, string title)
+        {
+            var path = Path.Combine(directory, fileName);
+            CreateEmptyFile(path);
+            CreateCompanionText(
+                Path.ChangeExtension(path, ".txt"),
+                topic: "Filme",
+                title: title,
+                duration: "01:13:57");
+            return path;
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_MergesSpecialLabels_WhenTitleIsEquivalent()
     {
         var planner = CreatePlanner();
