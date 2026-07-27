@@ -19,8 +19,21 @@ public sealed partial class SeriesEpisodeMuxPlanner
             fileNameParts = fileNameParts with { SeriesName = titleSeriesName };
         }
 
+        var usesDirectorySeriesFallback = TryExtractSeriesFromDirectoryTitle(
+            filePath,
+            textMetadata.Topic,
+            textMetadata.Title,
+            out var directorySeriesName,
+            out var directoryTitleParts);
+        if (usesDirectorySeriesFallback)
+        {
+            txtTitleParts = directoryTitleParts;
+            fileNameParts = fileNameParts with { SeriesName = directorySeriesName };
+        }
+
         var hasSpecificTextTopic = !string.IsNullOrWhiteSpace(textMetadata.Topic)
-            && !IsGenericMetadataTopic(textMetadata.Topic);
+            && !IsGenericMetadataTopic(textMetadata.Topic)
+            && !usesDirectorySeriesFallback;
         var seriesName = hasSpecificTextTopic
             ? NormalizeSeriesName(textMetadata.Topic!)
             : NormalizeSeriesName(fileNameParts.SeriesName);
@@ -250,7 +263,68 @@ public sealed partial class SeriesEpisodeMuxPlanner
             return false;
         }
 
-        return BuildSeriesIdentityKey(topic) is "filme" or "film" or "backstage" or "der samstagskrimi" or "hallo deutschland" or "riverboat";
+        return BuildSeriesIdentityKey(topic) is
+            "filme" or
+            "film" or
+            "film & fiktion" or
+            "backstage" or
+            "der samstagskrimi" or
+            "hallo deutschland" or
+            "riverboat";
+    }
+
+    // Filmrubriken enthalten nicht immer einen auswertbaren "Serie: Titel"-Aufbau.
+    // Wenn der Ordnername aber ein echtes Präfix des Titels ist, liefert er die
+    // stabilere Reihenidentität für Quellen verschiedener Sender.
+    private static bool TryExtractSeriesFromDirectoryTitle(
+        string filePath,
+        string? rawTopic,
+        string? rawTitle,
+        out string seriesName,
+        out TitleDetails titleDetails)
+    {
+        seriesName = string.Empty;
+        titleDetails = new TitleDetails("Unbekannter Titel", "xx", "xx");
+
+        if (string.IsNullOrWhiteSpace(rawTitle)
+            || (!IsGenericMetadataTopic(rawTopic)
+                && !string.Equals(
+                    BuildSeriesIdentityKey(rawTopic ?? string.Empty),
+                    BuildTitleIdentityKey(rawTitle),
+                    StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var directoryPath = Path.GetDirectoryName(filePath);
+        var directoryName = string.IsNullOrWhiteSpace(directoryPath)
+            ? string.Empty
+            : Path.GetFileName(directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var normalizedSeriesName = NormalizeSeriesName(directoryName);
+        var normalizedTitle = NormalizeEpisodeTitle(rawTitle);
+        if (string.IsNullOrWhiteSpace(normalizedSeriesName)
+            || IsGenericMetadataTopic(normalizedSeriesName)
+            || normalizedTitle.Length <= normalizedSeriesName.Length
+            || !normalizedTitle.StartsWith(normalizedSeriesName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var titleRemainder = normalizedTitle[normalizedSeriesName.Length..];
+        if (!Regex.IsMatch(titleRemainder, @"^\s+|^\s*[-:_]\s*"))
+        {
+            return false;
+        }
+
+        titleRemainder = Regex.Replace(titleRemainder, @"^\s*[-:_]?\s*", string.Empty);
+        if (string.IsNullOrWhiteSpace(titleRemainder))
+        {
+            return false;
+        }
+
+        seriesName = normalizedSeriesName;
+        titleDetails = ParseTitleDetails(titleRemainder);
+        return true;
     }
 
     private static bool TryExtractSeriesPrefixFromTitle(

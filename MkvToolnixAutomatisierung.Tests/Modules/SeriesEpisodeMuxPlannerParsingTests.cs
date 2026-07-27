@@ -345,6 +345,59 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_MergesMrBeanMovie_FromSpecificAndGenericTopics()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+        var sourceDirectory = Path.Combine(tempDirectory, "Mr. Bean");
+        Directory.CreateDirectory(sourceDirectory);
+
+        try
+        {
+            var rbbPath = Path.Combine(
+                sourceDirectory,
+                "Mr. Bean macht Ferien-Mr. Bean macht Ferien-1279847987.mp4");
+            CreateEmptyFile(rbbPath);
+            CreateCompanionText(
+                Path.ChangeExtension(rbbPath, ".txt"),
+                topic: "Mr. Bean macht Ferien",
+                title: "Mr. Bean macht Ferien",
+                duration: "01:22:28");
+
+            var swrPath = Path.Combine(
+                sourceDirectory,
+                "Film & Fiktion-Mr. Bean macht Ferien-1075328925.mp4");
+            CreateEmptyFile(swrPath);
+            CreateCompanionText(
+                Path.ChangeExtension(swrPath, ".txt"),
+                topic: "Film & Fiktion",
+                title: "Mr. Bean macht Ferien",
+                duration: "01:22:28");
+
+            var context = planner.CreateDirectoryDetectionContext(sourceDirectory);
+
+            var mainVideoPath = Assert.Single(context.MainVideoFiles);
+            Assert.Equal(swrPath, mainVideoPath);
+
+            var selectedSeed = context.GetSelectedSeed(mainVideoPath);
+            Assert.Equal("Mr. Bean", selectedSeed.Identity.SeriesName);
+            Assert.Equal("macht Ferien", selectedSeed.Identity.Title);
+
+            var episodeSeeds = context.GetEpisodeSeeds(selectedSeed);
+            Assert.Contains(
+                episodeSeeds.NormalVideoSeeds,
+                seed => string.Equals(seed.FilePath, rbbPath, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                episodeSeeds.NormalVideoSeeds,
+                seed => string.Equals(seed.FilePath, swrPath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_MergesSpecialLabels_WhenTitleIsEquivalent()
     {
         var planner = CreatePlanner();
