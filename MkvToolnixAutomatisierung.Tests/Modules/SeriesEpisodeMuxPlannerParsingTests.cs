@@ -300,6 +300,51 @@ public sealed class SeriesEpisodeMuxPlannerParsingTests
     }
 
     [Fact]
+    public void CreateDirectoryDetectionContext_MergesMarieBrandSubtitlePackage_WithTruncatedZdfTopic()
+    {
+        var planner = CreatePlanner();
+        var tempDirectory = CreateTempDirectory();
+
+        try
+        {
+            var zdfVideoPath = Path.Combine(
+                tempDirectory,
+                "Marie Brand und-Marie Brand und die falsche Wahrheit - Der Samstagskrimi (S04_E03)-0566251869.mp4");
+            CreateEmptyFile(zdfVideoPath);
+            CreateCompanionText(
+                Path.ChangeExtension(zdfVideoPath, ".txt"),
+                topic: "Marie Brand und ...",
+                title: "Marie Brand und die falsche Wahrheit - Der Samstagskrimi (S04/E03)",
+                duration: "01:29:07");
+
+            var orfSubtitlePath = Path.Combine(
+                tempDirectory,
+                "Marie Brand-Marie Brand und die falsche Wahrheit-0587293581.ass");
+            CreateEmptyFile(orfSubtitlePath);
+            CreateCompanionText(
+                Path.ChangeExtension(orfSubtitlePath, ".txt"),
+                topic: "Marie Brand",
+                title: "Marie Brand und die falsche Wahrheit",
+                duration: "01:29:08");
+
+            var context = planner.CreateDirectoryDetectionContext(tempDirectory);
+
+            Assert.Equal("Marie Brand", context.GetSelectedSeed(zdfVideoPath).Identity.SeriesName);
+            var mainVideoPath = Assert.Single(context.MainVideoFiles);
+            Assert.Equal(zdfVideoPath, mainVideoPath);
+
+            var episodeSeeds = context.GetEpisodeSeeds(context.GetSelectedSeed(zdfVideoPath));
+            Assert.Contains(
+                episodeSeeds.SubtitleOnlySeeds,
+                seed => string.Equals(seed.FilePath, orfSubtitlePath, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectoryDetectionContext_MergesSpecialLabels_WhenTitleIsEquivalent()
     {
         var planner = CreatePlanner();

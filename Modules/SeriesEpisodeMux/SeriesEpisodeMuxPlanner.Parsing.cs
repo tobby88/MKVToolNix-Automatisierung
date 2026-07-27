@@ -236,6 +236,10 @@ public sealed partial class SeriesEpisodeMuxPlanner
     {
         var normalized = NormalizeNameForParsing(rawSeriesName);
         normalized = RemoveEditorialLabels(normalized);
+        // ZDF kürzt einzelne Themenrubriken wie "Marie Brand und ..." ab. Das
+        // abschließende "und ..." gehört dabei nicht zum Seriennamen und würde
+        // sonst Quellen anderer Sender trotz identischem Episodentitel trennen.
+        normalized = Regex.Replace(normalized, @"\s+und\s+\.{3}$", string.Empty, RegexOptions.IgnoreCase);
         return normalized.Trim();
     }
 
