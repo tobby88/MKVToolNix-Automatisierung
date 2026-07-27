@@ -23,7 +23,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SharpCompress" Version="0.50.1" />
-    <!-- 2.1.12 bleibt binär mit Microsoft.Data.Sqlite 10 kompatibel und ersetzt dessen verwundbare 2.1.11-Laufzeit. -->
+    <!-- Die explizite Referenz aktualisiert die von Microsoft.Data.Sqlite verwendete native SQLite-Laufzeit unabhängig vom transitiven Paketstand. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.4" />
   </ItemGroup>
   <ItemGroup>

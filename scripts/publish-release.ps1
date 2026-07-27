@@ -76,6 +76,7 @@ New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
     -r $RuntimeIdentifier `
     --no-self-contained `
     -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:SelfContained=false `
     -p:PublishSelfContained=false `
     -p:PublishTrimmed=false `
@@ -94,6 +95,14 @@ if ($LASTEXITCODE -ne 0) {
 $publishedExecutablePath = Join-Path $temporaryPublishDirectory 'MkvToolnixAutomatisierung.exe'
 if (-not (Test-Path -LiteralPath $publishedExecutablePath)) {
     throw "Die erwartete veröffentlichte Exe wurde nicht gefunden: $publishedExecutablePath"
+}
+
+# Der Release veröffentlicht bewusst nur die EXE. Bleibt eine DLL daneben liegen,
+# würde sie im GitHub-Asset fehlen und die portable App erst zur Laufzeit scheitern.
+$unbundledLibraries = @(Get-ChildItem -LiteralPath $temporaryPublishDirectory -File -Filter '*.dll')
+if ($unbundledLibraries.Count -gt 0) {
+    $libraryNames = ($unbundledLibraries.Name | Sort-Object) -join ', '
+    throw "Der Single-File-Publish enthält nicht eingebettete Bibliotheken: $libraryNames"
 }
 
 $publishedExecutableSize = (Get-Item -LiteralPath $publishedExecutablePath).Length
