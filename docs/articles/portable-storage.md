@@ -17,7 +17,7 @@ Ein persistenter Dateisystem-`Cache` ist absichtlich nicht mehr Teil des Projekt
 ## Wichtige Konsequenzen
 
 - `Data/settings.json` kann TVDB-Zugangsdaten und lokale Serienzuordnungen enthalten und gehört nicht in ein öffentliches Repository.
-- `Data/IMDb/imdb-episodes.sqlite` ist der optionale, jederzeit neu aufbaubare IMDb-Episodenindex. Temporär geladene GZip-Rohdaten liegen nur während eines ausdrücklich bestätigten Updates in einem Staging-Unterordner.
+- `Data/IMDb/imdb-episodes.sqlite` ist der optionale, jederzeit neu aufbaubare IMDb-Episodenindex. Stand Juli 2026 benötigt er ungefähr 2,7 GiB dauerhaft; während eines Updates sollten wegen des atomaren Austauschs und der rund 750 MiB Roharchive 6 bis 7 GiB frei sein. Temporär geladene GZip-Rohdaten liegen nur während eines ausdrücklich bestätigten Updates in einem Staging-Unterordner.
 - `Logs` kann lokale Dateipfade enthalten und sollte bei Releases oder Uploads ebenfalls bewusst behandelt werden.
 - `Tools` kann große heruntergeladene Toolversionen enthalten und wird jederzeit aus den Einstellungen bzw. vom Start-Check neu aufgebaut.
 - `.gitignore` schließt diese lokalen Laufzeitverzeichnisse deshalb standardmäßig aus.

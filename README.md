@@ -71,7 +71,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
-- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem mehrere hundert MiB großen Download fragt sie ausdrücklich nach. Die Verwaltung kann in den Einstellungen deaktiviert werden.
+- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem großen Download fragt sie ausdrücklich nach. Stand Juli 2026 sind rund 750 MiB Download, etwa 2,7 GiB dauerhafter Speicher und während eines atomaren Neuaufbaus vorsichtshalber 6 bis 7 GiB freier Speicher einzuplanen. Die Verwaltung kann in den Einstellungen deaktiviert werden.
 - Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
 ## Portable Modus
@@ -80,7 +80,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs.
+- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs. Der optionale IMDb-Index liegt unter `.\Data\IMDb` und benötigt derzeit rund 2,7 GiB.
 - Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
@@ -184,13 +184,21 @@ Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby s
 
 Nach einem erfolgreichen Emby-Abgleich markiert die App erledigte Reporteinträge in der JSON. Sobald alle relevanten Einträge eines Reports abgearbeitet sind, wird der Report in einen `done`-Unterordner verschoben.
 
-Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Die erste lokale Suche läuft beim Öffnen asynchron. Werden Serienname oder Episodentitel korrigiert, durchsucht `Lokal neu suchen` den Offlineindex mit genau diesen geänderten Angaben; das Tippen selbst bleibt dadurch frei von blockierenden SQLite-Abfragen. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Die lokale Suche läuft asynchron und aktualisiert sich nach einer kurzen Eingabepause automatisch. Sie bietet passende Serien einschließlich deutscher Aliasnamen an; nach Auswahl einer Serie können alle Episoden oder nur die tatsächlich vorhandenen IMDb-Staffeln angezeigt werden. Ähnliche Episodentitel stehen oben, während Staffel und Folge wegen möglicher Abweichungen zu TVDB nur als Zusatzsignal dienen. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
 
 ### Optionaler IMDb-Offlineindex
 
-Der Offlineindex wird unter `./Data/IMDb/imdb-episodes.sqlite` gespeichert. Für einen Neuaufbau lädt die App `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` streamend in einen temporären Ordner, übernimmt nur Serien, Episoden und deutsche Aliase und löscht die großen Roharchive anschließend wieder. Ein vorhandener Index wird erst nach einem vollständig erfolgreichen Import atomar ersetzt. Wird die Nachfrage abgelehnt oder schlägt der Vorgang fehl, startet die App sofort mit dem bisherigen Stand weiter.
+Der Offlineindex wird unter `.\Data\IMDb\imdb-episodes.sqlite` gespeichert. Für einen Neuaufbau lädt die App `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` streamend in einen temporären Ordner, übernimmt nur Serien, Episoden und deutsche Aliase und löscht die großen Roharchive anschließend wieder. Ein vorhandener Index wird erst nach einem vollständig erfolgreichen Import atomar ersetzt. Wird die Nachfrage abgelehnt oder schlägt der Vorgang fehl, startet die App sofort mit dem bisherigen Stand weiter.
 
 Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Datensätze auch die aktuelle Datei (`1/3` bis `3/3`), deren geschätzten Prozentstand und den über alle drei Archive gewichteten Gesamtstand. Die Prozentwerte basieren auf den tatsächlich gelesenen Archivbytes; ein zusätzlicher vollständiger Zähllauf wird bewusst vermieden.
+
+Speicherbedarf, Stand Juli 2026:
+
+- ungefähr 750 MiB für die drei temporär heruntergeladenen GZip-Archive
+- ungefähr 2,7 GiB dauerhaft für `.\Data\IMDb\imdb-episodes.sqlite`
+- empfohlen 6 bis 7 GiB freier Speicher während eines Updates, weil alter Index, neuer Index und Roharchive bis zum erfolgreichen atomaren Austausch gleichzeitig vorhanden sein können
+
+Die offiziellen Datensätze wachsen fortlaufend; diese Werte sind deshalb Richtwerte und können bei späteren Aktualisierungen steigen.
 
 Die IMDb-Datensätze sind ausschließlich für persönliche und nicht kommerzielle Nutzung vorgesehen. Quelle: [IMDb Non-Commercial Datasets](https://www.imdb.com/interfaces/). Information courtesy of IMDb ([https://www.imdb.com](https://www.imdb.com)). Used with permission.
 
