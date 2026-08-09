@@ -160,6 +160,12 @@ public sealed class ImdbDatasetSettings
     public string InstalledVersion { get; set; } = string.Empty;
 
     /// <summary>
+    /// Neueste Quelldaten-Revision der zuletzt vollständig importierten IMDb-Dateien.
+    /// Sie dient der verständlichen Gegenüberstellung mit einem angebotenen Update.
+    /// </summary>
+    public DateTimeOffset? InstalledRevisionUtc { get; set; }
+
+    /// <summary>
     /// Zeitpunkt der letzten erfolgreichen, kleinen HEAD-Prüfung der offiziellen Dateien.
     /// </summary>
     public DateTimeOffset? LastCheckedUtc { get; set; }
@@ -177,6 +183,7 @@ public sealed class ImdbDatasetSettings
         AutoManageEnabled = AutoManageEnabled,
         ManagementPreferenceConfigured = ManagementPreferenceConfigured,
         InstalledVersion = InstalledVersion?.Trim() ?? string.Empty,
+        InstalledRevisionUtc = InstalledRevisionUtc,
         LastCheckedUtc = LastCheckedUtc,
         LastUpdatedUtc = LastUpdatedUtc
     };

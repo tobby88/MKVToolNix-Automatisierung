@@ -12,9 +12,12 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// </summary>
 internal sealed record ImdbDatasetUpdateOffer(
     bool IsInitialInstall,
-    string VersionToken,
-    DateTimeOffset? LastModifiedUtc,
-    long? TotalDownloadBytes);
+    string AvailableVersionToken,
+    DateTimeOffset? AvailableRevisionUtc,
+    long? TotalDownloadBytes,
+    string? InstalledVersionToken,
+    DateTimeOffset? InstalledRevisionUtc,
+    DateTimeOffset? InstalledAtUtc);
 
 /// <summary>
 /// Kapselt die zwingende Benutzerzustimmung vor dem Download der großen IMDb-Dateien.
@@ -31,27 +34,68 @@ internal sealed class ImdbDatasetUpdateConsent : IImdbDatasetUpdateConsent
 {
     public bool ConfirmUpdate(ImdbDatasetUpdateOffer offer)
     {
-        var sizeText = offer.TotalDownloadBytes is > 0
-            ? FormatBytes(offer.TotalDownloadBytes.Value)
-            : "mehrere hundert MiB";
-        var revisionText = offer.LastModifiedUtc is { } revision
-            ? revision.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)
-            : "aktuell";
-        var actionText = offer.IsInitialInstall
-            ? "Der optionale lokale IMDb-Index ist noch nicht installiert."
-            : "Für den lokalen IMDb-Index liegen neuere Quelldaten vor.";
         var result = MessageBox.Show(
             ResolveOwner(),
-            $"{actionText}{Environment.NewLine}{Environment.NewLine}"
-            + $"Revision: {revisionText}{Environment.NewLine}"
-            + $"Download: ungefähr {sizeText}{Environment.NewLine}{Environment.NewLine}"
-            + "Die drei offiziellen IMDb-Dateien werden nur nach Ihrer Zustimmung geladen. "
-            + "Der vorhandene Index bleibt bei Abbruch oder Fehler erhalten. Jetzt herunterladen und neu aufbauen?",
+            BuildMessage(offer),
             "IMDb-Offlineindex aktualisieren",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question,
             MessageBoxResult.No);
         return result == MessageBoxResult.Yes;
+    }
+
+    internal static string BuildMessage(ImdbDatasetUpdateOffer offer)
+    {
+        var sizeText = offer.TotalDownloadBytes is > 0
+            ? FormatBytes(offer.TotalDownloadBytes.Value)
+            : "mehrere hundert MiB";
+        var actionText = offer.IsInitialInstall
+            ? "Der optionale lokale IMDb-Index ist noch nicht installiert."
+            : "Für den lokalen IMDb-Index liegen neuere Quelldaten vor.";
+        return $"{actionText}{Environment.NewLine}{Environment.NewLine}"
+            + $"Vorhandene Version: {FormatInstalledVersion(offer)}{Environment.NewLine}"
+            + $"Verfügbare Version: {FormatVersion(offer.AvailableRevisionUtc, offer.AvailableVersionToken)}{Environment.NewLine}"
+            + $"Download: ungefähr {sizeText}{Environment.NewLine}{Environment.NewLine}"
+            + "Die drei offiziellen IMDb-Dateien werden nur nach Ihrer Zustimmung geladen. "
+            + "Der vorhandene Index bleibt bei Abbruch oder Fehler erhalten. Jetzt herunterladen und neu aufbauen?";
+    }
+
+    private static string FormatInstalledVersion(ImdbDatasetUpdateOffer offer)
+    {
+        if (offer.IsInitialInstall)
+        {
+            return "nicht installiert";
+        }
+
+        if (offer.InstalledRevisionUtc is { } revision)
+        {
+            return FormatVersion(revision, offer.InstalledVersionToken);
+        }
+
+        var identifier = FormatVersionIdentifier(offer.InstalledVersionToken);
+        return offer.InstalledAtUtc is { } installedAt
+            ? $"aufgebaut am {installedAt.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)}{identifier}"
+            : $"installiert{identifier}";
+    }
+
+    private static string FormatVersion(DateTimeOffset? revisionUtc, string? versionToken)
+    {
+        var revisionText = revisionUtc is { } revision
+            ? $"Datenstand vom {revision.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)}"
+            : "Datenstand unbekannt";
+        return revisionText + FormatVersionIdentifier(versionToken);
+    }
+
+    private static string FormatVersionIdentifier(string? versionToken)
+    {
+        if (string.IsNullOrWhiteSpace(versionToken))
+        {
+            return string.Empty;
+        }
+
+        var normalized = versionToken.Trim();
+        var shortToken = normalized[..Math.Min(12, normalized.Length)];
+        return $" (Kennung {shortToken})";
     }
 
     private static Window? ResolveOwner() =>
@@ -158,11 +202,14 @@ internal sealed class ImdbDatasetManager
 
             var offer = new ImdbDatasetUpdateOffer(
                 IsInitialInstall: !databaseExists,
-                versionToken,
-                remoteFiles.Max(file => file.LastModifiedUtc),
-                remoteFiles.All(file => file.ContentLength is not null)
+                AvailableVersionToken: versionToken,
+                AvailableRevisionUtc: remoteFiles.Max(file => file.LastModifiedUtc),
+                TotalDownloadBytes: remoteFiles.All(file => file.ContentLength is not null)
                     ? remoteFiles.Sum(file => file.ContentLength!.Value)
-                    : null);
+                    : null,
+                InstalledVersionToken: datasetSettings.InstalledVersion,
+                InstalledRevisionUtc: datasetSettings.InstalledRevisionUtc,
+                InstalledAtUtc: datasetSettings.LastUpdatedUtc);
             if (!_consent.ConfirmUpdate(offer))
             {
                 Report(progress, "IMDb-Update übersprungen", "Der vorhandene Stand bleibt aktiv.", 100d, false);
@@ -171,6 +218,7 @@ internal sealed class ImdbDatasetManager
 
             await DownloadAndBuildAsync(remoteFiles, versionToken, progress, cancellationToken);
             datasetSettings.InstalledVersion = versionToken;
+            datasetSettings.InstalledRevisionUtc = remoteFiles.Max(file => file.LastModifiedUtc);
             datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
             datasetSettings.LastUpdatedUtc = DateTimeOffset.UtcNow;
             PersistDatasetSettings(datasetSettings);

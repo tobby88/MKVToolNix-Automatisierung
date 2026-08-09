@@ -160,6 +160,55 @@ public sealed class ImdbDatasetIndexTests : IDisposable
     }
 
     [Fact]
+    public void UpdateConsentMessage_ListsInstalledAndAvailableDatasetVersions()
+    {
+        var installedRevision = new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero);
+        var installedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var availableRevision = new DateTimeOffset(2026, 8, 8, 0, 0, 0, TimeSpan.Zero);
+        var offer = new ImdbDatasetUpdateOffer(
+            IsInitialInstall: false,
+            AvailableVersionToken: "bbbbbbbbbbbb2222",
+            AvailableRevisionUtc: availableRevision,
+            TotalDownloadBytes: 800L * 1024 * 1024,
+            InstalledVersionToken: "aaaaaaaaaaaa1111",
+            InstalledRevisionUtc: installedRevision,
+            InstalledAtUtc: installedAt);
+
+        var message = ImdbDatasetUpdateConsent.BuildMessage(offer);
+
+        Assert.Contains(
+            $"Vorhandene Version: Datenstand vom {installedRevision.ToLocalTime():d} (Kennung aaaaaaaaaaaa)",
+            message,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"Verfügbare Version: Datenstand vom {availableRevision.ToLocalTime():d} (Kennung bbbbbbbbbbbb)",
+            message,
+            StringComparison.Ordinal);
+        Assert.Contains("Download: ungefähr 800 MiB", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UpdateConsentMessage_UsesBuildDateForLegacyInstallation()
+    {
+        var installedAt = new DateTimeOffset(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
+        var offer = new ImdbDatasetUpdateOffer(
+            IsInitialInstall: false,
+            AvailableVersionToken: "bbbbbbbbbbbb2222",
+            AvailableRevisionUtc: new DateTimeOffset(2026, 8, 8, 0, 0, 0, TimeSpan.Zero),
+            TotalDownloadBytes: null,
+            InstalledVersionToken: "aaaaaaaaaaaa1111",
+            InstalledRevisionUtc: null,
+            InstalledAtUtc: installedAt);
+
+        var message = ImdbDatasetUpdateConsent.BuildMessage(offer);
+
+        Assert.Contains(
+            $"Vorhandene Version: aufgebaut am {installedAt.ToLocalTime():d} (Kennung aaaaaaaaaaaa)",
+            message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task EnsureCurrentAsync_DoesNotDownload_WhenUserDeclinesOffer()
     {
         var datasetBytes = BuildSmallDatasetByteMap();
@@ -250,6 +299,9 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(1, consent.CallCount);
         Assert.Equal(3, handler.GetRequestCount);
         Assert.False(string.IsNullOrWhiteSpace(store.CurrentSettings.ImdbDataset.InstalledVersion));
+        Assert.Equal(
+            new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero),
+            store.CurrentSettings.ImdbDataset.InstalledRevisionUtc);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastUpdatedUtc);
         Assert.Single(new ImdbDatasetSearchService(databasePath).SearchEpisodeCandidates(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02")));
