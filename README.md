@@ -192,6 +192,8 @@ Der Offlineindex wird unter `.\Data\IMDb\imdb-episodes.sqlite` gespeichert. Für
 
 Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Datensätze auch die aktuelle Datei (`1/3` bis `3/3`), deren geschätzten Prozentstand und den über alle drei Archive gewichteten Gesamtstand. Die Prozentwerte basieren auf den tatsächlich gelesenen Archivbytes; ein zusätzlicher vollständiger Zähllauf wird bewusst vermieden.
 
+Vor einem angebotenen Update stellt die Nachfrage den vorhandenen und den verfügbaren Datenstand mit Revisionsdatum und kurzer Versionskennung direkt gegenüber. Bei älteren Indexen, für die noch keine Quelldatenrevision gespeichert wurde, zeigt sie ersatzweise das Datum des letzten erfolgreichen Indexaufbaus.
+
 Speicherbedarf, Stand Juli 2026:
 
 - ungefähr 750 MiB für die drei temporär heruntergeladenen GZip-Archive
@@ -356,7 +358,7 @@ Der CI-Workflow rendert die Screenshots zusätzlich als Smoke-Test, damit der Ge
 
 Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt Release-Notes, setzt danach das Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
 
-Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.0` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet, MediathekView optional bei aktivierter Einstellung.
+Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.1` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet, MediathekView optional bei aktivierter Einstellung.
 
 Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und erstellt das GitHub-Prerelease nur dann automatisch neu, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
 
