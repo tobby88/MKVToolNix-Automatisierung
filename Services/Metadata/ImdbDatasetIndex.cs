@@ -32,6 +32,7 @@ internal sealed record ImdbDatasetImportProgress(
 /// </summary>
 internal sealed class ImdbDatasetIndexBuilder
 {
+    internal const int SchemaVersion = 2;
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
@@ -62,7 +63,14 @@ internal sealed class ImdbDatasetIndexBuilder
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        await ExecuteNonQueryAsync(connection, "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA locking_mode=EXCLUSIVE;", cancellationToken);
+        var sqliteWorkerThreads = Math.Clamp(Environment.ProcessorCount - 1, 1, 4);
+        // Der Index wird vollständig neu erzeugt. Ein größerer nur für diese Verbindung gültiger
+        // Seitencache vermeidet den sehr kleinen SQLite-Standardcache beim Bulkimport; Hilfsthreads
+        // dürfen insbesondere die fünf abschließenden CREATE-INDEX-Sortierungen unterstützen.
+        await ExecuteNonQueryAsync(
+            connection,
+            $"PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA locking_mode=EXCLUSIVE; PRAGMA cache_size=-131072; PRAGMA threads={sqliteWorkerThreads};",
+            cancellationToken);
         await ExecuteNonQueryAsync(
             connection,
             """
@@ -85,6 +93,11 @@ internal sealed class ImdbDatasetIndexBuilder
                 region TEXT NULL,
                 language TEXT NULL
             );
+            CREATE TABLE series_aliases (
+                title_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                normalized_title TEXT NOT NULL
+            );
             CREATE TABLE metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -92,42 +105,52 @@ internal sealed class ImdbDatasetIndexBuilder
             """,
             cancellationToken);
 
-        var archivePaths = new[] { basicsArchivePath, episodesArchivePath, aliasesArchivePath };
-        var archiveLengths = archivePaths.Select(path => new FileInfo(path).Length).ToArray();
-        var totalArchiveBytes = archiveLengths.Sum();
+        var basicsArchiveLength = new FileInfo(basicsArchivePath).Length;
+        var episodesArchiveLength = new FileInfo(episodesArchivePath).Length;
+        var aliasesArchiveLength = new FileInfo(aliasesArchivePath).Length;
+        var totalArchiveBytes = basicsArchiveLength + episodesArchiveLength + aliasesArchiveLength;
         var completedArchiveBytes = 0L;
         var importedTitleIds = new ImportedTitleIdSet();
-
-        ImportBasics(
-            connection,
-            basicsArchivePath,
-            CreateProgressContext("title.basics", 1, archiveLengths[0], completedArchiveBytes, totalArchiveBytes),
-            progress,
-            importedTitleIds,
-            cancellationToken);
-        completedArchiveBytes += archiveLengths[0];
-        ImportEpisodes(
-            connection,
+        var importedSeriesIds = new ImportedTitleIdSet();
+        var episodeLinks = LoadEpisodeLinks(
             episodesArchivePath,
-            CreateProgressContext("title.episode", 2, archiveLengths[1], completedArchiveBytes, totalArchiveBytes),
+            CreateProgressContext("title.episode", 1, episodesArchiveLength, completedArchiveBytes, totalArchiveBytes),
             progress,
-            importedTitleIds,
             cancellationToken);
-        completedArchiveBytes += archiveLengths[1];
+        completedArchiveBytes += episodesArchiveLength;
+
+        try
+        {
+            ImportBasics(
+                connection,
+                basicsArchivePath,
+                CreateProgressContext("title.basics", 2, basicsArchiveLength, completedArchiveBytes, totalArchiveBytes),
+                progress,
+                importedTitleIds,
+                importedSeriesIds,
+                episodeLinks,
+                cancellationToken);
+        }
+        finally
+        {
+            episodeLinks.Release();
+        }
+
+        completedArchiveBytes += basicsArchiveLength;
         ImportGermanAliases(
             connection,
             aliasesArchivePath,
-            CreateProgressContext("title.akas", 3, archiveLengths[2], completedArchiveBytes, totalArchiveBytes),
+            CreateProgressContext("title.akas", 3, aliasesArchiveLength, completedArchiveBytes, totalArchiveBytes),
             progress,
             importedTitleIds,
+            importedSeriesIds,
             cancellationToken);
         var finalizationSteps = new (string Name, string Sql)[]
         {
-            ("Nicht zuordenbare Episoden werden entfernt.", "DELETE FROM titles WHERE kind = 2 AND parent_id IS NULL;"),
-            ("Der Primärtitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_primary ON titles(kind, normalized_primary);"),
-            ("Der Originaltitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_original ON titles(kind, normalized_original);"),
-            ("Der Episoden-Index wird aufgebaut.", "CREATE INDEX ix_titles_parent ON titles(parent_id, season_number, episode_number);"),
-            ("Der Aliasnamen-Index wird aufgebaut.", "CREATE INDEX ix_aliases_normalized ON aliases(normalized_title);"),
+            ("Der Primärtitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_primary ON titles(normalized_primary) WHERE kind = 1;"),
+            ("Der Originaltitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_original ON titles(normalized_original) WHERE kind = 1;"),
+            ("Der Episoden-Index wird aufgebaut.", "CREATE INDEX ix_titles_parent ON titles(parent_id, season_number, episode_number) WHERE kind = 2;"),
+            ("Der Aliasnamen-Index wird aufgebaut.", "CREATE INDEX ix_aliases_normalized ON series_aliases(normalized_title);"),
             ("Der Aliasverknüpfungs-Index wird aufgebaut.", "CREATE INDEX ix_aliases_title_id ON aliases(title_id);")
         };
         var finalizationStepCount = finalizationSteps.Length + 1;
@@ -167,6 +190,8 @@ internal sealed class ImdbDatasetIndexBuilder
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         ImportedTitleIdSet importedTitleIds,
+        ImportedTitleIdSet importedSeriesIds,
+        EpisodeLinkLookup episodeLinks,
         CancellationToken cancellationToken)
     {
         using var transaction = connection.BeginTransaction();
@@ -175,8 +200,11 @@ internal sealed class ImdbDatasetIndexBuilder
         command.CommandText =
             """
             INSERT INTO titles(
-                id, kind, primary_title, original_title, normalized_primary, normalized_original, start_year)
-            VALUES($id, $kind, $primary, $original, $normalizedPrimary, $normalizedOriginal, $year);
+                id, kind, primary_title, original_title, normalized_primary, normalized_original, start_year,
+                parent_id, season_number, episode_number)
+            VALUES(
+                $id, $kind, $primary, $original, $normalizedPrimary, $normalizedOriginal, $year,
+                $parent, $season, $episode);
             """;
         var id = command.Parameters.Add("$id", SqliteType.Text);
         var kind = command.Parameters.Add("$kind", SqliteType.Integer);
@@ -185,6 +213,9 @@ internal sealed class ImdbDatasetIndexBuilder
         var normalizedPrimary = command.Parameters.Add("$normalizedPrimary", SqliteType.Text);
         var normalizedOriginal = command.Parameters.Add("$normalizedOriginal", SqliteType.Text);
         var year = command.Parameters.Add("$year", SqliteType.Integer);
+        var parent = command.Parameters.Add("$parent", SqliteType.Text);
+        var season = command.Parameters.Add("$season", SqliteType.Integer);
+        var episode = command.Parameters.Add("$episode", SqliteType.Integer);
         command.Prepare();
 
         ReadGzipTsv(
@@ -197,10 +228,19 @@ internal sealed class ImdbDatasetIndexBuilder
                 if (!TryGetColumnRanges(line, columns)
                     || !TryMapTitleKind(line.AsSpan(columns[1]), out var mappedKind))
                 {
-                    return null;
+                    return;
                 }
 
                 var idSpan = line.AsSpan(columns[0]);
+                string? parentId = null;
+                int? seasonNumber = null;
+                int? episodeNumber = null;
+                if (mappedKind == 2
+                    && !episodeLinks.TryGet(idSpan, out parentId, out seasonNumber, out episodeNumber))
+                {
+                    return;
+                }
+
                 var primaryTitle = line[columns[2]];
                 var originalTitle = line[columns[3]];
                 var normalizedPrimaryTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
@@ -213,36 +253,30 @@ internal sealed class ImdbDatasetIndexBuilder
                     ? normalizedPrimaryTitle
                     : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
                 year.Value = TryParseNullableInt(line.AsSpan(columns[5])) is { } parsedYear ? parsedYear : DBNull.Value;
+                parent.Value = parentId is null ? DBNull.Value : parentId;
+                season.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
+                episode.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
                 importedTitleIds.Add(idSpan);
-                return command;
+                if (mappedKind == 1)
+                {
+                    importedSeriesIds.Add(idSpan);
+                }
+
+                command.ExecuteNonQuery();
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         transaction.Commit();
     }
 
-    private static void ImportEpisodes(
-        SqliteConnection connection,
+    private static EpisodeLinkLookup LoadEpisodeLinks(
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
-        ImportedTitleIdSet importedTitleIds,
         CancellationToken cancellationToken)
     {
-        using var transaction = connection.BeginTransaction();
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            UPDATE titles
-            SET parent_id = $parent, season_number = $season, episode_number = $episode
-            WHERE id = $id AND kind = 2;
-            """;
-        var id = command.Parameters.Add("$id", SqliteType.Text);
-        var parent = command.Parameters.Add("$parent", SqliteType.Text);
-        var season = command.Parameters.Add("$season", SqliteType.Integer);
-        var episode = command.Parameters.Add("$episode", SqliteType.Integer);
-        command.Prepare();
+        var estimatedRowCount = (int)Math.Clamp(new FileInfo(archivePath).Length / 32L, 1024L, 12_000_000L);
+        var lookup = new EpisodeLinkLookup(estimatedRowCount);
 
         ReadGzipTsv(
             archivePath,
@@ -253,24 +287,18 @@ internal sealed class ImdbDatasetIndexBuilder
                 Span<Range> columns = stackalloc Range[4];
                 if (!TryGetColumnRanges(line, columns))
                 {
-                    return null;
+                    return;
                 }
 
-                var idSpan = line.AsSpan(columns[0]);
-                if (!importedTitleIds.Contains(idSpan))
-                {
-                    return null;
-                }
-
-                id.Value = idSpan.ToString();
-                parent.Value = line[columns[1]];
-                season.Value = TryParseNullableInt(line.AsSpan(columns[2])) is { } parsedSeason ? parsedSeason : DBNull.Value;
-                episode.Value = TryParseNullableInt(line.AsSpan(columns[3])) is { } parsedEpisode ? parsedEpisode : DBNull.Value;
-                return command;
+                lookup.Add(
+                    line.AsSpan(columns[0]),
+                    line.AsSpan(columns[1]),
+                    TryParseNullableInt(line.AsSpan(columns[2])),
+                    TryParseNullableInt(line.AsSpan(columns[3])));
             },
             cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        transaction.Commit();
+        lookup.PrepareForLookup();
+        return lookup;
     }
 
     private static void ImportGermanAliases(
@@ -279,6 +307,7 @@ internal sealed class ImdbDatasetIndexBuilder
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
         ImportedTitleIdSet importedTitleIds,
+        ImportedTitleIdSet importedSeriesIds,
         CancellationToken cancellationToken)
     {
         using var transaction = connection.BeginTransaction();
@@ -295,6 +324,17 @@ internal sealed class ImdbDatasetIndexBuilder
         var region = command.Parameters.Add("$region", SqliteType.Text);
         var language = command.Parameters.Add("$language", SqliteType.Text);
         command.Prepare();
+        using var seriesCommand = connection.CreateCommand();
+        seriesCommand.Transaction = transaction;
+        seriesCommand.CommandText =
+            """
+            INSERT INTO series_aliases(title_id, title, normalized_title)
+            VALUES($id, $title, $normalized);
+            """;
+        var seriesId = seriesCommand.Parameters.Add("$id", SqliteType.Text);
+        var seriesTitle = seriesCommand.Parameters.Add("$title", SqliteType.Text);
+        var seriesNormalized = seriesCommand.Parameters.Add("$normalized", SqliteType.Text);
+        seriesCommand.Prepare();
 
         ReadGzipTsv(
             archivePath,
@@ -305,7 +345,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 Span<Range> columns = stackalloc Range[5];
                 if (!TryGetColumnRanges(line, columns))
                 {
-                    return null;
+                    return;
                 }
 
                 var idSpan = line.AsSpan(columns[0]);
@@ -315,7 +355,7 @@ internal sealed class ImdbDatasetIndexBuilder
                         && !languageSpan.Equals("de", StringComparison.OrdinalIgnoreCase))
                     || !importedTitleIds.Contains(idSpan))
                 {
-                    return null;
+                    return;
                 }
 
                 var aliasTitle = line[columns[2]];
@@ -324,7 +364,14 @@ internal sealed class ImdbDatasetIndexBuilder
                 normalized.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
                 region.Value = ToDatabaseNullable(regionSpan);
                 language.Value = ToDatabaseNullable(languageSpan);
-                return command;
+                command.ExecuteNonQuery();
+                if (importedSeriesIds.Contains(idSpan))
+                {
+                    seriesId.Value = id.Value;
+                    seriesTitle.Value = aliasTitle;
+                    seriesNormalized.Value = normalized.Value;
+                    seriesCommand.ExecuteNonQuery();
+                }
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -340,7 +387,7 @@ internal sealed class ImdbDatasetIndexBuilder
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
-        Func<string, SqliteCommand?> prepareCommand,
+        Action<string> processLine,
         CancellationToken cancellationToken)
     {
         using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, useAsync: false);
@@ -355,11 +402,7 @@ internal sealed class ImdbDatasetIndexBuilder
         {
             cancellationToken.ThrowIfCancellationRequested();
             rowCount++;
-            var command = prepareCommand(line);
-            if (command is not null)
-            {
-                command.ExecuteNonQuery();
-            }
+            processLine(line);
 
             if (Stopwatch.GetElapsedTime(lastProgressTimestamp) >= ProgressUpdateInterval)
             {
@@ -466,6 +509,17 @@ internal sealed class ImdbDatasetIndexBuilder
     private static object ToDatabaseNullable(ReadOnlySpan<char> value) =>
         value.Equals(@"\N", StringComparison.Ordinal) ? DBNull.Value : value.ToString();
 
+    private static bool TryParseNumericTitleId(ReadOnlySpan<char> id, out int numericId)
+    {
+        numericId = 0;
+        return id.Length > 2
+            && (id[0] is 't' or 'T')
+            && (id[1] is 't' or 'T')
+            && int.TryParse(id[2..], NumberStyles.None, CultureInfo.InvariantCulture, out numericId)
+            && numericId >= 0
+            && numericId < int.MaxValue - ImportedTitleIdSet.GrowthBlockSize;
+    }
+
     private static async Task ExecuteNonQueryAsync(
         SqliteConnection connection,
         string commandText,
@@ -485,19 +539,149 @@ internal sealed class ImdbDatasetIndexBuilder
         long TotalArchiveBytes);
 
     /// <summary>
+    /// Hält die Zuordnung aus <c>title.episode</c> kompakt im Arbeitsspeicher, damit Episodentitel beim
+    /// ersten und einzigen SQLite-Schreibvorgang bereits Parent, Staffel und Folge erhalten. Numerische
+    /// IMDb-Kennungen benötigen dabei nur vier Integer je Eintrag statt mehrerer verwalteter Zeichenfolgen.
+    /// </summary>
+    private sealed class EpisodeLinkLookup
+    {
+        private const int MissingNumber = int.MinValue;
+        private readonly List<NumericEpisodeLink> _numericLinks;
+        private readonly Dictionary<string, TextEpisodeLink> _textLinks = new(StringComparer.Ordinal);
+        private bool _isOrdered = true;
+        private int _lastNumericId = -1;
+        private int _lookupCursor;
+        private int _lastLookupId = -1;
+
+        public EpisodeLinkLookup(int estimatedRowCount)
+        {
+            _numericLinks = new List<NumericEpisodeLink>(estimatedRowCount);
+        }
+
+        public void Add(ReadOnlySpan<char> id, ReadOnlySpan<char> parentId, int? seasonNumber, int? episodeNumber)
+        {
+            if (TryParseNumericTitleId(id, out var numericId)
+                && TryParseNumericTitleId(parentId, out var numericParentId))
+            {
+                _isOrdered &= numericId >= _lastNumericId;
+                _lastNumericId = numericId;
+                _numericLinks.Add(new NumericEpisodeLink(
+                    numericId,
+                    numericParentId,
+                    seasonNumber ?? MissingNumber,
+                    episodeNumber ?? MissingNumber));
+                return;
+            }
+
+            _textLinks[id.ToString()] = new TextEpisodeLink(
+                parentId.ToString(),
+                seasonNumber,
+                episodeNumber);
+        }
+
+        public void PrepareForLookup()
+        {
+            if (!_isOrdered)
+            {
+                _numericLinks.Sort(static (left, right) => left.Id.CompareTo(right.Id));
+            }
+        }
+
+        public bool TryGet(
+            ReadOnlySpan<char> id,
+            out string? parentId,
+            out int? seasonNumber,
+            out int? episodeNumber)
+        {
+            if (TryParseNumericTitleId(id, out var numericId))
+            {
+                if (numericId < _lastLookupId)
+                {
+                    _lookupCursor = FindLowerBound(numericId);
+                }
+                else
+                {
+                    while (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].Id < numericId)
+                    {
+                        _lookupCursor++;
+                    }
+                }
+
+                _lastLookupId = numericId;
+                if (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].Id == numericId)
+                {
+                    var candidate = _numericLinks[_lookupCursor];
+                    parentId = "tt" + candidate.ParentId.ToString("D7", CultureInfo.InvariantCulture);
+                    seasonNumber = candidate.SeasonNumber == MissingNumber ? null : candidate.SeasonNumber;
+                    episodeNumber = candidate.EpisodeNumber == MissingNumber ? null : candidate.EpisodeNumber;
+                    return true;
+                }
+            }
+            else if (_textLinks.TryGetValue(id.ToString(), out var textLink))
+            {
+                parentId = textLink.ParentId;
+                seasonNumber = textLink.SeasonNumber;
+                episodeNumber = textLink.EpisodeNumber;
+                return true;
+            }
+
+            parentId = null;
+            seasonNumber = null;
+            episodeNumber = null;
+            return false;
+        }
+
+        private int FindLowerBound(int numericId)
+        {
+            var lower = 0;
+            var upper = _numericLinks.Count;
+            while (lower < upper)
+            {
+                var middle = lower + ((upper - lower) / 2);
+                if (_numericLinks[middle].Id < numericId)
+                {
+                    lower = middle + 1;
+                }
+                else
+                {
+                    upper = middle;
+                }
+            }
+
+            return lower;
+        }
+
+        public void Release()
+        {
+            _numericLinks.Clear();
+            _numericLinks.TrimExcess();
+            _textLinks.Clear();
+            _textLinks.TrimExcess();
+        }
+
+        private readonly record struct NumericEpisodeLink(
+            int Id,
+            int ParentId,
+            int SeasonNumber,
+            int EpisodeNumber);
+
+        private sealed record TextEpisodeLink(string ParentId, int? SeasonNumber, int? EpisodeNumber);
+    }
+
+    /// <summary>
     /// Kompakter Vorfilter für IMDb-Titelkennungen. Die numerische <c>tt</c>-Kennung passt direkt in
     /// ein Bitfeld, sodass selbst zig Millionen importierte Titel nur wenige MiB Arbeitsspeicher benötigen.
     /// Seltene nicht standardkonforme Kennungen bleiben über eine kleine Zeichenfolgenmenge korrekt.
     /// </summary>
     private sealed class ImportedTitleIdSet
     {
-        private const int GrowthBlockSize = 4 * 1024 * 1024;
+        internal const int GrowthBlockSize = 4 * 1024 * 1024;
         private readonly HashSet<string> _nonNumericIds = new(StringComparer.Ordinal);
         private BitArray _numericIds = new(GrowthBlockSize);
 
         public void Add(ReadOnlySpan<char> id)
         {
-            if (!TryParseNumericId(id, out var numericId))
+            if (!TryParseNumericTitleId(id, out var numericId))
             {
                 _nonNumericIds.Add(id.ToString());
                 return;
@@ -509,7 +693,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         public bool Contains(ReadOnlySpan<char> id)
         {
-            if (!TryParseNumericId(id, out var numericId))
+            if (!TryParseNumericTitleId(id, out var numericId))
             {
                 return _nonNumericIds.Contains(id.ToString());
             }
@@ -528,16 +712,6 @@ internal sealed class ImdbDatasetIndexBuilder
             _numericIds.Length = checked((int)requiredLength);
         }
 
-        private static bool TryParseNumericId(ReadOnlySpan<char> id, out int numericId)
-        {
-            numericId = 0;
-            return id.Length > 2
-                && (id[0] is 't' or 'T')
-                && (id[1] is 't' or 'T')
-                && int.TryParse(id[2..], NumberStyles.None, CultureInfo.InvariantCulture, out numericId)
-                && numericId >= 0
-                && numericId < int.MaxValue - GrowthBlockSize;
-        }
     }
 }
 
@@ -822,13 +996,14 @@ internal sealed class ImdbDatasetSearchService
     private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(SqliteConnection connection, string normalizedSeries)
     {
         var rows = new List<ImdbSeriesTitleRow>();
+        var aliasTable = HasDedicatedSeriesAliasTable(connection) ? "series_aliases" : "aliases";
         foreach (var prefix in BuildSeriesSearchPrefixes(normalizedSeries))
         {
             using var command = connection.CreateCommand();
             // Jede Quelle nutzt einen passenden Präfixindex. Der Aliaszweig liefert den deutschen
             // Anzeigenamen, während Primär- und Originaltitel weiterhin englische Suchtexte finden.
             command.CommandText =
-                """
+                $$"""
                 WITH candidate_titles(id, title, normalized_title, source_priority) AS (
                     SELECT id, primary_title, normalized_primary, 1
                     FROM titles
@@ -839,7 +1014,7 @@ internal sealed class ImdbDatasetSearchService
                     WHERE kind = 1 AND normalized_original >= $prefix AND normalized_original < $prefixUpper
                     UNION ALL
                     SELECT a.title_id, a.title, a.normalized_title, 2
-                    FROM aliases a INDEXED BY ix_aliases_normalized
+                    FROM {{aliasTable}} a INDEXED BY ix_aliases_normalized
                     INNER JOIN titles t ON t.id = a.title_id
                     WHERE t.kind = 1 AND a.normalized_title >= $prefix AND a.normalized_title < $prefixUpper
                 )
@@ -906,6 +1081,14 @@ internal sealed class ImdbDatasetSearchService
                 && candidate.TitleSimilarity >= bestSimilarity - 6)
             .Take(12)
             .ToArray();
+    }
+
+    private static bool HasDedicatedSeriesAliasTable(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'series_aliases');";
+        return Convert.ToInt32(command.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
     }
 
     private static IReadOnlyList<ImdbEpisodeCatalogEntry> LoadEpisodeCatalog(

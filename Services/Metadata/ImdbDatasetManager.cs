@@ -181,6 +181,7 @@ internal sealed class ImdbDatasetManager
         var databaseExists = File.Exists(_databasePath);
         if (databaseExists
             && datasetSettings.LastCheckCompleted
+            && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
             && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
             && DateTimeOffset.UtcNow - lastCheckedUtc < SuccessfulCheckInterval)
         {
@@ -193,10 +194,13 @@ internal sealed class ImdbDatasetManager
             var remoteFiles = await LoadRemoteMetadataAsync(cancellationToken);
             var versionToken = BuildVersionToken(remoteFiles);
 
-            if (databaseExists && string.Equals(datasetSettings.InstalledVersion, versionToken, StringComparison.Ordinal))
+            if (databaseExists
+                && datasetSettings.InstalledSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
+                && string.Equals(datasetSettings.InstalledVersion, versionToken, StringComparison.Ordinal))
             {
                 datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
                 datasetSettings.LastCheckCompleted = true;
+                datasetSettings.LastCheckedSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
                 PersistDatasetSettings(datasetSettings);
                 Report(progress, "IMDb-Offlineindex aktuell", "Kein Download nötig.", 100d, false);
                 return new ImdbDatasetStartupResult([]);
@@ -218,6 +222,7 @@ internal sealed class ImdbDatasetManager
                 // Prüfintervall. Abbruch und Fehler im anschließenden Update dürfen das nicht.
                 datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
                 datasetSettings.LastCheckCompleted = true;
+                datasetSettings.LastCheckedSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
                 PersistDatasetSettings(datasetSettings);
                 Report(progress, "IMDb-Update übersprungen", "Der vorhandene Stand bleibt aktiv.", 100d, false);
                 return new ImdbDatasetStartupResult([]);
@@ -231,9 +236,11 @@ internal sealed class ImdbDatasetManager
             cancellationToken.ThrowIfCancellationRequested();
             await DownloadAndBuildAsync(remoteFiles, versionToken, progress, cancellationToken);
             datasetSettings.InstalledVersion = versionToken;
+            datasetSettings.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
             datasetSettings.InstalledRevisionUtc = remoteFiles.Max(file => file.LastModifiedUtc);
             datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
             datasetSettings.LastCheckCompleted = true;
+            datasetSettings.LastCheckedSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
             datasetSettings.LastUpdatedUtc = DateTimeOffset.UtcNow;
             PersistDatasetSettings(datasetSettings);
             Report(progress, "IMDb-Offlineindex bereit", "Download und Indexaufbau abgeschlossen.", 100d, false);
@@ -401,10 +408,11 @@ internal sealed class ImdbDatasetManager
 
     private static string BuildVersionToken(IReadOnlyList<ImdbRemoteDatasetFile> files)
     {
-        var rawToken = string.Join(
+        var datasetToken = string.Join(
             "|",
             files.Select(file =>
                 $"{file.Descriptor.Name}:{file.ETag ?? string.Empty}:{file.LastModifiedUtc?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture) ?? string.Empty}:{file.ContentLength?.ToString(CultureInfo.InvariantCulture) ?? string.Empty}"));
+        var rawToken = $"schema:{ImdbDatasetIndexBuilder.SchemaVersion}|{datasetToken}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken))).ToLowerInvariant();
     }
 

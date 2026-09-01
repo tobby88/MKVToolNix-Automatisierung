@@ -160,6 +160,12 @@ public sealed class ImdbDatasetSettings
     public string InstalledVersion { get; set; } = string.Empty;
 
     /// <summary>
+    /// Schemafassung, mit der der aktive SQLite-Index aufgebaut wurde. Ein abweichender oder bei
+    /// älteren Einstellungen fehlender Wert erzwingt unabhängig vom Tagesintervall eine Neuprüfung.
+    /// </summary>
+    public int InstalledSchemaVersion { get; set; }
+
+    /// <summary>
     /// Neueste Quelldaten-Revision der zuletzt vollständig importierten IMDb-Dateien.
     /// Sie dient der verständlichen Gegenüberstellung mit einem angebotenen Update.
     /// </summary>
@@ -178,6 +184,13 @@ public sealed class ImdbDatasetSettings
     public bool LastCheckCompleted { get; set; }
 
     /// <summary>
+    /// Index-Schemafassung, auf die sich die letzte regulär abgeschlossene Remote-Prüfung bezieht.
+    /// Dadurch wird ein bewusst abgelehnter Neuaufbau für das Tagesintervall respektiert, während
+    /// ältere Einstellungen nach einer Schemaänderung trotzdem sofort einmal geprüft werden.
+    /// </summary>
+    public int LastCheckedSchemaVersion { get; set; }
+
+    /// <summary>
     /// Zeitpunkt des letzten vollständig erfolgreichen Indexaufbaus.
     /// </summary>
     public DateTimeOffset? LastUpdatedUtc { get; set; }
@@ -190,9 +203,11 @@ public sealed class ImdbDatasetSettings
         AutoManageEnabled = AutoManageEnabled,
         ManagementPreferenceConfigured = ManagementPreferenceConfigured,
         InstalledVersion = InstalledVersion?.Trim() ?? string.Empty,
+        InstalledSchemaVersion = InstalledSchemaVersion,
         InstalledRevisionUtc = InstalledRevisionUtc,
         LastCheckedUtc = LastCheckedUtc,
         LastCheckCompleted = LastCheckCompleted,
+        LastCheckedSchemaVersion = LastCheckedSchemaVersion,
         LastUpdatedUtc = LastUpdatedUtc
     };
 }

@@ -38,10 +38,23 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
         Assert.Equal(3, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
         Assert.Equal(5, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+        Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM series_aliases;"));
         Assert.Equal(0, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases WHERE title_id = 'tt3000001';"));
         Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt2000001';"));
         Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE kind = 1;"));
         Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
+        Assert.Contains(
+            "ix_titles_kind_primary",
+            ReadQueryPlan(databasePath, "SELECT id FROM titles WHERE kind = 1 AND normalized_primary >= 'der' AND normalized_primary < 'des';"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ix_titles_parent",
+            ReadQueryPlan(databasePath, "SELECT id FROM titles WHERE kind = 2 AND parent_id = 'tt1000001';"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ix_aliases_normalized",
+            ReadQueryPlan(databasePath, "SELECT title_id FROM series_aliases WHERE normalized_title >= 'der' AND normalized_title < 'des';"),
+            StringComparison.Ordinal);
         Assert.Equal(
             1,
             ReadScalar(
@@ -141,11 +154,18 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             group => Assert.Equal(100d, group.Last().DatasetProgressPercent, precision: 5));
         Assert.True(importReports.Zip(importReports.Skip(1), (left, right) => left.OverallProgressPercent <= right.OverallProgressPercent).All(value => value));
         var finalizationReports = progress.Values.Where(value => value.IsFinalizing).ToArray();
-        Assert.Equal(7, finalizationReports.Length);
-        Assert.Equal(Enumerable.Range(1, 7), finalizationReports.Select(value => value.DatasetNumber));
-        Assert.All(finalizationReports, value => Assert.Equal(7, value.DatasetCount));
+        Assert.Equal(6, finalizationReports.Length);
+        Assert.Equal(Enumerable.Range(1, 6), finalizationReports.Select(value => value.DatasetNumber));
+        Assert.All(finalizationReports, value => Assert.Equal(6, value.DatasetCount));
         Assert.Contains(finalizationReports, value => value.DatasetName.Contains("Aliasnamen", StringComparison.Ordinal));
         Assert.All(finalizationReports, value => Assert.Equal(100d, value.OverallProgressPercent));
+
+        ExecuteSql(
+            databasePath,
+            "DROP TABLE series_aliases; CREATE INDEX ix_aliases_normalized ON aliases(normalized_title);");
+        var legacyAliasResult = Assert.Single(
+            new ImdbDatasetSearchService(databasePath).SearchSeriesCandidates("SOKO Leipzig"));
+        Assert.Equal("SOKO Leipzig", legacyAliasResult.DisplayTitle);
     }
 
     [Fact]
@@ -233,6 +253,9 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(0, handler.GetRequestCount);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastCheckedUtc);
         Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion,
+            store.CurrentSettings.ImdbDataset.LastCheckedSchemaVersion);
         Assert.True(store.CurrentSettings.ImdbDataset.AutoManageEnabled);
         Assert.True(store.CurrentSettings.ImdbDataset.ManagementPreferenceConfigured);
     }
@@ -323,12 +346,17 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             databasePath);
 
         var retryResult = await retryManager.EnsureCurrentAsync();
+        var throttledResult = await retryManager.EnsureCurrentAsync();
 
         Assert.False(retryResult.HasWarning);
+        Assert.False(throttledResult.HasWarning);
         Assert.Equal(1, retryConsent.CallCount);
         Assert.Equal(6, handler.HeadRequestCount);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastCheckedUtc);
         Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion,
+            store.CurrentSettings.ImdbDataset.LastCheckedSchemaVersion);
     }
 
     [Fact]
@@ -366,10 +394,16 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(3, handler.GetRequestCount);
         Assert.False(string.IsNullOrWhiteSpace(store.CurrentSettings.ImdbDataset.InstalledVersion));
         Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion,
+            store.CurrentSettings.ImdbDataset.InstalledSchemaVersion);
+        Assert.Equal(
             new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero),
             store.CurrentSettings.ImdbDataset.InstalledRevisionUtc);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastUpdatedUtc);
         Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion,
+            store.CurrentSettings.ImdbDataset.LastCheckedSchemaVersion);
         Assert.Single(new ImdbDatasetSearchService(databasePath).SearchEpisodeCandidates(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02")));
         Assert.Contains(progress.Values, value =>
@@ -452,11 +486,12 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             + "tt1000002\ttvSeries\tLeipzig Homicide\tSOKO Leipzig\t0\t2001\t\\N\t45\tCrime\n"
             + "tt2000002\ttvEpisode\tDark Truth\tDark Truth\t0\t2025\t\\N\t45\tCrime\n"
             + "tt2000003\ttvEpisode\tSecond Episode\tSecond Episode\t0\t2025\t\\N\t45\tCrime\n"
+            + "tt2000004\ttvEpisode\tOrphaned Episode\tOrphaned Episode\t0\t2025\t\\N\t45\tCrime\n"
             + "tt3000001\tmovie\tIgnored Movie\tIgnored Movie\t0\t2026\t\\N\t90\tDrama\n"),
         ["title.episode.tsv.gz"] = Gzip(
             "tconst\tparentTconst\tseasonNumber\tepisodeNumber\n"
-            + "tt2000001\ttt1000001\t55\t2\n"
             + "tt2000002\ttt1000002\t1\t1\n"
+            + "tt2000001\ttt1000001\t55\t2\n"
             + "tt2000003\ttt1000002\t2\t1\n"),
         ["title.akas.tsv.gz"] = Gzip(
             "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n"
@@ -497,6 +532,31 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         using var command = connection.CreateCommand();
         command.CommandText = commandText;
         return Convert.ToString(command.ExecuteScalar())!;
+    }
+
+    private static string ReadQueryPlan(string databasePath, string commandText)
+    {
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN QUERY PLAN " + commandText;
+        using var reader = command.ExecuteReader();
+        var details = new List<string>();
+        while (reader.Read())
+        {
+            details.Add(reader.GetString(3));
+        }
+
+        return string.Join(Environment.NewLine, details);
+    }
+
+    private static void ExecuteSql(string databasePath, string commandText)
+    {
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = commandText;
+        command.ExecuteNonQuery();
     }
 
     public void Dispose()
