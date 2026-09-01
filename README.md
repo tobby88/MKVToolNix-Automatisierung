@@ -71,7 +71,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
-- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem großen Download fragt sie ausdrücklich nach. Stand Juli 2026 sind rund 750 MiB Download, etwa 2,7 GiB dauerhafter Speicher und während eines atomaren Neuaufbaus vorsichtshalber 6 bis 7 GiB freier Speicher einzuplanen. Die Verwaltung kann in den Einstellungen deaktiviert werden.
+- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem großen Download fragt sie ausdrücklich nach. Stand September 2026 sind rund 750 MiB Download, etwa 1,3 GiB dauerhafter Speicher und während eines atomaren Neuaufbaus vorsichtshalber 4 bis 5 GiB freier Speicher einzuplanen. Die Verwaltung kann in den Einstellungen deaktiviert werden.
 - Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
 
 ## Portable Modus
@@ -80,7 +80,7 @@ Die App ist bewusst portabel gedacht und nicht für eine klassische Installation
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs. Der optionale IMDb-Index liegt unter `.\Data\IMDb` und benötigt derzeit rund 2,7 GiB.
+- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs. Der optionale IMDb-Index liegt unter `.\Data\IMDb` und benötigt derzeit rund 1,3 GiB.
 - Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
 - Der Anwendungsordner muss beschreibbar sein.
 - Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
@@ -194,11 +194,11 @@ Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Date
 
 Vor einem angebotenen Update stellt die Nachfrage den vorhandenen und den verfügbaren Datenstand mit Revisionsdatum und kurzer Versionskennung direkt gegenüber. Bei älteren Indexen, für die noch keine Quelldatenrevision gespeichert wurde, zeigt sie ersatzweise das Datum des letzten erfolgreichen Indexaufbaus.
 
-Speicherbedarf, Stand Juli 2026:
+Speicherbedarf, Stand September 2026:
 
 - ungefähr 750 MiB für die drei temporär heruntergeladenen GZip-Archive
-- ungefähr 2,7 GiB dauerhaft für `.\Data\IMDb\imdb-episodes.sqlite`
-- empfohlen 6 bis 7 GiB freier Speicher während eines Updates, weil alter Index, neuer Index und Roharchive bis zum erfolgreichen atomaren Austausch gleichzeitig vorhanden sein können
+- ungefähr 1,3 GiB dauerhaft für `.\Data\IMDb\imdb-episodes.sqlite`
+- empfohlen 4 bis 5 GiB freier Speicher während eines Updates, weil alter Index, neuer Index und Roharchive bis zum erfolgreichen atomaren Austausch gleichzeitig vorhanden sein können
 
 Die offiziellen Datensätze wachsen fortlaufend; diese Werte sind deshalb Richtwerte und können bei späteren Aktualisierungen steigen.
 

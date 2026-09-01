@@ -30,7 +30,7 @@ Titelähnlichkeit ist das wichtigste Suchsignal. Staffel und Folge beeinflussen 
 
 Der manuelle Dialog lädt lokale Kandidaten asynchron und hält bereits gelesene Serien- und Episodenkataloge für weitere Folgen derselben Serie im Speicher. Korrigierte Serien- oder Episodentexte lösen nach einer kurzen Entprellzeit automatisch eine neue Hintergrundsuche aus. Passende Serien werden einschließlich lokalisierter Aliasnamen angeboten; nach der Serienwahl lässt sich der Episodenkatalog auf die tatsächlich vorhandenen IMDb-Staffeln begrenzen.
 
-Der Index ist ein Fallback, keine zusätzliche Online-API. Er liegt portabel unter `Data/IMDb/imdb-episodes.sqlite`; die heruntergeladenen GZip-Dateien werden nach dem Aufbau wieder entfernt. Stand Juli 2026 beanspruchen die Archive rund 750 MiB und der fertige Index rund 2,7 GiB. Während des atomaren Neuaufbaus sollten 6 bis 7 GiB frei sein, weil alter und neuer Index vorübergehend neben den Archiven liegen. Die IMDb-Datensätze dürfen nur entsprechend ihrer Bedingungen für persönliche, nichtkommerzielle Zwecke verwendet werden.
+Der Index ist ein Fallback, keine zusätzliche Online-API. Er liegt portabel unter `Data/IMDb/imdb-episodes.sqlite`; die heruntergeladenen GZip-Dateien werden nach dem Aufbau wieder entfernt. Stand September 2026 beanspruchen die Archive rund 750 MiB und der fertige Index rund 1,3 GiB. Während des atomaren Neuaufbaus sollten 4 bis 5 GiB frei sein, weil alter und neuer Index vorübergehend neben den Archiven liegen. Die IMDb-Datensätze dürfen nur entsprechend ihrer Bedingungen für persönliche, nichtkommerzielle Zwecke verwendet werden.
 
 ## NFO-Schreibgrenzen
 
