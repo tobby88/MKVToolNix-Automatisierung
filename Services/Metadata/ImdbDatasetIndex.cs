@@ -1,8 +1,11 @@
+using System.Buffers;
+using System.Buffers.Text;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using Microsoft.Data.Sqlite;
 
 namespace MkvToolnixAutomatisierung.Services.Metadata;
@@ -230,12 +233,12 @@ internal sealed class ImdbDatasetIndexBuilder
             {
                 Span<Range> columns = stackalloc Range[6];
                 if (!TryGetColumnRanges(line, columns)
-                    || !TryMapTitleKind(line.AsSpan(columns[1]), out var mappedKind))
+                    || !TryMapTitleKind(line[columns[1]], out var mappedKind))
                 {
                     return false;
                 }
 
-                var idSpan = line.AsSpan(columns[0]);
+                var idSpan = line[columns[0]];
                 string? parentId = null;
                 int? seasonNumber = null;
                 int? episodeNumber = null;
@@ -245,10 +248,10 @@ internal sealed class ImdbDatasetIndexBuilder
                     return false;
                 }
 
-                var primaryTitle = line[columns[2]];
-                var originalTitle = line[columns[3]];
+                var primaryTitle = Encoding.UTF8.GetString(line[columns[2]]);
+                var originalTitle = Encoding.UTF8.GetString(line[columns[3]]);
                 var normalizedPrimaryTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
-                id.Value = idSpan.ToString();
+                id.Value = Encoding.ASCII.GetString(idSpan);
                 kind.Value = mappedKind;
                 primary.Value = primaryTitle;
                 original.Value = originalTitle;
@@ -256,7 +259,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 normalizedOriginal.Value = string.Equals(primaryTitle, originalTitle, StringComparison.Ordinal)
                     ? normalizedPrimaryTitle
                     : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
-                year.Value = TryParseNullableInt(line.AsSpan(columns[5])) is { } parsedYear ? parsedYear : DBNull.Value;
+                year.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear ? parsedYear : DBNull.Value;
                 parent.Value = parentId is null ? DBNull.Value : parentId;
                 season.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
                 episode.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
@@ -296,10 +299,10 @@ internal sealed class ImdbDatasetIndexBuilder
                 }
 
                 lookup.Add(
-                    line.AsSpan(columns[0]),
-                    line.AsSpan(columns[1]),
-                    TryParseNullableInt(line.AsSpan(columns[2])),
-                    TryParseNullableInt(line.AsSpan(columns[3])));
+                    line[columns[0]],
+                    line[columns[1]],
+                    TryParseNullableInt(line[columns[2]]),
+                    TryParseNullableInt(line[columns[3]]));
                 return true;
             },
             cancellationToken);
@@ -354,18 +357,18 @@ internal sealed class ImdbDatasetIndexBuilder
                     return false;
                 }
 
-                var idSpan = line.AsSpan(columns[0]);
-                var regionSpan = line.AsSpan(columns[3]);
-                var languageSpan = line.AsSpan(columns[4]);
-                if ((!regionSpan.Equals("DE", StringComparison.OrdinalIgnoreCase)
-                        && !languageSpan.Equals("de", StringComparison.OrdinalIgnoreCase))
+                var idSpan = line[columns[0]];
+                var regionSpan = line[columns[3]];
+                var languageSpan = line[columns[4]];
+                if ((!EqualsAsciiIgnoreCase(regionSpan, "DE"u8)
+                        && !EqualsAsciiIgnoreCase(languageSpan, "de"u8))
                     || !importedTitleIds.Contains(idSpan))
                 {
                     return false;
                 }
 
-                var aliasTitle = line[columns[2]];
-                id.Value = idSpan.ToString();
+                var aliasTitle = Encoding.UTF8.GetString(line[columns[2]]);
+                id.Value = Encoding.ASCII.GetString(idSpan);
                 title.Value = aliasTitle;
                 normalized.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
                 region.Value = ToDatabaseNullable(regionSpan);
@@ -387,30 +390,56 @@ internal sealed class ImdbDatasetIndexBuilder
     }
 
     /// <summary>
-    /// Liest die lokalen GZip-Dateien bewusst synchron auf dem vom Manager bereitgestellten Worker-Thread.
-    /// Sowohl GZip als auch Microsoft.Data.Sqlite erledigen ihre eigentliche Arbeit synchron; ein Task pro
-    /// Datenzeile würde bei den IMDb-Millionendatensätzen nur zusätzlichen Verwaltungsaufwand erzeugen.
+    /// Liest die lokalen GZip-Dateien als UTF-8-Bytes auf dem vom Manager bereitgestellten Worker-Thread.
+    /// Verworfene IMDb-Zeilen benötigen dadurch weder einen vollständigen String noch Teilstrings.
     /// </summary>
     private static void ReadGzipTsv(
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
-        Func<string, bool> processLine,
+        Utf8LineProcessor processLine,
         CancellationToken cancellationToken)
     {
         using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, useAsync: false);
         using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress, leaveOpen: false);
-        using var reader = new StreamReader(gzipStream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, 1024 * 1024);
-        _ = reader.ReadLine(); // Kopfzeile
-
+        var readBuffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+        var lineBuffer = ArrayPool<byte>.Shared.Rent(4096);
+        var bufferedLineLength = 0;
+        var isHeader = true;
         long rowCount = 0;
         long importedRowCount = 0;
         var elapsed = Stopwatch.StartNew();
         var lastProgressTimestamp = Stopwatch.GetTimestamp();
         ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, fileStream.Position);
-        while (reader.ReadLine() is { } line)
+
+        void AppendLineSegment(ReadOnlySpan<byte> segment)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            var requiredLength = bufferedLineLength + segment.Length;
+            if (requiredLength > lineBuffer.Length)
+            {
+                var replacement = ArrayPool<byte>.Shared.Rent(Math.Max(requiredLength, lineBuffer.Length * 2));
+                lineBuffer.AsSpan(0, bufferedLineLength).CopyTo(replacement);
+                ArrayPool<byte>.Shared.Return(lineBuffer);
+                lineBuffer = replacement;
+            }
+
+            segment.CopyTo(lineBuffer.AsSpan(bufferedLineLength));
+            bufferedLineLength = requiredLength;
+        }
+
+        void ProcessCompletedLine(ReadOnlySpan<byte> line)
+        {
+            if (!line.IsEmpty && line[^1] == (byte)'\r')
+            {
+                line = line[..^1];
+            }
+
+            if (isHeader)
+            {
+                isHeader = false;
+                return;
+            }
+
             rowCount++;
             if (processLine(line))
             {
@@ -424,20 +453,72 @@ internal sealed class ImdbDatasetIndexBuilder
             }
         }
 
-        ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, progressContext.ArchiveLength);
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var bytesRead = gzipStream.Read(readBuffer);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                var block = readBuffer.AsSpan(0, bytesRead);
+                var segmentStart = 0;
+                for (var index = 0; index < block.Length; index++)
+                {
+                    if (block[index] != (byte)'\n')
+                    {
+                        continue;
+                    }
+
+                    var segment = block[segmentStart..index];
+                    if (bufferedLineLength == 0)
+                    {
+                        ProcessCompletedLine(segment);
+                    }
+                    else
+                    {
+                        AppendLineSegment(segment);
+                        ProcessCompletedLine(lineBuffer.AsSpan(0, bufferedLineLength));
+                        bufferedLineLength = 0;
+                    }
+
+                    segmentStart = index + 1;
+                }
+
+                if (segmentStart < block.Length)
+                {
+                    AppendLineSegment(block[segmentStart..]);
+                }
+            }
+
+            if (bufferedLineLength > 0)
+            {
+                ProcessCompletedLine(lineBuffer.AsSpan(0, bufferedLineLength));
+            }
+
+            ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, progressContext.ArchiveLength);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(readBuffer);
+            ArrayPool<byte>.Shared.Return(lineBuffer);
+        }
     }
 
     /// <summary>
     /// Ermittelt nur die tatsächlich benötigten TSV-Spalten. Dadurch entstehen für verworfene IMDb-Zeilen
     /// keine Teilstrings und für relevante Zeilen nur die Werte, die in den Index geschrieben werden.
     /// </summary>
-    private static bool TryGetColumnRanges(string line, Span<Range> columns)
+    private static bool TryGetColumnRanges(ReadOnlySpan<byte> line, Span<Range> columns)
     {
         var columnIndex = 0;
         var columnStart = 0;
         for (var index = 0; index < line.Length; index++)
         {
-            if (line[index] != '\t')
+            if (line[index] != (byte)'\t')
             {
                 continue;
             }
@@ -498,16 +579,16 @@ internal sealed class ImdbDatasetIndexBuilder
             ProcessedRowsPerSecond: elapsed.TotalSeconds > 0d ? processedRowCount / elapsed.TotalSeconds : 0d));
     }
 
-    private static bool TryMapTitleKind(ReadOnlySpan<char> value, out int kind)
+    private static bool TryMapTitleKind(ReadOnlySpan<byte> value, out int kind)
     {
-        if (value.Equals("tvSeries", StringComparison.OrdinalIgnoreCase)
-            || value.Equals("tvMiniSeries", StringComparison.OrdinalIgnoreCase))
+        if (EqualsAsciiIgnoreCase(value, "tvSeries"u8)
+            || EqualsAsciiIgnoreCase(value, "tvMiniSeries"u8))
         {
             kind = 1;
             return true;
         }
 
-        if (value.Equals("tvEpisode", StringComparison.OrdinalIgnoreCase))
+        if (EqualsAsciiIgnoreCase(value, "tvEpisode"u8))
         {
             kind = 2;
             return true;
@@ -517,25 +598,81 @@ internal sealed class ImdbDatasetIndexBuilder
         return false;
     }
 
-    private static int? TryParseNullableInt(ReadOnlySpan<char> value) =>
-        !value.Equals(@"\N", StringComparison.Ordinal)
-        && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+    private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> expected)
+    {
+        if (value.Length != expected.Length)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            var left = value[index];
+            var right = expected[index];
+            if (left == right)
+            {
+                continue;
+            }
+
+            if (left is >= (byte)'A' and <= (byte)'Z')
+            {
+                left += (byte)('a' - 'A');
+            }
+
+            if (right is >= (byte)'A' and <= (byte)'Z')
+            {
+                right += (byte)('a' - 'A');
+            }
+
+            if (left != right)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int? TryParseNullableInt(ReadOnlySpan<byte> value) =>
+        !value.SequenceEqual("\\N"u8)
+        && Utf8Parser.TryParse(value, out int parsed, out var consumed)
+        && consumed == value.Length
             ? parsed
             : null;
 
-    private static object ToDatabaseNullable(ReadOnlySpan<char> value) =>
-        value.Equals(@"\N", StringComparison.Ordinal) ? DBNull.Value : value.ToString();
+    private static object ToDatabaseNullable(ReadOnlySpan<byte> value) =>
+        value.SequenceEqual("\\N"u8) ? DBNull.Value : Encoding.UTF8.GetString(value);
 
-    private static bool TryParseNumericTitleId(ReadOnlySpan<char> id, out int numericId)
+    private static bool TryParseNumericTitleId(ReadOnlySpan<byte> id, out int numericId)
     {
         numericId = 0;
-        return id.Length > 2
-            && (id[0] is 't' or 'T')
-            && (id[1] is 't' or 'T')
-            && int.TryParse(id[2..], NumberStyles.None, CultureInfo.InvariantCulture, out numericId)
-            && numericId >= 0
-            && numericId < int.MaxValue - ImportedTitleIdSet.GrowthBlockSize;
+        if (id.Length <= 2
+            || id[0] is not ((byte)'t' or (byte)'T')
+            || id[1] is not ((byte)'t' or (byte)'T'))
+        {
+            return false;
+        }
+
+        foreach (var character in id[2..])
+        {
+            if (character is < (byte)'0' or > (byte)'9')
+            {
+                return false;
+            }
+
+            var nextValue = (long)numericId * 10L + character - (byte)'0';
+            if (nextValue >= int.MaxValue - ImportedTitleIdSet.GrowthBlockSize)
+            {
+                return false;
+            }
+
+            numericId = (int)nextValue;
+        }
+
+        return true;
     }
+
+    private delegate bool Utf8LineProcessor(ReadOnlySpan<byte> line);
 
     private static async Task ExecuteNonQueryAsync(
         SqliteConnection connection,
@@ -576,7 +713,7 @@ internal sealed class ImdbDatasetIndexBuilder
             _numericLinks = new List<NumericEpisodeLink>(estimatedRowCount);
         }
 
-        public void Add(ReadOnlySpan<char> id, ReadOnlySpan<char> parentId, int? seasonNumber, int? episodeNumber)
+        public void Add(ReadOnlySpan<byte> id, ReadOnlySpan<byte> parentId, int? seasonNumber, int? episodeNumber)
         {
             if (TryCreateTitleIdSortKey(id, out var sortKey)
                 && TryParseNumericTitleId(parentId, out var numericParentId)
@@ -588,8 +725,8 @@ internal sealed class ImdbDatasetIndexBuilder
                 return;
             }
 
-            _textLinks[id.ToString()] = new TextEpisodeLink(
-                parentId.ToString(),
+            _textLinks[Encoding.UTF8.GetString(id)] = new TextEpisodeLink(
+                Encoding.UTF8.GetString(parentId),
                 seasonNumber,
                 episodeNumber);
         }
@@ -603,7 +740,7 @@ internal sealed class ImdbDatasetIndexBuilder
         }
 
         public bool TryGet(
-            ReadOnlySpan<char> id,
+            ReadOnlySpan<byte> id,
             out string? parentId,
             out int? seasonNumber,
             out int? episodeNumber)
@@ -635,7 +772,7 @@ internal sealed class ImdbDatasetIndexBuilder
                     return true;
                 }
             }
-            else if (_textLinks.TryGetValue(id.ToString(), out var textLink))
+            else if (_textLinks.TryGetValue(Encoding.UTF8.GetString(id), out var textLink))
             {
                 parentId = textLink.ParentId;
                 seasonNumber = textLink.SeasonNumber;
@@ -669,7 +806,7 @@ internal sealed class ImdbDatasetIndexBuilder
             return lower;
         }
 
-        private static bool TryCreateTitleIdSortKey(ReadOnlySpan<char> id, out ulong sortKey)
+        private static bool TryCreateTitleIdSortKey(ReadOnlySpan<byte> id, out ulong sortKey)
         {
             sortKey = 0;
             if (!TryParseNumericTitleId(id, out _) || id.Length > 12)
@@ -686,7 +823,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 sortKey <<= 4;
                 if (index < digits.Length)
                 {
-                    sortKey |= (uint)(digits[index] - '0' + 1);
+                    sortKey |= (uint)(digits[index] - (byte)'0' + 1);
                 }
             }
 
@@ -735,11 +872,11 @@ internal sealed class ImdbDatasetIndexBuilder
         private readonly HashSet<string> _nonNumericIds = new(StringComparer.Ordinal);
         private BitArray _numericIds = new(GrowthBlockSize);
 
-        public void Add(ReadOnlySpan<char> id)
+        public void Add(ReadOnlySpan<byte> id)
         {
             if (!TryParseNumericTitleId(id, out var numericId))
             {
-                _nonNumericIds.Add(id.ToString());
+                _nonNumericIds.Add(Encoding.UTF8.GetString(id));
                 return;
             }
 
@@ -747,11 +884,11 @@ internal sealed class ImdbDatasetIndexBuilder
             _numericIds[numericId] = true;
         }
 
-        public bool Contains(ReadOnlySpan<char> id)
+        public bool Contains(ReadOnlySpan<byte> id)
         {
             if (!TryParseNumericTitleId(id, out var numericId))
             {
-                return _nonNumericIds.Contains(id.ToString());
+                return _nonNumericIds.Contains(Encoding.UTF8.GetString(id));
             }
 
             return numericId < _numericIds.Length && _numericIds[numericId];
