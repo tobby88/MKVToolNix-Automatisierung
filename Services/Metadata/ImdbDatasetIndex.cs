@@ -545,13 +545,14 @@ internal sealed class ImdbDatasetIndexBuilder
     /// </summary>
     private sealed class EpisodeLinkLookup
     {
-        private const int MissingNumber = int.MinValue;
+        private const ushort MissingNumber = ushort.MaxValue;
+        private const ulong ParentIdMask = 0x7FFF_FFFFUL;
         private readonly List<NumericEpisodeLink> _numericLinks;
         private readonly Dictionary<string, TextEpisodeLink> _textLinks = new(StringComparer.Ordinal);
         private bool _isOrdered = true;
-        private int _lastNumericId = -1;
+        private ulong _lastSortKey;
         private int _lookupCursor;
-        private int _lastLookupId = -1;
+        private ulong _lastLookupSortKey;
 
         public EpisodeLinkLookup(int estimatedRowCount)
         {
@@ -560,16 +561,13 @@ internal sealed class ImdbDatasetIndexBuilder
 
         public void Add(ReadOnlySpan<char> id, ReadOnlySpan<char> parentId, int? seasonNumber, int? episodeNumber)
         {
-            if (TryParseNumericTitleId(id, out var numericId)
-                && TryParseNumericTitleId(parentId, out var numericParentId))
+            if (TryCreateTitleIdSortKey(id, out var sortKey)
+                && TryParseNumericTitleId(parentId, out var numericParentId)
+                && TryPackEpisodeLink(numericParentId, seasonNumber, episodeNumber, out var packedData))
             {
-                _isOrdered &= numericId >= _lastNumericId;
-                _lastNumericId = numericId;
-                _numericLinks.Add(new NumericEpisodeLink(
-                    numericId,
-                    numericParentId,
-                    seasonNumber ?? MissingNumber,
-                    episodeNumber ?? MissingNumber));
+                _isOrdered &= sortKey >= _lastSortKey;
+                _lastSortKey = sortKey;
+                _numericLinks.Add(new NumericEpisodeLink(sortKey, packedData));
                 return;
             }
 
@@ -583,7 +581,7 @@ internal sealed class ImdbDatasetIndexBuilder
         {
             if (!_isOrdered)
             {
-                _numericLinks.Sort(static (left, right) => left.Id.CompareTo(right.Id));
+                _numericLinks.Sort(static (left, right) => left.SortKey.CompareTo(right.SortKey));
             }
         }
 
@@ -593,27 +591,30 @@ internal sealed class ImdbDatasetIndexBuilder
             out int? seasonNumber,
             out int? episodeNumber)
         {
-            if (TryParseNumericTitleId(id, out var numericId))
+            if (TryCreateTitleIdSortKey(id, out var sortKey))
             {
-                if (numericId < _lastLookupId)
+                if (sortKey < _lastLookupSortKey)
                 {
-                    _lookupCursor = FindLowerBound(numericId);
+                    _lookupCursor = FindLowerBound(sortKey);
                 }
                 else
                 {
-                    while (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].Id < numericId)
+                    while (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].SortKey < sortKey)
                     {
                         _lookupCursor++;
                     }
                 }
 
-                _lastLookupId = numericId;
-                if (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].Id == numericId)
+                _lastLookupSortKey = sortKey;
+                if (_lookupCursor < _numericLinks.Count && _numericLinks[_lookupCursor].SortKey == sortKey)
                 {
                     var candidate = _numericLinks[_lookupCursor];
-                    parentId = "tt" + candidate.ParentId.ToString("D7", CultureInfo.InvariantCulture);
-                    seasonNumber = candidate.SeasonNumber == MissingNumber ? null : candidate.SeasonNumber;
-                    episodeNumber = candidate.EpisodeNumber == MissingNumber ? null : candidate.EpisodeNumber;
+                    var numericParentId = (int)(candidate.PackedData & ParentIdMask);
+                    var packedSeason = (ushort)((candidate.PackedData >> 31) & ushort.MaxValue);
+                    var packedEpisode = (ushort)((candidate.PackedData >> 47) & ushort.MaxValue);
+                    parentId = "tt" + numericParentId.ToString("D7", CultureInfo.InvariantCulture);
+                    seasonNumber = packedSeason == MissingNumber ? null : packedSeason;
+                    episodeNumber = packedEpisode == MissingNumber ? null : packedEpisode;
                     return true;
                 }
             }
@@ -631,14 +632,14 @@ internal sealed class ImdbDatasetIndexBuilder
             return false;
         }
 
-        private int FindLowerBound(int numericId)
+        private int FindLowerBound(ulong sortKey)
         {
             var lower = 0;
             var upper = _numericLinks.Count;
             while (lower < upper)
             {
                 var middle = lower + ((upper - lower) / 2);
-                if (_numericLinks[middle].Id < numericId)
+                if (_numericLinks[middle].SortKey < sortKey)
                 {
                     lower = middle + 1;
                 }
@@ -651,6 +652,48 @@ internal sealed class ImdbDatasetIndexBuilder
             return lower;
         }
 
+        private static bool TryCreateTitleIdSortKey(ReadOnlySpan<char> id, out ulong sortKey)
+        {
+            sortKey = 0;
+            if (!TryParseNumericTitleId(id, out _) || id.Length > 12)
+            {
+                return false;
+            }
+
+            // Jede Ziffer erhält 1..10, das implizite Stringende 0. Der linksbündig auf zehn
+            // Nibbles aufgefüllte Wert hat damit exakt dieselbe Ordnung wie die TSV-Zeichenfolge,
+            // auch am Übergang tt1000000 -> tt10000000 -> tt1000001.
+            var digits = id[2..];
+            for (var index = 0; index < 10; index++)
+            {
+                sortKey <<= 4;
+                if (index < digits.Length)
+                {
+                    sortKey |= (uint)(digits[index] - '0' + 1);
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryPackEpisodeLink(
+            int parentId,
+            int? seasonNumber,
+            int? episodeNumber,
+            out ulong packedData)
+        {
+            packedData = 0;
+            if (seasonNumber is < 0 or >= MissingNumber || episodeNumber is < 0 or >= MissingNumber)
+            {
+                return false;
+            }
+
+            var packedSeason = (ushort)(seasonNumber ?? MissingNumber);
+            var packedEpisode = (ushort)(episodeNumber ?? MissingNumber);
+            packedData = (uint)parentId | ((ulong)packedSeason << 31) | ((ulong)packedEpisode << 47);
+            return true;
+        }
+
         public void Release()
         {
             _numericLinks.Clear();
@@ -659,11 +702,7 @@ internal sealed class ImdbDatasetIndexBuilder
             _textLinks.TrimExcess();
         }
 
-        private readonly record struct NumericEpisodeLink(
-            int Id,
-            int ParentId,
-            int SeasonNumber,
-            int EpisodeNumber);
+        private readonly record struct NumericEpisodeLink(ulong SortKey, ulong PackedData);
 
         private sealed record TextEpisodeLink(string ParentId, int? SeasonNumber, int? EpisodeNumber);
     }

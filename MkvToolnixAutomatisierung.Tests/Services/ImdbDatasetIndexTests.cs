@@ -35,13 +35,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             "revision-1",
             progress);
 
-        Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
-        Assert.Equal(3, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
+        Assert.Equal(3, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
+        Assert.Equal(6, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
         Assert.Equal(5, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
         Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM series_aliases;"));
         Assert.Equal(0, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases WHERE title_id = 'tt3000001';"));
         Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt2000001';"));
-        Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE kind = 1;"));
+        Assert.Equal("tt3500000", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt40000000';"));
+        Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE id = 'tt1000001';"));
         Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
         Assert.Contains(
             "ix_titles_kind_primary",
@@ -487,12 +488,19 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             + "tt2000002\ttvEpisode\tDark Truth\tDark Truth\t0\t2025\t\\N\t45\tCrime\n"
             + "tt2000003\ttvEpisode\tSecond Episode\tSecond Episode\t0\t2025\t\\N\t45\tCrime\n"
             + "tt2000004\ttvEpisode\tOrphaned Episode\tOrphaned Episode\t0\t2025\t\\N\t45\tCrime\n"
-            + "tt3000001\tmovie\tIgnored Movie\tIgnored Movie\t0\t2026\t\\N\t90\tDrama\n"),
+            + "tt3000001\tmovie\tIgnored Movie\tIgnored Movie\t0\t2026\t\\N\t90\tDrama\n"
+            + "tt3500000\ttvSeries\tBoundary Series\tBoundary Series\t0\t2026\t\\N\t45\tCrime\n"
+            + "tt4000000\ttvEpisode\tBoundary One\tBoundary One\t0\t2026\t\\N\t45\tCrime\n"
+            + "tt40000000\ttvEpisode\tBoundary Two\tBoundary Two\t0\t2026\t\\N\t45\tCrime\n"
+            + "tt4000001\ttvEpisode\tBoundary Three\tBoundary Three\t0\t2026\t\\N\t45\tCrime\n"),
         ["title.episode.tsv.gz"] = Gzip(
             "tconst\tparentTconst\tseasonNumber\tepisodeNumber\n"
             + "tt2000002\ttt1000002\t1\t1\n"
             + "tt2000001\ttt1000001\t55\t2\n"
-            + "tt2000003\ttt1000002\t2\t1\n"),
+            + "tt2000003\ttt1000002\t2\t1\n"
+            + "tt4000000\ttt3500000\t1\t1\n"
+            + "tt40000000\ttt3500000\t1\t2\n"
+            + "tt4000001\ttt3500000\t1\t3\n"),
         ["title.akas.tsv.gz"] = Gzip(
             "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n"
             + "tt1000001\t1\tDer alte Kommissar\tDE\tde\timdbDisplay\t\\N\t0\n"
