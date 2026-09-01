@@ -202,28 +202,40 @@ internal sealed class ImdbDatasetIndexBuilder
         CancellationToken cancellationToken)
     {
         using var transaction = connection.BeginTransaction();
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
+        using var seriesCommand = connection.CreateCommand();
+        seriesCommand.Transaction = transaction;
+        seriesCommand.CommandText =
             """
             INSERT INTO titles(
                 id, kind, primary_title, original_title, normalized_primary, normalized_original, start_year,
                 parent_id, season_number, episode_number)
             VALUES(
-                $id, $kind, $primary, $original, $normalizedPrimary, $normalizedOriginal, $year,
-                $parent, $season, $episode);
+                $id, 1, $primary, $original, $normalizedPrimary, $normalizedOriginal, $year,
+                NULL, NULL, NULL);
             """;
-        var id = command.Parameters.Add("$id", SqliteType.Text);
-        var kind = command.Parameters.Add("$kind", SqliteType.Integer);
-        var primary = command.Parameters.Add("$primary", SqliteType.Text);
-        var original = command.Parameters.Add("$original", SqliteType.Text);
-        var normalizedPrimary = command.Parameters.Add("$normalizedPrimary", SqliteType.Text);
-        var normalizedOriginal = command.Parameters.Add("$normalizedOriginal", SqliteType.Text);
-        var year = command.Parameters.Add("$year", SqliteType.Integer);
-        var parent = command.Parameters.Add("$parent", SqliteType.Text);
-        var season = command.Parameters.Add("$season", SqliteType.Integer);
-        var episode = command.Parameters.Add("$episode", SqliteType.Integer);
-        command.Prepare();
+        var seriesId = seriesCommand.Parameters.Add("$id", SqliteType.Text);
+        var seriesPrimary = seriesCommand.Parameters.Add("$primary", SqliteType.Text);
+        var seriesOriginal = seriesCommand.Parameters.Add("$original", SqliteType.Text);
+        var seriesNormalizedPrimary = seriesCommand.Parameters.Add("$normalizedPrimary", SqliteType.Text);
+        var seriesNormalizedOriginal = seriesCommand.Parameters.Add("$normalizedOriginal", SqliteType.Text);
+        var seriesYear = seriesCommand.Parameters.Add("$year", SqliteType.Integer);
+        seriesCommand.Prepare();
+
+        // Episoden bilden den weitaus größten Teil von title.basics. Ein eigenes Statement
+        // bindet nur die fünf variablen Werte, die der spätere Episodenkatalog tatsächlich liest.
+        using var episodeCommand = connection.CreateCommand();
+        episodeCommand.Transaction = transaction;
+        episodeCommand.CommandText =
+            """
+            INSERT INTO titles(id, kind, primary_title, parent_id, season_number, episode_number)
+            VALUES($id, 2, $primary, $parent, $season, $episode);
+            """;
+        var episodeId = episodeCommand.Parameters.Add("$id", SqliteType.Text);
+        var episodePrimary = episodeCommand.Parameters.Add("$primary", SqliteType.Text);
+        var episodeParent = episodeCommand.Parameters.Add("$parent", SqliteType.Text);
+        var episodeSeason = episodeCommand.Parameters.Add("$season", SqliteType.Integer);
+        var episodeNumberParameter = episodeCommand.Parameters.Add("$episode", SqliteType.Integer);
+        episodeCommand.Prepare();
 
         ReadGzipTsv(
             archivePath,
@@ -251,51 +263,42 @@ internal sealed class ImdbDatasetIndexBuilder
                 var primaryTitleSpan = line[columns[2]];
                 var originalTitleSpan = line[columns[3]];
                 var primaryTitle = Encoding.UTF8.GetString(primaryTitleSpan);
-                id.Value = Encoding.ASCII.GetString(idSpan);
-                kind.Value = mappedKind;
-                primary.Value = primaryTitle;
                 if (mappedKind == 1)
                 {
-                    normalizedPrimary.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
+                    seriesId.Value = Encoding.ASCII.GetString(idSpan);
+                    seriesPrimary.Value = primaryTitle;
+                    seriesNormalizedPrimary.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
                     if (primaryTitleSpan.SequenceEqual(originalTitleSpan))
                     {
                         // Der Primärtitelzweig findet denselben Text bereits. Ein zweites Exemplar
                         // würde sowohl die Tabelle als auch den Originaltitel-Index nur vergrößern.
-                        original.Value = DBNull.Value;
-                        normalizedOriginal.Value = DBNull.Value;
+                        seriesOriginal.Value = DBNull.Value;
+                        seriesNormalizedOriginal.Value = DBNull.Value;
                     }
                     else
                     {
                         var originalTitle = Encoding.UTF8.GetString(originalTitleSpan);
-                        original.Value = originalTitle;
-                        normalizedOriginal.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
+                        seriesOriginal.Value = originalTitle;
+                        seriesNormalizedOriginal.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
                     }
 
-                    year.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear
+                    seriesYear.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear
                         ? parsedYear
                         : DBNull.Value;
+                    seriesCommand.ExecuteNonQuery();
+                    importedSeriesIds.Add(idSpan);
                 }
                 else
                 {
-                    // Episodenkataloge lesen nur den Primärtitel und normalisieren ihn bei der
-                    // konkreten Seriensuche. Diese Felder millionenfach vorab zu berechnen und
-                    // zu speichern hatte keinen Leser und dominierte title.basics unnötig.
-                    original.Value = DBNull.Value;
-                    normalizedPrimary.Value = DBNull.Value;
-                    normalizedOriginal.Value = DBNull.Value;
-                    year.Value = DBNull.Value;
+                    episodeId.Value = Encoding.ASCII.GetString(idSpan);
+                    episodePrimary.Value = primaryTitle;
+                    episodeParent.Value = parentId is null ? DBNull.Value : parentId;
+                    episodeSeason.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
+                    episodeNumberParameter.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
+                    episodeCommand.ExecuteNonQuery();
                 }
 
-                parent.Value = parentId is null ? DBNull.Value : parentId;
-                season.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
-                episode.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
                 importedTitleIds.Add(idSpan);
-                if (mappedKind == 1)
-                {
-                    importedSeriesIds.Add(idSpan);
-                }
-
-                command.ExecuteNonQuery();
                 return true;
             },
             cancellationToken);
