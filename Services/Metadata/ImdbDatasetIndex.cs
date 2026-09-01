@@ -202,28 +202,7 @@ internal sealed class ImdbDatasetIndexBuilder
         CancellationToken cancellationToken)
     {
         using var transaction = connection.BeginTransaction();
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            INSERT INTO titles(
-                id, kind, primary_title, original_title, normalized_primary, normalized_original, start_year,
-                parent_id, season_number, episode_number)
-            VALUES(
-                $id, $kind, $primary, $original, $normalizedPrimary, $normalizedOriginal, $year,
-                $parent, $season, $episode);
-            """;
-        var id = command.Parameters.Add("$id", SqliteType.Text);
-        var kind = command.Parameters.Add("$kind", SqliteType.Integer);
-        var primary = command.Parameters.Add("$primary", SqliteType.Text);
-        var original = command.Parameters.Add("$original", SqliteType.Text);
-        var normalizedPrimary = command.Parameters.Add("$normalizedPrimary", SqliteType.Text);
-        var normalizedOriginal = command.Parameters.Add("$normalizedOriginal", SqliteType.Text);
-        var year = command.Parameters.Add("$year", SqliteType.Integer);
-        var parent = command.Parameters.Add("$parent", SqliteType.Text);
-        var season = command.Parameters.Add("$season", SqliteType.Integer);
-        var episode = command.Parameters.Add("$episode", SqliteType.Integer);
-        command.Prepare();
+        using var batch = CreateTitleInsertBatch(connection, transaction);
 
         ReadGzipTsv(
             archivePath,
@@ -251,29 +230,30 @@ internal sealed class ImdbDatasetIndexBuilder
                 var primaryTitle = Encoding.UTF8.GetString(line[columns[2]]);
                 var originalTitle = Encoding.UTF8.GetString(line[columns[3]]);
                 var normalizedPrimaryTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
-                id.Value = Encoding.ASCII.GetString(idSpan);
-                kind.Value = mappedKind;
-                primary.Value = primaryTitle;
-                original.Value = originalTitle;
-                normalizedPrimary.Value = normalizedPrimaryTitle;
-                normalizedOriginal.Value = string.Equals(primaryTitle, originalTitle, StringComparison.Ordinal)
-                    ? normalizedPrimaryTitle
-                    : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
-                year.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear ? parsedYear : DBNull.Value;
-                parent.Value = parentId is null ? DBNull.Value : parentId;
-                season.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
-                episode.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
+                batch.Add(new TitleImportRow(
+                    Encoding.ASCII.GetString(idSpan),
+                    mappedKind,
+                    primaryTitle,
+                    originalTitle,
+                    normalizedPrimaryTitle,
+                    string.Equals(primaryTitle, originalTitle, StringComparison.Ordinal)
+                        ? normalizedPrimaryTitle
+                        : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle),
+                    TryParseNullableInt(line[columns[5]]),
+                    parentId,
+                    seasonNumber,
+                    episodeNumber));
                 importedTitleIds.Add(idSpan);
                 if (mappedKind == 1)
                 {
                     importedSeriesIds.Add(idSpan);
                 }
 
-                command.ExecuteNonQuery();
                 return true;
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
+        batch.Complete();
         transaction.Commit();
     }
 
@@ -320,30 +300,8 @@ internal sealed class ImdbDatasetIndexBuilder
         CancellationToken cancellationToken)
     {
         using var transaction = connection.BeginTransaction();
-        using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText =
-            """
-            INSERT INTO aliases(title_id, title, normalized_title, region, language)
-            VALUES($id, $title, $normalized, $region, $language);
-            """;
-        var id = command.Parameters.Add("$id", SqliteType.Text);
-        var title = command.Parameters.Add("$title", SqliteType.Text);
-        var normalized = command.Parameters.Add("$normalized", SqliteType.Text);
-        var region = command.Parameters.Add("$region", SqliteType.Text);
-        var language = command.Parameters.Add("$language", SqliteType.Text);
-        command.Prepare();
-        using var seriesCommand = connection.CreateCommand();
-        seriesCommand.Transaction = transaction;
-        seriesCommand.CommandText =
-            """
-            INSERT INTO series_aliases(title_id, title, normalized_title)
-            VALUES($id, $title, $normalized);
-            """;
-        var seriesId = seriesCommand.Parameters.Add("$id", SqliteType.Text);
-        var seriesTitle = seriesCommand.Parameters.Add("$title", SqliteType.Text);
-        var seriesNormalized = seriesCommand.Parameters.Add("$normalized", SqliteType.Text);
-        seriesCommand.Prepare();
+        using var aliasBatch = CreateAliasInsertBatch(connection, transaction);
+        using var seriesAliasBatch = CreateSeriesAliasInsertBatch(connection, transaction);
 
         ReadGzipTsv(
             archivePath,
@@ -368,26 +326,105 @@ internal sealed class ImdbDatasetIndexBuilder
                 }
 
                 var aliasTitle = Encoding.UTF8.GetString(line[columns[2]]);
-                id.Value = Encoding.ASCII.GetString(idSpan);
-                title.Value = aliasTitle;
-                normalized.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
-                region.Value = ToDatabaseNullable(regionSpan);
-                language.Value = ToDatabaseNullable(languageSpan);
-                command.ExecuteNonQuery();
+                var titleId = Encoding.ASCII.GetString(idSpan);
+                var normalizedTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
+                aliasBatch.Add(new AliasImportRow(
+                    titleId,
+                    aliasTitle,
+                    normalizedTitle,
+                    DecodeNullableUtf8(regionSpan),
+                    DecodeNullableUtf8(languageSpan)));
                 if (importedSeriesIds.Contains(idSpan))
                 {
-                    seriesId.Value = id.Value;
-                    seriesTitle.Value = aliasTitle;
-                    seriesNormalized.Value = normalized.Value;
-                    seriesCommand.ExecuteNonQuery();
+                    seriesAliasBatch.Add(new SeriesAliasImportRow(titleId, aliasTitle, normalizedTitle));
                 }
 
                 return true;
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
+        aliasBatch.Complete();
+        seriesAliasBatch.Complete();
         transaction.Commit();
     }
+
+    private static SqliteInsertBatch<TitleImportRow> CreateTitleInsertBatch(
+        SqliteConnection connection,
+        SqliteTransaction transaction) =>
+        new(
+            connection,
+            transaction,
+            "titles",
+            [
+                new("id", SqliteType.Text),
+                new("kind", SqliteType.Integer),
+                new("primary_title", SqliteType.Text),
+                new("original_title", SqliteType.Text),
+                new("normalized_primary", SqliteType.Text),
+                new("normalized_original", SqliteType.Text),
+                new("start_year", SqliteType.Integer),
+                new("parent_id", SqliteType.Text),
+                new("season_number", SqliteType.Integer),
+                new("episode_number", SqliteType.Integer)
+            ],
+            batchSize: 64,
+            static (parameters, row) =>
+            {
+                parameters[0].Value = row.Id;
+                parameters[1].Value = row.Kind;
+                parameters[2].Value = row.PrimaryTitle;
+                parameters[3].Value = row.OriginalTitle;
+                parameters[4].Value = row.NormalizedPrimary;
+                parameters[5].Value = row.NormalizedOriginal;
+                parameters[6].Value = row.StartYear is { } year ? year : DBNull.Value;
+                parameters[7].Value = row.ParentId is { } parentId ? parentId : DBNull.Value;
+                parameters[8].Value = row.SeasonNumber is { } season ? season : DBNull.Value;
+                parameters[9].Value = row.EpisodeNumber is { } episode ? episode : DBNull.Value;
+            });
+
+    private static SqliteInsertBatch<AliasImportRow> CreateAliasInsertBatch(
+        SqliteConnection connection,
+        SqliteTransaction transaction) =>
+        new(
+            connection,
+            transaction,
+            "aliases",
+            [
+                new("title_id", SqliteType.Text),
+                new("title", SqliteType.Text),
+                new("normalized_title", SqliteType.Text),
+                new("region", SqliteType.Text),
+                new("language", SqliteType.Text)
+            ],
+            batchSize: 128,
+            static (parameters, row) =>
+            {
+                parameters[0].Value = row.Id;
+                parameters[1].Value = row.Title;
+                parameters[2].Value = row.NormalizedTitle;
+                parameters[3].Value = row.Region is { } region ? region : DBNull.Value;
+                parameters[4].Value = row.Language is { } language ? language : DBNull.Value;
+            });
+
+    private static SqliteInsertBatch<SeriesAliasImportRow> CreateSeriesAliasInsertBatch(
+        SqliteConnection connection,
+        SqliteTransaction transaction) =>
+        new(
+            connection,
+            transaction,
+            "series_aliases",
+            [
+                new("title_id", SqliteType.Text),
+                new("title", SqliteType.Text),
+                new("normalized_title", SqliteType.Text)
+            ],
+            batchSize: 128,
+            static (parameters, row) =>
+            {
+                parameters[0].Value = row.Id;
+                parameters[1].Value = row.Title;
+                parameters[2].Value = row.NormalizedTitle;
+            });
 
     /// <summary>
     /// Liest die lokalen GZip-Dateien als UTF-8-Bytes auf dem vom Manager bereitgestellten Worker-Thread.
@@ -640,8 +677,8 @@ internal sealed class ImdbDatasetIndexBuilder
             ? parsed
             : null;
 
-    private static object ToDatabaseNullable(ReadOnlySpan<byte> value) =>
-        value.SequenceEqual("\\N"u8) ? DBNull.Value : Encoding.UTF8.GetString(value);
+    private static string? DecodeNullableUtf8(ReadOnlySpan<byte> value) =>
+        value.SequenceEqual("\\N"u8) ? null : Encoding.UTF8.GetString(value);
 
     private static bool TryParseNumericTitleId(ReadOnlySpan<byte> id, out int numericId)
     {
@@ -674,6 +711,8 @@ internal sealed class ImdbDatasetIndexBuilder
 
     private delegate bool Utf8LineProcessor(ReadOnlySpan<byte> line);
 
+    private delegate void BindBatchRow<T>(Span<SqliteParameter> parameters, T row);
+
     private static async Task ExecuteNonQueryAsync(
         SqliteConnection connection,
         string commandText,
@@ -691,6 +730,165 @@ internal sealed class ImdbDatasetIndexBuilder
         long ArchiveLength,
         long CompletedArchiveBytes,
         long TotalArchiveBytes);
+
+    private readonly record struct TitleImportRow(
+        string Id,
+        int Kind,
+        string PrimaryTitle,
+        string OriginalTitle,
+        string NormalizedPrimary,
+        string NormalizedOriginal,
+        int? StartYear,
+        string? ParentId,
+        int? SeasonNumber,
+        int? EpisodeNumber);
+
+    private readonly record struct AliasImportRow(
+        string Id,
+        string Title,
+        string NormalizedTitle,
+        string? Region,
+        string? Language);
+
+    private readonly record struct SeriesAliasImportRow(
+        string Id,
+        string Title,
+        string NormalizedTitle);
+
+    private readonly record struct SqliteColumn(string Name, SqliteType Type);
+
+    /// <summary>
+    /// Bündelt viele kleine IMDb-Zeilen in ein vorbereitetes Mehrfach-INSERT. Die gewählten
+    /// Batchgrößen bleiben unter dem konservativen SQLite-Limit von 999 Parametern.
+    /// </summary>
+    private sealed class SqliteInsertBatch<T> : IDisposable
+    {
+        private readonly SqliteConnection _connection;
+        private readonly SqliteTransaction _transaction;
+        private readonly string _tableName;
+        private readonly SqliteColumn[] _columns;
+        private readonly BindBatchRow<T> _bindRow;
+        private readonly T[] _rows;
+        private PreparedBatchCommand? _fullBatchCommand;
+        private int _rowCount;
+
+        public SqliteInsertBatch(
+            SqliteConnection connection,
+            SqliteTransaction transaction,
+            string tableName,
+            IReadOnlyList<SqliteColumn> columns,
+            int batchSize,
+            BindBatchRow<T> bindRow)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+            _connection = connection;
+            _transaction = transaction;
+            _tableName = tableName;
+            _columns = [.. columns];
+            _bindRow = bindRow;
+            _rows = new T[batchSize];
+        }
+
+        public void Add(T row)
+        {
+            _rows[_rowCount++] = row;
+            if (_rowCount == _rows.Length)
+            {
+                Flush();
+            }
+        }
+
+        public void Complete()
+        {
+            if (_rowCount > 0)
+            {
+                Flush();
+            }
+        }
+
+        private void Flush()
+        {
+            PreparedBatchCommand? temporaryCommand = null;
+            var batchCommand = _rowCount == _rows.Length
+                ? _fullBatchCommand ??= CreateCommand(_rowCount)
+                : temporaryCommand = CreateCommand(_rowCount);
+            try
+            {
+                for (var rowIndex = 0; rowIndex < _rowCount; rowIndex++)
+                {
+                    _bindRow(
+                        batchCommand.Parameters.AsSpan(rowIndex * _columns.Length, _columns.Length),
+                        _rows[rowIndex]);
+                }
+
+                batchCommand.Command.ExecuteNonQuery();
+            }
+            finally
+            {
+                Array.Clear(_rows, 0, _rowCount);
+                _rowCount = 0;
+                temporaryCommand?.Dispose();
+            }
+        }
+
+        private PreparedBatchCommand CreateCommand(int rowCount)
+        {
+            var command = _connection.CreateCommand();
+            command.Transaction = _transaction;
+            var sql = new StringBuilder(rowCount * _columns.Length * 12);
+            sql.Append("INSERT INTO ").Append(_tableName).Append('(');
+            for (var columnIndex = 0; columnIndex < _columns.Length; columnIndex++)
+            {
+                if (columnIndex > 0)
+                {
+                    sql.Append(',');
+                }
+
+                sql.Append(_columns[columnIndex].Name);
+            }
+
+            sql.Append(") VALUES");
+            var parameters = new SqliteParameter[rowCount * _columns.Length];
+            for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+            {
+                if (rowIndex > 0)
+                {
+                    sql.Append(',');
+                }
+
+                sql.Append('(');
+                for (var columnIndex = 0; columnIndex < _columns.Length; columnIndex++)
+                {
+                    if (columnIndex > 0)
+                    {
+                        sql.Append(',');
+                    }
+
+                    var parameterName = $"$p{rowIndex}_{columnIndex}";
+                    sql.Append(parameterName);
+                    parameters[(rowIndex * _columns.Length) + columnIndex] =
+                        command.Parameters.Add(parameterName, _columns[columnIndex].Type);
+                }
+
+                sql.Append(')');
+            }
+
+            command.CommandText = sql.Append(';').ToString();
+            command.Prepare();
+            return new PreparedBatchCommand(command, parameters);
+        }
+
+        public void Dispose()
+        {
+            _fullBatchCommand?.Dispose();
+            Array.Clear(_rows);
+        }
+
+        private sealed record PreparedBatchCommand(SqliteCommand Command, SqliteParameter[] Parameters) : IDisposable
+        {
+            public void Dispose() => Command.Dispose();
+        }
+    }
 
     /// <summary>
     /// Hält die Zuordnung aus <c>title.episode</c> kompakt im Arbeitsspeicher, damit Episodentitel beim

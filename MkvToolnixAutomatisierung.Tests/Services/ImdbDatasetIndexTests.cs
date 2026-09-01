@@ -176,6 +176,54 @@ public sealed class ImdbDatasetIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task BuildAsync_ImportsCompleteAndPartialSqliteBatches()
+    {
+        var files = WriteBatchedDatasetArchives();
+        var databasePath = Path.Combine(_tempDirectory, "batched-index.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(
+            databasePath,
+            files.Basics,
+            files.Episodes,
+            files.Aliases,
+            "batched-revision");
+
+        Assert.Equal(71, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles;"));
+        Assert.Equal(130, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+        Assert.Equal(130, ReadScalar(databasePath, "SELECT COUNT(*) FROM series_aliases;"));
+        Assert.Equal(
+            "Episode 70",
+            ReadText(databasePath, "SELECT primary_title FROM titles WHERE id = 'tt5000070';"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_RollsBackBufferedAndWrittenBatches_WhenCanceledDuringImport()
+    {
+        var files = WriteBatchedDatasetArchives();
+        var databasePath = Path.Combine(_tempDirectory, "canceled-batched-index.sqlite");
+        using var cancellationSource = new CancellationTokenSource();
+        var progress = new ActionProgress<ImdbDatasetImportProgress>(value =>
+        {
+            if (value.DatasetNumber == 2 && value.DatasetProgressPercent == 100d)
+            {
+                cancellationSource.Cancel();
+            }
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ImdbDatasetIndexBuilder().BuildAsync(
+                databasePath,
+                files.Basics,
+                files.Episodes,
+                files.Aliases,
+                "canceled-revision",
+                progress,
+                cancellationSource.Token));
+
+        Assert.Equal(0, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles;"));
+        Assert.Equal(0, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+    }
+
+    [Fact]
     public void SelectAutomaticCandidate_RejectsAmbiguousOrInexactMatches()
     {
         var exact = new ImdbEpisodeCandidate("tt1000001", "Serie", "Folge", 1, 1, 80, 30, true);
@@ -482,6 +530,40 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             Write("title.basics.tsv.gz"),
             Write("title.episode.tsv.gz"),
             Write("title.akas.tsv.gz"));
+    }
+
+    private string WriteArchive(string fileName, string contents)
+    {
+        var path = Path.Combine(_tempDirectory, fileName);
+        File.WriteAllBytes(path, Gzip(contents));
+        return path;
+    }
+
+    private DatasetFiles WriteBatchedDatasetArchives()
+    {
+        const string seriesId = "tt5000000";
+        var basics = new StringBuilder(
+            "tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres\n")
+            .AppendLine($"{seriesId}\ttvSeries\tBatch Series\tBatch Series\t0\t2026\t\\N\t45\tCrime");
+        var episodes = new StringBuilder("tconst\tparentTconst\tseasonNumber\tepisodeNumber\n");
+        for (var index = 1; index <= 70; index++)
+        {
+            var episodeId = $"tt{5_000_000 + index:D7}";
+            basics.AppendLine($"{episodeId}\ttvEpisode\tEpisode {index}\tEpisode {index}\t0\t2026\t\\N\t45\tCrime");
+            episodes.AppendLine($"{episodeId}\t{seriesId}\t1\t{index}");
+        }
+
+        var aliases = new StringBuilder(
+            "titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\n");
+        for (var index = 1; index <= 130; index++)
+        {
+            aliases.AppendLine($"{seriesId}\t{index}\tDeutscher Serienalias {index}\tDE\tde\timdbDisplay\t\\N\t0");
+        }
+
+        return new DatasetFiles(
+            WriteArchive("batched-basics.tsv.gz", basics.ToString()),
+            WriteArchive("batched-episodes.tsv.gz", episodes.ToString()),
+            WriteArchive("batched-aliases.tsv.gz", aliases.ToString()));
     }
 
     private static Dictionary<string, byte[]> BuildSmallDatasetByteMap() => new(StringComparer.OrdinalIgnoreCase)
