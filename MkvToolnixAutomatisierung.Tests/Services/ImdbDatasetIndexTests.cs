@@ -43,6 +43,13 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt2000001';"));
         Assert.Equal("tt3500000", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt40000000';"));
         Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE id = 'tt1000001';"));
+        Assert.Equal(1, ReadScalar(databasePath, "SELECT original_title IS NULL FROM titles WHERE id = 'tt1000001';"));
+        Assert.Equal("SOKO Leipzig", ReadText(databasePath, "SELECT original_title FROM titles WHERE id = 'tt1000002';"));
+        Assert.Equal(
+            1,
+            ReadScalar(
+                databasePath,
+                "SELECT original_title IS NULL AND normalized_primary IS NULL AND normalized_original IS NULL AND start_year IS NULL FROM titles WHERE id = 'tt2000001';"));
         Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
         Assert.Equal("Grenzfall für Öl", ReadText(databasePath, "SELECT title FROM aliases WHERE title_id = 'tt3500000';"));
         Assert.Contains(
@@ -52,6 +59,10 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Contains(
             "ix_titles_parent",
             ReadQueryPlan(databasePath, "SELECT id FROM titles WHERE kind = 2 AND parent_id = 'tt1000001';"),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ix_titles_kind_original",
+            ReadQueryPlan(databasePath, "SELECT id FROM titles WHERE kind = 1 AND normalized_original >= 'soko' AND normalized_original < 'sokp';"),
             StringComparison.Ordinal);
         Assert.Contains(
             "ix_aliases_normalized",
@@ -429,6 +440,58 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             value.StatusText.Contains("geladen", StringComparison.Ordinal)
             && value.ProgressLabel == "Download"
             && value.ProgressPercent == 100d);
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_OffersRebuild_WhenInstalledSchemaIsOutdated()
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var httpClient = new HttpClient(handler);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                AutoManageEnabled = true,
+                ManagementPreferenceConfigured = true
+            }
+        });
+        var databasePath = Path.Combine(_tempDirectory, "schema-update.sqlite");
+        var initialManager = new ImdbDatasetManager(
+            store,
+            httpClient,
+            new ImdbDatasetIndexBuilder(),
+            new FixedConsent(true),
+            _tempDirectory,
+            databasePath);
+        await initialManager.EnsureCurrentAsync();
+        store.Update(settings =>
+        {
+            settings.ImdbDataset.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion - 1;
+            settings.ImdbDataset.LastCheckedSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion - 1;
+            settings.ImdbDataset.LastCheckedUtc = DateTimeOffset.UtcNow;
+            settings.ImdbDataset.LastCheckCompleted = true;
+        });
+        var rebuildConsent = new FixedConsent(false);
+        var manager = new ImdbDatasetManager(
+            store,
+            httpClient,
+            new ImdbDatasetIndexBuilder(),
+            rebuildConsent,
+            _tempDirectory,
+            databasePath);
+
+        var result = await manager.EnsureCurrentAsync();
+
+        Assert.False(result.HasWarning);
+        Assert.Equal(1, rebuildConsent.CallCount);
+        Assert.Equal(6, handler.HeadRequestCount);
+        Assert.Equal(3, handler.GetRequestCount);
+        Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion - 1,
+            store.CurrentSettings.ImdbDataset.InstalledSchemaVersion);
+        Assert.Equal(
+            ImdbDatasetIndexBuilder.SchemaVersion,
+            store.CurrentSettings.ImdbDataset.LastCheckedSchemaVersion);
     }
 
     [Fact]

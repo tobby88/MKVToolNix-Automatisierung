@@ -39,7 +39,7 @@ internal sealed record ImdbDatasetImportProgress(
 /// </summary>
 internal sealed class ImdbDatasetIndexBuilder
 {
-    internal const int SchemaVersion = 2;
+    internal const int SchemaVersion = 3;
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
@@ -85,9 +85,9 @@ internal sealed class ImdbDatasetIndexBuilder
                 id TEXT PRIMARY KEY,
                 kind INTEGER NOT NULL,
                 primary_title TEXT NOT NULL,
-                original_title TEXT NOT NULL,
-                normalized_primary TEXT NOT NULL,
-                normalized_original TEXT NOT NULL,
+                original_title TEXT NULL,
+                normalized_primary TEXT NULL,
+                normalized_original TEXT NULL,
                 start_year INTEGER NULL,
                 parent_id TEXT NULL,
                 season_number INTEGER NULL,
@@ -155,7 +155,7 @@ internal sealed class ImdbDatasetIndexBuilder
         var finalizationSteps = new (string Name, string Sql)[]
         {
             ("Der Primärtitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_primary ON titles(normalized_primary) WHERE kind = 1;"),
-            ("Der Originaltitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_original ON titles(normalized_original) WHERE kind = 1;"),
+            ("Der Originaltitel-Index wird aufgebaut.", "CREATE INDEX ix_titles_kind_original ON titles(normalized_original) WHERE kind = 1 AND normalized_original IS NOT NULL;"),
             ("Der Episoden-Index wird aufgebaut.", "CREATE INDEX ix_titles_parent ON titles(parent_id, season_number, episode_number) WHERE kind = 2;"),
             ("Der Aliasnamen-Index wird aufgebaut.", "CREATE INDEX ix_aliases_normalized ON series_aliases(normalized_title);"),
             ("Der Aliasverknüpfungs-Index wird aufgebaut.", "CREATE INDEX ix_aliases_title_id ON aliases(title_id);")
@@ -248,18 +248,44 @@ internal sealed class ImdbDatasetIndexBuilder
                     return false;
                 }
 
-                var primaryTitle = Encoding.UTF8.GetString(line[columns[2]]);
-                var originalTitle = Encoding.UTF8.GetString(line[columns[3]]);
-                var normalizedPrimaryTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
+                var primaryTitleSpan = line[columns[2]];
+                var originalTitleSpan = line[columns[3]];
+                var primaryTitle = Encoding.UTF8.GetString(primaryTitleSpan);
                 id.Value = Encoding.ASCII.GetString(idSpan);
                 kind.Value = mappedKind;
                 primary.Value = primaryTitle;
-                original.Value = originalTitle;
-                normalizedPrimary.Value = normalizedPrimaryTitle;
-                normalizedOriginal.Value = string.Equals(primaryTitle, originalTitle, StringComparison.Ordinal)
-                    ? normalizedPrimaryTitle
-                    : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
-                year.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear ? parsedYear : DBNull.Value;
+                if (mappedKind == 1)
+                {
+                    normalizedPrimary.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
+                    if (primaryTitleSpan.SequenceEqual(originalTitleSpan))
+                    {
+                        // Der Primärtitelzweig findet denselben Text bereits. Ein zweites Exemplar
+                        // würde sowohl die Tabelle als auch den Originaltitel-Index nur vergrößern.
+                        original.Value = DBNull.Value;
+                        normalizedOriginal.Value = DBNull.Value;
+                    }
+                    else
+                    {
+                        var originalTitle = Encoding.UTF8.GetString(originalTitleSpan);
+                        original.Value = originalTitle;
+                        normalizedOriginal.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
+                    }
+
+                    year.Value = TryParseNullableInt(line[columns[5]]) is { } parsedYear
+                        ? parsedYear
+                        : DBNull.Value;
+                }
+                else
+                {
+                    // Episodenkataloge lesen nur den Primärtitel und normalisieren ihn bei der
+                    // konkreten Seriensuche. Diese Felder millionenfach vorab zu berechnen und
+                    // zu speichern hatte keinen Leser und dominierte title.basics unnötig.
+                    original.Value = DBNull.Value;
+                    normalizedPrimary.Value = DBNull.Value;
+                    normalizedOriginal.Value = DBNull.Value;
+                    year.Value = DBNull.Value;
+                }
+
                 parent.Value = parentId is null ? DBNull.Value : parentId;
                 season.Value = seasonNumber is { } parsedSeason ? parsedSeason : DBNull.Value;
                 episode.Value = episodeNumber is { } parsedEpisode ? parsedEpisode : DBNull.Value;
