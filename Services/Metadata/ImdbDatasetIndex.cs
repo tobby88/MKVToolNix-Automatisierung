@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
@@ -95,26 +96,30 @@ internal sealed class ImdbDatasetIndexBuilder
         var archiveLengths = archivePaths.Select(path => new FileInfo(path).Length).ToArray();
         var totalArchiveBytes = archiveLengths.Sum();
         var completedArchiveBytes = 0L;
+        var importedTitleIds = new ImportedTitleIdSet();
 
-        await ImportBasicsAsync(
+        ImportBasics(
             connection,
             basicsArchivePath,
             CreateProgressContext("title.basics", 1, archiveLengths[0], completedArchiveBytes, totalArchiveBytes),
             progress,
+            importedTitleIds,
             cancellationToken);
         completedArchiveBytes += archiveLengths[0];
-        await ImportEpisodesAsync(
+        ImportEpisodes(
             connection,
             episodesArchivePath,
             CreateProgressContext("title.episode", 2, archiveLengths[1], completedArchiveBytes, totalArchiveBytes),
             progress,
+            importedTitleIds,
             cancellationToken);
         completedArchiveBytes += archiveLengths[1];
-        await ImportGermanAliasesAsync(
+        ImportGermanAliases(
             connection,
             aliasesArchivePath,
             CreateProgressContext("title.akas", 3, archiveLengths[2], completedArchiveBytes, totalArchiveBytes),
             progress,
+            importedTitleIds,
             cancellationToken);
         var finalizationSteps = new (string Name, string Sql)[]
         {
@@ -156,16 +161,17 @@ internal sealed class ImdbDatasetIndexBuilder
             IsFinalizing: true));
     }
 
-    private static async Task ImportBasicsAsync(
+    private static void ImportBasics(
         SqliteConnection connection,
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
+        ImportedTitleIdSet importedTitleIds,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.Transaction = (SqliteTransaction)transaction;
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             INSERT INTO titles(
@@ -181,42 +187,51 @@ internal sealed class ImdbDatasetIndexBuilder
         var year = command.Parameters.Add("$year", SqliteType.Integer);
         command.Prepare();
 
-        await ReadGzipTsvAsync(
+        ReadGzipTsv(
             archivePath,
             progressContext,
             progress,
-            (columns, _) =>
+            line =>
             {
-                if (columns.Length < 6 || !TryMapTitleKind(columns[1], out var mappedKind))
+                Span<Range> columns = stackalloc Range[6];
+                if (!TryGetColumnRanges(line, columns)
+                    || !TryMapTitleKind(line.AsSpan(columns[1]), out var mappedKind))
                 {
                     return null;
                 }
 
-                var primaryTitle = columns[2];
-                var originalTitle = columns[3];
-                id.Value = columns[0];
+                var idSpan = line.AsSpan(columns[0]);
+                var primaryTitle = line[columns[2]];
+                var originalTitle = line[columns[3]];
+                var normalizedPrimaryTitle = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
+                id.Value = idSpan.ToString();
                 kind.Value = mappedKind;
                 primary.Value = primaryTitle;
                 original.Value = originalTitle;
-                normalizedPrimary.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(primaryTitle);
-                normalizedOriginal.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
-                year.Value = TryParseNullableInt(columns[5]) is { } parsedYear ? parsedYear : DBNull.Value;
+                normalizedPrimary.Value = normalizedPrimaryTitle;
+                normalizedOriginal.Value = string.Equals(primaryTitle, originalTitle, StringComparison.Ordinal)
+                    ? normalizedPrimaryTitle
+                    : EpisodeMetadataMatchingHeuristics.NormalizeText(originalTitle);
+                year.Value = TryParseNullableInt(line.AsSpan(columns[5])) is { } parsedYear ? parsedYear : DBNull.Value;
+                importedTitleIds.Add(idSpan);
                 return command;
             },
             cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
     }
 
-    private static async Task ImportEpisodesAsync(
+    private static void ImportEpisodes(
         SqliteConnection connection,
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
+        ImportedTitleIdSet importedTitleIds,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.Transaction = (SqliteTransaction)transaction;
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             UPDATE titles
@@ -229,42 +244,50 @@ internal sealed class ImdbDatasetIndexBuilder
         var episode = command.Parameters.Add("$episode", SqliteType.Integer);
         command.Prepare();
 
-        await ReadGzipTsvAsync(
+        ReadGzipTsv(
             archivePath,
             progressContext,
             progress,
-            (columns, _) =>
+            line =>
             {
-                if (columns.Length < 4)
+                Span<Range> columns = stackalloc Range[4];
+                if (!TryGetColumnRanges(line, columns))
                 {
                     return null;
                 }
 
-                id.Value = columns[0];
-                parent.Value = columns[1];
-                season.Value = TryParseNullableInt(columns[2]) is { } parsedSeason ? parsedSeason : DBNull.Value;
-                episode.Value = TryParseNullableInt(columns[3]) is { } parsedEpisode ? parsedEpisode : DBNull.Value;
+                var idSpan = line.AsSpan(columns[0]);
+                if (!importedTitleIds.Contains(idSpan))
+                {
+                    return null;
+                }
+
+                id.Value = idSpan.ToString();
+                parent.Value = line[columns[1]];
+                season.Value = TryParseNullableInt(line.AsSpan(columns[2])) is { } parsedSeason ? parsedSeason : DBNull.Value;
+                episode.Value = TryParseNullableInt(line.AsSpan(columns[3])) is { } parsedEpisode ? parsedEpisode : DBNull.Value;
                 return command;
             },
             cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
     }
 
-    private static async Task ImportGermanAliasesAsync(
+    private static void ImportGermanAliases(
         SqliteConnection connection,
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
+        ImportedTitleIdSet importedTitleIds,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.Transaction = (SqliteTransaction)transaction;
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             INSERT INTO aliases(title_id, title, normalized_title, region, language)
-            SELECT $id, $title, $normalized, $region, $language
-            WHERE EXISTS (SELECT 1 FROM titles WHERE id = $id);
+            VALUES($id, $title, $normalized, $region, $language);
             """;
         var id = command.Parameters.Add("$id", SqliteType.Text);
         var title = command.Parameters.Add("$title", SqliteType.Text);
@@ -273,54 +296,69 @@ internal sealed class ImdbDatasetIndexBuilder
         var language = command.Parameters.Add("$language", SqliteType.Text);
         command.Prepare();
 
-        await ReadGzipTsvAsync(
+        ReadGzipTsv(
             archivePath,
             progressContext,
             progress,
-            (columns, _) =>
+            line =>
             {
-                if (columns.Length < 5
-                    || (!string.Equals(columns[3], "DE", StringComparison.OrdinalIgnoreCase)
-                        && !string.Equals(columns[4], "de", StringComparison.OrdinalIgnoreCase)))
+                Span<Range> columns = stackalloc Range[5];
+                if (!TryGetColumnRanges(line, columns))
                 {
                     return null;
                 }
 
-                var aliasTitle = columns[2];
-                id.Value = columns[0];
+                var idSpan = line.AsSpan(columns[0]);
+                var regionSpan = line.AsSpan(columns[3]);
+                var languageSpan = line.AsSpan(columns[4]);
+                if ((!regionSpan.Equals("DE", StringComparison.OrdinalIgnoreCase)
+                        && !languageSpan.Equals("de", StringComparison.OrdinalIgnoreCase))
+                    || !importedTitleIds.Contains(idSpan))
+                {
+                    return null;
+                }
+
+                var aliasTitle = line[columns[2]];
+                id.Value = idSpan.ToString();
                 title.Value = aliasTitle;
                 normalized.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
-                region.Value = ToDatabaseNullable(columns[3]);
-                language.Value = ToDatabaseNullable(columns[4]);
+                region.Value = ToDatabaseNullable(regionSpan);
+                language.Value = ToDatabaseNullable(languageSpan);
                 return command;
             },
             cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
     }
 
-    private static async Task ReadGzipTsvAsync(
+    /// <summary>
+    /// Liest die lokalen GZip-Dateien bewusst synchron auf dem vom Manager bereitgestellten Worker-Thread.
+    /// Sowohl GZip als auch Microsoft.Data.Sqlite erledigen ihre eigentliche Arbeit synchron; ein Task pro
+    /// Datenzeile würde bei den IMDb-Millionendatensätzen nur zusätzlichen Verwaltungsaufwand erzeugen.
+    /// </summary>
+    private static void ReadGzipTsv(
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
-        Func<string[], long, SqliteCommand?> prepareCommand,
+        Func<string, SqliteCommand?> prepareCommand,
         CancellationToken cancellationToken)
     {
-        await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, useAsync: true);
-        await using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress, leaveOpen: false);
+        using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, useAsync: false);
+        using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress, leaveOpen: false);
         using var reader = new StreamReader(gzipStream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true, 1024 * 1024);
-        _ = await reader.ReadLineAsync(cancellationToken); // Kopfzeile
+        _ = reader.ReadLine(); // Kopfzeile
 
         long rowCount = 0;
         var lastProgressTimestamp = Stopwatch.GetTimestamp();
         ReportImportProgress(progress, progressContext, rowCount, fileStream.Position);
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        while (reader.ReadLine() is { } line)
         {
             cancellationToken.ThrowIfCancellationRequested();
             rowCount++;
-            var command = prepareCommand(line.Split('\t'), rowCount);
+            var command = prepareCommand(line);
             if (command is not null)
             {
-                await command.ExecuteNonQueryAsync(cancellationToken);
+                command.ExecuteNonQuery();
             }
 
             if (Stopwatch.GetElapsedTime(lastProgressTimestamp) >= ProgressUpdateInterval)
@@ -331,6 +369,38 @@ internal sealed class ImdbDatasetIndexBuilder
         }
 
         ReportImportProgress(progress, progressContext, rowCount, progressContext.ArchiveLength);
+    }
+
+    /// <summary>
+    /// Ermittelt nur die tatsächlich benötigten TSV-Spalten. Dadurch entstehen für verworfene IMDb-Zeilen
+    /// keine Teilstrings und für relevante Zeilen nur die Werte, die in den Index geschrieben werden.
+    /// </summary>
+    private static bool TryGetColumnRanges(string line, Span<Range> columns)
+    {
+        var columnIndex = 0;
+        var columnStart = 0;
+        for (var index = 0; index < line.Length; index++)
+        {
+            if (line[index] != '\t')
+            {
+                continue;
+            }
+
+            columns[columnIndex++] = columnStart..index;
+            if (columnIndex == columns.Length)
+            {
+                return true;
+            }
+
+            columnStart = index + 1;
+        }
+
+        if (columnIndex < columns.Length)
+        {
+            columns[columnIndex++] = columnStart..line.Length;
+        }
+
+        return columnIndex == columns.Length;
     }
 
     private static ImdbDatasetProgressContext CreateProgressContext(
@@ -368,16 +438,16 @@ internal sealed class ImdbDatasetIndexBuilder
             Math.Clamp(overallPercent, 0d, 100d)));
     }
 
-    private static bool TryMapTitleKind(string value, out int kind)
+    private static bool TryMapTitleKind(ReadOnlySpan<char> value, out int kind)
     {
-        if (string.Equals(value, "tvSeries", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(value, "tvMiniSeries", StringComparison.OrdinalIgnoreCase))
+        if (value.Equals("tvSeries", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("tvMiniSeries", StringComparison.OrdinalIgnoreCase))
         {
             kind = 1;
             return true;
         }
 
-        if (string.Equals(value, "tvEpisode", StringComparison.OrdinalIgnoreCase))
+        if (value.Equals("tvEpisode", StringComparison.OrdinalIgnoreCase))
         {
             kind = 2;
             return true;
@@ -387,14 +457,14 @@ internal sealed class ImdbDatasetIndexBuilder
         return false;
     }
 
-    private static int? TryParseNullableInt(string value) =>
-        !string.Equals(value, @"\N", StringComparison.Ordinal)
+    private static int? TryParseNullableInt(ReadOnlySpan<char> value) =>
+        !value.Equals(@"\N", StringComparison.Ordinal)
         && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
 
-    private static object ToDatabaseNullable(string value) =>
-        string.Equals(value, @"\N", StringComparison.Ordinal) ? DBNull.Value : value;
+    private static object ToDatabaseNullable(ReadOnlySpan<char> value) =>
+        value.Equals(@"\N", StringComparison.Ordinal) ? DBNull.Value : value.ToString();
 
     private static async Task ExecuteNonQueryAsync(
         SqliteConnection connection,
@@ -413,6 +483,62 @@ internal sealed class ImdbDatasetIndexBuilder
         long ArchiveLength,
         long CompletedArchiveBytes,
         long TotalArchiveBytes);
+
+    /// <summary>
+    /// Kompakter Vorfilter für IMDb-Titelkennungen. Die numerische <c>tt</c>-Kennung passt direkt in
+    /// ein Bitfeld, sodass selbst zig Millionen importierte Titel nur wenige MiB Arbeitsspeicher benötigen.
+    /// Seltene nicht standardkonforme Kennungen bleiben über eine kleine Zeichenfolgenmenge korrekt.
+    /// </summary>
+    private sealed class ImportedTitleIdSet
+    {
+        private const int GrowthBlockSize = 4 * 1024 * 1024;
+        private readonly HashSet<string> _nonNumericIds = new(StringComparer.Ordinal);
+        private BitArray _numericIds = new(GrowthBlockSize);
+
+        public void Add(ReadOnlySpan<char> id)
+        {
+            if (!TryParseNumericId(id, out var numericId))
+            {
+                _nonNumericIds.Add(id.ToString());
+                return;
+            }
+
+            EnsureCapacity(numericId);
+            _numericIds[numericId] = true;
+        }
+
+        public bool Contains(ReadOnlySpan<char> id)
+        {
+            if (!TryParseNumericId(id, out var numericId))
+            {
+                return _nonNumericIds.Contains(id.ToString());
+            }
+
+            return numericId < _numericIds.Length && _numericIds[numericId];
+        }
+
+        private void EnsureCapacity(int numericId)
+        {
+            if (numericId < _numericIds.Length)
+            {
+                return;
+            }
+
+            var requiredLength = ((long)numericId / GrowthBlockSize + 1L) * GrowthBlockSize;
+            _numericIds.Length = checked((int)requiredLength);
+        }
+
+        private static bool TryParseNumericId(ReadOnlySpan<char> id, out int numericId)
+        {
+            numericId = 0;
+            return id.Length > 2
+                && (id[0] is 't' or 'T')
+                && (id[1] is 't' or 'T')
+                && int.TryParse(id[2..], NumberStyles.None, CultureInfo.InvariantCulture, out numericId)
+                && numericId >= 0
+                && numericId < int.MaxValue - GrowthBlockSize;
+        }
+    }
 }
 
 /// <summary>

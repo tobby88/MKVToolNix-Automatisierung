@@ -38,6 +38,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(2, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 1;"));
         Assert.Equal(3, ReadScalar(databasePath, "SELECT COUNT(*) FROM titles WHERE kind = 2;"));
         Assert.Equal(5, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases;"));
+        Assert.Equal(0, ReadScalar(databasePath, "SELECT COUNT(*) FROM aliases WHERE title_id = 'tt3000001';"));
         Assert.Equal("tt1000001", ReadText(databasePath, "SELECT parent_id FROM titles WHERE id = 'tt2000001';"));
         Assert.Equal("der alte", ReadText(databasePath, "SELECT normalized_primary FROM titles WHERE kind = 1;"));
         Assert.Equal("die wahrheit im dunkeln", ReadText(databasePath, "SELECT normalized_title FROM aliases WHERE title_id = 'tt2000001';"));
@@ -398,6 +399,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             + "tt1000002\t1\tSOKO Leipzig\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000002\t1\tDunkle Wahrheit\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000003\t1\tZweite Folge\tDE\tde\timdbDisplay\t\\N\t0\n"
+            + "tt3000001\t1\tIgnorierter Film\tDE\tde\timdbDisplay\t\\N\t0\n"
             + "tt2000001\t2\tLa vérité\tFR\tfr\timdbDisplay\t\\N\t0\n")
     };
 
