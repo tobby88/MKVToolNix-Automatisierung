@@ -5,8 +5,15 @@ using System.Text.RegularExpressions;
 namespace MkvToolnixAutomatisierung.Services.Metadata;
 
 // Dieser Helfer bündelt die eigentlichen TVDB-Matching-Heuristiken, damit der Service Orchestrierung und Persistenz klarer trennt.
-internal static class EpisodeMetadataMatchingHeuristics
+internal static partial class EpisodeMetadataMatchingHeuristics
 {
+    /// <summary>
+    /// Vereinheitlicht einen Serien- oder Episodentitel für fehlertolerante Vergleiche.
+    /// </summary>
+    /// <remarks>
+    /// Gewöhnliche ASCII-Titel werden in einem einzigen Durchlauf verarbeitet. Der aufwendigere
+    /// Unicode- und Regex-Pfad bleibt auf Titel mit Umlauten, Diakritika oder bekannten Sonderregeln begrenzt.
+    /// </remarks>
     public static string NormalizeText(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -14,14 +21,80 @@ internal static class EpisodeMetadataMatchingHeuristics
             return string.Empty;
         }
 
+        if (IsAscii(value)
+            && !value.Contains("teil", StringComparison.OrdinalIgnoreCase)
+            && !value.Contains("walze", StringComparison.OrdinalIgnoreCase))
+        {
+            return NormalizeWordCharacters(value, convertToLower: true);
+        }
+
         var normalized = ReplaceGermanTransliterations(value.ToLowerInvariant());
-        normalized = NormalizeMultipartEpisodeMarkers(normalized);
-        normalized = RemoveDiacritics(normalized);
-        normalized = NormalizeKnownProviderTitleVariants(normalized);
-        normalized = normalized.Replace("&", " und ");
-        normalized = new string(normalized.Select(character => char.IsLetterOrDigit(character) ? character : ' ').ToArray());
-        normalized = string.Join(" ", normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-        return normalized.Trim();
+        if (normalized.Contains("teil", StringComparison.Ordinal))
+        {
+            normalized = NormalizeMultipartEpisodeMarkers(normalized);
+        }
+
+        if (!IsAscii(normalized))
+        {
+            normalized = RemoveDiacritics(normalized);
+        }
+
+        if (normalized.Contains("walze", StringComparison.Ordinal))
+        {
+            normalized = NormalizeKnownProviderTitleVariants(normalized);
+        }
+
+        return NormalizeWordCharacters(normalized, convertToLower: false);
+    }
+
+    private static bool IsAscii(string value)
+    {
+        foreach (var character in value)
+        {
+            if (character > 0x7F)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string NormalizeWordCharacters(string value, bool convertToLower)
+    {
+        var builder = new StringBuilder(value.Length);
+        var separatorPending = false;
+        foreach (var sourceCharacter in value)
+        {
+            var character = convertToLower ? char.ToLowerInvariant(sourceCharacter) : sourceCharacter;
+            if (char.IsLetterOrDigit(character))
+            {
+                if (separatorPending && builder.Length > 0)
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append(character);
+                separatorPending = false;
+                continue;
+            }
+
+            if (character == '&')
+            {
+                if (builder.Length > 0)
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append("und");
+                separatorPending = true;
+                continue;
+            }
+
+            separatorPending = builder.Length > 0;
+        }
+
+        return builder.ToString();
     }
 
     private static string ReplaceGermanTransliterations(string value)
@@ -50,8 +123,8 @@ internal static class EpisodeMetadataMatchingHeuristics
 
     private static string NormalizeMultipartEpisodeMarkers(string value)
     {
-        var normalized = Regex.Replace(value, @"\b(?<number>\d+)\s*\.?\s*teil\b", "teil ${number}", RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\bteil\s*(?<number>\d+)\b", "teil ${number}", RegexOptions.IgnoreCase);
+        var normalized = NumberBeforePartRegex().Replace(value, "teil ${number}");
+        normalized = PartBeforeNumberRegex().Replace(normalized, "teil ${number}");
         return normalized;
     }
 
@@ -60,8 +133,17 @@ internal static class EpisodeMetadataMatchingHeuristics
         // ORF benennt die Pippi-Folgen aktuell mit "auf der Walze", während TVDB und IMDb
         // den etablierten deutschen Titel "auf der Walz" führen. Das ist keine andere
         // Episode, sondern eine providerseitige Schreibvariante.
-        return Regex.Replace(value, @"\bwalze\b", "walz", RegexOptions.IgnoreCase);
+        return WalzeRegex().Replace(value, "walz");
     }
+
+    [GeneratedRegex(@"\b(?<number>\d+)\s*\.?\s*teil\b", RegexOptions.IgnoreCase)]
+    private static partial Regex NumberBeforePartRegex();
+
+    [GeneratedRegex(@"\bteil\s*(?<number>\d+)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PartBeforeNumberRegex();
+
+    [GeneratedRegex(@"\bwalze\b", RegexOptions.IgnoreCase)]
+    private static partial Regex WalzeRegex();
 
     public static TvdbSeriesSearchResult? FindPreferredSeriesResult(
         EpisodeMetadataGuess guess,
