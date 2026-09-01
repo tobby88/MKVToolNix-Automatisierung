@@ -171,6 +171,13 @@ public sealed class ImdbDatasetSettings
     public DateTimeOffset? LastCheckedUtc { get; set; }
 
     /// <summary>
+    /// Kennzeichnet, dass die durch <see cref="LastCheckedUtc"/> beschriebene Prüfung regulär beendet wurde.
+    /// Das separate Flag ermöglicht nach Abbruch, Prozessende und bei älteren fehlerhaften Einstellungen
+    /// eine sofortige Wiederholung, ohne den täglichen Prüfzeitpunkt grundsätzlich aufzugeben.
+    /// </summary>
+    public bool LastCheckCompleted { get; set; }
+
+    /// <summary>
     /// Zeitpunkt des letzten vollständig erfolgreichen Indexaufbaus.
     /// </summary>
     public DateTimeOffset? LastUpdatedUtc { get; set; }
@@ -185,6 +192,7 @@ public sealed class ImdbDatasetSettings
         InstalledVersion = InstalledVersion?.Trim() ?? string.Empty,
         InstalledRevisionUtc = InstalledRevisionUtc,
         LastCheckedUtc = LastCheckedUtc,
+        LastCheckCompleted = LastCheckCompleted,
         LastUpdatedUtc = LastUpdatedUtc
     };
 }

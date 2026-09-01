@@ -232,6 +232,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(3, handler.HeadRequestCount);
         Assert.Equal(0, handler.GetRequestCount);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastCheckedUtc);
+        Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
         Assert.True(store.CurrentSettings.ImdbDataset.AutoManageEnabled);
         Assert.True(store.CurrentSettings.ImdbDataset.ManagementPreferenceConfigured);
     }
@@ -264,6 +265,70 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(0, consent.CallCount);
         Assert.Equal(0, handler.HeadRequestCount);
         Assert.Equal(0, handler.GetRequestCount);
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_OffersUpdateAgainImmediately_WhenDownloadIsCanceled()
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var httpClient = new HttpClient(handler);
+        var interruptedCheckTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                AutoManageEnabled = true,
+                ManagementPreferenceConfigured = true,
+                InstalledVersion = "previous-version",
+                // Simuliert den von älteren Versionen bereits zu früh gespeicherten Prüfzeitpunkt.
+                LastCheckedUtc = interruptedCheckTimestamp
+            }
+        });
+        var databasePath = Path.Combine(_tempDirectory, "existing-index.sqlite");
+        await File.WriteAllTextAsync(databasePath, "previous-index");
+        using var cancellationSource = new CancellationTokenSource();
+        var firstConsent = new FixedConsent(true);
+        var manager = new ImdbDatasetManager(
+            store,
+            httpClient,
+            new ImdbDatasetIndexBuilder(),
+            firstConsent,
+            _tempDirectory,
+            databasePath);
+        var cancelDuringDownload = new ActionProgress<ManagedToolStartupProgress>(value =>
+        {
+            if (value.ProgressLabel == "Download" && value.ProgressPercent is > 0d)
+            {
+                cancellationSource.Cancel();
+            }
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            manager.EnsureCurrentAsync(cancelDuringDownload, cancellationSource.Token));
+
+        Assert.Equal(interruptedCheckTimestamp, store.CurrentSettings.ImdbDataset.LastCheckedUtc);
+        Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Equal("previous-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
+        Assert.Equal("previous-index", await File.ReadAllTextAsync(databasePath));
+        Assert.Equal(1, firstConsent.CallCount);
+        Assert.Equal(1, handler.GetRequestCount);
+
+        var retryConsent = new FixedConsent(false);
+        var retryManager = new ImdbDatasetManager(
+            store,
+            httpClient,
+            new ImdbDatasetIndexBuilder(),
+            retryConsent,
+            _tempDirectory,
+            databasePath);
+
+        var retryResult = await retryManager.EnsureCurrentAsync();
+
+        Assert.False(retryResult.HasWarning);
+        Assert.Equal(1, retryConsent.CallCount);
+        Assert.Equal(6, handler.HeadRequestCount);
+        Assert.NotNull(store.CurrentSettings.ImdbDataset.LastCheckedUtc);
+        Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
     }
 
     [Fact]
@@ -304,6 +369,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero),
             store.CurrentSettings.ImdbDataset.InstalledRevisionUtc);
         Assert.NotNull(store.CurrentSettings.ImdbDataset.LastUpdatedUtc);
+        Assert.True(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
         Assert.Single(new ImdbDatasetSearchService(databasePath).SearchEpisodeCandidates(
             new EpisodeMetadataGuess("Der Alte", "Die Wahrheit im Dunkeln", "55", "02")));
         Assert.Contains(progress.Values, value =>
@@ -513,6 +579,11 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         public IReadOnlyList<T> Values => Reports.Select(report => report.Value).ToArray();
 
         public void Report(T value) => Reports.Add(new RecordedProgress<T>(value, Environment.CurrentManagedThreadId));
+    }
+
+    private sealed class ActionProgress<T>(Action<T> reportAction) : IProgress<T>
+    {
+        public void Report(T value) => reportAction(value);
     }
 
     private sealed record RecordedProgress<T>(T Value, int ThreadId);

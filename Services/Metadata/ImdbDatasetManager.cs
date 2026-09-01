@@ -180,6 +180,7 @@ internal sealed class ImdbDatasetManager
 
         var databaseExists = File.Exists(_databasePath);
         if (databaseExists
+            && datasetSettings.LastCheckCompleted
             && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
             && DateTimeOffset.UtcNow - lastCheckedUtc < SuccessfulCheckInterval)
         {
@@ -191,11 +192,12 @@ internal sealed class ImdbDatasetManager
             Report(progress, "IMDb-Daten werden geprüft...", "Prüfe offizielle Datensatzrevisionen.", 0d, false);
             var remoteFiles = await LoadRemoteMetadataAsync(cancellationToken);
             var versionToken = BuildVersionToken(remoteFiles);
-            datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
-            PersistDatasetSettings(datasetSettings);
 
             if (databaseExists && string.Equals(datasetSettings.InstalledVersion, versionToken, StringComparison.Ordinal))
             {
+                datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
+                datasetSettings.LastCheckCompleted = true;
+                PersistDatasetSettings(datasetSettings);
                 Report(progress, "IMDb-Offlineindex aktuell", "Kein Download nötig.", 100d, false);
                 return new ImdbDatasetStartupResult([]);
             }
@@ -212,14 +214,26 @@ internal sealed class ImdbDatasetManager
                 InstalledAtUtc: datasetSettings.LastUpdatedUtc);
             if (!_consent.ConfirmUpdate(offer))
             {
+                // Eine bewusste Ablehnung unterdrückt das identische Angebot für das normale
+                // Prüfintervall. Abbruch und Fehler im anschließenden Update dürfen das nicht.
+                datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
+                datasetSettings.LastCheckCompleted = true;
+                PersistDatasetSettings(datasetSettings);
                 Report(progress, "IMDb-Update übersprungen", "Der vorhandene Stand bleibt aktiv.", 100d, false);
                 return new ImdbDatasetStartupResult([]);
             }
 
+            // Vor dem potenziell langen Download wird nur der Abschlussmarker zurückgesetzt.
+            // Bei Abbruch oder Prozessende bleibt der letzte installierte Index unangetastet,
+            // die Prüfung wird beim nächsten Start aber nicht durch den Tages-Cache blockiert.
+            datasetSettings.LastCheckCompleted = false;
+            PersistDatasetSettings(datasetSettings);
+            cancellationToken.ThrowIfCancellationRequested();
             await DownloadAndBuildAsync(remoteFiles, versionToken, progress, cancellationToken);
             datasetSettings.InstalledVersion = versionToken;
             datasetSettings.InstalledRevisionUtc = remoteFiles.Max(file => file.LastModifiedUtc);
             datasetSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
+            datasetSettings.LastCheckCompleted = true;
             datasetSettings.LastUpdatedUtc = DateTimeOffset.UtcNow;
             PersistDatasetSettings(datasetSettings);
             Report(progress, "IMDb-Offlineindex bereit", "Download und Indexaufbau abgeschlossen.", 100d, false);
