@@ -18,6 +18,8 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <param name="DatasetProgressPercent">Aus der gelesenen komprimierten Dateiposition geschätzter Dateifortschritt.</param>
 /// <param name="OverallProgressPercent">Nach Archivgröße gewichteter Fortschritt über alle Dateien.</param>
 /// <param name="IsFinalizing">Kennzeichnet einen nicht prozentual messbaren SQLite-Abschluss-Schritt.</param>
+/// <param name="ImportedRowCount">Zahl der tatsächlich in den Arbeitsindex übernommenen Datensätze.</param>
+/// <param name="ProcessedRowsPerSecond">Seit Beginn der aktuellen Datei durchschnittlich gelesene Datensätze pro Sekunde.</param>
 internal sealed record ImdbDatasetImportProgress(
     string DatasetName,
     int DatasetNumber,
@@ -25,7 +27,9 @@ internal sealed record ImdbDatasetImportProgress(
     long ProcessedRowCount,
     double DatasetProgressPercent,
     double OverallProgressPercent,
-    bool IsFinalizing = false);
+    bool IsFinalizing = false,
+    long ImportedRowCount = 0,
+    double ProcessedRowsPerSecond = 0d);
 
 /// <summary>
 /// Baut aus den offiziellen IMDb-Dateien einen auf Serien und Episoden begrenzten SQLite-Index.
@@ -228,7 +232,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 if (!TryGetColumnRanges(line, columns)
                     || !TryMapTitleKind(line.AsSpan(columns[1]), out var mappedKind))
                 {
-                    return;
+                    return false;
                 }
 
                 var idSpan = line.AsSpan(columns[0]);
@@ -238,7 +242,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 if (mappedKind == 2
                     && !episodeLinks.TryGet(idSpan, out parentId, out seasonNumber, out episodeNumber))
                 {
-                    return;
+                    return false;
                 }
 
                 var primaryTitle = line[columns[2]];
@@ -263,6 +267,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 }
 
                 command.ExecuteNonQuery();
+                return true;
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -287,7 +292,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 Span<Range> columns = stackalloc Range[4];
                 if (!TryGetColumnRanges(line, columns))
                 {
-                    return;
+                    return false;
                 }
 
                 lookup.Add(
@@ -295,6 +300,7 @@ internal sealed class ImdbDatasetIndexBuilder
                     line.AsSpan(columns[1]),
                     TryParseNullableInt(line.AsSpan(columns[2])),
                     TryParseNullableInt(line.AsSpan(columns[3])));
+                return true;
             },
             cancellationToken);
         lookup.PrepareForLookup();
@@ -345,7 +351,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 Span<Range> columns = stackalloc Range[5];
                 if (!TryGetColumnRanges(line, columns))
                 {
-                    return;
+                    return false;
                 }
 
                 var idSpan = line.AsSpan(columns[0]);
@@ -355,7 +361,7 @@ internal sealed class ImdbDatasetIndexBuilder
                         && !languageSpan.Equals("de", StringComparison.OrdinalIgnoreCase))
                     || !importedTitleIds.Contains(idSpan))
                 {
-                    return;
+                    return false;
                 }
 
                 var aliasTitle = line[columns[2]];
@@ -372,6 +378,8 @@ internal sealed class ImdbDatasetIndexBuilder
                     seriesNormalized.Value = normalized.Value;
                     seriesCommand.ExecuteNonQuery();
                 }
+
+                return true;
             },
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -387,7 +395,7 @@ internal sealed class ImdbDatasetIndexBuilder
         string archivePath,
         ImdbDatasetProgressContext progressContext,
         IProgress<ImdbDatasetImportProgress>? progress,
-        Action<string> processLine,
+        Func<string, bool> processLine,
         CancellationToken cancellationToken)
     {
         using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, useAsync: false);
@@ -396,22 +404,27 @@ internal sealed class ImdbDatasetIndexBuilder
         _ = reader.ReadLine(); // Kopfzeile
 
         long rowCount = 0;
+        long importedRowCount = 0;
+        var elapsed = Stopwatch.StartNew();
         var lastProgressTimestamp = Stopwatch.GetTimestamp();
-        ReportImportProgress(progress, progressContext, rowCount, fileStream.Position);
+        ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, fileStream.Position);
         while (reader.ReadLine() is { } line)
         {
             cancellationToken.ThrowIfCancellationRequested();
             rowCount++;
-            processLine(line);
+            if (processLine(line))
+            {
+                importedRowCount++;
+            }
 
             if (Stopwatch.GetElapsedTime(lastProgressTimestamp) >= ProgressUpdateInterval)
             {
-                ReportImportProgress(progress, progressContext, rowCount, fileStream.Position);
+                ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, fileStream.Position);
                 lastProgressTimestamp = Stopwatch.GetTimestamp();
             }
         }
 
-        ReportImportProgress(progress, progressContext, rowCount, progressContext.ArchiveLength);
+        ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, progressContext.ArchiveLength);
     }
 
     /// <summary>
@@ -458,6 +471,8 @@ internal sealed class ImdbDatasetIndexBuilder
         IProgress<ImdbDatasetImportProgress>? progress,
         ImdbDatasetProgressContext context,
         long processedRowCount,
+        long importedRowCount,
+        TimeSpan elapsed,
         long processedArchiveBytes)
     {
         if (progress is null)
@@ -478,7 +493,9 @@ internal sealed class ImdbDatasetIndexBuilder
             context.DatasetCount,
             processedRowCount,
             Math.Clamp(datasetPercent, 0d, 100d),
-            Math.Clamp(overallPercent, 0d, 100d)));
+            Math.Clamp(overallPercent, 0d, 100d),
+            ImportedRowCount: importedRowCount,
+            ProcessedRowsPerSecond: elapsed.TotalSeconds > 0d ? processedRowCount / elapsed.TotalSeconds : 0d));
     }
 
     private static bool TryMapTitleKind(ReadOnlySpan<char> value, out int kind)

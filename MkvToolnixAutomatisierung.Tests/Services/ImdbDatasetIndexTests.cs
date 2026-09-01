@@ -152,7 +152,12 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal([1, 2, 3], importReports.Select(value => value.DatasetNumber).Distinct().ToArray());
         Assert.All(
             importReports.GroupBy(value => value.DatasetNumber),
-            group => Assert.Equal(100d, group.Last().DatasetProgressPercent, precision: 5));
+            group =>
+            {
+                Assert.Equal(100d, group.Last().DatasetProgressPercent, precision: 5);
+                Assert.True(group.Last().ImportedRowCount > 0);
+                Assert.True(group.Last().ProcessedRowsPerSecond > 0d);
+            });
         Assert.True(importReports.Zip(importReports.Skip(1), (left, right) => left.OverallProgressPercent <= right.OverallProgressPercent).All(value => value));
         var finalizationReports = progress.Values.Where(value => value.IsFinalizing).ToArray();
         Assert.Equal(6, finalizationReports.Length);
