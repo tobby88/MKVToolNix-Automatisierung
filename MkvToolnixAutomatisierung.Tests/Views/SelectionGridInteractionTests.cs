@@ -463,6 +463,64 @@ public sealed class SelectionGridInteractionTests
     }
 
     [Fact]
+    public async Task EmbyProviderAbsenceCheckboxes_BindIndependentlyAndKeepTheirOwnKeyboardAction()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var vm = CreateEmbySyncViewModel();
+            var item = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Bonus.mkv");
+            vm.Items.Add(item);
+            var view = new EmbySyncView { DataContext = vm };
+            var window = CreateHostWindow(view);
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+                var grid = Assert.IsType<DataGrid>(FindVisualChild<DataGrid>(view));
+                foreach (var columnIndex in new[] { 2, 3 })
+                {
+                    grid.ScrollIntoView(item, grid.Columns[columnIndex]);
+                    grid.UpdateLayout();
+                    var cellContent = grid.Columns[columnIndex].GetCellContent(item);
+                    var checkBox = Assert.IsType<CheckBox>(FindVisualChild<CheckBox>(cellContent));
+                    Assert.Equal("Kein Eintrag", checkBox.Content);
+                    Assert.Same(item, checkBox.DataContext);
+                    Assert.Equal(columnIndex == 2 ? nameof(EmbySyncItemViewModel.IsTvdbUnavailable) : nameof(EmbySyncItemViewModel.IsImdbUnavailable),
+                        checkBox.GetBindingExpression(ToggleButton.IsCheckedProperty)!.ParentBinding.Path.Path);
+                    Assert.True(checkBox.IsEnabled);
+                    checkBox.Focus();
+                    Keyboard.Focus(checkBox);
+                    var key = new KeyEventArgs(Keyboard.PrimaryDevice,
+                        PresentationSource.FromVisual(checkBox), Environment.TickCount, Key.Space)
+                    {
+                        RoutedEvent = Keyboard.PreviewKeyDownEvent
+                    };
+                    checkBox.RaiseEvent(key);
+                    Assert.False(key.Handled); // Der Grid-Shortcut darf die Checkbox nicht abfangen.
+                    Assert.True(item.IsSelected);
+                    checkBox.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+                    await WpfTestHost.WaitForIdleAsync();
+                    Assert.True(item.IsTvdbUnavailable, $"Column {columnIndex}: checked={checkBox.IsChecked}, binding={checkBox.GetBindingExpression(ToggleButton.IsCheckedProperty)?.Status}, tvdb={item.TvdbId}");
+                    Assert.Equal(columnIndex == 3, item.IsImdbUnavailable);
+                }
+
+                Assert.True(item.HasCompleteProviderIds);
+                item.TvdbId = "12345";
+                grid.ScrollIntoView(item, grid.Columns[2]);
+                grid.UpdateLayout();
+                await WpfTestHost.WaitForIdleAsync();
+                var tvdbCheckBox = Assert.IsType<CheckBox>(FindVisualChild<CheckBox>(grid.Columns[2].GetCellContent(item)));
+                Assert.False(tvdbCheckBox.IsChecked);
+                Assert.True(item.IsImdbUnavailable);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task EmbySyncView_DisablesGridWhileScanIsRunning()
     {
         await WpfTestHost.RunAsync(async () =>

@@ -241,11 +241,20 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <TextBox Grid.Column="0"
                                              Style="{StaticResource EditableIdTextBoxStyle}"
                                              IsEnabled="{Binding CanEditProviderIds}"
                                              ToolTip="{Binding ProviderIdEditTooltip}"
                                              Text="{Binding TvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
+                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0"
+                                              Content="Kein Eintrag"
+                                              IsEnabled="{Binding CanEditProviderIds}"
+                                              IsChecked="{Binding IsTvdbUnavailable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Bewusst keine TVDB-ID vergeben. Wird beim Speichern im Report gemerkt und entfernt eine bisherige TVDB-ID aus der NFO. Zum erneuten Prüfen Haken entfernen oder eine ID eintragen." />
                                     <Button Grid.Column="1"
                                             Margin="6,0,0,0"
                                             Style="{StaticResource RowActionButtonStyle}"
@@ -268,11 +277,20 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <TextBox Grid.Column="0"
                                              Style="{StaticResource EditableIdTextBoxStyle}"
                                              IsEnabled="{Binding CanEditProviderIds}"
                                              ToolTip="{Binding ProviderIdEditTooltip}"
                                              Text="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
+                                    <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0"
+                                              Content="Kein Eintrag"
+                                              IsEnabled="{Binding CanEditProviderIds}"
+                                              IsChecked="{Binding IsImdbUnavailable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Bewusst keine IMDb-ID vergeben. Wird beim Speichern im Report gemerkt und entfernt eine bisherige IMDb-ID aus der NFO. Zum erneuten Prüfen Haken entfernen oder eine ID eintragen." />
                                     <Button Grid.Column="1"
                                             Margin="6,0,0,0"
                                             Style="{StaticResource RowActionButtonStyle}"

@@ -143,10 +143,13 @@ internal static class DataGridSelectionInput
     /// <summary>
     /// Bearbeitbare Eingabeelemente behalten ihr Standardverhalten. Die Auswahl-Shortcuts gelten
     /// nur fuer reine Zeilenoberflächen, nicht etwa fuer TextBoxen in Edit-Templates.
+    /// Buttons und fachliche Checkboxen behalten Space für ihre eigene Aktion; die reine
+    /// Zeilenauswahl-Checkbox ist nicht fokussierbar und wird weiterhin vom Grid bedient.
     /// </summary>
     private static bool IsEditingElement(DependencyObject? source)
     {
         return FindVisualParent<TextBoxBase>(source) is not null
+            || FindVisualParent<ButtonBase>(source) is not null
             || FindVisualParent<ComboBox>(source) is not null
             || FindVisualParent<PasswordBox>(source) is not null;
     }

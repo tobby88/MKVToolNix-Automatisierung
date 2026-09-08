@@ -299,6 +299,8 @@ internal sealed class DemoEmbyItem
     public string MediaFileName { get; init; } = string.Empty;
     public string TvdbId { get; set; } = string.Empty;
     public string ImdbId { get; set; } = string.Empty;
+    public bool IsTvdbUnavailable { get; set; }
+    public bool IsImdbUnavailable { get; set; }
     public bool CanEditProviderIds { get; init; }
     public string ProviderIdEditTooltip { get; init; } = string.Empty;
     public bool CanReviewTvdb { get; init; }
