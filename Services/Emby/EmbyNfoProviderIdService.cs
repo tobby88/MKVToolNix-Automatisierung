@@ -107,8 +107,9 @@ internal sealed class EmbyNfoProviderIdService
     /// <param name="mediaFilePath">Pfad zur MKV-Datei.</param>
     /// <param name="providerIds">IDs, die in der NFO stehen sollen.</param>
     /// <param name="removeImdbId">Entfernt vorhandene IMDb-Felder, wenn der Benutzer bewusst keine IMDb-ID vergeben hat.</param>
+    /// <param name="removeTvdbId">Entfernt vorhandene TVDB-Felder nur bei einer ausdrücklichen Entscheidung gegen eine TVDB-ID.</param>
     /// <returns>Ergebnis mit Änderungsstatus und Hinweistext.</returns>
-    public EmbyNfoUpdateResult UpdateProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false)
+    public EmbyNfoUpdateResult UpdateProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false, bool removeTvdbId = false)
     {
         var nfoPath = GetNfoPath(mediaFilePath);
         if (!File.Exists(nfoPath))
@@ -116,7 +117,7 @@ internal sealed class EmbyNfoProviderIdService
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false, "NFO-Datei fehlt. Bitte zuerst Emby scannen lassen.");
         }
 
-        if (!providerIds.HasAny && !removeImdbId)
+        if (!providerIds.HasAny && !removeImdbId && !removeTvdbId)
         {
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false, "Keine TVDB- oder IMDB-ID vorhanden.");
         }
@@ -141,6 +142,11 @@ internal sealed class EmbyNfoProviderIdService
                 {
                     changed |= SetLegacyProviderElement(root, "tvdbid", providerIds.TvdbId!);
                 }
+            }
+
+            else if (removeTvdbId)
+            {
+                changed |= RemoveProviderId(root, "tvdb", "tvdbid");
             }
 
             if (!string.IsNullOrWhiteSpace(providerIds.ImdbId))

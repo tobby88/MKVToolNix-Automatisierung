@@ -1,4 +1,5 @@
 using System.IO;
+using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -8,6 +9,59 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
 public sealed class EmbySyncItemViewModelTests
 {
+    [Fact]
+    public void RestoredAbsenceDecisions_SuppressAllFallbackSources_AndCanBeRevoked()
+    {
+        var original = new EmbySyncItemViewModel(@"C:\Videos\Bonus.mkv", new EmbyProviderIds("100", "tt1234567"))
+        {
+            IsTvdbUnavailable = true,
+            IsImdbUnavailable = true
+        };
+        var vm = new EmbySyncItemViewModel(original.MediaFilePath,
+            new EmbyProviderIds("100", "tt1234567"), original.CreateReviewSnapshot());
+        var emby = new EmbyItem("emby-1", "Bonus", vm.MediaFilePath,
+            new Dictionary<string, string> { ["Tvdb"] = "200", ["Imdb"] = "tt2345678" });
+
+        vm.ApplyAnalysis(new EmbyFileAnalysis(vm.MediaFilePath, vm.NfoPath, true, true,
+            new EmbyProviderIds("300", "tt3456789"), emby, null));
+        vm.ApplyEmbyItem(emby);
+
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.True(vm.HasKnownEmbyProviderIdMismatch);
+        Assert.Empty(vm.TvdbId);
+        Assert.Empty(vm.ImdbId);
+        vm.IsTvdbUnavailable = false;
+        Assert.False(vm.HasCompleteProviderIds);
+        vm.TvdbId = "400";
+        Assert.True(vm.HasCompleteProviderIds);
+        vm.IsImdbUnavailable = false;
+        Assert.True(vm.RequiresImdbReview);
+        Assert.False(vm.HasCompleteProviderIds);
+        vm.ImdbId = "tt4567890";
+        Assert.True(vm.HasCompleteProviderIds);
+    }
+
+    [Fact]
+    public void EnteringAnId_ReplacesOnlyThatProvidersAbsenceDecision()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Bonus.mkv")
+        {
+            IsTvdbUnavailable = true,
+            IsImdbUnavailable = true
+        };
+        vm.ApplyImdbSelection("tt1234567");
+        Assert.True(vm.IsTvdbUnavailable);
+        Assert.False(vm.IsImdbUnavailable);
+        Assert.True(vm.HasCompleteProviderIds);
+        vm.TvdbId = "12345";
+        Assert.False(vm.IsTvdbUnavailable);
+        Assert.True(vm.HasCompleteProviderIds);
+        var restored = new EmbySyncItemViewModel(vm.MediaFilePath, EmbyProviderIds.Empty, vm.CreateReviewSnapshot());
+        Assert.Equal("12345", restored.TvdbId);
+        Assert.Equal("tt1234567", restored.ImdbId);
+        Assert.False(restored.HasPendingProviderReview);
+    }
+
     [Fact]
     public void ApplyAnalysis_PrefersReportedTvdbId_OverDifferentNfoAndEmbyIds()
     {
@@ -522,11 +576,14 @@ public sealed class EmbySyncItemViewModelTests
     }
 
     [Fact]
-    public void MarkImdbUnavailable_CompletesProviderReviewWhenNoIdsExist()
+    public void MissingProviders_RequireSeparateExplicitDecisions()
     {
         var vm = new EmbySyncItemViewModel(@"C:\Videos\Serie - S00E01 - Bonus.mkv", EmbyProviderIds.Empty);
 
         vm.MarkImdbUnavailable();
+        Assert.False(vm.HasCompleteProviderIds);
+        Assert.False(vm.IsTvdbUnavailable);
+        vm.IsTvdbUnavailable = true;
 
         Assert.False(vm.HasTvdbId);
         Assert.False(vm.HasImdbId);
@@ -535,7 +592,7 @@ public sealed class EmbySyncItemViewModelTests
         Assert.True(vm.HasCompleteProviderIds);
         Assert.Equal("Bereit", vm.StatusText);
         Assert.Equal("Ready", vm.StatusTone);
-        Assert.Contains("keine TVDB-/IMDb-ID", vm.Note, StringComparison.Ordinal);
+        Assert.Contains("bestätigt", vm.Note, StringComparison.Ordinal);
     }
 
     [Fact]

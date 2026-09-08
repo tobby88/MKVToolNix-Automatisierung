@@ -8,6 +8,99 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 public sealed class EmbyMetadataSyncServiceTests
 {
     [Fact]
+    public void ReportProgress_PreservesDecisionsAndMovesBetweenSiblingFoldersWhenReopened()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Bonus.mkv");
+            var reportPath = Path.Combine(directory, "run.json");
+            WriteReport(reportPath, mediaPath);
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+            var review = new BatchOutputEmbyReview
+            {
+                TvdbId = "",
+                ImdbId = "",
+                TvdbUnavailable = true,
+                ImdbUnavailable = true,
+                TvdbManuallyReviewed = true,
+                ImdbManuallyReviewed = true
+            };
+            var reviews = new Dictionary<string, BatchOutputEmbyReview>(StringComparer.OrdinalIgnoreCase)
+            {
+                [mediaPath] = review
+            };
+
+            // Auch ein Lauf ohne erfolgreichen Refresh muss die bewussten Entscheidungen behalten.
+            var partial = service.MarkOutputReportsDone([reportPath], [], reviews);
+            Assert.Empty(partial.FailedReports);
+            var partialPath = Assert.Single(partial.MovedReports).TargetPath;
+            Assert.Equal(Path.Combine(directory, "partial", "run.json"), partialPath);
+            var imported = Assert.Single(service.LoadNewOutputReport(partialPath));
+            Assert.Equal(review, imported.Review);
+            Assert.Equal("100", imported.ProviderIds.TvdbId); // Ursprüngliche Mux-Zuordnung bleibt nachvollziehbar.
+
+            var done = service.MarkOutputReportsDone([partialPath], [mediaPath], reviews);
+            var donePath = Assert.Single(done.MovedReports).TargetPath;
+            Assert.Equal(Path.Combine(directory, "done", "run.json"), donePath);
+            var finished = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(donePath))!;
+            Assert.True(finished.Items[0].EmbySyncDone);
+            Assert.NotNull(finished.Items[0].EmbySyncDoneAt);
+            Assert.NotNull(finished.EmbySyncCompletedAt);
+            Assert.Empty(service.MarkOutputReportsDone([donePath], [mediaPath], reviews).MovedReports);
+
+            // Eine zurückgenommene Entscheidung darf keinen veralteten Abschluss hinterlassen.
+            reviews[mediaPath] = review with { TvdbUnavailable = false, TvdbManuallyReviewed = false };
+            var reopened = service.MarkOutputReportsDone([donePath], [], reviews);
+            Assert.Equal(partialPath, Assert.Single(reopened.MovedReports).TargetPath);
+            var pending = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(partialPath))!;
+            Assert.False(pending.Items[0].EmbySyncDone);
+            Assert.Null(pending.Items[0].EmbySyncDoneAt);
+            Assert.Null(pending.EmbySyncCompletedAt);
+            Assert.False(pending.Items[0].EmbyReview!.TvdbUnavailable);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReportProgress_DoesNotOverwriteOtherReportsOrModifyUnselectedEntries()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var first = Path.Combine(directory, "First.mkv");
+            var second = Path.Combine(directory, "Second.mkv");
+            var reportPath = Path.Combine(directory, "run.json");
+            WriteReport(reportPath, first, second);
+            var partialDirectory = Path.Combine(directory, "partial");
+            Directory.CreateDirectory(partialDirectory);
+            var collisionPath = Path.Combine(partialDirectory, "run.json");
+            File.WriteAllText(collisionPath, "other report");
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+            var result = service.MarkOutputReportsDone([reportPath], [first]);
+
+            Assert.Empty(result.FailedReports);
+            var moved = Assert.Single(result.MovedReports);
+            Assert.NotEqual(collisionPath, moved.TargetPath);
+            Assert.Equal("other report", File.ReadAllText(collisionPath));
+            var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(moved.TargetPath))!;
+            Assert.True(report.Items[0].EmbySyncDone);
+            Assert.Null(report.Items[1].EmbySyncDone);
+            Assert.Null(report.Items[1].EmbyReview);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LoadNewOutputReport_RejectsLegacyTextLists()
     {
         var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
@@ -102,17 +195,18 @@ public sealed class EmbyMetadataSyncServiceTests
 
             var partialResult = service.MarkOutputReportsDone([reportPath], [firstMediaPath]);
 
-            Assert.Equal([reportPath], partialResult.UpdatedReportPaths);
-            Assert.Empty(partialResult.MovedReports);
-            var partialReport = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath))!;
+            Assert.Empty(partialResult.UpdatedReportPaths);
+            var partialPath = Assert.Single(partialResult.MovedReports).TargetPath;
+            Assert.Equal(Path.Combine(directory, "partial", Path.GetFileName(reportPath)), partialPath);
+            var partialReport = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(partialPath))!;
             Assert.True(partialReport.Items[0].EmbySyncDone);
             Assert.Null(partialReport.Items[1].EmbySyncDone);
             Assert.Null(partialReport.EmbySyncCompletedAt);
 
-            var completedResult = service.MarkOutputReportsDone([reportPath], [secondMediaPath]);
+            var completedResult = service.MarkOutputReportsDone([partialPath], [secondMediaPath]);
 
             var movedReport = Assert.Single(completedResult.MovedReports);
-            Assert.Equal(reportPath, movedReport.SourcePath);
+            Assert.Equal(partialPath, movedReport.SourcePath);
             Assert.StartsWith(Path.Combine(directory, "done"), movedReport.TargetPath, StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(reportPath));
             Assert.True(File.Exists(movedReport.TargetPath));

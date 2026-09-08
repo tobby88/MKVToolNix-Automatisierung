@@ -6,6 +6,49 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class EmbyNfoProviderIdServiceTests
 {
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void UpdateProviderIds_RemovesOnlyExplicitlyRejectedProviders_AndIsIdempotent(bool removeTvdb, bool removeImdb)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Bonus.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, """
+                <episodedetails>
+                  <title>Bonus</title><lockedfields>Name</lockedfields>
+                  <uniqueid type="tvdb">100</uniqueid><tvdbid>100</tvdbid>
+                  <uniqueid type="imdb">tt1234567</uniqueid><imdbid>tt1234567</imdbid>
+                  <uniqueid type="tmdb">900</uniqueid>
+                </episodedetails>
+                """);
+            var service = new EmbyNfoProviderIdService();
+            var result = service.UpdateProviderIds(mediaPath, EmbyProviderIds.Empty,
+                removeImdbId: removeImdb, removeTvdbId: removeTvdb);
+
+            Assert.True(result.Success);
+            Assert.True(result.NfoChanged);
+            var content = File.ReadAllText(nfoPath);
+            Assert.Equal(!removeTvdb, content.Contains("tvdb", StringComparison.Ordinal));
+            Assert.Equal(!removeImdb, content.Contains("imdb", StringComparison.Ordinal));
+            Assert.Contains("<title>Bonus</title>", content);
+            Assert.Contains("<lockedfields>Name</lockedfields>", content);
+            Assert.Contains("tmdb", content);
+            var repeated = service.UpdateProviderIds(mediaPath, EmbyProviderIds.Empty,
+                removeImdbId: removeImdb, removeTvdbId: removeTvdb);
+            Assert.True(repeated.Success);
+            Assert.False(repeated.NfoChanged);
+            Assert.Equal(content, File.ReadAllText(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public void ReadProviderIds_ReadsUniqueIdAndLegacyFallbacks()
     {

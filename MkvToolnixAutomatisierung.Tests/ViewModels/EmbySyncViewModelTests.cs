@@ -18,6 +18,71 @@ public sealed class EmbySyncViewModelTests
 {
     private readonly PortableStorageFixture _storageFixture;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunSyncCommand_PartialMissingTvdbCanBeExplicitlyCompletedAndReimportedWithoutWriting(bool nfoAlreadyCurrent)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-sync-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Serie - S00E01 - Bonus.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(mediaPath, string.Empty);
+            File.WriteAllText(nfoPath, nfoAlreadyCurrent
+                ? "<episodedetails><uniqueid type=\"imdb\">tt1234567</uniqueid></episodedetails>"
+                : "<episodedetails><title>Bonus</title></episodedetails>");
+            var reportPath = WriteMetadataReport(directory, "run.json", mediaPath, "", "tt1234567");
+            var vm = CreateViewModel(new SelectingDialogService([reportPath]));
+            await vm.SelectReportCommand.ExecuteAsync();
+            var item = Assert.Single(vm.Items);
+            item.ApplyImdbSelection("tt1234567");
+
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            Assert.Equal("IDs fehlen", item.StatusText);
+            var partialPath = Path.Combine(directory, "partial", "run.json");
+            Assert.Equal(partialPath, vm.ReportPath);
+            var partial = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(partialPath))!;
+            Assert.False(partial.Items[0].EmbySyncDone);
+            Assert.False(partial.Items[0].EmbyReview!.TvdbUnavailable);
+            Assert.True(partial.Items[0].EmbyReview!.ImdbManuallyReviewed);
+
+            // Wiederaufnahme über eine neue VM: keine implizite TVDB-Absage, IMDb-Freigabe bleibt erhalten.
+            vm = CreateViewModel(new SelectingDialogService([partialPath]));
+            await vm.SelectReportCommand.ExecuteAsync();
+            item = Assert.Single(vm.Items);
+            Assert.False(item.RequiresImdbReview);
+            Assert.False(item.HasCompleteProviderIds);
+            item.IsTvdbUnavailable = true;
+            await vm.RunSyncCommand.ExecuteAsync();
+
+            var donePath = Path.Combine(directory, "done", "run.json");
+            Assert.Equal(donePath, vm.ReportPath);
+            var done = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(donePath))!;
+            Assert.True(done.Items[0].EmbySyncDone);
+            Assert.True(done.Items[0].EmbyReview!.TvdbUnavailable);
+            Assert.False(File.Exists(partialPath));
+
+            // Unveränderte Wiederholung lässt die NFO bytegenau und ohne neuen Schreibzeitpunkt stehen.
+            var content = File.ReadAllText(nfoPath);
+            var writtenAt = File.GetLastWriteTimeUtc(nfoPath);
+            vm = CreateViewModel(new SelectingDialogService([donePath]));
+            await vm.SelectReportCommand.ExecuteAsync();
+            Assert.True(Assert.Single(vm.Items).HasCompleteProviderIds);
+            await vm.RunSyncCommand.ExecuteAsync();
+            Assert.Equal("NFO aktuell", Assert.Single(vm.Items).StatusText);
+            Assert.Equal(donePath, vm.ReportPath);
+            Assert.Equal(content, File.ReadAllText(nfoPath));
+            Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     public EmbySyncViewModelTests(PortableStorageFixture storageFixture)
     {
         _storageFixture = storageFixture;
@@ -628,7 +693,8 @@ public sealed class EmbySyncViewModelTests
             Assert.Contains("Emby-Item auch bei erneuter Pfadsuche nicht gefunden", item.Note, StringComparison.Ordinal);
             Assert.Contains("Emby-Refresh offen", vm.StatusText, StringComparison.Ordinal);
             Assert.Equal(0, embyClient.RefreshCallCount);
-            Assert.True(File.Exists(reportPath));
+            Assert.False(File.Exists(reportPath));
+            Assert.True(File.Exists(Path.Combine(tempDirectory, "partial", "run.metadata.json")));
             Assert.False(File.Exists(Path.Combine(tempDirectory, "done", "run.metadata.json")));
         }
         finally
@@ -733,6 +799,7 @@ public sealed class EmbySyncViewModelTests
                 NfoProviderIds: new EmbyProviderIds(null, "tt1234567"),
                 EmbyItem: null,
                 WarningMessage: null));
+            item.IsTvdbUnavailable = true;
             item.MarkImdbUnavailable();
             vm.Items.Add(item);
 
@@ -776,6 +843,7 @@ public sealed class EmbySyncViewModelTests
                 NfoProviderIds: EmbyProviderIds.Empty,
                 EmbyItem: null,
                 WarningMessage: null));
+            item.IsTvdbUnavailable = true;
             item.MarkImdbUnavailable();
             vm.Items.Add(item);
 
@@ -1001,8 +1069,9 @@ public sealed class EmbySyncViewModelTests
             await vm.RunSyncCommand.ExecuteAsync();
 
             Assert.Equal("Refresh prüfen", item.StatusText);
-            var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath))!;
-            Assert.Null(Assert.Single(report.Items).EmbySyncDone);
+            var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(vm.ReportPath))!;
+            Assert.False(Assert.Single(report.Items).EmbySyncDone);
+            Assert.Equal("partial", Path.GetFileName(Path.GetDirectoryName(vm.ReportPath)));
             Assert.Contains("Emby-Refresh-Fehler", vm.StatusText, StringComparison.Ordinal);
         }
         finally
@@ -1162,7 +1231,8 @@ public sealed class EmbySyncViewModelTests
             Assert.Contains("NFO war bereits aktuell", item.Note, StringComparison.Ordinal);
             Assert.Contains("Emby-Item auch bei erneuter Pfadsuche nicht gefunden", item.Note, StringComparison.Ordinal);
             Assert.Equal(0, embyClient.RefreshCallCount);
-            Assert.True(File.Exists(reportPath));
+            Assert.False(File.Exists(reportPath));
+            Assert.True(File.Exists(Path.Combine(tempDirectory, "partial", "current-missing-emby.metadata.json")));
             Assert.False(File.Exists(Path.Combine(tempDirectory, "done", "current-missing-emby.metadata.json")));
         }
         finally

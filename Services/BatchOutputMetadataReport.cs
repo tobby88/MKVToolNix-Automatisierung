@@ -107,6 +107,32 @@ public sealed class BatchOutputMetadataEntry
     /// Zeitpunkt der erfolgreichen Emby-Abgleich-Bearbeitung dieser MKV.
     /// </summary>
     public DateTimeOffset? EmbySyncDoneAt { get; set; }
+
+    /// <summary>
+    /// Zuletzt gespeicherte Emby-Auswahl, getrennt von den ursprünglichen Mux-Metadaten.
+    /// Fehlende Werte in alten Reports bedeuten ausdrücklich noch keine bewusste Ablehnung.
+    /// </summary>
+    public BatchOutputEmbyReview? EmbyReview { get; set; }
+}
+
+/// <summary>
+/// Wiederaufnehmbare Provider-Auswahl. Eine bewusst fehlende ID wird je Anbieter gespeichert;
+/// dadurch kann ein leerer Treffer von einer noch ausstehenden Zuordnung unterschieden werden.
+/// </summary>
+public sealed record BatchOutputEmbyReview
+{
+    /// <summary>Zuletzt gewählte TVDB-Episoden-ID.</summary>
+    public string? TvdbId { get; init; }
+    /// <summary>Zuletzt gewählte IMDb-ID.</summary>
+    public string? ImdbId { get; init; }
+    /// <summary>Der Benutzer hat bewusst keinen passenden TVDB-Eintrag zugeordnet.</summary>
+    public bool TvdbUnavailable { get; init; }
+    /// <summary>Der Benutzer hat bewusst keinen passenden IMDb-Eintrag zugeordnet.</summary>
+    public bool ImdbUnavailable { get; init; }
+    /// <summary>Die TVDB-Auswahl wurde manuell bestätigt, nicht nur automatisch übernommen.</summary>
+    public bool TvdbManuallyReviewed { get; init; }
+    /// <summary>Die IMDb-Auswahl wurde manuell bestätigt, nicht nur automatisch übernommen.</summary>
+    public bool ImdbManuallyReviewed { get; init; }
 }
 
 /// <summary>

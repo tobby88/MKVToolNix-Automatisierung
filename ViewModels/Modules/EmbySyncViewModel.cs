@@ -583,7 +583,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     continue;
                 }
 
-                if (!item.ProviderIds.HasAny && !item.IsImdbUnavailable)
+                if (!item.ProviderIds.HasAny && !item.IsImdbUnavailable && !item.IsTvdbUnavailable)
                 {
                     item.SetStatus("Übersprungen", "Keine TVDB- oder IMDB-ID vorhanden. Bitte IDs manuell ergänzen oder Emby-Metadaten prüfen.");
                     skippedCount++;
@@ -600,7 +600,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 var updateResult = _services.Sync.UpdateNfoProviderIds(
                     item.MediaFilePath,
                     item.ProviderIds,
-                    removeImdbId: item.IsImdbUnavailable);
+                    removeImdbId: item.IsImdbUnavailable,
+                    removeTvdbId: item.IsTvdbUnavailable);
                 if (!updateResult.Success)
                 {
                     item.SetStatus("NFO prüfen", updateResult.Message);
@@ -660,7 +661,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     item.MarkUpdated(
                         metadataRefreshTriggered: false,
                         noRefreshReason: "Emby-Refresh nicht ausgeführt, weil keine Emby-API-Zugangsdaten konfiguriert sind.");
-                    completedMediaFilePaths.Add(item.MediaFilePath);
+                    if (item.HasCompleteProviderIds) completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
 
@@ -676,7 +677,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 {
                     await _services.Sync.RefreshItemMetadataAsync(settings, refreshItemId);
                     item.MarkUpdated(metadataRefreshTriggered: true);
-                    completedMediaFilePaths.Add(item.MediaFilePath);
+                    if (item.HasCompleteProviderIds) completedMediaFilePaths.Add(item.MediaFilePath);
                 }
                 catch (Exception ex)
                 {
@@ -689,7 +690,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             ProgressValue = 100;
             StatusText = BuildRunSyncSummary(updatedCount, currentCount, refreshOnlyCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
             AppendLog(StatusText);
-            MarkSelectedReportsDone(completedMediaFilePaths);
+            MarkSelectedReportsDone(completedMediaFilePaths, selectedItems);
             RefreshSummaryAndCommands();
             SaveVisibleLog("Änderungen schreiben");
         });
@@ -984,7 +985,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         Items.Clear();
         foreach (var importEntry in importEntries)
         {
-            var item = new EmbySyncItemViewModel(importEntry.MediaFilePath, importEntry.ProviderIds);
+            var item = new EmbySyncItemViewModel(importEntry.MediaFilePath, importEntry.ProviderIds, importEntry.Review);
             item.PropertyChanged += ItemOnPropertyChanged;
             Items.Add(item);
         }
@@ -1023,17 +1024,19 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         item.IsSelected = !item.IsSelected;
     }
 
-    private void MarkSelectedReportsDone(IReadOnlyList<string> completedMediaFilePaths)
+    private void MarkSelectedReportsDone(IReadOnlyList<string> completedMediaFilePaths, IReadOnlyList<EmbySyncItemViewModel> attemptedItems)
     {
-        if (completedMediaFilePaths.Count == 0 || _reportPaths.Count == 0)
+        if (_reportPaths.Count == 0)
         {
             return;
         }
 
-        var completion = _services.Sync.MarkOutputReportsDone(_reportPaths, completedMediaFilePaths);
+        var reviews = attemptedItems.ToDictionary(item => item.MediaFilePath,
+            item => item.CreateReviewSnapshot(), StringComparer.OrdinalIgnoreCase);
+        var completion = _services.Sync.MarkOutputReportsDone(_reportPaths, completedMediaFilePaths, reviews);
         if (completion.UpdatedReportPaths.Count > 0)
         {
-            AppendLog($"Metadatenreport aktualisiert: {completion.UpdatedReportPaths.Count} teilweise erledigt.");
+            AppendLog($"Bearbeitungsstand gespeichert: {completion.UpdatedReportPaths.Count} Metadatenreport(s).");
         }
 
         if (completion.MovedReports.Count > 0)
@@ -1041,7 +1044,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             foreach (var movedReport in completion.MovedReports)
             {
                 ReplaceReportPath(movedReport.SourcePath, movedReport.TargetPath);
-                AppendLog($"Metadatenreport erledigt und verschoben: {movedReport.TargetPath}");
+                var state = Path.GetFileName(Path.GetDirectoryName(movedReport.TargetPath)) == "done" ? "vollständig erledigt" : "teilweise erledigt";
+                AppendLog($"Metadatenreport {state} und verschoben: {movedReport.TargetPath}");
             }
 
             OnPropertyChanged(nameof(ReportSelectionSummaryText));
@@ -1526,7 +1530,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             laterEntry.MediaFilePath,
             new EmbyProviderIds(
                 PickPreferredProviderId(earlierEntry.ProviderIds.TvdbId, laterEntry.ProviderIds.TvdbId),
-                PickPreferredProviderId(earlierEntry.ProviderIds.ImdbId, laterEntry.ProviderIds.ImdbId)));
+                PickPreferredProviderId(earlierEntry.ProviderIds.ImdbId, laterEntry.ProviderIds.ImdbId)),
+            laterEntry.Review ?? earlierEntry.Review);
     }
 
     private static string? PickPreferredProviderId(string? earlierValue, string? laterValue)

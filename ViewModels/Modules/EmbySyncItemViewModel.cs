@@ -31,6 +31,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private bool _isImdbReviewApproved;
     private bool _imdbReviewWasManuallyResolved;
     private bool _isImdbUnavailable;
+    private bool _isTvdbUnavailable;
     private bool _embyLookupAttemptedWithoutItem;
     private string _tvdbId = string.Empty;
     private string _imdbId = string.Empty;
@@ -47,7 +48,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     {
     }
 
-    public EmbySyncItemViewModel(string mediaFilePath, EmbyProviderIds providerIds)
+    public EmbySyncItemViewModel(string mediaFilePath, EmbyProviderIds providerIds, BatchOutputEmbyReview? review = null)
     {
         MediaFilePath = mediaFilePath;
         NfoPath = Path.ChangeExtension(mediaFilePath, ".nfo");
@@ -55,6 +56,17 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         _tvdbId = _reportedProviderIds.TvdbId ?? string.Empty;
         _imdbId = _reportedProviderIds.ImdbId ?? string.Empty;
         _metadataGuess = TryParseMetadataGuess(mediaFilePath);
+        if (review is not null)
+        {
+            _isTvdbUnavailable = review.TvdbUnavailable;
+            _isImdbUnavailable = review.ImdbUnavailable;
+            _tvdbId = review.TvdbUnavailable ? string.Empty : review.TvdbId ?? _tvdbId;
+            _imdbId = review.ImdbUnavailable ? string.Empty : review.ImdbId ?? _imdbId;
+            _tvdbReviewWasManuallyResolved = review.TvdbManuallyReviewed || review.TvdbUnavailable;
+            _imdbReviewWasManuallyResolved = review.ImdbManuallyReviewed || review.ImdbUnavailable;
+            _isTvdbReviewApproved = _tvdbReviewWasManuallyResolved;
+            _isImdbReviewApproved = _imdbReviewWasManuallyResolved;
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -196,7 +208,61 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     /// <summary>
     /// Kennzeichnet, dass der Benutzer bewusst entschieden hat, keine IMDb-ID zu vergeben.
     /// </summary>
-    public bool IsImdbUnavailable => _isImdbUnavailable;
+    public bool IsImdbUnavailable
+    {
+        get => _isImdbUnavailable;
+        set
+        {
+            if (value == _isImdbUnavailable) return;
+            if (value) MarkImdbUnavailable();
+            else
+            {
+                _isImdbUnavailable = false;
+                _imdbReviewWasManuallyResolved = false;
+                _isImdbReviewApproved = false;
+                RefreshAbsenceStatus();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Bewusst keine TVDB-ID vergeben. Zurücknehmen öffnet die Zuordnung wieder;
+    /// ein leeres Feld allein gilt dagegen niemals als ausdrückliche Entscheidung.
+    /// </summary>
+    public bool IsTvdbUnavailable
+    {
+        get => _isTvdbUnavailable;
+        set
+        {
+            if (value == _isTvdbUnavailable) return;
+            if (value) SetTvdbId(string.Empty, markReviewResolved: false);
+            _isTvdbUnavailable = value;
+            _tvdbReviewWasManuallyResolved = value;
+            _isTvdbReviewApproved = value;
+            RefreshAbsenceStatus();
+        }
+    }
+
+    /// <summary>
+    /// Speichert nur manuelle Freigaben dauerhaft. Automatische TVDB/IMDb-Übereinstimmungen
+    /// müssen beim nächsten Import erneut anhand der dann aktuellen Quellen geprüft werden.
+    /// </summary>
+    public BatchOutputEmbyReview CreateReviewSnapshot() => new()
+    {
+        TvdbId = TvdbId,
+        ImdbId = ImdbId,
+        TvdbUnavailable = IsTvdbUnavailable,
+        ImdbUnavailable = IsImdbUnavailable,
+        TvdbManuallyReviewed = _tvdbReviewWasManuallyResolved,
+        ImdbManuallyReviewed = _imdbReviewWasManuallyResolved
+    };
+
+    private void RefreshAbsenceStatus()
+    {
+        NotifyProviderReviewPropertiesChanged();
+        SetStatus(HasPendingProviderReview ? "Prüfung offen" : HasCompleteProviderIds ? "Bereit" : "IDs fehlen",
+            HasCompleteProviderIds ? "Provider-Auswahl bestätigt." : "Fehlende IDs zuordnen oder ausdrücklich als nicht vorhanden bestätigen.");
+    }
 
     /// <summary>
     /// TVDB muss nur dann aktiv geprüft werden, wenn Report, NFO und Emby widersprüchliche IDs liefern.
@@ -223,20 +289,22 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     /// </summary>
     /// <remarks>
     /// Normalerweise bedeutet das: TVDB-ID vorhanden und IMDb-ID vorhanden oder bewusst leer.
-    /// Bonusmaterial kann aber absichtlich gar keine Provider-IDs haben; nach der IMDb-Prüfung
-    /// ist auch dieser leere Zustand ein gültiger Abschluss und darf nicht weiter als Warnung
-    /// "IDs fehlen" hängen bleiben.
+    /// Bonusmaterial kann absichtlich gar keine Provider-IDs haben. Für jeden fehlenden Anbieter
+    /// ist dann eine eigene ausdrückliche Entscheidung nötig; eine IMDb-Absage lehnt nicht auch TVDB ab.
     /// </remarks>
     public bool HasCompleteProviderIds => HasValidProviderIds
         && !HasPendingProviderReview
-        && ((HasTvdbId && (HasImdbId || IsImdbUnavailable)) || HasApprovedEmptyProviderIds);
+        && (HasTvdbId || IsTvdbUnavailable)
+        && (HasImdbId || IsImdbUnavailable);
 
     /// <summary>
     /// Kennzeichnet, ob das bereits gefundene Emby-Item noch andere Provider-IDs kennt als die geprüfte lokale Auswahl.
     /// </summary>
     public bool HasKnownEmbyProviderIdMismatch => SupportsProviderIdSync
         && !string.IsNullOrWhiteSpace(EmbyItemId)
-        && (ProviderIdDiffers(TvdbId, _embyProviderIds.TvdbId)
+        && ((IsTvdbUnavailable
+                ? !string.IsNullOrWhiteSpace(_embyProviderIds.TvdbId)
+                : ProviderIdDiffers(TvdbId, _embyProviderIds.TvdbId))
             || (IsImdbUnavailable
                 ? !string.IsNullOrWhiteSpace(_embyProviderIds.ImdbId)
                 : ProviderIdDiffers(ImdbId, _embyProviderIds.ImdbId)));
@@ -322,7 +390,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         var providerIds = ProviderIds
             .MergeFallback(_reportedProviderIds)
             .MergeFallback(analysis.EffectiveProviderIds);
-        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
+        if (!IsTvdbUnavailable && !string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             SetTvdbId(providerIds.TvdbId!, markReviewResolved: false);
         }
@@ -411,7 +479,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         var providerIds = ProviderIds
             .MergeFallback(_reportedProviderIds)
             .MergeFallback(embyProviderIds);
-        if (!string.IsNullOrWhiteSpace(providerIds.TvdbId))
+        if (!IsTvdbUnavailable && !string.IsNullOrWhiteSpace(providerIds.TvdbId))
         {
             SetTvdbId(providerIds.TvdbId!, markReviewResolved: false);
         }
@@ -886,12 +954,13 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         return "Keine TVDB-/IMDb-ID.";
     }
 
-    private bool HasApprovedEmptyProviderIds => !HasTvdbId && !HasImdbId && IsImdbUnavailable;
+    private bool HasApprovedEmptyProviderIds => !HasTvdbId && !HasImdbId && IsTvdbUnavailable && IsImdbUnavailable;
 
     private void SetTvdbId(string? value, bool markReviewResolved)
     {
         var normalized = (value ?? string.Empty).Trim();
         var changed = _tvdbId != normalized;
+        if (!string.IsNullOrWhiteSpace(normalized)) _isTvdbUnavailable = false;
         if (changed)
         {
             _tvdbId = normalized;
@@ -1075,6 +1144,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
     private void NotifyProviderReviewPropertiesChanged()
     {
+        OnPropertyChanged(nameof(IsTvdbUnavailable));
         OnPropertyChanged(nameof(IsImdbUnavailable));
         OnPropertyChanged(nameof(RequiresTvdbReview));
         OnPropertyChanged(nameof(RequiresImdbReview));

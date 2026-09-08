@@ -195,21 +195,24 @@ internal sealed class EmbyMetadataSyncService
     /// <summary>
     /// Aktualisiert die Provider-IDs in der lokalen NFO.
     /// </summary>
-    public EmbyNfoUpdateResult UpdateNfoProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false)
+    public EmbyNfoUpdateResult UpdateNfoProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false, bool removeTvdbId = false)
     {
-        return _nfoProviderIds.UpdateProviderIds(mediaFilePath, providerIds, removeImdbId);
+        return _nfoProviderIds.UpdateProviderIds(mediaFilePath, providerIds, removeImdbId, removeTvdbId);
     }
 
     /// <summary>
-    /// Markiert erfolgreich abgearbeitete Reporteinträge und verschiebt vollständig erledigte Reports in einen <c>done</c>-Unterordner.
+    /// Speichert Entscheidungen und Abschlussstatus. Teilweise bearbeitete Reports landen in
+    /// <c>partial</c>, vollständig erledigte in <c>done</c>, jeweils neben dem Ursprungsreport.
+    /// Ein erneut bearbeiteter Eintrag verliert seinen alten Abschluss, wenn der aktuelle Lauf fehlschlägt.
     /// </summary>
     public EmbyReportCompletionResult MarkOutputReportsDone(
         IReadOnlyList<string> reportPaths,
-        IReadOnlyCollection<string> completedMediaFilePaths)
+        IReadOnlyCollection<string> completedMediaFilePaths,
+        IReadOnlyDictionary<string, BatchOutputEmbyReview>? reviews = null)
     {
         ArgumentNullException.ThrowIfNull(reportPaths);
         ArgumentNullException.ThrowIfNull(completedMediaFilePaths);
-        if (reportPaths.Count == 0 || completedMediaFilePaths.Count == 0)
+        if (reportPaths.Count == 0 || (completedMediaFilePaths.Count == 0 && reviews?.Count is not > 0))
         {
             return EmbyReportCompletionResult.Empty;
         }
@@ -217,7 +220,7 @@ internal sealed class EmbyMetadataSyncService
         var completedPathSet = completedMediaFilePaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (completedPathSet.Count == 0)
+        if (completedPathSet.Count == 0 && reviews?.Count is not > 0)
         {
             return EmbyReportCompletionResult.Empty;
         }
@@ -233,7 +236,7 @@ internal sealed class EmbyMetadataSyncService
         {
             try
             {
-                var completion = MarkSingleOutputReportDone(reportPath, completedPathSet, now);
+                var completion = MarkSingleOutputReportDone(reportPath, completedPathSet, reviews, now);
                 if (completion.MovedReport is not null)
                 {
                     movedReports.Add(completion.MovedReport);
@@ -274,7 +277,7 @@ internal sealed class EmbyMetadataSyncService
         return report.Items
             .Where(item => !string.IsNullOrWhiteSpace(item.OutputPath))
             .Where(item => string.Equals(Path.GetExtension(item.OutputPath), ".mkv", StringComparison.OrdinalIgnoreCase))
-            .Select(item => new EmbyImportEntry(item.OutputPath, BuildProviderIds(item)))
+            .Select(item => new EmbyImportEntry(item.OutputPath, BuildProviderIds(item), item.EmbyReview))
             .GroupBy(item => item.MediaFilePath, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .OrderBy(item => item.MediaFilePath, StringComparer.OrdinalIgnoreCase)
@@ -284,6 +287,7 @@ internal sealed class EmbyMetadataSyncService
     private static SingleReportCompletionResult MarkSingleOutputReportDone(
         string reportPath,
         IReadOnlySet<string> completedMediaFilePaths,
+        IReadOnlyDictionary<string, BatchOutputEmbyReview>? reviews,
         DateTimeOffset completedAt)
     {
         if (!File.Exists(reportPath))
@@ -307,16 +311,26 @@ internal sealed class EmbyMetadataSyncService
         }
 
         var changed = false;
-        foreach (var item in relevantItems.Where(item => completedMediaFilePaths.Contains(item.OutputPath)))
+        foreach (var item in relevantItems)
         {
-            if (item.EmbySyncDone == true)
+            var hasReview = reviews is not null && reviews.ContainsKey(item.OutputPath);
+            var completed = completedMediaFilePaths.Contains(item.OutputPath);
+            if (!hasReview && !completed)
             {
                 continue;
             }
 
-            item.EmbySyncDone = true;
-            item.EmbySyncDoneAt = completedAt;
-            changed = true;
+            if (hasReview && item.EmbyReview != reviews![item.OutputPath])
+            {
+                item.EmbyReview = reviews![item.OutputPath];
+                changed = true;
+            }
+            if (item.EmbySyncDone != completed)
+            {
+                item.EmbySyncDone = completed;
+                item.EmbySyncDoneAt = completed ? completedAt : null;
+                changed = true;
+            }
         }
 
         var isComplete = relevantItems.All(item => item.EmbySyncDone == true);
@@ -325,39 +339,57 @@ internal sealed class EmbyMetadataSyncService
             report.EmbySyncCompletedAt = completedAt;
             changed = true;
         }
+        else if (!isComplete && report.EmbySyncCompletedAt is not null)
+        {
+            report.EmbySyncCompletedAt = null;
+            changed = true;
+        }
 
         if (changed)
         {
-            File.WriteAllText(reportPath, BatchOutputMetadataReportJson.Serialize(report));
+            // Erst vollständig neben der Originaldatei schreiben. Ein abgebrochener Schreibvorgang
+            // darf weder die ursprünglichen Mux-Metadaten noch bereits bestätigte Entscheidungen verlieren.
+            var temporaryPath = reportPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporaryPath, BatchOutputMetadataReportJson.Serialize(report));
+                File.Move(temporaryPath, reportPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
         }
 
-        if (!isComplete)
+        if (!isComplete && !relevantItems.Any(item => item.EmbySyncDone == true || item.EmbyReview is not null))
         {
             return changed
                 ? new SingleReportCompletionResult(reportPath, MovedReport: null)
                 : SingleReportCompletionResult.Empty;
         }
 
-        if (IsAlreadyInDoneDirectory(reportPath))
+        var currentDirectory = Path.GetDirectoryName(Path.GetFullPath(reportPath))!;
+        var currentFolder = Path.GetFileName(currentDirectory);
+        var targetFolder = isComplete ? "done" : "partial";
+        if (string.Equals(currentFolder, targetFolder, StringComparison.OrdinalIgnoreCase))
         {
             return changed
                 ? new SingleReportCompletionResult(reportPath, MovedReport: null)
                 : SingleReportCompletionResult.Empty;
         }
 
-        var targetDirectory = Path.Combine(Path.GetDirectoryName(reportPath)!, "done");
+        // Wiederimporte aus partial/done wechseln in den Geschwisterordner, niemals in partial/done/done.
+        var rootDirectory = currentFolder.Equals("done", StringComparison.OrdinalIgnoreCase)
+                            || currentFolder.Equals("partial", StringComparison.OrdinalIgnoreCase)
+            ? Path.GetDirectoryName(currentDirectory)!
+            : currentDirectory;
+        var targetDirectory = Path.Combine(rootDirectory, targetFolder);
         Directory.CreateDirectory(targetDirectory);
         var targetPath = BuildUniqueReportPath(Path.Combine(targetDirectory, Path.GetFileName(reportPath)));
         File.Move(reportPath, targetPath);
         return new SingleReportCompletionResult(
             UpdatedReportPath: null,
             new EmbyMovedReport(reportPath, targetPath));
-    }
-
-    private static bool IsAlreadyInDoneDirectory(string reportPath)
-    {
-        var directory = Path.GetFileName(Path.GetDirectoryName(reportPath));
-        return string.Equals(directory, "done", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildUniqueReportPath(string targetPath)
@@ -754,7 +786,7 @@ internal sealed class EmbyMetadataSyncService
     }
 }
 
-internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds ProviderIds);
+internal sealed record EmbyImportEntry(string MediaFilePath, EmbyProviderIds ProviderIds, BatchOutputEmbyReview? Review = null);
 
 internal sealed record EmbyReportCompletionResult(
     IReadOnlyList<string> UpdatedReportPaths,
