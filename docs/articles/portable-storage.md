@@ -19,5 +19,6 @@ Ein persistenter Dateisystem-`Cache` ist absichtlich nicht mehr Teil des Projekt
 - `Data/settings.json` kann TVDB-Zugangsdaten und lokale Serienzuordnungen enthalten und gehört nicht in ein öffentliches Repository.
 - `Data/IMDb/imdb-episodes.sqlite` ist der optionale, jederzeit neu aufbaubare IMDb-Episodenindex. Stand September 2026 benötigt er ungefähr 1,3 GiB dauerhaft; während eines Updates sollten wegen des atomaren Austauschs und der rund 750 MiB Roharchive 4 bis 5 GiB frei sein. Temporär geladene GZip-Rohdaten liegen nur während eines ausdrücklich bestätigten Updates in einem Staging-Unterordner.
 - `Logs` kann lokale Dateipfade enthalten und sollte bei Releases oder Uploads ebenfalls bewusst behandelt werden.
+- Der Emby-Abgleich speichert seinen Bearbeitungsstand im jeweiligen Metadatenreport. Nach dem Speichern liegen teilweise bearbeitete Reports in `partial` und vollständig erledigte in `done`, relativ zum ursprünglichen Reportordner. Beide können zum Fortsetzen oder erneuten Bearbeiten importiert werden; bewusste Entscheidungen gegen eine Provider-ID bleiben im Report erhalten.
 - `Tools` kann große heruntergeladene Toolversionen enthalten und wird jederzeit aus den Einstellungen bzw. vom Start-Check neu aufgebaut.
 - `.gitignore` schließt diese lokalen Laufzeitverzeichnisse deshalb standardmäßig aus.

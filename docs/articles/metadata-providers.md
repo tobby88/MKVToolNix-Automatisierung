@@ -17,8 +17,12 @@ Die Anwendung trennt lokale Erkennung, TVDB, IMDb, NFO und Emby bewusst voneinan
    - Remote-ID der bereits bestätigten TVDB-Episode
    - optionaler lokaler Index der offiziellen IMDb-Datensätze
    - browsergestützte manuelle Suche
-5. Eine bewusst bestätigte Entscheidung `Keine IMDb-ID` ist ebenfalls ein abgeschlossenes Prüfergebnis.
+5. `Kein Eintrag` bestätigt je Anbieter ausdrücklich, dass keine TVDB- beziehungsweise IMDb-ID vergeben werden soll. Die IMDb-Absage bestätigt nicht zugleich eine fehlende TVDB-Zuordnung; leere Felder allein bleiben offen.
 6. `NFO speichern + Emby aktualisieren` schreibt ausschließlich tatsächlich geänderte Provider-IDs. Unveränderte NFOs werden nicht neu gespeichert und ihre Emby-Items nicht unnötig aktualisiert.
+
+Der abschließende Schreibschritt speichert die aktuelle Provider-Auswahl und manuelle Freigaben im optionalen `embyReview`-Block jedes Reporteintrags. Die ursprünglichen Mux-Metadaten bleiben unverändert. `embySyncDone` und die Abschlusszeitpunkte dokumentieren die erfolgreiche Bearbeitung. Unvollständige Reports werden nach `partial`, vollständig erledigte nach `done` verschoben; Wiederimporte verwenden diese Geschwisterordner ohne weitere Verschachtelung. Erneute fehlgeschlagene Bearbeitungen nehmen einen alten Abschluss zurück. Ohne konfigurierte Emby-Zugangsdaten gilt der lokale NFO-Abgleich als Abschluss; mit Zugangsdaten bleibt ein erforderlicher, aber nicht erfolgreicher Refresh offen.
+
+Beim Wiederimport werden gespeicherte manuelle Entscheidungen übernommen. Automatische Übereinstimmungen werden dagegen erneut anhand der aktuellen Quellen geprüft. Bewusst fehlende IDs werden nicht aus Report, NFO oder Emby wieder aufgefüllt. Das Entfernen des Hakens oder eine neue ID-Eingabe erlaubt eine erneute Zuordnung.
 
 ## Lokaler IMDb-Index
 

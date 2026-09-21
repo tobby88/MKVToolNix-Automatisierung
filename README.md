@@ -34,6 +34,14 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 - `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
 - `Archivpflege`: für bestehende Archiv-MKVs, deren Header oder Dateinamen nachträglich vereinheitlicht werden sollen
 
+## Wartungsrelease 1.4.2
+
+- Schnellerer Aufbau des IMDb-Offlineindex, Durchsatzanzeige beim Import und erneutes Angebot abgebrochener Updates.
+- Emby-Reports werden nach `partial` und `done` getrennt; bewusste Entscheidungen gegen eine TVDB- oder IMDb-ID bleiben beim erneuten Laden erhalten.
+- Aktualisierte Laufzeitbibliotheken und Dokumentationswerkzeuge.
+
+Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/releases/1.4.2.md). Die portable EXE gibt es beim [aktuellen Release](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest).
+
 ## Screenshots
 
 ### Download

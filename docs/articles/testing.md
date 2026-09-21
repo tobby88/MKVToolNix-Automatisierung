@@ -31,6 +31,7 @@ Einige Tests sind bewusst auf die zuletzt fehleranfälligen Provider- und Emby-P
 - Die gemeinsame Titelnormalisierung wird für ASCII-, Unicode-, Satzzeichen- und Sonderfolgenvarianten gegen das bisherige Verhalten geprüft. Ein relativer Allokationstest schützt den schnellen IMDb-Importpfad vor einer unbemerkten Rückkehr zu mehreren Regex-, LINQ- und String-Zwischenschritten pro Titel.
 - Eine explizite Entscheidung `Keine IMDb-ID` wird auch ohne weitere Provider-ID in die NFO geschrieben.
 - Reports können als erledigt markiert werden, auch wenn kein Emby-Refresh nötig ist, weil die lokale NFO bereits aktuell war.
+- Getrennte TVDB-/IMDb-Absagen, ihre Rücknahme und der Wiederimport werden einschließlich echter JSON-/NFO-Dateien geprüft. Tests sichern den Wechsel zwischen `partial` und `done`, den Erhalt nicht ausgewählter Einträge, Dateinamenskollisionen und das Zurücknehmen veralteter Abschlussmarker ab. Ein WPF-Test prüft die sofortige Übernahme der Checkboxen und ihre eigene Leertastenbedienung.
 - Der Scan-Status unterscheidet zwischen gezieltem Serienbibliotheksscan und sichtbar gemeldetem globalem Fallback.
 
 ## FakeMkvMerge
