@@ -34,15 +34,20 @@ public sealed partial class SeriesArchiveService
         var plannedVideos = await ReadPlannedVideoSourcesAsync(mkvMergePath, plannedVideoPaths, request, cancellationToken);
         var preferredExistingVideoTracks = SelectBestExistingVideoTracks(existingArchive.VideoTracks);
         var bestExistingVideo = preferredExistingVideoTracks.FirstOrDefault();
-        var subtitlePlan = BuildSubtitleReusePlan(outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks);
         var existingAudioDescriptions = FindExistingAudioDescriptions(existingArchive.AudioTracks);
         var workingCopyPlan = BuildWorkingCopyPlan(outputPath, ResolveWorkingDirectory(request, outputPath));
-        var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
         var videoPlan = BuildFinalVideoSelectionPlan(
             outputPath,
             plannedVideos,
             preferredExistingVideoTracks,
             existingArchive.VideoTracks);
+        // Maßgeblich ist die tatsächlich gewählte Hauptquelle, nicht irgendeine neue oder
+        // verbesserte Zusatzspur. Nur beim Hauptquellenwechsel folgen passende Untertitel mit.
+        var replacesPrimaryVideo = videoPlan.VideoSelections.FirstOrDefault() is { } primaryVideo
+            && !string.Equals(primaryVideo.FilePath, outputPath, StringComparison.OrdinalIgnoreCase);
+        var subtitlePlan = BuildSubtitleReusePlan(
+            outputPath, request.SubtitlePaths, existingArchive.SubtitleTracks, replacesPrimaryVideo);
+        var replacedSubtitleTracks = GetRemovedSubtitleTracks(existingArchive.SubtitleTracks, subtitlePlan.EmbeddedPlans);
         var effectiveRequest = await BuildEffectiveAudioDescriptionRequestAsync(
             mkvMergePath,
             request,
@@ -303,10 +308,17 @@ public sealed partial class SeriesArchiveService
         return parts.Length == 2 ? parts[1] : slotKey;
     }
 
+    /// <summary>
+    /// Behält Archivuntertitel bei unveränderter Hauptquelle. Beim Wechsel zur neuen Hauptquelle
+    /// ersetzen gewählte externe Untertitel nur exakt passende Slots; alle übrigen Archivspuren
+    /// bleiben als Rückfall erhalten. Unterschiedliche Formate, Sprachen, HI- und Forced-Rollen
+    /// sind kein gleichwertiger Ersatz füreinander.
+    /// </summary>
     private static SubtitleReusePlan BuildSubtitleReusePlan(
         string outputPath,
         IReadOnlyList<string> requestSubtitlePaths,
-        IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks)
+        IReadOnlyList<ContainerTrackMetadata> existingSubtitleTracks,
+        bool replacesPrimaryVideo)
     {
         var embeddedSubtitlePlans = existingSubtitleTracks
             .Select(track => new
@@ -331,16 +343,6 @@ public sealed partial class SeriesArchiveService
                 })
             .ToList();
 
-        var embeddedCoverage = embeddedSubtitlePlans
-            // Typ und Sprache allein reichen nicht als Slot-Schlüssel: Ein normaler SRT und
-            // ein SDH/HI-SRT sind fachlich unterschiedliche Untertitel. Externe Untertitel
-            // werden weiterhin konservativ als HI erkannt; unterdrückt werden sie deshalb
-            // nur, wenn genau dieser Accessibility-Slot bereits in der Ziel-MKV vorhanden ist.
-            .Select(BuildSubtitleReuseCoverageKey)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // Vorhandene Untertitel in der Ziel-MKV bleiben für denselben fachlichen Slot erhalten.
-        // Ergänzt werden nur fehlende Slots, z. B. ASS zusätzlich zu vorhandenem SRT.
         // Die Erkennung verdichtet bereits auf einen Pfad pro Untertiteltyp. Diese zweite
         // Schranke schützt die gemeinsame Planebene zusätzlich vor manuellen, gecachten oder
         // älteren Requests mit mehreren Dateien für denselben externen Untertitel-Slot.
@@ -348,6 +350,19 @@ public sealed partial class SeriesArchiveService
             .SelectPreferredPathsByKind(requestSubtitlePaths)
             .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .ToList();
+        if (replacesPrimaryVideo)
+        {
+            var replacementCoverage = requestedExternalSubtitlePlans
+                .Select(BuildSubtitleReuseCoverageKey)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            embeddedSubtitlePlans.RemoveAll(subtitle => replacementCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)));
+        }
+
+        // Ohne Ersatz bleibt jeder Archivtrack erhalten, auch bei einem Hauptquellenwechsel.
+        // Bei gleicher Hauptquelle blockiert er weiterhin den entsprechenden externen Slot.
+        var embeddedCoverage = embeddedSubtitlePlans
+            .Select(BuildSubtitleReuseCoverageKey)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var externalSubtitlePlans = requestedExternalSubtitlePlans
             .Where(subtitle => !embeddedCoverage.Contains(BuildSubtitleReuseCoverageKey(subtitle)))
             .ToList();
@@ -956,12 +971,7 @@ public sealed partial class SeriesArchiveService
 
     private static string BuildSubtitleReuseCoverageKey(SubtitleFile subtitle)
     {
-        return BuildSubtitleReuseCoverageKey(subtitle.Kind, subtitle.LanguageCode, subtitle.Accessibility);
-    }
-
-    private static string BuildSubtitleReuseCoverageKey(SubtitleKind kind, string? languageCode, SubtitleAccessibility accessibility)
-    {
-        return $"{kind.DisplayName}|{MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode)}|{accessibility}";
+        return $"{subtitle.Kind.DisplayName}|{MediaLanguageHelper.NormalizeMuxLanguageCode(subtitle.LanguageCode)}|{subtitle.Accessibility}|{subtitle.IsForced}";
     }
 
     private static FileCopyPlan BuildWorkingCopyPlan(string archiveFilePath, string workingDirectory)

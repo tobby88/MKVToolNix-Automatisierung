@@ -51,6 +51,7 @@ Wichtig dabei:
    - Die fachlichen Matching-Heuristiken sind bewusst von Caching und TVDB-I/O getrennt, damit Bewertungsregeln unabhängig wartbar bleiben.
 4. `SeriesArchiveService` entscheidet, ob direkt neu gemuxt wird, ob eine bestehende Archivdatei wiederverwendet wird oder ob eine Arbeitskopie nötig ist.
    - Die Archiventscheidung ist dafür in vorbereitende Analyse und eigentliche Integrationsentscheidung getrennt.
+   - Die Untertitelauswahl folgt der finalen Hauptvideoauswahl: Nur ein Hauptquellenwechsel erlaubt den Ersatz vorhandener Untertitel durch ausgewählte externe Untertitel mit gleichem Format, gleicher Sprache und gleicher Accessibility-/Forced-Rolle. Nicht ersetzte Archivuntertitel bleiben erhalten; zusätzliche Videospuren allein lösen keinen Ersatz aus.
    - Die Umsetzung ist zusätzlich entlang der Verantwortungen `Preparation`, `AttachmentReuse` und `UsageReporting` auf mehrere Partial-Dateien verteilt, damit Archivvergleich, TXT-heuristische Attachment-Zuordnung und GUI-/Diff-Aufbereitung unabhängig angepasst werden können.
 5. `SeriesEpisodeMuxPlan` beschreibt den vollständigen mkvmerge-Aufruf.
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.

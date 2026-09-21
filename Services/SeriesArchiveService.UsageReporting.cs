@@ -263,7 +263,7 @@ public sealed partial class SeriesArchiveService
 
         return new ArchiveUsageChange(
             string.Join(Environment.NewLine, removedSubtitleTracks.Select(track => BuildSubtitleTrackLabel(outputPath, track))),
-            "Diese Untertitel werden nicht übernommen, weil neue oder passendere Untertitel denselben Slot belegen.");
+            "Mit der neuen Hauptquelle werden diese Untertitel durch die ausgewählten neuen Untertitel desselben Typs, derselben Sprache und Rolle ersetzt.");
     }
 
     private static ArchiveUsageChange? BuildRemovedAttachmentChange(

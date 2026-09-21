@@ -542,7 +542,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
         string codec,
         string trackName = "",
         bool isHearingImpaired = false,
-        string language = "de")
+        string language = "de",
+        bool isForced = false)
     {
         return new
         {
@@ -553,7 +554,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests : IDisposabl
             {
                 language_ietf = language,
                 track_name = trackName,
-                flag_hearing_impaired = isHearingImpaired
+                flag_hearing_impaired = isHearingImpaired,
+                forced_track = isForced
             }
         };
     }

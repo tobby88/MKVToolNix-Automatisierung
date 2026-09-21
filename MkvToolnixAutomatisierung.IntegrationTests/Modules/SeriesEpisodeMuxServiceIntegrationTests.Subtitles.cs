@@ -7,6 +7,142 @@ namespace MkvToolnixAutomatisierung.IntegrationTests.Modules;
 
 public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
 {
+    [Theory]
+    [InlineData("1920x1080", true)]
+    [InlineData("1280x720", false)]
+    [InlineData("720x576", false)]
+    public async Task CreatePlanAsync_ReplacesMatchingSubtitlesOnlyWhenPrimaryVideoIsUpgraded(string sourceDimensions, bool replacesPrimary)
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-upgrade");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-upgrade");
+        Directory.CreateDirectory(archiveDirectory);
+        var video = CreateFile(sourceDirectory, "Serie - Pilot.mp4");
+        var srt = CreateFile(sourceDirectory, "Serie - Pilot.srt", "new subtitles");
+        var duplicateSrt = CreateFile(sourceDirectory, "Serie - Pilot-other.srt", "duplicate slot");
+        var ass = CreateFile(sourceDirectory, "Serie - Pilot.ass", "additional subtitles");
+        var output = CreateFile(Path.Combine(archiveDirectory, "Serie", "Season 1"), "Serie - S01E01 - Pilot.mkv", "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(video,
+            CreateVideoTrack(0, "AVC/H.264", sourceDimensions), CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(output,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"), CreateAudioTrack(1, "AAC"),
+            CreateSubtitleTrack(3, "SubRip/SRT", isHearingImpaired: true),
+            CreateSubtitleTrack(4, "WebVTT", isHearingImpaired: true),
+            CreateSubtitleTrack(5, "SubRip/SRT", isHearingImpaired: true, language: "en"),
+            CreateSubtitleTrack(6, "SubRip/SRT", isHearingImpaired: false),
+            CreateSubtitleTrack(7, "SubRip/SRT", isHearingImpaired: true, isForced: true),
+            CreateSubtitleTrack(8, "HDMV PGS"));
+
+        var plan = await CreateMuxService(archiveDirectory).CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            video, null, [srt, duplicateSrt, ass], [], output, "Pilot"));
+
+        Assert.Equal(replacesPrimary ? video : output, plan.VideoSources[0].FilePath);
+        Assert.Equal(replacesPrimary, plan.SubtitleFiles.Any(track => track.FilePath == srt));
+        Assert.Equal(!replacesPrimary, plan.SubtitleFiles.Any(track => track.EmbeddedTrackId == 3));
+        Assert.Single(plan.SubtitleFiles, track => track.FilePath == ass);
+        Assert.DoesNotContain(plan.SubtitleFiles, track => track.FilePath == duplicateSrt);
+        // Fehlendes Format, andere Sprache, Standard- und Forced-Rollen sowie unbekannte Codecs
+        // dürfen niemals durch die neuen deutschen HI-Untertitel verlorengehen.
+        foreach (var id in new[] { 4, 5, 6, 7, 8 })
+            Assert.Single(plan.SubtitleFiles, track => track.IsEmbedded && track.EmbeddedTrackId == id);
+        Assert.True(Assert.Single(plan.SubtitleFiles, track => track.EmbeddedTrackId == 7).IsForced);
+        var summary = plan.BuildUsageSummary().Subtitles;
+        Assert.Equal(replacesPrimary, summary.HasRemoved);
+        if (replacesPrimary) Assert.Contains("neuen Hauptquelle", summary.RemovedReason!);
+        var arguments = plan.BuildArguments();
+        Assert.Equal(replacesPrimary, arguments.Contains(srt));
+        Assert.Contains(ass, arguments);
+        Assert.DoesNotContain(duplicateSrt, arguments);
+        var subtitleTrackIds = arguments.Select((arg, index) => (arg, index))
+            .Where(pair => pair.arg == "--subtitle-tracks").Select(pair => arguments[pair.index + 1]).ToList();
+        Assert.Equal(!replacesPrimary, subtitleTrackIds.Contains("3"));
+        Assert.Contains("7", subtitleTrackIds);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreatePlanAsync_PrimaryUpgradeKeepsOldSubtitlesWithoutSameFormatReplacement(bool addDifferentFormat)
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-no-replacement");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-no-replacement");
+        Directory.CreateDirectory(archiveDirectory);
+        var video = CreateFile(sourceDirectory, "Serie - Pilot.mp4");
+        var ass = CreateFile(sourceDirectory, "Serie - Pilot.ass", "new format");
+        var output = CreateFile(Path.Combine(archiveDirectory, "Serie", "Season 1"), "Serie - S01E01 - Pilot.mkv", "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(video,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"), CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(output,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"), CreateAudioTrack(1, "AAC"),
+            CreateSubtitleTrack(3, "SubRip/SRT", isHearingImpaired: true));
+
+        var plan = await CreateMuxService(archiveDirectory).CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            video, null, addDifferentFormat ? [ass] : [], [], output, "Pilot"));
+
+        Assert.Equal(video, plan.VideoSources[0].FilePath);
+        Assert.Single(plan.SubtitleFiles, track => track.IsEmbedded && track.EmbeddedTrackId == 3);
+        Assert.Equal(addDifferentFormat, plan.SubtitleFiles.Any(track => track.FilePath == ass));
+        Assert.False(plan.BuildUsageSummary().Subtitles.HasRemoved);
+        Assert.NotNull(plan.WorkingCopy);
+        AssertContainsSequence(plan.BuildArguments(), "--subtitle-tracks", "3");
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_PrimaryUpgradeWithCompleteSubtitleReplacementDoesNotReuseArchiveInput()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-complete-replacement");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-complete-replacement");
+        Directory.CreateDirectory(archiveDirectory);
+        var video = CreateFile(sourceDirectory, "Serie - Pilot.mp4");
+        var srt = CreateFile(sourceDirectory, "Serie - Pilot.srt", "replacement subtitles");
+        var output = CreateFile(Path.Combine(archiveDirectory, "Serie", "Season 1"), "Serie - S01E01 - Pilot.mkv", "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(video,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"), CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(output,
+            CreateVideoTrack(0, "AVC/H.264", "1280x720"), CreateAudioTrack(1, "AAC"),
+            CreateSubtitleTrack(3, "SubRip/SRT", isHearingImpaired: true));
+
+        var plan = await CreateMuxService(archiveDirectory).CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            video, null, [srt], [], output, "Pilot"));
+
+        Assert.Equal(video, plan.VideoSources[0].FilePath);
+        var subtitle = Assert.Single(plan.SubtitleFiles);
+        Assert.Equal(srt, subtitle.FilePath);
+        Assert.False(subtitle.IsEmbedded);
+        Assert.Null(plan.WorkingCopy);
+        Assert.True(plan.BuildUsageSummary().Subtitles.HasRemoved);
+        var arguments = plan.BuildArguments();
+        Assert.Contains(srt, arguments);
+        Assert.DoesNotContain("--subtitle-tracks", arguments);
+        // Der Archivpfad darf nur als Ausgabe, nicht erneut als Eingabe auftauchen.
+        Assert.Single(arguments, argument => argument == output);
+    }
+
+    [Fact]
+    public async Task CreatePlanAsync_SecondaryVideoUpgradeDoesNotReplaceSubtitles()
+    {
+        var sourceDirectory = Path.Combine(_tempDirectory, "source-secondary-upgrade");
+        var archiveDirectory = Path.Combine(_tempDirectory, "archive-secondary-upgrade");
+        Directory.CreateDirectory(archiveDirectory);
+        var video = CreateFile(sourceDirectory, "Serie - Pilot.mp4");
+        var srt = CreateFile(sourceDirectory, "Serie - Pilot.srt", "new subtitles");
+        var output = CreateFile(Path.Combine(archiveDirectory, "Serie", "Season 1"), "Serie - S01E01 - Pilot.mkv", "archive");
+        FakeMkvMergeTestHelper.WriteProbeFile(video,
+            CreateVideoTrack(0, "HEVC/H.265", "1920x1080"), CreateAudioTrack(1, "AAC"));
+        FakeMkvMergeTestHelper.WriteProbeFile(output,
+            CreateVideoTrack(0, "AVC/H.264", "1920x1080"),
+            CreateVideoTrack(2, "HEVC/H.265", "1280x720"), CreateAudioTrack(1, "AAC"),
+            CreateSubtitleTrack(3, "SubRip/SRT", isHearingImpaired: true));
+
+        var plan = await CreateMuxService(archiveDirectory).CreatePlanAsync(new SeriesEpisodeMuxRequest(
+            video, null, [srt], [], output, "Pilot"));
+
+        Assert.Equal(output, plan.VideoSources[0].FilePath);
+        Assert.Contains(plan.VideoSources, source => source.FilePath == video);
+        Assert.Single(plan.SubtitleFiles, track => track.IsEmbedded && track.EmbeddedTrackId == 3);
+        Assert.DoesNotContain(srt, plan.BuildArguments());
+        Assert.False(plan.BuildUsageSummary().Subtitles.HasRemoved);
+    }
+
     [Fact]
     public async Task CreatePlanAsync_ExternalSubtitles_RemainGerman_WhenPrimaryAudioUsesDifferentLanguage()
     {

@@ -265,9 +265,9 @@ Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen de
 
 - Unterstützt werden externe `.ass`, `.srt` und `.vtt`.
 - Externe Untertitel werden derzeit konservativ als `hörgeschädigte` behandelt, solange nichts Sicheres erkannt wird.
-- Bereits eingebettete Untertitel aus der Zieldatei werden weiterverwendet, wenn sie denselben fachlichen Slot bereits belegen.
-- Für die Wiederverwendung zählt dabei bewusst nur `Typ + Sprache`, nicht jede Feinheit der Accessibility-Markierung.
-- Externe Untertitel werden nur dann zusätzlich aufgenommen, wenn dieser Slot in der Zieldatei noch nicht vorhanden ist.
+- Bleibt die bisherige Hauptquelle erhalten, bleiben auch bereits eingebettete Untertitel erhalten. Externe Untertitel ergänzen dann nur fehlende Slots.
+- Wird die Hauptquelle durch eine bessere ersetzt, ersetzen ausgewählte neue Untertitel die Archivuntertitel im gleichen Slot. Das Verbessern einer zusätzlichen Videospur allein löst keinen Untertitelersatz aus.
+- Ein Slot besteht aus `Typ + Sprache + Rolle (normal/hörgeschädigt und Forced)`. Andere Formate, Sprachen oder Rollen gelten nicht als Ersatz; vorhandene Untertitel ohne passenden Ersatz bleiben immer erhalten.
 - Nicht unterstützte Untertitelcodecs werden nicht stillschweigend als vollwertig weitergemuxte Standard-Untertitel behandelt.
 
 ### TXT-Begleitdateien und eingebettete TXT-Anhänge
