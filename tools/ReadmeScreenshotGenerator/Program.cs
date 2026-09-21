@@ -78,7 +78,7 @@ internal static class Program
                 {
                     DataContext = DemoData.CreateEmbySyncViewModel()
                 },
-                1440,
+                1700,
                 860);
 
             RenderScreenshot(
