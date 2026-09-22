@@ -112,9 +112,16 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.True(plan.BuildUsageSummary().Subtitles.HasRemoved);
         var arguments = plan.BuildArguments();
         Assert.Contains(srt, arguments);
-        Assert.DoesNotContain("--subtitle-tracks", arguments);
+        // Die explizite Spurwahl gehört nur zur neuen externen SRT, nicht zur alten Archivspur 3.
+        var subtitleSelection = Assert.Single(arguments.Select((argument, index) => (argument, index)),
+            entry => entry.argument == "--subtitle-tracks");
+        Assert.Equal("0", arguments[subtitleSelection.index + 1]);
+        AssertContainsSequence(arguments, "--no-video", "--no-audio", "--no-attachments", "--subtitle-tracks", "0");
+        Assert.Empty(plan.PrimarySourceSubtitleTrackIds!);
         // Der Archivpfad darf nur als Ausgabe, nicht erneut als Eingabe auftauchen.
+        AssertContainsSequence(arguments, "--output", output);
         Assert.Single(arguments, argument => argument == output);
+        Assert.DoesNotContain(output, plan.GetReferencedInputFiles());
     }
 
     [Fact]

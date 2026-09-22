@@ -101,6 +101,15 @@ public sealed class SeriesArchiveServiceTests : IDisposable
         Assert.Equal(archiveRoot, reloadedSettings.DefaultSeriesArchiveRootPath);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AreAudioDescriptionDurationsCompatible_RejectsNonPositiveDurations(int seconds)
+    {
+        var duration = TimeSpan.FromSeconds(seconds);
+        Assert.False(SeriesArchiveService.AreAudioDescriptionDurationsCompatible(duration, duration, true));
+    }
+
     [Fact]
     public void BuildArchiveUnavailableWarningMessage_IncludesConfiguredPath()
     {

@@ -173,10 +173,27 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
 
     // ── Hilfsmethoden ───────────────────────────────────────────────────────
 
+    [Fact]
+    public void Build_PrimaryVideoHonorsDisabledDefaultFlag()
+    {
+        var plan = CreateMinimalPlan(null, "de", primaryDefault: false);
+        AssertContainsSequence(plan.BuildArguments(), "--default-track-flag", "0:no");
+    }
+
+    [Fact]
+    public void Build_EmptyPrimaryAttachmentSelectionDoesNotImportAllAttachments()
+    {
+        var plan = CreateMinimalPlan(null, "de", includeAttachments: true, attachmentIds: []);
+        Assert.Contains("--no-attachments", plan.BuildArguments());
+    }
+
     private static SeriesEpisodeMuxPlan CreateMinimalPlan(
         string? originalLanguage,
         string trackLanguageCode,
-        string outputFilePath = @"C:\Temp\output.mkv")
+        string outputFilePath = @"C:\Temp\output.mkv",
+        bool primaryDefault = true,
+        bool includeAttachments = false,
+        IReadOnlyList<int>? attachmentIds = null)
     {
         return new SeriesEpisodeMuxPlan(
             mkvMergePath: @"C:\Tools\mkvmerge.exe",
@@ -184,7 +201,7 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
             title: "Pilot",
             videoSources:
             [
-                new VideoSourcePlan(@"C:\Temp\video.mkv", 0, "Track", IsDefaultTrack: true, LanguageCode: trackLanguageCode)
+                new VideoSourcePlan(@"C:\Temp\video.mkv", 0, "Track", IsDefaultTrack: primaryDefault, LanguageCode: trackLanguageCode)
             ],
             audioSources:
             [
@@ -192,8 +209,8 @@ public sealed class SeriesEpisodeMuxArgumentBuilderTests
             ],
             primarySourceAudioTrackIds: [1],
             primarySourceSubtitleTrackIds: [],
-            primarySourceAttachmentIds: null,
-            includePrimarySourceAttachments: false,
+            primarySourceAttachmentIds: attachmentIds,
+            includePrimarySourceAttachments: includeAttachments,
             attachmentSourcePath: null,
             attachmentSourceAttachmentIds: null,
             audioDescriptionFilePath: null,

@@ -202,6 +202,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .ToList();
         var usableNormalSeeds = episodeSeeds.NormalVideoSeeds
             .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
+            .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
             .ToList();
         var usableAudioDescriptionSeeds = episodeSeeds.AudioDescriptionSeeds
             .Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))
@@ -253,8 +254,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
             // Zusatzmaterial-only-Fälle dürfen Untertitel begleitender defekter MP4-Varianten
             // nicht verlieren. Auch wenn die MP4 selbst fachlich ausgesiebt wird, bleiben ihre
             // Untertitel und TXT-Begleiter für spätere Reuse-/Cleanup-Entscheidungen relevant.
+            var supplementSeeds = FilterCleanupSeedsByRuntime(
+                defectiveSeedHealth.Select(entry => entry.Seed)
+                    .Concat(episodeSeeds.SubtitleOnlySeeds)
+                    .Concat(episodeSeeds.MetadataOnlySeeds)
+                    .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
+                    .ToList(),
+                new Dictionary<string, int?>(),
+                selectedSeed.TextMetadata.Duration is { } selectedDuration ? (int)Math.Round(selectedDuration.TotalSeconds) : null);
             var defectiveSeedCompanionCleanupPaths = CollectCompanionCleanupPathsFromSeeds(
-                defectiveSeedHealth.Select(entry => entry.Seed).ToList(),
+                supplementSeeds.Where(seed => defectiveSeedPaths.Contains(seed.FilePath)).ToList(),
                 companionFilesByBaseName);
             return new EpisodeDetectionContext(
                 directory,
@@ -263,10 +272,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
                 null,
                 [],
                 SubtitleSourceSelection.SelectPreferredPathsByKind(
-                    CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName)
-                        .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName))),
-                CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds], companionFilesByBaseName)
+                    CollectSubtitlePathsFromSeeds(supplementSeeds, companionFilesByBaseName)
+                        .Where(path => excludedSourcePaths is null || !excludedSourcePaths.Contains(path))),
+                CollectRelatedEpisodeFilePaths([.. cleanupEligibleVideoSeeds, .. supplementSeeds.Where(seed => !defectiveSeedPaths.Contains(seed.FilePath))], companionFilesByBaseName)
                     .Concat(defectiveSeedCompanionCleanupPaths)
+                    .Where(path => excludedSourcePaths is null || !excludedSourcePaths.Contains(path))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .ToList(),
@@ -284,7 +294,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
             candidateDurationsByPath,
             primaryVideoCandidate.DurationSeconds);
         var runtimeCompatibleSupplementSeeds = FilterCleanupSeedsByRuntime(
-            [.. episodeSeeds.SubtitleOnlySeeds, .. episodeSeeds.MetadataOnlySeeds],
+            episodeSeeds.SubtitleOnlySeeds.Concat(episodeSeeds.MetadataOnlySeeds)
+                .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
+                .ToList(),
+            candidateDurationsByPath,
+            primaryVideoCandidate.DurationSeconds);
+        // Salvaged companions must obey the same cut/duration boundary as normal sources.
+        var runtimeCompatibleSubtitleSeeds = FilterCleanupSeedsByRuntime(
+            defectiveSeedHealth.Select(entry => entry.Seed).Concat(episodeSeeds.SubtitleOnlySeeds)
+                .Where(seed => excludedSourcePaths is null || !excludedSourcePaths.Contains(seed.FilePath))
+                .ToList(),
             candidateDurationsByPath,
             primaryVideoCandidate.DurationSeconds);
         // Die Kandidatenreihenfolge enthält bereits die Qualitätspräferenz. Zusätzliche
@@ -292,9 +311,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
         // derselben Episode wieder in die Auswahl einschleusen.
         var subtitlePaths = SubtitleSourceSelection.SelectPreferredPathsByKind(
             CollectSubtitlePaths(normalCandidates, selectedVideoCandidates, primaryVideoCandidate)
-                .Concat(CollectSubtitlePathsFromSeeds(defectiveSeedHealth.Select(entry => entry.Seed).ToList(), companionFilesByBaseName))
-                .Concat(CollectSubtitlePathsFromSeeds(episodeSeeds.SubtitleOnlySeeds, companionFilesByBaseName)));
-        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. runtimeCompatibleCleanupVideoSeeds, .. runtimeCompatibleSupplementSeeds], companionFilesByBaseName);
+                .Concat(CollectSubtitlePathsFromSeeds(runtimeCompatibleSubtitleSeeds, companionFilesByBaseName))
+                .Where(path => excludedSourcePaths is null || !excludedSourcePaths.Contains(path)));
+        var relatedFilePaths = CollectRelatedEpisodeFilePaths([.. runtimeCompatibleCleanupVideoSeeds, .. runtimeCompatibleSupplementSeeds], companionFilesByBaseName)
+            .Where(path => excludedSourcePaths is null || !excludedSourcePaths.Contains(path))
+            .ToList();
 
         return new EpisodeDetectionContext(
             directory,

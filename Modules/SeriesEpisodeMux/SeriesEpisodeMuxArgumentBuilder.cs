@@ -59,7 +59,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             arguments.AddRange(["--subtitle-tracks", string.Join(",", plan.PrimarySourceSubtitleTrackIds)]);
         }
 
-        if (!plan.IncludePrimarySourceAttachments)
+        if (!plan.IncludePrimarySourceAttachments || plan.PrimarySourceAttachmentIds is { Count: 0 })
         {
             arguments.Add("--no-attachments");
         }
@@ -90,7 +90,7 @@ internal static class SeriesEpisodeMuxArgumentBuilder
             "--track-name",
             $"{primaryVideoTrackId}:{primaryVideo.TrackName}",
             "--default-track-flag",
-            $"{primaryVideoTrackId}:yes",
+            primaryVideo.IsDefaultTrack ? $"{primaryVideoTrackId}:yes" : $"{primaryVideoTrackId}:no",
             "--stereo-mode",
             $"{primaryVideoTrackId}:mono",
             "--original-flag",
@@ -276,6 +276,11 @@ internal static class SeriesEpisodeMuxArgumentBuilder
     {
         arguments.AddRange(
         [
+            "--no-video",
+            "--no-audio",
+            "--no-attachments",
+            "--subtitle-tracks",
+            "0",
             "--language",
             $"0:{subtitle.LanguageCode}",
             "--track-name",

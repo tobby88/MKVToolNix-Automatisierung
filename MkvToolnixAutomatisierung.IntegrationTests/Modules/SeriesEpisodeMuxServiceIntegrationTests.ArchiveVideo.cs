@@ -346,6 +346,11 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             [1, 2],
             plan.AudioSources.Select(source => source.TrackId).ToList());
         AssertContainsSequence(plan.BuildArguments(), "--track-name", "0:English - FHD - H.264", "--default-track-flag", "0:yes");
+        var audioSummary = plan.BuildUsageSummary().Audio;
+        Assert.True(audioSummary.HasRemoved);
+        Assert.Contains("Deutsch - E-AC-3", audioSummary.RemovedText, StringComparison.Ordinal);
+        Assert.Contains("English - AAC", audioSummary.RemovedText, StringComparison.Ordinal);
+        Assert.Contains("Tonspuren", audioSummary.RemovedReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -385,7 +390,8 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
             SubtitlePaths: [subtitlePath],
             AttachmentPaths: [manualAttachmentPath],
             outputPath,
-            Title: "Pilot"));
+            Title: "Pilot",
+            ManualAttachmentPaths: [manualAttachmentPath]));
 
         var summary = plan.BuildUsageSummary();
 
@@ -402,6 +408,9 @@ public sealed partial class SeriesEpisodeMuxServiceIntegrationTests
         Assert.Contains(summary.Subtitles.CurrentItems, item => item.IsAdded && item.Text.EndsWith(".srt", StringComparison.OrdinalIgnoreCase));
         Assert.True(summary.Attachments.HasRemoved);
         Assert.Contains("Anhänge", summary.Attachments.RemovedReason, StringComparison.Ordinal);
+        Assert.Contains(manualAttachmentPath, plan.AttachmentFilePaths);
+        Assert.DoesNotContain("bestehend.txt", plan.PreservedAttachmentNames);
+        Assert.Contains("bestehend.txt", summary.Attachments.RemovedText, StringComparison.Ordinal);
     }
 
     [Fact]

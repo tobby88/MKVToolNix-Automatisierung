@@ -239,17 +239,16 @@ public sealed partial class SeriesArchiveService
 
     private static ArchiveUsageChange? BuildRemovedAudioDescriptionChange(
         string outputPath,
-        ContainerTrackMetadata? existingAudioDescription,
-        string? requestedAudioDescriptionPath)
+        IReadOnlyList<ContainerTrackMetadata> removedAudioDescriptions)
     {
-        if (existingAudioDescription is null || string.IsNullOrWhiteSpace(requestedAudioDescriptionPath))
+        if (removedAudioDescriptions.Count == 0)
         {
             return null;
         }
 
         return new ArchiveUsageChange(
-            BuildAudioTrackLabel(outputPath, existingAudioDescription),
-            "Die bisherige AD-Spur wird durch die neu ausgewählte AD-Datei ersetzt.");
+            string.Join(Environment.NewLine, removedAudioDescriptions.Select(track => BuildAudioTrackLabel(outputPath, track))),
+            "Die bisherigen AD-Spuren dieser Sprache werden durch die neu ausgewählte AD-Datei ersetzt.");
     }
 
     private static ArchiveUsageChange? BuildRemovedSubtitleChange(

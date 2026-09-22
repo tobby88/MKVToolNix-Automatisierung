@@ -26,9 +26,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
         var (planNotes, plannedVideoPaths) = ResolvePlanSourceSelection(request, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
-        var subtitleFiles = request.SubtitlePaths
-            .OrderBy(path => SubtitleKind.FromExtension(Path.GetExtension(path)).SortRank)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+        var subtitleFiles = SubtitleSourceSelection.SelectPreferredPathsByKind(request.SubtitlePaths)
             .Select(path => SubtitleFile.CreateDetectedExternal(path, SubtitleKind.FromExtension(Path.GetExtension(path))))
             .ToList();
 
@@ -157,7 +155,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
                     trackId,
                     fallbackAudioLanguage,
                     cancellationToken)
-                : await _probeService.ReadFirstAudioTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
+                : await ReadAudioDescriptionTrackMetadataAsync(mkvMergePath, audioDescriptionPath, cancellationToken);
             var (sourceTrackName, sourceLanguageCode) = BuildAudioDescriptionTrackMetadata(
                 fallbackAudioLanguage,
                 audioDescriptionMetadata.CodecLabel,
@@ -847,10 +845,14 @@ public sealed partial class SeriesEpisodeMuxPlanner
             textMetadata.Topic);
 
         var normalizedOverride = NormalizeOptionalLanguageOverride(audioLanguageOverride);
-        return AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks)
+        var normalTracks = AudioTrackClassifier.GetPreferredNormalAudioTracks(container.Tracks);
+        // A file-level hint cannot describe each language of a multilingual container.
+        // Match the archive comparison's single-track correction instead of relabeling all tracks.
+        var singleTrackLanguageHint = normalTracks.Count == 1 ? sourceLanguageHint : null;
+        return normalTracks
             .Select(track =>
             {
-                var languageCode = normalizedOverride ?? sourceLanguageHint ?? track.Language;
+                var languageCode = normalizedOverride ?? singleTrackLanguageHint ?? track.Language;
                 return new AudioSourcePlan(
                     inputFilePath,
                     track.TrackId,
@@ -900,6 +902,16 @@ public sealed partial class SeriesEpisodeMuxPlanner
             : MediaLanguageHelper.NormalizeMuxLanguageCode(languageCode);
     }
 
+    private async Task<AudioTrackMetadata> ReadAudioDescriptionTrackMetadataAsync(
+        string mkvMergePath,
+        string filePath,
+        CancellationToken cancellationToken)
+    {
+        var container = await _probeService.ReadContainerMetadataAsync(mkvMergePath, filePath, cancellationToken);
+        var track = AudioTrackClassifier.SelectAudioDescriptionTrack(container.Tracks);
+        return new AudioTrackMetadata(track.TrackId, track.CodecLabel, track.Language, track.TrackName, track.IsVisualImpaired);
+    }
+
     private static void ValidateRequest(SeriesEpisodeMuxRequest request)
     {
         if (request.HasPrimaryVideoSource && !File.Exists(request.MainVideoPath))
@@ -920,7 +932,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             throw new FileNotFoundException($"AD-Datei nicht gefunden: {request.AudioDescriptionPath}");
         }
 
-        foreach (var attachmentPath in request.AttachmentPaths)
+        foreach (var attachmentPath in request.AttachmentPaths.Concat(request.ManualAttachmentPaths ?? []).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!File.Exists(attachmentPath))
             {
@@ -930,6 +942,11 @@ public sealed partial class SeriesEpisodeMuxPlanner
 
         foreach (var subtitlePath in request.SubtitlePaths)
         {
+            if (!SupportedSubtitleExtensions.Contains(Path.GetExtension(subtitlePath)))
+            {
+                throw new ArgumentException($"Nicht unterstuetztes externes Untertitelformat: {subtitlePath}", nameof(request));
+            }
+
             if (!File.Exists(subtitlePath))
             {
                 throw new FileNotFoundException($"Untertiteldatei nicht gefunden: {subtitlePath}");

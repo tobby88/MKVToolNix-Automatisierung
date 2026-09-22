@@ -1,4 +1,5 @@
 using System.Text;
+using MkvToolnixAutomatisierung.Services;
 
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
@@ -145,20 +146,10 @@ internal static class SeriesEpisodeMuxPresentationBuilder
             if (plan.HasHeaderEdits)
             {
                 builder.AppendLine("Direkte Header-Anpassungen:");
-                if (plan.ContainerTitleEdit is not null)
+                foreach (var change in ArchiveHeaderNormalizationService.BuildHeaderChangeNotes(
+                    plan.ContainerTitleEdit, plan.TrackHeaderEdits))
                 {
-                    var currentTitle = string.IsNullOrWhiteSpace(plan.ContainerTitleEdit.CurrentTitle)
-                        ? "(leer)"
-                        : plan.ContainerTitleEdit.CurrentTitle;
-                    builder.AppendLine($"- MKV-Titel: {currentTitle} -> {plan.ContainerTitleEdit.ExpectedTitle}");
-                }
-
-                foreach (var headerEdit in plan.TrackHeaderEdits)
-                {
-                    var currentName = string.IsNullOrWhiteSpace(headerEdit.CurrentTrackName)
-                        ? "(leer)"
-                        : headerEdit.CurrentTrackName;
-                    builder.AppendLine($"- {headerEdit.DisplayLabel}: {currentName} -> {headerEdit.ExpectedTrackName}");
+                    builder.AppendLine($"- {change}");
                 }
             }
             else if (plan.WorkingCopy is not null)

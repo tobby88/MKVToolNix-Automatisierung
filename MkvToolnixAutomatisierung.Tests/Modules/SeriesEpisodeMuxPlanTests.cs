@@ -19,6 +19,7 @@ public sealed class SeriesEpisodeMuxPlanTests
 
         Assert.Contains("0:Deutsch (hörgeschädigte) - SRT", arguments);
         AssertContainsSequence(arguments, "--hearing-impaired-flag", "0:yes");
+        AssertContainsSequence(arguments, "--no-video", "--no-audio", "--no-attachments", "--subtitle-tracks", "0");
     }
 
     [Fact]
@@ -154,10 +155,15 @@ public sealed class SeriesEpisodeMuxPlanTests
         Assert.Equal(@"C:\Temp\output.mkv", arguments[0]);
         AssertContainsSequence(arguments, "--edit", "track:2", "--set", "name=Deutsch - E-AC-3");
         Assert.Equal("mkvpropedit", plan.ExecutionToolDisplayName);
+        Assert.Contains("- Audio 1: Alter Audiotitel -> Deutsch - E-AC-3", plan.BuildPreviewText(), StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void BuildArguments_UsesMkvPropEditForDirectTrackHeaderValueEdits()
+    [Theory]
+    [InlineData("flag-hearing-impaired", "Hörgeschädigt", "nein", "ja", "1")]
+    [InlineData("flag-default", "Standard", "ja", "nein", "0")]
+    [InlineData("language", "Sprache", "de", "nds", "nds")]
+    public void BuildArguments_UsesMkvPropEditForDirectTrackHeaderValueEdits(
+        string propertyName, string displayName, string currentValue, string expectedValue, string expectedArgument)
     {
         var plan = new SeriesEpisodeMuxPlan(
             mkvMergePath: @"C:\Tools\mkvmerge.exe",
@@ -196,18 +202,21 @@ public sealed class SeriesEpisodeMuxPlanTests
                     "Deutsch (hörgeschädigte) - SRT",
                     [
                         new TrackHeaderValueEdit(
-                            "flag-hearing-impaired",
-                            "Hörgeschädigt",
-                            "nein",
-                            "ja",
-                            "1")
+                            propertyName,
+                            displayName,
+                            currentValue,
+                            expectedValue,
+                            expectedArgument)
                     ])
             ],
             notes: []);
 
         var arguments = plan.BuildArguments();
 
-        AssertContainsSequence(arguments, "--edit", "track:3", "--set", "flag-hearing-impaired=1");
+        AssertContainsSequence(arguments, "--edit", "track:3", "--set", $"{propertyName}={expectedArgument}");
+        var preview = plan.BuildPreviewText();
+        Assert.Contains($"- Untertitel 2: {displayName}: {currentValue} -> {expectedValue}", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("- Untertitel 2: Deutsch (hörgeschädigte) - SRT -> Deutsch (hörgeschädigte) - SRT", preview, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -250,6 +259,7 @@ public sealed class SeriesEpisodeMuxPlanTests
         AssertContainsSequence(arguments, "--edit", "info", "--set", "title=Pilot");
         Assert.True(plan.HasHeaderEdits);
         Assert.False(plan.HasTrackHeaderEdits);
+        Assert.Contains("- MKV-Titel: Alter Titel -> Pilot", plan.BuildPreviewText(), StringComparison.Ordinal);
     }
 
     private static SeriesEpisodeMuxPlan CreatePlan(IReadOnlyList<SubtitleFile> subtitleFiles)

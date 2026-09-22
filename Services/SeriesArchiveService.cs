@@ -261,8 +261,8 @@ public sealed record ArchiveIntegrationDecision(
     IReadOnlyList<string> Notes)
 {
     /// <summary>
-    /// Bereits vollständig aufgelöste AD-Spuren aus einer vorhandenen Archivdatei.
-    /// Bleibt leer, wenn eine frische AD-Datei verwendet oder keine AD übernommen wird.
+    /// Vollständig aufgelöste AD-Spuren aus der frischen Auswahl und dem Archiv.
+    /// Ein Ersatz betrifft nur dieselbe Sprache; andere Archivsprachen bleiben erhalten.
     /// </summary>
     public IReadOnlyList<AudioDescriptionSourcePlan> AudioDescriptionSources { get; init; } = [];
 

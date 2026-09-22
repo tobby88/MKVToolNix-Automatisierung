@@ -148,6 +148,12 @@ public sealed class SeriesEpisodeMuxService
         Action<MuxExecutionUpdate>? onUpdate = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (plan.SkipMux)
+        {
+            return new MuxExecutionResult(0, false, null);
+        }
+
         if (plan.HasHeaderEdits)
         {
             return await ExecuteTrackHeaderEditAsync(plan, onOutput, onUpdate, cancellationToken);
@@ -155,6 +161,7 @@ public sealed class SeriesEpisodeMuxService
 
         var hadWarning = false;
         int? latestProgressPercent = null;
+        var outputSync = new object();
 
         onUpdate?.Invoke(new MuxExecutionUpdate(0, false));
 
@@ -164,28 +171,34 @@ public sealed class SeriesEpisodeMuxService
             plan.ExecutionToolDisplayName,
             line =>
             {
-                onOutput?.Invoke(line);
-
-                var parsedOutput = _outputParser.Parse(line);
-                if (parsedOutput.ProgressPercent is null && !parsedOutput.IsWarning)
+                // stdout and stderr callbacks can arrive concurrently.
+                lock (outputSync)
                 {
-                    return;
-                }
+                    onOutput?.Invoke(line);
 
-                if (parsedOutput.ProgressPercent is int progressPercent)
-                {
-                    latestProgressPercent = progressPercent;
-                }
+                    var parsedOutput = _outputParser.Parse(line);
+                    if (parsedOutput.ProgressPercent is null && !parsedOutput.IsWarning)
+                    {
+                        return;
+                    }
 
-                if (parsedOutput.IsWarning)
-                {
-                    hadWarning = true;
-                }
+                    if (parsedOutput.ProgressPercent is int progressPercent)
+                    {
+                        latestProgressPercent = progressPercent;
+                    }
 
-                onUpdate?.Invoke(new MuxExecutionUpdate(latestProgressPercent, hadWarning));
+                    hadWarning |= parsedOutput.IsWarning;
+
+                    onUpdate?.Invoke(new MuxExecutionUpdate(latestProgressPercent, hadWarning));
+                }
             },
             cancellationToken);
 
+        if (exitCode == 1 && !hadWarning)
+        {
+            hadWarning = true;
+            onUpdate?.Invoke(new MuxExecutionUpdate(latestProgressPercent, true));
+        }
         return new MuxExecutionResult(exitCode, hadWarning, latestProgressPercent);
     }
 
@@ -196,6 +209,7 @@ public sealed class SeriesEpisodeMuxService
         CancellationToken cancellationToken)
     {
         var hadWarning = false;
+        var outputSync = new object();
 
         onUpdate?.Invoke(new MuxExecutionUpdate(0, false));
         var exitCode = await _executionService.ExecuteAsync(
@@ -204,17 +218,18 @@ public sealed class SeriesEpisodeMuxService
             plan.ExecutionToolDisplayName,
             line =>
             {
-                onOutput?.Invoke(line);
-                if (line.Contains("warning", StringComparison.OrdinalIgnoreCase)
-                    || line.Contains("warnung", StringComparison.OrdinalIgnoreCase))
+                lock (outputSync)
                 {
-                    hadWarning = true;
+                    onOutput?.Invoke(line);
+                    hadWarning |= _outputParser.Parse(line).IsWarning;
                 }
             },
             cancellationToken);
 
-        onUpdate?.Invoke(new MuxExecutionUpdate(100, hadWarning));
-        return new MuxExecutionResult(exitCode, hadWarning, 100);
+        hadWarning |= exitCode == 1;
+        int? finalProgress = exitCode is 0 or 1 ? 100 : null;
+        onUpdate?.Invoke(new MuxExecutionUpdate(finalProgress, hadWarning));
+        return new MuxExecutionResult(exitCode, hadWarning, finalProgress);
     }
 
     private static Action<DetectionProgressUpdate>? CreateCancelableProgressCallback(
