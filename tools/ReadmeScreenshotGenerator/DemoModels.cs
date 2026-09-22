@@ -43,10 +43,13 @@ internal sealed class DemoMuxModuleViewModel
     public DemoSingleViewModel SingleMux { get; init; } = new();
     public DemoBatchViewModel BatchMux { get; init; } = new();
     public int SelectedTabIndex { get; set; }
+    public bool IsSingleTabEnabled => true;
+    public bool IsBatchTabEnabled => true;
 }
 
 internal sealed class DemoSingleViewModel
 {
+    public bool IsInteractive => true;
     public string MainVideoPath { get; init; } = string.Empty;
     public bool HasPlanSummary { get; init; }
     public Brush OutputTargetBadgeBackground { get; init; } = Brushes.Transparent;
@@ -64,6 +67,7 @@ internal sealed class DemoSingleViewModel
     public DemoEpisodeUsageSummary? UsageSummary { get; init; }
     public bool HasPendingPlanReview { get; init; }
     public string PrimaryActionablePlanNote { get; init; } = string.Empty;
+    public string ActionablePlanNotesDisplayText => PrimaryActionablePlanNote;
     public bool HasPlanRefreshProblem { get; init; }
     public string PlanRefreshProblemText { get; init; } = string.Empty;
     public bool RequiresManualCheck { get; init; }
@@ -203,6 +207,7 @@ internal sealed class DemoBatchEpisodeItem
     public bool HasNotes { get; init; }
     public bool HasActionablePlanNotes { get; init; }
     public string PrimaryActionablePlanNote { get; init; } = string.Empty;
+    public string ActionablePlanNotesDisplayText => PrimaryActionablePlanNote;
     public IReadOnlyList<string> RequestedSourcePaths { get; init; } = [];
     public IReadOnlyList<string> SubtitlePaths { get; init; } = [];
     public IReadOnlyList<string> AttachmentPaths { get; init; } = [];
