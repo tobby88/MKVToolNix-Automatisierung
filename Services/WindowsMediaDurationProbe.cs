@@ -10,6 +10,17 @@ namespace MkvToolnixAutomatisierung.Services;
 public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<string, TimeSpan?> _durationReader;
+
+    /// <summary>Initializes the optional Windows Media Player duration fallback.</summary>
+    public WindowsMediaDurationProbe() : this(ReadDurationCore)
+    {
+    }
+
+    internal WindowsMediaDurationProbe(Func<string, TimeSpan?> durationReader)
+    {
+        _durationReader = durationReader;
+    }
 
     /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
@@ -25,8 +36,17 @@ public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = ReadDurationCore(filePath);
-        _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        var duration = _durationReader(filePath);
+        // COM availability and media readiness can fail transiently, just like ffprobe.
+        if (duration is { } value && value > TimeSpan.Zero)
+        {
+            _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
+        }
+        else
+        {
+            _cache.TryRemove(filePath, out _);
+            duration = null;
+        }
         return duration;
     }
 

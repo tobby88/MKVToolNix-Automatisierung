@@ -78,13 +78,15 @@ public sealed partial class MkvMergeProbeService
         string inputFilePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
             return cachedMetadata.Value;
         }
 
-        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreatePrimaryVideoMetadata(trackDocument, inputFilePath);
         StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
         return metadata;
@@ -102,13 +104,15 @@ public sealed partial class MkvMergeProbeService
         string inputFilePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
             return cachedMetadata.Value;
         }
 
-        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreateFirstAudioTrackMetadata(trackDocument, inputFilePath);
         StoreCachedValue(_audioTrackCache, inputFilePath, snapshot, metadata);
         return metadata;
@@ -126,13 +130,15 @@ public sealed partial class MkvMergeProbeService
         string inputFilePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
             return cachedMetadata.Value;
         }
 
-        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken);
+        using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreateContainerMetadata(trackDocument, inputFilePath);
         StoreCachedValue(_containerCache, inputFilePath, snapshot, metadata);
         return metadata;

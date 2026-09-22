@@ -34,7 +34,8 @@ internal static class MediaLanguageHelper
             return null;
         }
 
-        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
+        // Region/script subtags do not change the mux language, including ISO-639-2 aliases.
+        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-').Split('-', 2)[0];
         if (normalized is "de" or "deu" or "ger" || normalized.StartsWith("de-", StringComparison.Ordinal))
         {
             return "de";
@@ -176,7 +177,7 @@ internal static class MediaLanguageHelper
         // Andere echte Mischfälle, z. B. bewusst englische Tonspuren bei bereits
         // gesetztem deutschem Video-Flag, dürfen dadurch nicht versehentlich in
         // einen anderen Sprachslot verschoben werden.
-        if (IsEnglishLanguageCode(videoLanguageCode) && normalizedAudioLanguage == "de")
+        if (IsEnglishLanguageCode(videoLanguageCode) && TryNormalizeKnownMuxLanguageCode(primaryAudioLanguageCode) == "de")
         {
             return normalizedAudioLanguage;
         }
@@ -197,13 +198,7 @@ internal static class MediaLanguageHelper
 
     private static bool IsEnglishLanguageCode(string? languageCode)
     {
-        if (string.IsNullOrWhiteSpace(languageCode))
-        {
-            return false;
-        }
-
-        var normalized = languageCode.Trim().ToLowerInvariant().Replace('_', '-');
-        return normalized is "en" or "eng" || normalized.StartsWith("en-", StringComparison.Ordinal);
+        return TryNormalizeKnownMuxLanguageCode(languageCode) == "en";
     }
 
     /// <summary>

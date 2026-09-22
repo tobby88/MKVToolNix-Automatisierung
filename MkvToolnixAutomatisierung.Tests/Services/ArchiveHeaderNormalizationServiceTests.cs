@@ -52,6 +52,51 @@ public sealed class ArchiveHeaderNormalizationServiceTests
         Assert.Contains(result.TrackHeaderEdits, edit => edit.ValueEdits?.Any(value => value.PropertyName == "flag-hearing-impaired" && value.ExpectedMkvPropEditValue == "1") == true);
     }
 
+    [Theory]
+    [InlineData("de", "de")]
+    [InlineData("ger", "de")]
+    [InlineData("und", "und")]
+    public void BuildForArchiveFile_UsesRawLanguageForInferredLanguageCorrections(
+        string rawLanguage, string expectedCurrentValue)
+    {
+        var track = CreateAudioTrack(1, "Plattdüütsch - AAC") with
+        {
+            Language = "nds",
+            RawLanguage = rawLanguage
+        };
+        var container = new ContainerMetadata("Pilot", [track], []);
+
+        var result = ArchiveHeaderNormalizationService.BuildForArchiveFile(
+            "episode.mkv", container, "Pilot", originalLanguage: null);
+
+        var operation = Assert.Single(result.TrackHeaderEdits);
+        var edit = Assert.Single(operation.ValueEdits!);
+        Assert.Equal("language", edit.PropertyName);
+        Assert.Equal(expectedCurrentValue, edit.CurrentDisplayValue);
+        Assert.Equal("nds", edit.ExpectedMkvPropEditValue);
+        Assert.Equal("nds", track.Language);
+
+        var corrected = container with { Tracks = [track with { RawLanguage = "nds" }] };
+        Assert.False(ArchiveHeaderNormalizationService.BuildForArchiveFile(
+            "episode.mkv", corrected, "Pilot", originalLanguage: null).HasChanges);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("ger")]
+    [InlineData("deu")]
+    [InlineData("de-DE")]
+    public void BuildForArchiveFile_AcceptsEquivalentOrUnavailableRawLanguage(string? rawLanguage)
+    {
+        var track = CreateAudioTrack(1, "Deutsch - AAC") with { RawLanguage = rawLanguage };
+        var container = new ContainerMetadata("Pilot", [track], []);
+
+        var result = ArchiveHeaderNormalizationService.BuildForArchiveFile(
+            "episode.mkv", container, "Pilot", originalLanguage: null);
+
+        Assert.False(result.HasChanges);
+    }
+
     [Fact]
     public void BuildForArchiveFile_DerKommissarUndDasMeer_PlansOriginalFlagsOff()
     {

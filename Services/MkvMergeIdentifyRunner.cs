@@ -35,9 +35,11 @@ internal static class MkvMergeIdentifyRunner
 
         var standardOutputTask = process.StandardOutput.ReadToEndAsync();
         var standardErrorTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync(cancellationToken);
-        var standardOutput = await standardOutputTask;
-        var standardError = await standardErrorTask;
+        // Detection also calls this API synchronously; never require its caller's UI context.
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        var standardOutput = await standardOutputTask.ConfigureAwait(false);
+        var standardError = await standardErrorTask.ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
     }
 
@@ -75,8 +77,17 @@ internal static class MkvMergeIdentifyRunner
         return startInfo;
     }
 
-    private static JsonDocument ParseIdentifyResult(string standardOutput, string standardError, int exitCode)
+    internal static JsonDocument ParseIdentifyResult(string standardOutput, string standardError, int exitCode)
     {
+        // Valid JSON alone is not success: mkvmerge also emits JSON on fatal errors.
+        if (exitCode is not (0 or 1))
+        {
+            var errorDetails = string.IsNullOrWhiteSpace(standardError)
+                ? standardOutput.Trim()
+                : standardError.Trim();
+            throw new InvalidOperationException($"mkvmerge --identify ist fehlgeschlagen (Exitcode {exitCode}): {errorDetails}");
+        }
+
         if (!string.IsNullOrWhiteSpace(standardOutput))
         {
             try

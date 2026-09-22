@@ -139,7 +139,10 @@ internal static class MkvMergeIdentifyParser
                 IsForcedTrack: ReadBooleanProperty(properties, "forced_track")
                     || ReadBooleanProperty(properties, "flag_forced"),
                 IsOriginalLanguage: ReadBooleanProperty(properties, "flag_original"),
-                Duration: ReadTrackDuration(properties)));
+                Duration: ReadTrackDuration(properties))
+            {
+                RawLanguage = ReadRawLanguage(properties)
+            });
         }
 
         var attachments = new List<ContainerAttachmentMetadata>();
@@ -186,7 +189,8 @@ internal static class MkvMergeIdentifyParser
 
     private static JsonElement GetTracksElement(JsonDocument trackDocument, string inputFilePath)
     {
-        if (trackDocument.RootElement.TryGetProperty("tracks", out var tracks)
+        if (trackDocument.RootElement.ValueKind == JsonValueKind.Object
+            && trackDocument.RootElement.TryGetProperty("tracks", out var tracks)
             && tracks.ValueKind == JsonValueKind.Array)
         {
             return tracks;
@@ -202,7 +206,10 @@ internal static class MkvMergeIdentifyParser
 
     private static int ReadTrackId(JsonElement track)
     {
-        if (!track.TryGetProperty("id", out var idElement) || !idElement.TryGetInt32(out var trackId))
+        if (!track.TryGetProperty("id", out var idElement)
+            || idElement.ValueKind != JsonValueKind.Number
+            || !idElement.TryGetInt32(out var trackId)
+            || trackId < 0)
         {
             throw new InvalidOperationException("mkvmerge hat keine gültige Track-ID geliefert.");
         }
@@ -313,6 +320,7 @@ internal static class MkvMergeIdentifyParser
         }
 
         return TimeSpan.TryParse(NormalizeTrackDurationText(durationText), CultureInfo.InvariantCulture, out var duration)
+            && duration > TimeSpan.Zero
             ? duration
             : null;
     }
@@ -350,7 +358,9 @@ internal static class MkvMergeIdentifyParser
             return "Unbekannt";
         }
 
-        if (codecId.Contains("HEVC", StringComparison.OrdinalIgnoreCase) || codecId.Contains("H/265", StringComparison.OrdinalIgnoreCase))
+        if (codecId.Contains("HEVC", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("H.265", StringComparison.OrdinalIgnoreCase)
+            || codecId.Contains("H/265", StringComparison.OrdinalIgnoreCase))
         {
             return "H.265";
         }
@@ -449,6 +459,11 @@ internal static class MkvMergeIdentifyParser
             return trackNameLanguage;
         }
 
+        return ReadRawLanguage(properties) ?? "de";
+    }
+
+    private static string? ReadRawLanguage(JsonElement properties)
+    {
         if (properties.ValueKind != JsonValueKind.Undefined && properties.TryGetProperty("language_ietf", out var ietfElement))
         {
             var value = ietfElement.GetString();
@@ -467,6 +482,6 @@ internal static class MkvMergeIdentifyParser
             }
         }
 
-        return "de";
+        return null;
     }
 }

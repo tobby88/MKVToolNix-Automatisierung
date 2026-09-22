@@ -171,7 +171,14 @@ public sealed record ContainerTrackMetadata(
     bool IsDefaultTrack,
     bool IsForcedTrack = false,
     bool IsOriginalLanguage = false,
-    TimeSpan? Duration = null);
+    TimeSpan? Duration = null)
+{
+    /// <summary>
+    /// Unveränderter Container-Sprachwert (language_ietf, ersatzweise language).
+    /// Null bedeutet nicht überliefert; Language bleibt die für die Auswahl abgeleitete Sprache.
+    /// </summary>
+    public string? RawLanguage { get; init; }
+}
 
 /// <summary>
 /// Anhänge, die beim Archivabgleich erhalten bleiben können.

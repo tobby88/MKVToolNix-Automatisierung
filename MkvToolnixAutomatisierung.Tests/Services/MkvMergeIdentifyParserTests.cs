@@ -6,6 +6,37 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class MkvMergeIdentifyParserTests
 {
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    public void CreateContainerMetadata_RejectsInvalidRootWithFileContext(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var error = Assert.Throws<InvalidOperationException>(() => MkvMergeIdentifyParser.CreateContainerMetadata(doc, "episode.mkv"));
+        Assert.Contains("episode.mkv", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("\"0\"")]
+    public void CreateContainerMetadata_RejectsInvalidTrackIds(string id)
+    {
+        using var doc = JsonDocument.Parse("{\"tracks\":[{\"id\":" + id + ",\"type\":\"audio\",\"codec\":\"AAC\"}]}");
+        Assert.Throws<InvalidOperationException>(() => MkvMergeIdentifyParser.CreateContainerMetadata(doc, "episode.mkv"));
+    }
+
+    [Theory]
+    [InlineData("00:00:00.000000000")]
+    [InlineData("-00:01:00")]
+    public void CreateContainerMetadata_DoesNotTreatNonPositiveDurationAsPrecise(string duration)
+    {
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            tracks = new[] { new { id = 0, type = "audio", codec = "AAC", properties = new { tag_duration = duration } } }
+        }));
+        Assert.Null(Assert.Single(MkvMergeIdentifyParser.CreateContainerMetadata(doc, "episode.mkv").Tracks).Duration);
+    }
+
     [Fact]
     public void CreatePrimaryVideoMetadata_HappyPath_ParsesTrackIdsCodecAndWidth()
     {
@@ -79,6 +110,7 @@ public sealed class MkvMergeIdentifyParserTests
     [InlineData("V_MPEG4/ISO/AVC", "H.264")]
     [InlineData("H.264", "H.264")]
     [InlineData("HEVC", "H.265")]
+    [InlineData("H.265/MPEG-H", "H.265")]
     public void CreatePrimaryVideoMetadata_VideoCodecNormalization(string rawCodec, string expectedLabel)
     {
         using var doc = JsonDocument.Parse($$"""
@@ -265,6 +297,40 @@ public sealed class MkvMergeIdentifyParserTests
         Assert.Equal(2, result.Attachments.Count);
         Assert.Equal("cover.jpg", result.Attachments[0].FileName);
         Assert.Equal("chapter.xml", result.Attachments[1].FileName);
+    }
+
+    [Theory]
+    [InlineData("de", "ger", "de")]
+    [InlineData(null, "ger", "ger")]
+    [InlineData(" ", "deu", "deu")]
+    [InlineData("und", "ger", "und")]
+    [InlineData(null, null, null)]
+    public void CreateContainerMetadata_PreservesRawLanguageSeparatelyFromInferredLanguage(
+        string? ietfLanguage, string? legacyLanguage, string? expectedRawLanguage)
+    {
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            tracks = new[]
+            {
+                new
+                {
+                    id = 0,
+                    type = "audio",
+                    codec = "AAC",
+                    properties = new
+                    {
+                        track_name = "Plattdeutsch - AAC",
+                        language_ietf = ietfLanguage,
+                        language = legacyLanguage
+                    }
+                }
+            }
+        }));
+
+        var track = Assert.Single(MkvMergeIdentifyParser.CreateContainerMetadata(doc, "episode.mkv").Tracks);
+
+        Assert.Equal("nds", track.Language);
+        Assert.Equal(expectedRawLanguage, track.RawLanguage);
     }
 
     [Theory]

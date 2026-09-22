@@ -362,11 +362,17 @@ internal static class ArchiveHeaderNormalizationService
             expectedValue: expectedTrackName);
 
         var normalizedExpectedLanguage = MediaLanguageHelper.NormalizeMuxLanguageCode(expectedLanguageCode);
+        // Die abgeleitete Auswahlsprache darf einen abweichenden Containerwert nicht verdecken.
+        // Ohne Rohwert bleibt das Verhalten für bisherige Modellaufrufer unverändert.
+        var normalizedCurrentLanguage = track.RawLanguage is null
+            ? MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language)
+            : MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode(track.RawLanguage)
+                ?? track.RawLanguage.Trim().ToLowerInvariant();
         TryAddTextHeaderEdit(
             edits,
             propertyName: "language",
             displayName: "Sprache",
-            currentValue: MediaLanguageHelper.NormalizeMuxLanguageCode(track.Language),
+            currentValue: normalizedCurrentLanguage,
             expectedValue: normalizedExpectedLanguage);
 
         TryAddFlagHeaderEdit(edits, "flag-default", "Standard", track.IsDefaultTrack, expectedDefaultFlag);

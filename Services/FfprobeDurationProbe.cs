@@ -88,6 +88,7 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var ffprobePath = GetCurrentFfprobePath();
         var snapshot = FileStateSnapshot.TryCreate(filePath);
         if (string.IsNullOrWhiteSpace(ffprobePath) || snapshot is null)
@@ -100,7 +101,8 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = await _durationReaderAsync(filePath, ffprobePath, timeout, cancellationToken);
+        var duration = await _durationReaderAsync(filePath, ffprobePath, timeout, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         StoreSuccessfulDurationOrClearCache(filePath, snapshot.Value, duration);
         return duration;
     }
@@ -146,6 +148,7 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(filePath))
         {
             return null;
@@ -184,12 +187,13 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
 
             try
             {
-                await process.WaitForExitAsync(linkedCancellation.Token);
+                // TryReadDuration blocks synchronously, including on STA/UI callers.
+                await process.WaitForExitAsync(linkedCancellation.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 KillProcessTree(process);
-                await DrainProcessOutputAfterKillAsync(process, standardOutputTask, standardErrorTask);
+                await DrainProcessOutputAfterKillAsync(process, standardOutputTask, standardErrorTask).ConfigureAwait(false);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     throw;
@@ -198,8 +202,9 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
                 return null;
             }
 
-            var output = await standardOutputTask;
-            _ = await standardErrorTask;
+            var output = await standardOutputTask.ConfigureAwait(false);
+            _ = await standardErrorTask.ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (process.ExitCode != 0)
             {
@@ -269,8 +274,8 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
     {
         try
         {
-            await process.WaitForExitAsync();
-            await Task.WhenAll(standardOutputTask, standardErrorTask);
+            await process.WaitForExitAsync().ConfigureAwait(false);
+            await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false);
         }
         catch
         {

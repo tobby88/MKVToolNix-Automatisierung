@@ -143,6 +143,62 @@ public sealed class MkvMergeProbeServiceIntegrationTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task CachedProbeMethods_RespectPreCanceledToken()
+    {
+        var mediaPath = CreateFile("cached.mp4");
+        FakeMkvMergeTestHelper.WriteProbeFile(mediaPath,
+            new { id = 0, type = "video", codec = "AVC/H.264", properties = new { pixel_dimensions = "1920x1080" } },
+            new { id = 1, type = "audio", codec = "AAC" });
+        var service = new MkvMergeProbeService();
+        var executable = FakeMkvMergeTestHelper.ResolveExecutablePath();
+        await service.ReadPrimaryVideoMetadataAsync(executable, mediaPath);
+        await service.ReadFirstAudioTrackMetadataAsync(executable, mediaPath);
+        await service.ReadContainerMetadataAsync(executable, mediaPath);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ReadPrimaryVideoMetadataAsync(executable, mediaPath, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ReadFirstAudioTrackMetadataAsync(executable, mediaPath, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ReadContainerMetadataAsync(executable, mediaPath, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task ReadPrimaryVideoMetadataAsync_DoesNotCaptureCallingSynchronizationContext()
+    {
+        var mediaPath = CreateFile("context.mp4");
+        FakeMkvMergeTestHelper.WriteProbeFile(mediaPath,
+            new { id = 0, type = "video", codec = "AVC/H.264", properties = new { pixel_dimensions = "1920x1080" } },
+            new { id = 1, type = "audio", codec = "AAC" });
+        var context = new RecordingSynchronizationContext();
+        var previous = SynchronizationContext.Current;
+        Task<MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux.MediaTrackMetadata> pending;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            pending = new MkvMergeProbeService().ReadPrimaryVideoMetadataAsync(FakeMkvMergeTestHelper.ResolveExecutablePath(), mediaPath);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        await pending.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(0, context.PostCount);
+    }
+
+    private sealed class RecordingSynchronizationContext : SynchronizationContext
+    {
+        private int _postCount;
+        public int PostCount => Volatile.Read(ref _postCount);
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Interlocked.Increment(ref _postCount);
+            ThreadPool.QueueUserWorkItem(_ => callback(state));
+        }
+    }
+
     private string CreateFile(string fileName, string content = "data")
     {
         var filePath = Path.Combine(_tempDirectory, fileName);

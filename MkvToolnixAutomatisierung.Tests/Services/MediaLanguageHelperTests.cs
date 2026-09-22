@@ -11,6 +11,9 @@ public sealed class MediaLanguageHelperTests
     [InlineData("und", "eng", null, "en")]
     [InlineData("eng", "eng", null, "en")]
     [InlineData("de", "en", null, "de")]
+    [InlineData("eng", "und", null, "en")]
+    [InlineData("en-US", "unknown", null, "en")]
+    [InlineData("eng-US", "deu-DE", null, "de")]
     public void ResolveMuxVideoLanguageCode_PrefersExplicitHintThenPrimaryAudioLanguage(
         string? videoLanguage,
         string? primaryAudioLanguage,
@@ -45,5 +48,16 @@ public sealed class MediaLanguageHelperTests
         Assert.Equal("sv", MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode("swe"));
         Assert.Null(MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode("zz"));
         Assert.Null(MediaLanguageHelper.TryNormalizeKnownMuxLanguageCode(null));
+    }
+
+    [Theory]
+    [InlineData("eng-US", "en")]
+    [InlineData("swe_SE", "sv")]
+    [InlineData("fra-CA", "fr")]
+    [InlineData("cmn-Hans", "zh")]
+    [InlineData("ger-DE", "de")]
+    public void NormalizeMuxLanguageCode_PreservesKnownThreeLetterLanguageWithSubtags(string input, string expected)
+    {
+        Assert.Equal(expected, MediaLanguageHelper.NormalizeMuxLanguageCode(input));
     }
 }

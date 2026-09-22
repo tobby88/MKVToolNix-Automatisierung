@@ -107,6 +107,53 @@ public sealed class FfprobeDurationProbeTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TryReadDurationAsync_ObservesCancellationBeforeLookupAndOnCacheHit(bool warmCache)
+    {
+        var mediaPath = CreateFile("canceled.mp4");
+        var locator = new CountingFfprobeLocator(CreateFile("ffprobe.exe"));
+        var reads = 0;
+        var probe = new FfprobeDurationProbe(locator, (_, _, _, _) =>
+        {
+            reads++;
+            return Task.FromResult<TimeSpan?>(TimeSpan.FromMinutes(42));
+        });
+        if (warmCache)
+        {
+            await probe.TryReadDurationAsync(mediaPath, TimeSpan.FromSeconds(1));
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            probe.TryReadDurationAsync(mediaPath, TimeSpan.FromSeconds(1), cancellation.Token));
+
+        Assert.Equal(warmCache ? 1 : 0, reads);
+        Assert.Equal(warmCache ? 1 : 0, locator.CallCount);
+    }
+
+    [Fact]
+    public async Task TryReadDurationAsync_DoesNotCacheResultReturnedAfterCancellation()
+    {
+        var mediaPath = CreateFile("late-result.mp4");
+        using var cancellation = new CancellationTokenSource();
+        var reads = 0;
+        var probe = new FfprobeDurationProbe(new CountingFfprobeLocator(CreateFile("ffprobe.exe")), (_, _, _, _) =>
+        {
+            reads++;
+            cancellation.Cancel();
+            return Task.FromResult<TimeSpan?>(TimeSpan.FromMinutes(42));
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            probe.TryReadDurationAsync(mediaPath, TimeSpan.FromSeconds(1), cancellation.Token));
+        await probe.TryReadDurationAsync(mediaPath, TimeSpan.FromSeconds(1));
+
+        Assert.Equal(2, reads);
+    }
+
     private sealed class CountingFfprobeLocator(string? resolvedPath) : IFfprobeLocator
     {
         public int CallCount { get; private set; }

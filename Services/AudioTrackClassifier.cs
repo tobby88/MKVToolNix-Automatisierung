@@ -40,6 +40,27 @@ internal static class AudioTrackClassifier
     }
 
     /// <summary>
+    /// Selects a marked AD track from an explicitly selected AD source. An unmarked
+    /// single audio track is accepted; ambiguous multi-audio sources are never guessed.
+    /// </summary>
+    public static ContainerTrackMetadata SelectAudioDescriptionTrack(IEnumerable<ContainerTrackMetadata> tracks)
+    {
+        ArgumentNullException.ThrowIfNull(tracks);
+        var audioTracks = tracks.Where(IsAudioTrack).ToList();
+        var markedTrack = audioTracks.FirstOrDefault(IsAudioDescriptionTrack);
+        if (markedTrack is not null)
+        {
+            return markedTrack;
+        }
+
+        return audioTracks.Count == 1
+            ? audioTracks[0]
+            : throw new InvalidOperationException(audioTracks.Count == 0
+                ? "In der AD-Datei wurde keine Audiospur gefunden."
+                : "Die AD-Datei enthaelt mehrere Audiospuren, aber keine eindeutig markierte Audiodeskription.");
+    }
+
+    /// <summary>
     /// Filtert aus einer Trackliste nur normale Audiospuren heraus und entfernt dabei erkannte AD-Spuren.
     /// </summary>
     /// <param name="tracks">Beliebige Container-Tracks oder bereits vorgefilterte Audiospuren.</param>

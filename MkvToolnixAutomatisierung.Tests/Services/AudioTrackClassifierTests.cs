@@ -67,4 +67,28 @@ public sealed class AudioTrackClassifierTests
             IsHearingImpaired: false,
             IsDefaultTrack: false);
     }
+
+    [Theory]
+    [InlineData(true, "")]
+    [InlineData(false, "English Audio Description")]
+    public void SelectAudioDescriptionTrack_PrefersMarkedTrackOverFirstAudio(bool flagged, string name)
+    {
+        var selected = AudioTrackClassifier.SelectAudioDescriptionTrack(
+            [CreateAudioTrack(1, "Main"), CreateAudioTrack(3, name, flagged)]);
+
+        Assert.Equal(3, selected.TrackId);
+    }
+
+    [Fact]
+    public void SelectAudioDescriptionTrack_AcceptsUnmarkedSingleTrack()
+    {
+        Assert.Equal(4, AudioTrackClassifier.SelectAudioDescriptionTrack([CreateAudioTrack(4, "")]).TrackId);
+    }
+
+    [Fact]
+    public void SelectAudioDescriptionTrack_RejectsAmbiguousUnmarkedAudio()
+    {
+        Assert.Throws<InvalidOperationException>(() => AudioTrackClassifier.SelectAudioDescriptionTrack(
+            [CreateAudioTrack(1, "Main"), CreateAudioTrack(2, "Commentary")]));
+    }
 }
