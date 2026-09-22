@@ -62,6 +62,18 @@ public sealed class EpisodePlanCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task AsyncCacheOperations_HonorCancellationWithFixedVideoSelection()
+    {
+        var cache = new EpisodePlanCache();
+        var input = CreateFileBackedInput(includePlannedVideoPaths: true);
+        var owner = new object();
+        var cancelled = new CancellationToken(true);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.StoreAsync(owner, input, CreatePlan("cached"), cancelled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.TryGetAsync(owner, input, cancelled));
+        Assert.False(cache.TryGet(owner, input, out _));
+    }
+
+    [Fact]
     public void TryGet_ReturnsFalse_WhenRelevantInputChanged()
     {
         var cache = new EpisodePlanCache();

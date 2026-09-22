@@ -169,12 +169,14 @@ internal sealed class EpisodePlanCache
         EpisodePlanCacheKeyInput input,
         CancellationToken cancellationToken)
     {
-        if (!RequiresDetectionDirectoryScan(input))
+        // Auch bei fester Quellliste werden Größen/Zeitstempel gelesen, oft über SMB.
+        // Diese I/O darf weder den UI-Dispatcher blockieren noch einen Abbruch umgehen.
+        return Task.Run(() =>
         {
-            return Task.FromResult(BuildCacheKey(input, cancellationToken));
-        }
-
-        return Task.Run(() => BuildCacheKey(input, cancellationToken), cancellationToken);
+            var key = BuildCacheKey(input, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return key;
+        }, cancellationToken);
     }
 
     private static string BuildCacheKey(

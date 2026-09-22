@@ -12,19 +12,6 @@ namespace MkvToolnixAutomatisierung;
 internal sealed class AppCompositionRoot
 {
     /// <summary>
-    /// Erstellt die komplette Objektstruktur der Anwendung in fachlich gruppierten Schritten.
-    /// </summary>
-    /// <remarks>
-    /// Der Root baut bewusst einen validierenden <see cref="ServiceProvider"/>, damit fehlende Registrierungen
-    /// oder unauflösbare Konstruktoren bereits beim Start der App statt erst tief im UI-Ablauf auffallen.
-    /// </remarks>
-    /// <returns>Fertig verdrahtete Anwendungskomposition für den Bootstrapper.</returns>
-    public AppComposition Create()
-    {
-        return CreateAsync().GetAwaiter().GetResult();
-    }
-
-    /// <summary>
     /// Erstellt die komplette Objektstruktur der Anwendung asynchron und meldet sichtbaren Startfortschritt.
     /// </summary>
     /// <param name="progress">Optionaler Fortschrittskanal für Werkzeug- und IMDb-Datenprüfung.</param>

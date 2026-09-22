@@ -44,11 +44,11 @@ public sealed class AppCompositionRootTests
     }
 
     [Fact]
-    public void Create_ReturnsDisposableAppComposition()
+    public async Task CreateAsync_ReturnsDisposableAppComposition()
     {
         SaveToolAutoManagementSettings(autoManageEnabled: false);
 
-        using var composition = new AppCompositionRoot().Create();
+        using var composition = await new AppCompositionRoot().CreateAsync();
 
         Assert.NotNull(composition.DialogService);
         Assert.NotNull(composition.SettingsLoadResult);
