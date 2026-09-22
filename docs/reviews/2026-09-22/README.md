@@ -5,6 +5,10 @@ Ziel: belegbare Fehler, Inkonsistenzen, Performance- und Wartbarkeitsprobleme
 einschließlich kleiner Befunde prüfen und direkt mit Regressionstests beheben.
 Keine funktional unbegründeten Großumbauten oder Paketupdates.
 
+**Für die weitere Auswahl:** [Konsolidierte offene Findings, Hinweise und Testlücken](open-findings.md).
+Diese Restliste berücksichtigt die späteren Korrekturen und ersetzt ältere Offen-/Übergabevermerke
+in den einzelnen Bereichsberichten. Der Stand bis `9ff3a8e` wurde inzwischen gepusht.
+
 ## Arbeitsliste
 
 - [x] Mux-Kern: Erkennung, Archivvergleich, Spurenauswahl, Argumente und Medien-Probes.
