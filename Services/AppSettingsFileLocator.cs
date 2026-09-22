@@ -55,6 +55,7 @@ public static class AppSettingsFileLocator
     /// <param name="settings">Zu speichernder Einstellungssatz.</param>
     public static void SaveCombinedSettings(CombinedAppSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         var settingsPath = GetSettingsFilePath();
         var backupPath = GetBackupFilePath();
         var temporaryPath = BuildTemporarySettingsFilePath(settingsPath);
@@ -149,7 +150,8 @@ public static class AppSettingsFileLocator
         try
         {
             var json = File.ReadAllText(filePath, Utf8Encoding);
-            var settings = JsonSerializer.Deserialize<CombinedAppSettings>(json, SerializerOptions) ?? new CombinedAppSettings();
+            var settings = JsonSerializer.Deserialize<CombinedAppSettings>(json, SerializerOptions)
+                ?? throw new JsonException("Die Einstellungsdatei enthält kein Einstellungsobjekt.");
             settings.Metadata ??= new AppMetadataSettings();
             settings.ToolPaths ??= new AppToolPathSettings();
             settings.Archive ??= new AppArchiveSettings();

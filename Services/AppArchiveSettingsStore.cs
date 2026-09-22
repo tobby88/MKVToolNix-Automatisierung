@@ -68,8 +68,10 @@ public sealed class AppArchiveSettings
     {
         return new AppArchiveSettings
         {
-            DefaultSeriesArchiveRootPath = DefaultSeriesArchiveRootPath,
+            DefaultSeriesArchiveRootPath = DefaultSeriesArchiveRootPath ?? SeriesArchiveService.DefaultArchiveRootDirectory,
             SuppressedMaintenanceChanges = (SuppressedMaintenanceChanges ?? [])
+                // Explizite null-Elemente sind in handbearbeitetem JSON möglich.
+                .Where(change => change is not null)
                 .Select(change => change.Clone())
                 .ToList()
         };

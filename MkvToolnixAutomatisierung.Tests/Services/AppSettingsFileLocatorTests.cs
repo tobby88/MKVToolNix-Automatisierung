@@ -17,8 +17,10 @@ public sealed class AppSettingsFileLocatorTests
         _storageFixture.Reset();
     }
 
-    [Fact]
-    public void LoadCombinedSettingsWithDiagnostics_LoadsBackupAndCreatesCorruptSnapshot_WhenPrimaryIsBroken()
+    [Theory]
+    [InlineData("{ invalid json")]
+    [InlineData("null")]
+    public void LoadCombinedSettingsWithDiagnostics_LoadsBackupAndCreatesCorruptSnapshot_WhenPrimaryIsBroken(string brokenJson)
     {
         AppSettingsFileLocator.SaveCombinedSettings(new CombinedAppSettings
         {
@@ -36,7 +38,7 @@ public sealed class AppSettingsFileLocatorTests
             }
         });
 
-        File.WriteAllText(PortableAppStorage.SettingsFilePath, "{ invalid json");
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, brokenJson);
 
         var result = AppSettingsFileLocator.LoadCombinedSettingsWithDiagnostics();
 

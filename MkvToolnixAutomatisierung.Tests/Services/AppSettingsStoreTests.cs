@@ -79,6 +79,39 @@ public sealed class AppSettingsStoreTests
     }
 
     [Fact]
+    public void Load_NormalizesNullToolStatesWithoutEnablingOptionalDownload()
+    {
+        PortableAppStorage.EnsureDataDirectoryForSave();
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, """
+            { "ToolPaths": { "ManagedMkvToolNix": null, "ManagedFfprobe": null,
+              "ManagedMediathekView": null, "FfprobePath": null, "MkvToolNixDirectoryPath": null } }
+            """);
+
+        var settings = new AppSettingsStore().Load().ToolPaths!;
+
+        Assert.True(settings.ManagedMkvToolNix.AutoManageEnabled);
+        Assert.True(settings.ManagedFfprobe.AutoManageEnabled);
+        Assert.False(settings.ManagedMediathekView.AutoManageEnabled);
+        Assert.Equal(string.Empty, settings.FfprobePath);
+        Assert.Equal(string.Empty, settings.MkvToolNixDirectoryPath);
+    }
+
+    [Fact]
+    public void Load_IgnoresNullArchiveSuppressionEntries()
+    {
+        PortableAppStorage.EnsureDataDirectoryForSave();
+        File.WriteAllText(PortableAppStorage.SettingsFilePath, """
+            { "Archive": { "DefaultSeriesArchiveRootPath": null,
+              "SuppressedMaintenanceChanges": [null, { "MediaFilePath": "episode.mkv" }] } }
+            """);
+
+        var settings = new AppSettingsStore().Load().Archive!;
+
+        Assert.Equal(SeriesArchiveService.DefaultArchiveRootDirectory, settings.DefaultSeriesArchiveRootPath);
+        Assert.Equal("episode.mkv", Assert.Single(settings.SuppressedMaintenanceChanges).MediaFilePath);
+    }
+
+    [Fact]
     public void Update_UsesCachedStateAndWritesMergedSettings()
     {
         var store = new AppSettingsStore();

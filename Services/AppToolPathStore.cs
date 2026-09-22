@@ -95,12 +95,14 @@ public sealed class AppToolPathSettings
     {
         return new AppToolPathSettings
         {
-            ManagedMkvToolNix = ManagedMkvToolNix.Clone(),
-            ManagedFfprobe = ManagedFfprobe.Clone(),
-            ManagedMediathekView = ManagedMediathekView.Clone(),
-            FfprobePath = FfprobePath,
-            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
-            MediathekViewPath = MediathekViewPath
+            // JSON kann trotz nicht-nullbarer C#-Eigenschaften explizite null-Werte
+            // enthalten. Der erste Clone geschieht bereits vor der Store-Normalisierung.
+            ManagedMkvToolNix = ManagedMkvToolNix?.Clone() ?? new ManagedToolSettings(),
+            ManagedFfprobe = ManagedFfprobe?.Clone() ?? new ManagedToolSettings(),
+            ManagedMediathekView = ManagedMediathekView?.Clone() ?? new ManagedToolSettings { AutoManageEnabled = false },
+            FfprobePath = FfprobePath ?? string.Empty,
+            MkvToolNixDirectoryPath = MkvToolNixDirectoryPath ?? string.Empty,
+            MediathekViewPath = MediathekViewPath ?? string.Empty
         };
     }
 }
