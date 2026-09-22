@@ -628,4 +628,155 @@ public sealed class EmbySyncItemViewModelTests
 
         Assert.Equal(expectedTone, vm.StatusTone);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissingTvdbLink_PreservesManualImdbDecision(bool unavailable)
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv", new EmbyProviderIds("123", null));
+        if (unavailable) vm.MarkImdbUnavailable();
+        else vm.ApplyImdbSelection("tt1234567");
+
+        var comparison = vm.ApplyTvdbImdbCandidate(123, null);
+
+        Assert.Equal(TvdbImdbComparisonKind.ManualDecisionPreserved, comparison.Kind);
+        Assert.False(vm.RequiresImdbReview);
+        Assert.True(vm.HasCompleteProviderIds);
+        Assert.Equal(unavailable, vm.IsImdbUnavailable);
+    }
+
+    [Fact]
+    public void AutomaticImdbCandidate_DoesNotApproveDifferentVisibleValueAfterTvdbChange()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv", new EmbyProviderIds("100", null));
+        Assert.Equal(TvdbImdbComparisonKind.Added, vm.ApplyTvdbImdbCandidate(100, "tt1111111").Kind);
+
+        vm.TvdbId = "200";
+        var comparison = vm.ApplyTvdbImdbCandidate(200, "tt2222222");
+
+        Assert.Equal(TvdbImdbComparisonKind.Conflict, comparison.Kind);
+        Assert.Equal("tt1111111", vm.ImdbId);
+        Assert.True(vm.RequiresImdbReview);
+        Assert.False(vm.HasCompleteProviderIds);
+    }
+
+    [Fact]
+    public void ClearingManuallyReviewedIds_RevokesApprovalBeforeSourcesAreReadAgain()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv", new EmbyProviderIds("100", "tt1111111"));
+        vm.TvdbId = "200";
+        vm.ImdbId = "tt2222222";
+        vm.TvdbId = string.Empty;
+        vm.ImdbId = string.Empty;
+
+        var review = vm.CreateReviewSnapshot();
+        Assert.False(review.TvdbManuallyReviewed);
+        Assert.False(review.ImdbManuallyReviewed);
+        vm.ApplyAnalysis(new EmbyFileAnalysis(vm.MediaFilePath, vm.NfoPath, true, true,
+            new EmbyProviderIds("300", "tt3333333"), null, null));
+
+        Assert.True(vm.RequiresTvdbReview);
+        Assert.True(vm.RequiresImdbReview);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("2147483648")]
+    [InlineData("\u0661\u0662\u0663")]
+    public void TvdbId_RejectsValuesNotSupportedByEpisodeLookup(string id)
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv") { TvdbId = id, IsImdbUnavailable = true };
+
+        Assert.False(vm.HasValidTvdbId);
+        Assert.False(vm.HasCompleteProviderIds);
+        Assert.NotEmpty(vm[nameof(EmbySyncItemViewModel.TvdbId)]);
+    }
+
+    [Fact]
+    public void ImdbId_RejectsUnicodeDigits()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv") { ImdbId = "tt\u0661\u0662\u0663\u0664\u0665\u0666\u0667" };
+
+        Assert.False(vm.HasValidImdbId);
+    }
+
+    [Fact]
+    public void TvdbId_NotifiesLookupAvailabilityForUnparseableFileName()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv");
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        vm.TvdbId = "123";
+
+        Assert.True(vm.CanReviewTvdb);
+        Assert.Contains(nameof(EmbySyncItemViewModel.CanReviewTvdb), changed);
+        Assert.Contains(nameof(EmbySyncItemViewModel.TvdbLookupTooltip), changed);
+    }
+
+    [Fact]
+    public void ApplyEmbyItem_DoesNotTreatTvdbSeriesAsEpisodeProviderId()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv");
+
+        vm.ApplyEmbyItem(new EmbyItem("episode", "Episode", vm.MediaFilePath,
+            new Dictionary<string, string> { ["TvdbSeries"] = "123" }));
+
+        Assert.False(vm.HasTvdbId);
+    }
+
+    [Fact]
+    public void RefreshRequest_TracksTargetValuesWithoutConfirmingServerState()
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv", new EmbyProviderIds("123", "tt1234567"));
+        vm.ApplyEmbyRefreshTarget(new EmbyItem("episode", "Episode", vm.MediaFilePath,
+            new Dictionary<string, string> { ["Tvdb"] = "999" }));
+
+        vm.RememberRefreshRequest(vm.EmbyItemId, vm.ProviderIds, false, false);
+
+        Assert.True(vm.HasCurrentRefreshRequest);
+        Assert.True(vm.HasKnownEmbyProviderIdMismatch);
+        vm.TvdbId = "456";
+        Assert.False(vm.HasCurrentRefreshRequest);
+        vm.TvdbId = "123";
+        vm.MarkImdbUnavailable();
+        Assert.False(vm.HasCurrentRefreshRequest);
+        vm.RememberRefreshRequest(vm.EmbyItemId, vm.ProviderIds, false, true);
+        Assert.True(vm.HasCurrentRefreshRequest);
+        vm.IsImdbUnavailable = false;
+        Assert.False(vm.HasCurrentRefreshRequest);
+        vm.IsTvdbUnavailable = true;
+        vm.RememberRefreshRequest(vm.EmbyItemId, vm.ProviderIds, true, false);
+        Assert.True(vm.HasCurrentRefreshRequest);
+        vm.IsTvdbUnavailable = false;
+        Assert.False(vm.HasCurrentRefreshRequest);
+    }
+
+    [Theory]
+    [InlineData("analysis")]
+    [InlineData("item")]
+    [InlineData("target")]
+    [InlineData("connection")]
+    public void RefreshRequest_IsInvalidatedByFreshServerStateOrConnectionChange(string update)
+    {
+        var vm = new EmbySyncItemViewModel(@"C:\Videos\Episode.mkv", new EmbyProviderIds("123", null));
+        var serverItem = new EmbyItem("episode", "Episode", vm.MediaFilePath, new Dictionary<string, string>());
+        vm.ApplyEmbyRefreshTarget(serverItem);
+        vm.RememberRefreshRequest(vm.EmbyItemId, vm.ProviderIds, false, false);
+
+        switch (update)
+        {
+            case "analysis":
+                vm.ApplyAnalysis(new EmbyFileAnalysis(vm.MediaFilePath, vm.NfoPath, true, true,
+                    vm.ProviderIds, serverItem, null));
+                break;
+            case "item": vm.ApplyEmbyItem(serverItem); break;
+            case "target": vm.ApplyEmbyRefreshTarget(serverItem); break;
+            case "connection": vm.ClearEmbyLookup(); break;
+        }
+
+        Assert.False(vm.HasCurrentRefreshRequest);
+    }
 }

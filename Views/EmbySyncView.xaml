@@ -11,10 +11,14 @@
             <Setter Property="Background" Value="#FFF9E2" />
             <Setter Property="BorderBrush" Value="#D8B24A" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="ToolTip" Value="{Binding ProviderIdEditTooltip}" />
             <Style.Triggers>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="#FFF3F4F6" />
                     <Setter Property="BorderBrush" Value="#D0D7DE" />
+                </Trigger>
+                <Trigger Property="Validation.HasError" Value="True">
+                    <Setter Property="ToolTip" Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -125,6 +129,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -248,7 +253,7 @@
                                     <TextBox Grid.Column="0"
                                              Style="{StaticResource EditableIdTextBoxStyle}"
                                              IsEnabled="{Binding CanEditProviderIds}"
-                                             ToolTip="{Binding ProviderIdEditTooltip}"
+                                             AutomationProperties.Name="TVDB-ID"
                                              Text="{Binding TvdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
                                     <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0"
                                               Content="Kein Eintrag"
@@ -284,7 +289,7 @@
                                     <TextBox Grid.Column="0"
                                              Style="{StaticResource EditableIdTextBoxStyle}"
                                              IsEnabled="{Binding CanEditProviderIds}"
-                                             ToolTip="{Binding ProviderIdEditTooltip}"
+                                             AutomationProperties.Name="IMDb-ID"
                                              Text="{Binding ImdbId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True, NotifyOnValidationError=True}" />
                                     <CheckBox Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0"
                                               Content="Kein Eintrag"
@@ -427,5 +432,10 @@
                              Value="{Binding ProgressValue, Mode=OneWay}" />
             </StackPanel>
         </Grid>
+        <TextBlock Grid.Row="4"
+                   Margin="0,6,0,0"
+                   Text="{Binding StatusText, Mode=OneWay}"
+                   TextWrapping="Wrap"
+                   AutomationProperties.LiveSetting="Polite" />
     </Grid>
 </UserControl>

@@ -11,7 +11,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Verwaltet den nachgelagerten Emby-Abgleich für neu erzeugte MKV-Dateien und deren NFO-Provider-IDs.
 /// </summary>
-internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSettingsAwareModule
+internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettingsAwareModule
 {
     private static readonly TimeSpan LibraryScanProgressStallHintDelay = TimeSpan.FromSeconds(5);
 
@@ -30,6 +30,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     private int _progressValue;
     private bool _isBusy;
     private CancellationTokenSource? _scanCancellationSource;
+    private AppEmbySettings _lastEmbySettings;
 
     public EmbySyncViewModel(
         EmbyModuleServices services,
@@ -41,15 +42,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         _dialogService = dialogService;
         _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService(_services.ImdbDatasetSearch);
         _moduleLogs = moduleLogs;
+        _lastEmbySettings = _services.Settings.Load();
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
-        SelectReportCommand = new AsyncRelayCommand(SelectReportAsync, () => !_isBusy, unexpectedCommandErrorHandler);
+        SelectReportCommand = new AsyncRelayCommand(() => RunBusyAsync(SelectReportAsync), () => !_isBusy, unexpectedCommandErrorHandler);
         RunScanCommand = new AsyncRelayCommand(RunScanAsync, CanRunScan, unexpectedCommandErrorHandler);
         CancelScanCommand = new RelayCommand(CancelScan, () => CanCancelScan);
         ToggleSelectedItemSelectionCommand = new RelayCommand(ToggleSelectedItemSelection, () => !_isBusy && SelectedItem is not null);
-        ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
+        ReviewSelectedMetadataCommand = new AsyncRelayCommand(() => RunBusyAsync(ReviewSelectedMetadataAsync), CanReviewSelectedMetadata, unexpectedCommandErrorHandler);
         ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, CanReviewSelectedImdb);
-        ReviewPendingProviderIdsCommand = new AsyncRelayCommand(ReviewPendingProviderIdsAsync, CanReviewPendingProviderIds, unexpectedCommandErrorHandler);
+        ReviewPendingProviderIdsCommand = new AsyncRelayCommand(() => RunBusyAsync(ReviewPendingProviderIdsAsync), CanReviewPendingProviderIds, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
         SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
         DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
@@ -228,18 +230,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             return;
         }
 
-        SetReportPaths(selectedPaths);
-        await ImportSelectedReportsAsync();
+        await ImportSelectedReportsAsync(selectedPaths);
     }
 
-    private Task ImportSelectedReportsAsync()
+    private async Task ImportSelectedReportsAsync(IReadOnlyList<string> selectedPaths)
     {
-        if (_reportPaths.Count == 0 || _reportPaths.Any(path => !File.Exists(path)))
-        {
-            return Task.CompletedTask;
-        }
-
-        var importEntries = _reportPaths
+        var reportPaths = selectedPaths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var importEntries = await Task.Run(() => reportPaths
             .Select(reportPath => new
             {
                 ReportPath = reportPath,
@@ -252,7 +249,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             .GroupBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.Aggregate(MergeImportEntries))
             .OrderBy(entry => entry.MediaFilePath, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .ToList());
+        // Commit the selection only after every report has loaded successfully. Otherwise
+        // old rows could be written back into a newly selected, invalid report set.
+        SetReportPaths(reportPaths);
         ReplaceItems(importEntries);
         ProgressValue = importEntries.Count == 0 ? 0 : 20;
         StatusText = importEntries.Count == 0
@@ -266,10 +266,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         if (importEntries.Count == 0)
         {
             SaveVisibleLog("Reports prüfen");
-            return Task.CompletedTask;
+            return;
         }
 
-        return AnalyzeItemsAsync();
+        await AnalyzeItemsAsync();
     }
 
     private async Task AnalyzeItemsAsync()
@@ -433,12 +433,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private async Task ReviewSelectedMetadataAsync()
     {
-        if (SelectedItem is null)
+        var item = SelectedItem;
+        if (item is null)
         {
             return;
         }
 
-        if (!SelectedItem.CanReviewTvdb)
+        if (!item.CanReviewTvdb)
         {
             _dialogService.ShowWarning(
                 "TVDB-Prüfung",
@@ -447,13 +448,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         }
 
         var reviewApplied = ApplyTvdbReviewResult(
-            SelectedItem,
-            _providerReviewDialogs.ReviewTvdb(SelectedItem, _services.EpisodeMetadata, _services.SettingsDialog),
+            item,
+            _providerReviewDialogs.ReviewTvdb(item, _services.EpisodeMetadata, _services.SettingsDialog),
             isBatchReview: false);
         SaveVisibleLog("TVDB prüfen");
         if (reviewApplied)
         {
-            await ResolveTvdbImdbLinksAsync([SelectedItem], CancellationToken.None);
+            await ResolveTvdbImdbLinksAsync([item], CancellationToken.None);
             RefreshSummaryAndCommands();
         }
     }
@@ -565,6 +566,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             var updatedCount = 0;
             var currentCount = 0;
             var refreshOnlyCount = 0;
+            var alreadyRequestedRefreshCount = 0;
+            var assetCount = 0;
             var skippedCount = 0;
             var refreshFailureCount = 0;
             var refreshPendingCount = 0;
@@ -576,9 +579,17 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 StatusText = $"Aktualisiere NFO {index + 1}/{selectedItems.Count}...";
                 ProgressValue = ScaleProgress(index, selectedItems.Count, 10, 95);
 
+                if (!await Task.Run(() => File.Exists(item.MediaFilePath)))
+                {
+                    item.SetStatus("Fehlt", "Die MKV-Datei wurde nicht gefunden. Die NFO bleibt unverändert.");
+                    skippedCount++;
+                    continue;
+                }
+
                 if (!item.SupportsProviderIdSync)
                 {
                     item.SetStatus("Ohne NFO-Sync", "Für diesen Emby-Eintrag gibt es keine Episoden-NFO. Ein TVDB-/IMDB-Sync ist hier nicht nötig.");
+                    assetCount++;
                     completedMediaFilePaths.Add(item.MediaFilePath);
                     continue;
                 }
@@ -597,11 +608,14 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                     continue;
                 }
 
-                var updateResult = _services.Sync.UpdateNfoProviderIds(
+                var providerIds = item.ProviderIds;
+                var removeImdbId = item.IsImdbUnavailable;
+                var removeTvdbId = item.IsTvdbUnavailable;
+                var updateResult = await Task.Run(() => _services.Sync.UpdateNfoProviderIds(
                     item.MediaFilePath,
-                    item.ProviderIds,
-                    removeImdbId: item.IsImdbUnavailable,
-                    removeTvdbId: item.IsTvdbUnavailable);
+                    providerIds,
+                    removeImdbId,
+                    removeTvdbId));
                 if (!updateResult.Success)
                 {
                     item.SetStatus("NFO prüfen", updateResult.Message);
@@ -626,9 +640,20 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
                         if (canRefreshEmby && item.HasKnownEmbyProviderIdMismatch)
                         {
+                            if (item.HasCurrentRefreshRequest)
+                            {
+                                item.SetStatus("Refresh angefordert", "NFO bereits aktuell. Emby-Refresh für diese Auswahl bereits angefordert; serverseitiger Abschluss nicht bestätigt.");
+                                currentCount++;
+                                alreadyRequestedRefreshCount++;
+                                completedMediaFilePaths.Add(item.MediaFilePath);
+                                continue;
+                            }
+
                             try
                             {
-                                await _services.Sync.RefreshItemMetadataAsync(settings, item.EmbyItemId);
+                                var currentRefreshItemId = item.EmbyItemId;
+                                await _services.Sync.RefreshItemMetadataAsync(settings, currentRefreshItemId);
+                                item.RememberRefreshRequest(currentRefreshItemId, providerIds, removeTvdbId, removeImdbId);
                                 refreshOnlyCount++;
                                 item.MarkCurrentAndRefreshed();
                                 completedMediaFilePaths.Add(item.MediaFilePath);
@@ -655,6 +680,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 }
 
                 updatedCount++;
+                item.ClearRefreshRequest();
 
                 if (!canRefreshEmby)
                 {
@@ -676,6 +702,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 try
                 {
                     await _services.Sync.RefreshItemMetadataAsync(settings, refreshItemId);
+                    item.RememberRefreshRequest(refreshItemId, providerIds, removeTvdbId, removeImdbId);
                     item.MarkUpdated(metadataRefreshTriggered: true);
                     if (item.HasCompleteProviderIds) completedMediaFilePaths.Add(item.MediaFilePath);
                 }
@@ -688,9 +715,9 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
 
             ProgressValue = 100;
-            StatusText = BuildRunSyncSummary(updatedCount, currentCount, refreshOnlyCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
+            StatusText = BuildRunSyncSummary(updatedCount, currentCount, refreshOnlyCount, alreadyRequestedRefreshCount, assetCount, skippedCount, refreshFailureCount, refreshPendingCount, canRefreshEmby);
             AppendLog(StatusText);
-            MarkSelectedReportsDone(completedMediaFilePaths, selectedItems);
+            await MarkSelectedReportsDoneAsync(completedMediaFilePaths, selectedItems);
             RefreshSummaryAndCommands();
             SaveVisibleLog("Änderungen schreiben");
         });
@@ -746,42 +773,51 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         EmbyLibraryMatch? libraryMatch,
         CancellationToken cancellationToken)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600));
+        using var budgetSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budgetSource.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(settings.ScanWaitTimeoutSeconds, 5, 600)));
         var pendingItems = selectedItems
             .Where(item => string.IsNullOrWhiteSpace(item.EmbyItemId))
             .ToList();
         var attempt = 0;
 
-        while (pendingItems.Count > 0 && DateTime.UtcNow <= deadline)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            attempt++;
-            StatusText = $"Suche neue Emby-Items ({selectedItems.Count - pendingItems.Count}/{selectedItems.Count})...";
-            foreach (var item in pendingItems.ToList())
+            while (pendingItems.Count > 0)
             {
-                var embyItem = await _services.Sync.FindItemByPathAsync(
-                    settings,
-                    item.MediaFilePath,
-                    archiveRootPath,
-                    libraryMatch,
-                    cancellationToken);
-                if (embyItem is null)
+                budgetSource.Token.ThrowIfCancellationRequested();
+                attempt++;
+                StatusText = $"Suche neue Emby-Items ({selectedItems.Count - pendingItems.Count}/{selectedItems.Count})...";
+                foreach (var item in pendingItems.ToList())
                 {
-                    continue;
+                    budgetSource.Token.ThrowIfCancellationRequested();
+                    var embyItem = await _services.Sync.FindItemByPathAsync(
+                        settings,
+                        item.MediaFilePath,
+                        archiveRootPath,
+                        libraryMatch,
+                        budgetSource.Token);
+                    if (embyItem is null)
+                    {
+                        continue;
+                    }
+
+                    item.ApplyEmbyItem(embyItem);
+                    pendingItems.Remove(item);
                 }
 
-                item.ApplyEmbyItem(embyItem);
-                pendingItems.Remove(item);
-            }
+                ProgressValue = pendingItems.Count == 0
+                    ? Math.Max(ProgressValue, 70)
+                    : Math.Max(ProgressValue, Math.Min(69, 50 + attempt * 4));
 
-            ProgressValue = pendingItems.Count == 0
-                ? Math.Max(ProgressValue, 70)
-                : Math.Max(ProgressValue, Math.Min(69, 50 + attempt * 4));
-
-            if (pendingItems.Count > 0)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+                if (pendingItems.Count > 0)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), budgetSource.Token);
+                }
             }
+        }
+        catch (OperationCanceledException) when (budgetSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            AppendLog("Wartezeit für neue Emby-Items abgelaufen. Noch offene Einträge werden lokal nachgeprüft.");
         }
 
         foreach (var item in pendingItems)
@@ -960,18 +996,18 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
     {
         try
         {
-            return await _services.Sync.AnalyzeFileAsync(
+            return await Task.Run(() => _services.Sync.AnalyzeFileAsync(
                 settings,
                 item.MediaFilePath,
                 queryEmby,
                 archiveRootPath,
                 libraryMatch,
-                cancellationToken);
+                cancellationToken), cancellationToken);
         }
         catch (Exception ex) when (queryEmby && ex is not OperationCanceledException)
         {
             AppendLog($"{operationLabel}: Emby-Abfrage für {item.MediaFileName} fehlgeschlagen: {ex.Message}. Verwende lokale NFO-Daten.");
-            return _services.Sync.AnalyzeLocalFile(item.MediaFilePath);
+            return await Task.Run(() => _services.Sync.AnalyzeLocalFile(item.MediaFilePath), cancellationToken);
         }
     }
 
@@ -1024,7 +1060,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         item.IsSelected = !item.IsSelected;
     }
 
-    private void MarkSelectedReportsDone(IReadOnlyList<string> completedMediaFilePaths, IReadOnlyList<EmbySyncItemViewModel> attemptedItems)
+    private async Task MarkSelectedReportsDoneAsync(IReadOnlyList<string> completedMediaFilePaths, IReadOnlyList<EmbySyncItemViewModel> attemptedItems)
     {
         if (_reportPaths.Count == 0)
         {
@@ -1033,7 +1069,8 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
         var reviews = attemptedItems.ToDictionary(item => item.MediaFilePath,
             item => item.CreateReviewSnapshot(), StringComparer.OrdinalIgnoreCase);
-        var completion = _services.Sync.MarkOutputReportsDone(_reportPaths, completedMediaFilePaths, reviews);
+        var reportPaths = _reportPaths.ToArray();
+        var completion = await Task.Run(() => _services.Sync.MarkOutputReportsDone(reportPaths, completedMediaFilePaths, reviews));
         if (completion.UpdatedReportPaths.Count > 0)
         {
             AppendLog($"Bearbeitungsstand gespeichert: {completion.UpdatedReportPaths.Count} Metadatenreport(s).");
@@ -1063,6 +1100,10 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         {
             AppendLog($"Metadatenreport konnte nicht als erledigt markiert werden: {failedReport}");
         }
+        if (completion.FailedReports.Count > 0)
+        {
+            StatusText += $" {completion.FailedReports.Count} Report(s) konnten nicht gespeichert werden; siehe Protokoll.";
+        }
     }
 
     private void ReplaceReportPath(string sourcePath, string targetPath)
@@ -1076,6 +1117,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     public void HandleGlobalSettingsChanged()
     {
+        var settings = LoadConfiguredSettings();
+        if (!string.Equals(settings.ServerUrl.TrimEnd('/'), _lastEmbySettings.ServerUrl.TrimEnd('/'), StringComparison.Ordinal)
+            || !string.Equals(settings.ApiKey, _lastEmbySettings.ApiKey, StringComparison.Ordinal))
+        {
+            foreach (var item in Items)
+            {
+                item.ClearEmbyLookup();
+            }
+        }
+        _lastEmbySettings = settings;
         RefreshCommands();
     }
 
@@ -1086,6 +1137,7 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
 
     private async Task RunBusyAsync(Func<Task> action)
     {
+        var wasBusy = _isBusy;
         try
         {
             SetProgressDisplayTextOverride(null);
@@ -1094,13 +1146,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         }
         finally
         {
-            SetBusy(false);
+            SetBusy(wasBusy);
         }
     }
 
     private bool HasEmbyApiSettings()
     {
-        var settings = LoadConfiguredSettings();
+        var settings = _lastEmbySettings;
         return !string.IsNullOrWhiteSpace(settings.ServerUrl)
             && !string.IsNullOrWhiteSpace(settings.ApiKey);
     }
@@ -1276,6 +1328,13 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
                 return false;
             }
 
+            if (IsFailedLibraryScanStatus(currentLibrary.RefreshStatus))
+            {
+                AppendLog($"Emby meldet keinen erfolgreichen Scanabschluss: {currentLibrary.RefreshStatus} ({currentLibrary.Name}).");
+                SetProgressDisplayTextOverride("Scan nicht abgeschlossen");
+                return false;
+            }
+
             if (TryGetActiveLibraryScanState(currentLibrary, out var progressPercent, out var refreshStatusText))
             {
                 sawActiveServerProgress = true;
@@ -1303,6 +1362,12 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
             }
             else if (sawActiveServerProgress)
             {
+                if (currentLibrary.RefreshProgress is not >= 100
+                    && !IsCompletedLibraryScanStatus(currentLibrary.RefreshStatus ?? string.Empty))
+                {
+                    AppendLog("Emby liefert keinen Scanstatus mehr. Der Abschluss bleibt unbestätigt.");
+                    return false;
+                }
                 ProgressValue = 100;
                 SetProgressDisplayTextOverride("100 % · Scan beendet");
                 StatusText = $"Serienbibliotheksscan abgeschlossen: {currentLibrary.Name}";
@@ -1371,33 +1436,38 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         return startPercent + (int)Math.Round((endPercent - startPercent) * fraction);
     }
 
-    private static bool TryGetActiveLibraryScanState(
+    internal static bool TryGetActiveLibraryScanState(
         EmbyLibraryFolder library,
         out int progressPercent,
         out string? refreshStatusText)
     {
-        progressPercent = Math.Clamp((int)Math.Round(library.RefreshProgress ?? 0), 0, 100);
+        var progress = library.RefreshProgress is { } value && double.IsFinite(value) ? value : 0;
+        progressPercent = (int)Math.Round(Math.Clamp(progress, 0, 100));
         refreshStatusText = string.IsNullOrWhiteSpace(library.RefreshStatus)
             ? null
             : library.RefreshStatus.Trim();
 
-        if (progressPercent is > 0 and < 100)
+        if (IsFailedLibraryScanStatus(refreshStatusText)
+            || IsCompletedLibraryScanStatus(refreshStatusText ?? string.Empty))
         {
-            return true;
+            return false;
         }
 
-        return !string.IsNullOrWhiteSpace(refreshStatusText)
-            && !IsCompletedLibraryScanStatus(refreshStatusText);
+        var active = !string.IsNullOrWhiteSpace(refreshStatusText) || progress is > 0 and < 100;
+        if (active && progress < 100)
+        {
+            progressPercent = Math.Min(progressPercent, 99);
+        }
+        return active;
     }
 
     private static bool IsCompletedLibraryScanStatus(string refreshStatusText)
     {
-        return refreshStatusText.Contains("idle", StringComparison.OrdinalIgnoreCase)
-            || refreshStatusText.Contains("ready", StringComparison.OrdinalIgnoreCase)
-            || refreshStatusText.Contains("complete", StringComparison.OrdinalIgnoreCase)
-            || refreshStatusText.Contains("finished", StringComparison.OrdinalIgnoreCase)
-            || refreshStatusText.Contains("stopped", StringComparison.OrdinalIgnoreCase);
+        return refreshStatusText.Trim().ToLowerInvariant() is "idle" or "ready" or "complete" or "completed" or "finished";
     }
+
+    private static bool IsFailedLibraryScanStatus(string? status)
+        => status?.Trim().ToLowerInvariant() is "failed" or "error" or "stopped" or "cancelled" or "canceled" or "aborted";
 
     private void SetReportPaths(IEnumerable<string> reportPaths)
     {
@@ -1543,19 +1613,34 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         int updatedCount,
         int currentCount,
         int refreshOnlyCount,
+        int alreadyRequestedRefreshCount,
+        int assetCount,
         int skippedCount,
         int refreshFailureCount,
         int refreshPendingCount,
         bool canRefreshEmby)
     {
         if (updatedCount == 0
-            && currentCount > 0
+            && currentCount + assetCount > 0
             && refreshOnlyCount == 0
             && skippedCount == 0
             && refreshFailureCount == 0
             && refreshPendingCount == 0)
         {
-            return $"Keine Änderungen nötig: {currentCount} NFO-Datei(en) bereits aktuell.";
+            var noChangeParts = new List<string>();
+            if (currentCount > 0)
+            {
+                noChangeParts.Add($"Keine Änderungen nötig: {currentCount} NFO-Datei(en) bereits aktuell.");
+            }
+            if (assetCount > 0)
+            {
+                noChangeParts.Add($"Abgeschlossen: {assetCount} Emby-Asset(s) ohne NFO-Sync.");
+            }
+            if (alreadyRequestedRefreshCount > 0)
+            {
+                noChangeParts.Add($"{alreadyRequestedRefreshCount} Emby-Refresh bereits angefordert; serverseitiger Abschluss nicht bestätigt.");
+            }
+            return string.Join(" ", noChangeParts);
         }
 
         var parts = new List<string>
@@ -1570,6 +1655,16 @@ internal sealed class EmbySyncViewModel : INotifyPropertyChanged, IGlobalSetting
         if (refreshOnlyCount > 0)
         {
             parts.Add($"{refreshOnlyCount} Emby-Refresh ohne NFO-Änderung.");
+        }
+
+        if (alreadyRequestedRefreshCount > 0)
+        {
+            parts.Add($"{alreadyRequestedRefreshCount} Emby-Refresh bereits angefordert; serverseitiger Abschluss nicht bestätigt.");
+        }
+
+        if (assetCount > 0)
+        {
+            parts.Add($"{assetCount} Emby-Asset(s) ohne NFO-Sync abgeschlossen.");
         }
 
         if (refreshFailureCount > 0)

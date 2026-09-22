@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using MkvToolnixAutomatisierung.Services;
@@ -15,8 +16,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private static readonly Regex EpisodeFileNamePattern = new(
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex TvdbIdPattern = new(@"^\d+$", RegexOptions.Compiled);
-    private static readonly Regex ImdbIdPattern = new(@"^tt\d{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ImdbIdPattern = new(@"^tt[0-9]{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> EmbyAssetFoldersWithoutEpisodeNfo = new(StringComparer.OrdinalIgnoreCase)
     {
         "trailers",
@@ -39,6 +39,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     private string? _tvdbImdbId;
     private EmbyProviderIds _nfoProviderIds = EmbyProviderIds.Empty;
     private EmbyProviderIds _embyProviderIds = EmbyProviderIds.Empty;
+    private (string ItemId, EmbyProviderIds ProviderIds, bool RemoveTvdbId, bool RemoveImdbId)? _lastRefreshRequest;
     private string _embyItemId = string.Empty;
     private string _statusText = "Noch nicht geprüft";
     private string _note = string.Empty;
@@ -53,15 +54,15 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         MediaFilePath = mediaFilePath;
         NfoPath = Path.ChangeExtension(mediaFilePath, ".nfo");
         _reportedProviderIds = providerIds ?? EmbyProviderIds.Empty;
-        _tvdbId = _reportedProviderIds.TvdbId ?? string.Empty;
-        _imdbId = _reportedProviderIds.ImdbId ?? string.Empty;
+        _tvdbId = _reportedProviderIds.TvdbId?.Trim() ?? string.Empty;
+        _imdbId = _reportedProviderIds.ImdbId?.Trim() ?? string.Empty;
         _metadataGuess = TryParseMetadataGuess(mediaFilePath);
         if (review is not null)
         {
             _isTvdbUnavailable = review.TvdbUnavailable;
             _isImdbUnavailable = review.ImdbUnavailable;
-            _tvdbId = review.TvdbUnavailable ? string.Empty : review.TvdbId ?? _tvdbId;
-            _imdbId = review.ImdbUnavailable ? string.Empty : review.ImdbId ?? _imdbId;
+            _tvdbId = review.TvdbUnavailable ? string.Empty : review.TvdbId?.Trim() ?? _tvdbId;
+            _imdbId = review.ImdbUnavailable ? string.Empty : review.ImdbId?.Trim() ?? _imdbId;
             _tvdbReviewWasManuallyResolved = review.TvdbManuallyReviewed || review.TvdbUnavailable;
             _imdbReviewWasManuallyResolved = review.ImdbManuallyReviewed || review.ImdbUnavailable;
             _isTvdbReviewApproved = _tvdbReviewWasManuallyResolved;
@@ -105,7 +106,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     /// <summary>
     /// Kennzeichnet, ob eine vorhandene TVDB-ID dem erwarteten Zielformat entspricht.
     /// </summary>
-    public bool HasValidTvdbId => string.IsNullOrWhiteSpace(TvdbId) || TvdbIdPattern.IsMatch(TvdbId);
+    public bool HasValidTvdbId => GetTvdbValidationMessage(TvdbId) is null;
 
     /// <summary>
     /// Kennzeichnet, ob eine vorhandene IMDb-ID dem erwarteten Zielformat entspricht.
@@ -298,7 +299,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         && (HasImdbId || IsImdbUnavailable);
 
     /// <summary>
-    /// Kennzeichnet, ob das bereits gefundene Emby-Item noch andere Provider-IDs kennt als die geprüfte lokale Auswahl.
+    /// Vergleicht den zuletzt gelesenen Serverstand mit der geprüften lokalen Auswahl.
+    /// Ein angenommener Refresh bestätigt noch keine serverseitige Aktualisierung.
     /// </summary>
     public bool HasKnownEmbyProviderIdMismatch => SupportsProviderIdSync
         && !string.IsNullOrWhiteSpace(EmbyItemId)
@@ -308,6 +310,22 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             || (IsImdbUnavailable
                 ? !string.IsNullOrWhiteSpace(_embyProviderIds.ImdbId)
                 : ProviderIdDiffers(ImdbId, _embyProviderIds.ImdbId)));
+
+    /// <summary>Verhindert identische Refresh-Anforderungen ohne neue NFO-Änderung oder Serverprüfung.</summary>
+    public bool HasCurrentRefreshRequest => _lastRefreshRequest is { } request
+        && request.ItemId == EmbyItemId
+        && request.ProviderIds == ProviderIds
+        && request.RemoveTvdbId == IsTvdbUnavailable
+        && request.RemoveImdbId == IsImdbUnavailable;
+
+    /// <summary>Merkt nur erfolgreich angeforderte Zielwerte, ohne den gelesenen Serverstand zu ändern.</summary>
+    public void RememberRefreshRequest(string itemId, EmbyProviderIds providerIds, bool removeTvdbId, bool removeImdbId)
+    {
+        _lastRefreshRequest = (itemId, providerIds, removeTvdbId, removeImdbId);
+    }
+
+    /// <summary>Neue NFO-Änderungen oder Serverdaten erfordern gegebenenfalls eine neue Anforderung.</summary>
+    public void ClearRefreshRequest() => _lastRefreshRequest = null;
 
     /// <summary>
     /// Kennzeichnet, ob alle aktuell befüllten Provider-ID-Felder formal gültig sind.
@@ -378,6 +396,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         var freshEmbyItem = analysis.EmbyItem;
         if (freshEmbyItem is not null)
         {
+            ClearRefreshRequest();
             _embyProviderIds = BuildProviderIdsFromEmbyItem(freshEmbyItem);
             SetEmbyLookupMissing(false);
             EmbyItemId = freshEmbyItem.Id;
@@ -436,7 +455,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
         var providerMismatchNote = BuildProviderMismatchNote(
             analysis.NfoProviderIds.TvdbId,
-            freshEmbyItem?.GetProviderId("Tvdb") ?? freshEmbyItem?.GetProviderId("TvdbSeries") ?? _embyProviderIds.TvdbId,
+            freshEmbyItem?.GetProviderId("Tvdb") ?? _embyProviderIds.TvdbId,
             analysis.NfoProviderIds.ImdbId,
             freshEmbyItem?.GetProviderId("Imdb") ?? _embyProviderIds.ImdbId);
         var embyItemKnown = freshEmbyItem is not null || !string.IsNullOrWhiteSpace(EmbyItemId);
@@ -470,10 +489,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             return;
         }
 
+        ClearRefreshRequest();
         EmbyItemId = item.Id;
         SetEmbyLookupMissing(false);
         var embyProviderIds = new EmbyProviderIds(
-            item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
+            item.GetProviderId("Tvdb"),
             item.GetProviderId("Imdb"));
         _embyProviderIds = embyProviderIds;
         var providerIds = ProviderIds
@@ -520,10 +540,21 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
     {
         ArgumentNullException.ThrowIfNull(item);
 
+        ClearRefreshRequest();
         EmbyItemId = item.Id;
         SetEmbyLookupMissing(false);
         _embyProviderIds = BuildProviderIdsFromEmbyItem(item);
         OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
+    }
+
+    /// <summary>Verwirft servergebundene Item-IDs nach einem Wechsel der Emby-Verbindung.</summary>
+    public void ClearEmbyLookup()
+    {
+        ClearRefreshRequest();
+        _embyProviderIds = EmbyProviderIds.Empty;
+        EmbyItemId = string.Empty;
+        SetEmbyLookupMissing(false);
+        RefreshProviderReviewStateFromCurrentSources();
     }
 
     /// <summary>
@@ -621,6 +652,12 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         var normalizedCandidate = NormalizeImdbId(tvdbImdbId);
         _tvdbImdbEpisodeId = tvdbEpisodeId;
         _tvdbImdbId = normalizedCandidate;
+
+        if (_imdbReviewWasManuallyResolved)
+        {
+            return new TvdbImdbComparisonResult(TvdbImdbComparisonKind.ManualDecisionPreserved,
+                normalizedCandidate, BuildImdbCandidateValues().ToArray());
+        }
 
         if (normalizedCandidate is null)
         {
@@ -964,6 +1001,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         if (changed)
         {
             _tvdbId = normalized;
+            if (normalized.Length == 0)
+            {
+                _tvdbReviewWasManuallyResolved = false;
+                _isTvdbReviewApproved = false;
+            }
             _tvdbImdbEpisodeId = null;
             _tvdbImdbId = null;
             if (!_imdbReviewWasManuallyResolved)
@@ -976,6 +1018,8 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
             OnPropertyChanged(nameof(HasProviderIds));
             OnPropertyChanged(nameof(HasValidProviderIds));
             OnPropertyChanged(nameof(HasKnownEmbyProviderIdMismatch));
+            OnPropertyChanged(nameof(CanReviewTvdb));
+            OnPropertyChanged(nameof(TvdbLookupTooltip));
         }
 
         if (markReviewResolved && !string.IsNullOrWhiteSpace(normalized))
@@ -997,6 +1041,11 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         if (changed)
         {
             _imdbId = normalized;
+            if (normalized.Length == 0)
+            {
+                _imdbReviewWasManuallyResolved = false;
+                _isImdbReviewApproved = false;
+            }
             OnPropertyChanged(nameof(ImdbId));
             OnPropertyChanged(nameof(HasImdbId));
             OnPropertyChanged(nameof(HasValidImdbId));
@@ -1079,6 +1128,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         AddIfPresent(values, _reportedProviderIds.TvdbId);
         AddIfPresent(values, _nfoProviderIds.TvdbId);
         AddIfPresent(values, _embyProviderIds.TvdbId);
+        AddIfPresent(values, TvdbId);
         return values;
     }
 
@@ -1088,6 +1138,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         AddIfPresent(values, _reportedProviderIds.ImdbId);
         AddIfPresent(values, _nfoProviderIds.ImdbId);
         AddIfPresent(values, _embyProviderIds.ImdbId);
+        // A visible automatic/restored value is still a source, even if the current NFO
+        // and report are empty. A new candidate must not approve a different visible ID.
+        AddIfPresent(values, ImdbId);
         return values;
     }
 
@@ -1124,7 +1177,7 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
         return item is null
             ? EmbyProviderIds.Empty
             : new EmbyProviderIds(
-                item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
+                item.GetProviderId("Tvdb"),
                 item.GetProviderId("Imdb"));
     }
 
@@ -1178,8 +1231,9 @@ internal sealed class EmbySyncItemViewModel : INotifyPropertyChanged, IDataError
 
     private static string? GetTvdbValidationMessage(string? value)
     {
-        return !string.IsNullOrWhiteSpace(value) && !TvdbIdPattern.IsMatch(value)
-            ? "TVDB-ID muss eine Ganzzahl sein."
+        return !string.IsNullOrWhiteSpace(value)
+               && (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0)
+            ? "TVDB-ID muss eine positive Ganzzahl bis 2147483647 sein."
             : null;
     }
 
