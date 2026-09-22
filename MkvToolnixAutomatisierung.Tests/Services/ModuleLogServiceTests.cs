@@ -87,6 +87,33 @@ public sealed class ModuleLogServiceTests
         Assert.Contains("Header aktualisiert.", logText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SaveModuleLog_RetriesUnsavedLinesAfterWriteFailure()
+    {
+        var service = new ModuleLogService();
+        var first = service.SaveModuleLog("Archivpflege", "Scan", null, "erste Zeile");
+        using (var lockedLog = new FileStream(first.LogPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.Throws<IOException>(() => service.SaveModuleLog("Archivpflege", "Scan", null, "erste Zeile\nneue Zeile"));
+        }
+        service.SaveModuleLog("Archivpflege", "Scan", null, "erste Zeile\nneue Zeile");
+        var logText = File.ReadAllText(first.LogPath);
+        Assert.Equal(1, CountOccurrences(logText, "erste Zeile"));
+        Assert.Equal(1, CountOccurrences(logText, "neue Zeile"));
+    }
+
+    [Fact]
+    public void SaveModuleLog_RecreatedLogContainsPreviouslyVisibleLines()
+    {
+        var service = new ModuleLogService();
+        var first = service.SaveModuleLog("Archivpflege", "Scan", null, "erste Zeile");
+        File.Delete(first.LogPath);
+        service.SaveModuleLog("Archivpflege", "Scan", null, "erste Zeile\nneue Zeile");
+        var logText = File.ReadAllText(first.LogPath);
+        Assert.Contains("erste Zeile", logText);
+        Assert.Contains("neue Zeile", logText);
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;

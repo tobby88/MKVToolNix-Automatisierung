@@ -51,6 +51,10 @@ internal sealed class ModuleLogService : IModuleLogService
         lock (_sync)
         {
             _sessionLogPath ??= CreateSessionLogPath(_sessionStartedAt);
+            if (!File.Exists(_sessionLogPath))
+            {
+                _lastSavedLogByContext.Clear();
+            }
             EnsureSessionHeader(_sessionLogPath, _sessionStartedAt);
 
             var newLogText = GetNewLogText(logKey, normalizedLogText);
@@ -62,6 +66,10 @@ internal sealed class ModuleLogService : IModuleLogService
                     Utf8Encoding);
             }
 
+            // Erst erfolgreich persistierte Zeilen gelten als gespeichert. Bei einem
+            // Schreibfehler muss der nächste Versuch dieselben Zeilen erneut schreiben.
+            _lastSavedLogByContext[logKey] = normalizedLogText;
+
             return new ModuleLogSaveResult(_sessionLogPath);
         }
     }
@@ -69,7 +77,6 @@ internal sealed class ModuleLogService : IModuleLogService
     private string GetNewLogText(string logKey, string normalizedLogText)
     {
         _lastSavedLogByContext.TryGetValue(logKey, out var previousLogText);
-        _lastSavedLogByContext[logKey] = normalizedLogText;
 
         if (string.IsNullOrWhiteSpace(normalizedLogText))
         {

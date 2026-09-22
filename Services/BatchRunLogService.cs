@@ -39,6 +39,26 @@ public sealed class BatchRunLogService
         IReadOnlyList<BatchOutputMetadataEntry>? newOutputMetadata = null,
         string runLabel = "Batch")
     {
+        // Einzel- und Batch-Ansicht teilen diesen Service. Namenswahl und alle Writes
+        // gehören in dieselbe Sperre, sonst können gleichzeitige Abschlüsse Reports überschreiben.
+        lock (_sync)
+        {
+            return SaveBatchRunArtifactsCore(sourceDirectory, outputDirectory, logText, newOutputFiles,
+                successCount, warningCount, errorCount, newOutputMetadata, runLabel);
+        }
+    }
+
+    private BatchRunLogSaveResult SaveBatchRunArtifactsCore(
+        string sourceDirectory,
+        string outputDirectory,
+        string logText,
+        IReadOnlyList<string> newOutputFiles,
+        int successCount,
+        int warningCount,
+        int errorCount,
+        IReadOnlyList<BatchOutputMetadataEntry>? newOutputMetadata,
+        string runLabel)
+    {
         PortableAppStorage.EnsureLogsDirectoryForSave();
 
         var now = DateTimeOffset.Now;
@@ -66,17 +86,10 @@ public sealed class BatchRunLogService
             warningCount,
             errorCount);
 
-        string batchLogPath;
-        lock (_sync)
-        {
-            _sessionLogPath ??= CreateSessionLogPath(_sessionStartedAt);
-            EnsureSessionHeader(_sessionLogPath, _sessionStartedAt);
-            File.AppendAllText(
-                _sessionLogPath,
-                BuildRunSection(runLogText),
-                Utf8Encoding);
-            batchLogPath = _sessionLogPath;
-        }
+        _sessionLogPath ??= CreateSessionLogPath(_sessionStartedAt);
+        EnsureSessionHeader(_sessionLogPath, _sessionStartedAt);
+        File.AppendAllText(_sessionLogPath, BuildRunSection(runLogText), Utf8Encoding);
+        var batchLogPath = _sessionLogPath;
 
         if (artifactPaths.NewOutputListPath is not null)
         {

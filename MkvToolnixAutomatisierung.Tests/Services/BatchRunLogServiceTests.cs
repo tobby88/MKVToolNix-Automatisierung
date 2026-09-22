@@ -266,6 +266,29 @@ public sealed class BatchRunLogServiceTests
         Assert.EndsWith("Neu erzeugte Ausgabedateien - 2026-04-29 08-15-00 (2).metadata.json", second.NewOutputMetadataReportPath, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task SaveBatchRunArtifacts_ConcurrentRunsKeepSeparateReports()
+    {
+        var directory = CreateDirectory("concurrent");
+        try
+        {
+            var output = Path.Combine(directory, "episode.mkv");
+            File.WriteAllText(output, "archive");
+            var service = new BatchRunLogService();
+            var results = await Task.WhenAll(Enumerable.Range(0, 16).Select(index => Task.Run(() =>
+                service.SaveBatchRunArtifacts(directory, directory, $"Lauf {index}", [output], 1, 0, 0))));
+
+            Assert.Equal(results.Length, results.Select(result => result.NewOutputMetadataReportPath).Distinct().Count());
+            Assert.Equal(results.Length, results.Select(result => result.NewOutputListPath).Distinct().Count());
+            Assert.Single(results.Select(result => result.BatchLogPath).Distinct());
+            Assert.All(results, result => Assert.True(File.Exists(result.NewOutputMetadataReportPath)));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateDirectory(string name)
     {
         var path = Path.Combine(Path.GetTempPath(), "mkv-auto-tests", Guid.NewGuid().ToString("N"), name);
