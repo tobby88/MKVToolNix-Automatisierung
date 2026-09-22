@@ -79,6 +79,13 @@ internal sealed partial class BatchMuxViewModel
         Func<bool>? shouldSkipPresentationUpdate = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (shouldSkipPresentationUpdate?.Invoke() == true)
+        {
+            return;
+        }
+
+        TryRedirectSupplementalOnlyItemToExistingArchive(item);
         var comparisonInputVersion = item.ComparisonInputVersion;
 
         bool ShouldSkipPresentationUpdate()
@@ -107,8 +114,6 @@ internal sealed partial class BatchMuxViewModel
             item.SetUsageSummary(null);
             return;
         }
-
-        TryRedirectSupplementalOnlyItemToExistingArchive(item);
 
         if (preserveCurrentPresentation)
         {
@@ -268,6 +273,12 @@ internal sealed partial class BatchMuxViewModel
             try
             {
                 var plan = await GetOrBuildPlanForItemAsync(item, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                // Erst dieser Plan ist die Ausfuehrungsgrundlage. Neue Hinweise duerfen nicht
+                // an der vorherigen, eventuell noch unvollstaendigen Pflichtpruefung vorbeigehen.
+                item.SetPlanSummary(plan.BuildCompactSummaryText());
+                item.SetPlanNotes(plan.Notes);
+                item.SetUsageSummary(plan.BuildUsageSummary());
                 var cleanupFiles = BuildBatchCleanupFileList(item, plan);
                 if (plan.SkipMux)
                 {

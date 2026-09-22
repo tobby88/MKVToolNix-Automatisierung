@@ -260,7 +260,15 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        await ReviewEpisodeMetadataAsync(item, isBatchPreparation: false);
+        SetBusy(true);
+        try
+        {
+            await ReviewEpisodeMetadataAsync(item, isBatchPreparation: false);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
     private async Task RefreshAllComparisonsAsync()

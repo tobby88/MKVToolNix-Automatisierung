@@ -45,20 +45,23 @@ internal sealed partial class BatchMuxViewModel
         }
 
         var cancellationToken = CancellationToken.None;
-        Action<string>? appendBatchRunLog = null;
         var planSummaryFrozenForExecution = false;
+        var planningErrorCount = 0;
+        var planningOnlyUpToDateCount = 0;
+        BatchExecutionOutcome? executionOutcome = null;
+        BatchRunLogSaveResult? logSaveResult = null;
+        // Persistierte Logs enthalten nur diesen Lauf, auch wenn er vorzeitig endet.
+        var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
+        void AppendBatchRunLogCore(string line)
+        {
+            AppendLog(line);
+            batchRunLogBuffer.AppendLine(line);
+        }
+
         try
         {
             SetBusy(true);
             cancellationToken = BeginBatchOperation(BatchOperationKind.Execution);
-            // Persistierte Batch-Logs sollen genau diesen Lauf enthalten, ohne ältere Scan-Einträge mitzuschleppen.
-            var batchRunLogBuffer = new BufferedTextStore(static flush => flush(), static _ => { });
-            void AppendBatchRunLogCore(string line)
-            {
-                AppendLog(line);
-                batchRunLogBuffer.AppendLine(line);
-            }
-            appendBatchRunLog = AppendBatchRunLogCore;
 
             var approved = await EnsurePendingChecksApprovedAsync(readyItems, cancellationToken);
             if (!approved)
@@ -70,6 +73,16 @@ internal sealed partial class BatchMuxViewModel
                 return;
             }
 
+            // Metadaten-/Quellenreviews können den Episodencode nach der ersten Prüfung ändern.
+            if (readyItems.Any(item => !EpisodeFileNameHelper.HasKnownEpisodeCode(item.SeasonNumber, item.EpisodeNumber)))
+            {
+                _dialogService.ShowWarning("Episodencode fehlt", "Nach der Prüfung ist mindestens ein Episodencode noch offen. Bitte Staffel/Folge korrigieren.");
+                SetStatus("Batch blockiert: Episodencode fehlt", ProgressValue);
+                return;
+            }
+
+            FreezeSelectedItemPlanSummaryForExecution();
+            planSummaryFrozenForExecution = true;
             SetStatus("Erstelle Mux-Pläne...", 0);
             var planningTracker = new BatchRunProgressTracker(readyItems.Count, SetStatusFromAnyThread);
             var executablePlans = await BuildExecutionWorkItemsAsync(
@@ -77,11 +90,64 @@ internal sealed partial class BatchMuxViewModel
                 planningTracker,
                 AppendBatchRunLogCore,
                 cancellationToken);
+            planningErrorCount = readyItems.Count(item => item.HasErrorStatus);
+            var scheduledItems = executablePlans.Select(entry => entry.Item).ToHashSet();
+            planningOnlyUpToDateCount = readyItems.Count(item => item.StatusKind == BatchEpisodeStatusKind.UpToDate
+                && !scheduledItems.Contains(item));
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (readyItems.Any(item => item.HasPendingChecks))
+            {
+                _dialogService.ShowWarning("Hinweis", BuildPendingReviewAbortMessage(readyItems));
+                SetStatus("Batch blockiert: Neuer Plan benötigt Freigabe", ProgressValue);
+                return;
+            }
+
+            var conflictingPlans = executablePlans
+                .GroupBy(entry => NormalizeOutputCollisionPath(entry.Plan.OutputFilePath), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .SelectMany(group => group)
+                .ToList();
+            if (conflictingPlans.Count > 0)
+            {
+                foreach (var entry in conflictingPlans)
+                {
+                    entry.Item.SetStatus(BatchEpisodeStatusKind.Warning, "Ausgabeziel mehrfach belegt");
+                }
+
+                _dialogService.ShowWarning("Ausgabezielkonflikt", "Mehrere ausgewählte Episoden schreiben dieselbe Ausgabedatei. Bitte unterschiedliche Ziele wählen oder die Auswahl reduzieren.");
+                SetStatus("Batch blockiert: Ausgabeziel mehrfach belegt", ProgressValue);
+                return;
+            }
+
+            var inputOwners = executablePlans
+                .SelectMany(entry => entry.Plan.GetReferencedInputFiles()
+                    .Select(path => (Path: NormalizeOutputCollisionPath(path), Entry: entry)))
+                .GroupBy(value => value.Path, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Select(value => value.Entry).ToList(), StringComparer.OrdinalIgnoreCase);
+            if (executablePlans.Any(entry => !entry.Plan.SkipMux
+                && inputOwners.TryGetValue(NormalizeOutputCollisionPath(entry.Plan.OutputFilePath), out var owners)
+                && owners.Any(owner => !ReferenceEquals(owner, entry))))
+            {
+                _dialogService.ShowWarning("Ausgabe-/Quellkonflikt", "Ein Ausgabeziel wird von einer anderen ausgewählten Episode als Quelle benötigt. Bitte Ausgabeziele oder Auswahl korrigieren.");
+                SetStatus("Batch blockiert: Ausgabe überschreibt andere Quelle", ProgressValue);
+                return;
+            }
 
             if (executablePlans.Count == 0)
             {
-                SetStatus("Keine weiteren Mux-Vorgänge nötig", 100);
-                _dialogService.ShowInfo("Hinweis", "Alle ausgewählten Episoden sind bereits vollständig oder wurden wegen Fehlern übersprungen.");
+                executionOutcome = BatchExecutionOutcome.Empty with
+                {
+                    ErrorCount = planningErrorCount,
+                    UpToDateCount = planningOnlyUpToDateCount
+                };
+                InvalidateBatchProgressCallbacks();
+                SetStatus(BuildBatchCompletionStatusText(executionOutcome), 100);
+                logSaveResult = TryPersistBatchRunArtifacts(executionOutcome, batchRunLogBuffer, AppendBatchRunLogCore);
+                if (logSaveResult is not null)
+                {
+                    ShowBatchRunArtifactInfo(logSaveResult);
+                }
                 return;
             }
 
@@ -98,21 +164,24 @@ internal sealed partial class BatchMuxViewModel
                 return;
             }
 
-            FreezeSelectedItemPlanSummaryForExecution();
-            planSummaryFrozenForExecution = true;
             await _executionRunner.PrepareWorkingCopiesAsync(
                 copyPreparation,
                 progressTracker,
                 AppendBatchRunLogCore,
                 cancellationToken);
             var doneDirectory = Path.Combine(SourceDirectory, DoneFolderName);
-            var executionOutcome = await _executionRunner.ExecutePlansAsync(
+            executionOutcome = await _executionRunner.ExecutePlansAsync(
                 executablePlans,
                 doneDirectory,
                 progressTracker,
                 AppendBatchRunLogCore,
                 cancellationToken,
                 item => SelectedEpisodeItem = item);
+            executionOutcome = executionOutcome with
+            {
+                ErrorCount = executionOutcome.ErrorCount + planningErrorCount,
+                UpToDateCount = executionOutcome.UpToDateCount + planningOnlyUpToDateCount
+            };
 
             if (executionOutcome.FailedDoneMoveFiles.Count > 0)
             {
@@ -121,50 +190,73 @@ internal sealed partial class BatchMuxViewModel
                     "Einige Quelldateien konnten nicht in den Done-Ordner verschoben werden. Der Batch wurde fortgesetzt; Details stehen im Batch-Protokoll.");
             }
 
-            await OfferBatchDoneCleanupAsync(
-                doneDirectory,
-                executionOutcome.MovedDoneFiles,
-                progressTracker,
-                cancellationToken);
-            BatchRunLogSaveResult? logSaveResult;
-            try
+            if (executionOutcome.WasCanceled)
             {
-                logSaveResult = BatchRunArtifactPersistence.Persist(
-                    _services.BatchLogs,
-                    SourceDirectory,
-                    OutputDirectory,
-                    executionOutcome.NewOutputFiles,
-                    executionOutcome.NewOutputMetadata,
-                    executionOutcome.SuccessCount,
-                    executionOutcome.WarningCount,
-                    executionOutcome.ErrorCount,
-                    batchRunLogBuffer,
-                    AppendBatchRunLogCore);
+                AppendBatchRunLogCore("ABGEBROCHEN: Batch-Lauf durch Benutzer abgebrochen; abgeschlossene Ergebnisse bleiben erhalten.");
             }
-            catch (Exception ex)
+            else
             {
-                AppendBatchRunLogCore($"LOG-FEHLER: {ex.Message}");
-                _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden.\n\n{ex.Message}");
-                logSaveResult = null;
+                AppendBatchRunLogCore("MUX-ERGEBNIS: Ausführung beendet. Artefakte werden vor dem optionalen Papierkorb-Cleanup gespeichert.");
+            }
+
+            // Kein abgebrochener Cleanup darf erfolgreiche Ausgaben und ihre Metadaten verschlucken.
+            logSaveResult = TryPersistBatchRunArtifacts(executionOutcome, batchRunLogBuffer, AppendBatchRunLogCore);
+            if (!executionOutcome.WasCanceled && logSaveResult is not null)
+            {
+                var cleanupCompleted = await OfferBatchDoneCleanupAsync(
+                    doneDirectory,
+                    executionOutcome.MovedDoneFiles,
+                    progressTracker,
+                    cancellationToken);
+                if (!cleanupCompleted)
+                {
+                    executionOutcome = executionOutcome with { WasCanceled = true };
+                    const string cleanupMessage = "ABGEBROCHEN: Papierkorb-Cleanup abgebrochen; Mux-Ergebnisse und Reports bleiben erhalten.";
+                    AppendBatchRunLogCore(cleanupMessage);
+                    PersistBatchCleanupLog(cleanupMessage);
+                }
             }
 
             InvalidateBatchProgressCallbacks();
             SetStatus(
                 BuildBatchCompletionStatusText(executionOutcome),
-                100);
+                executionOutcome.WasCanceled ? ProgressValue : 100);
 
             if (logSaveResult is not null)
             {
                 ShowBatchRunArtifactInfo(logSaveResult);
             }
 
-            ResetCompletedBatchSession();
+            if (!executionOutcome.WasCanceled && executionOutcome.ErrorCount == 0 && logSaveResult is not null)
+            {
+                ResetCompletedBatchSession();
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             InvalidateBatchProgressCallbacks();
-            appendBatchRunLog?.Invoke("ABGEBROCHEN: Batch-Lauf durch Benutzer abgebrochen.");
-            SetStatus("Batch abgebrochen", ProgressValue);
+            const string cancellationMessage = "ABGEBROCHEN: Batch-Lauf durch Benutzer abgebrochen; abgeschlossene Ergebnisse bleiben erhalten.";
+            AppendBatchRunLogCore(cancellationMessage);
+            executionOutcome ??= BatchExecutionOutcome.Empty with
+            {
+                ErrorCount = readyItems.Count(item => item.HasErrorStatus),
+                UpToDateCount = planningOnlyUpToDateCount
+            };
+            executionOutcome = executionOutcome with { WasCanceled = true };
+            if (logSaveResult is null)
+            {
+                logSaveResult = TryPersistBatchRunArtifacts(executionOutcome, batchRunLogBuffer, AppendBatchRunLogCore);
+            }
+            else
+            {
+                // Nur den Cleanup-Nachtrag speichern, keine zweite JSON-/Dateiliste erzeugen.
+                PersistBatchCleanupLog(cancellationMessage);
+            }
+            SetStatus(BuildBatchCompletionStatusText(executionOutcome), ProgressValue);
+            if (logSaveResult is not null)
+            {
+                ShowBatchRunArtifactInfo(logSaveResult);
+            }
         }
         finally
         {
@@ -178,6 +270,47 @@ internal sealed partial class BatchMuxViewModel
         }
     }
 
+    private BatchRunLogSaveResult? TryPersistBatchRunArtifacts(
+        BatchExecutionOutcome outcome,
+        BufferedTextStore logBuffer,
+        Action<string> appendLog)
+    {
+        try
+        {
+            return BatchRunArtifactPersistence.Persist(
+                _services.BatchLogs,
+                SourceDirectory,
+                OutputDirectory,
+                outcome.NewOutputFiles,
+                outcome.NewOutputMetadata,
+                outcome.SuccessCount,
+                outcome.WarningCount,
+                outcome.ErrorCount,
+                logBuffer,
+                appendLog);
+        }
+        catch (Exception ex)
+        {
+            appendLog($"LOG-FEHLER: {ex.Message}");
+            _dialogService.ShowWarning("Warnung", $"Das Batch-Protokoll konnte nicht gespeichert werden. Der optionale Papierkorb-Cleanup wird nicht gestartet.\n\n{ex.Message}");
+            return null;
+        }
+    }
+
+    private void PersistBatchCleanupLog(string message)
+    {
+        try
+        {
+            _services.BatchLogs.SaveBatchRunArtifacts(
+                SourceDirectory, OutputDirectory, message, [], 0, 0, 0, runLabel: "Batch-Cleanup");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"LOG-FEHLER beim Cleanup-Nachtrag: {ex.Message}");
+            _dialogService.ShowWarning("Warnung", $"Der Cleanup-Nachtrag konnte nicht gespeichert werden. Die zuvor gespeicherten Mux-Reports bleiben erhalten.\n\n{ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Verdichtet die Batch-Endstatistik zu einem lesbaren Abschlussstatus.
     /// Bereits vollständige Episoden werden separat ausgewiesen, damit Cleanup-only-Fälle
@@ -187,7 +320,7 @@ internal sealed partial class BatchMuxViewModel
     {
         var parts = new List<string>
         {
-            $"Batch abgeschlossen: {executionOutcome.SuccessCount} erfolgreich",
+            $"{(executionOutcome.WasCanceled ? "Batch abgebrochen" : "Batch abgeschlossen")}: {executionOutcome.SuccessCount} erfolgreich",
             $"{executionOutcome.WarningCount} Warnung(en)",
             $"{executionOutcome.ErrorCount} Fehler"
         };
@@ -256,7 +389,7 @@ internal sealed partial class BatchMuxViewModel
             .ToList();
     }
 
-    private async Task OfferBatchDoneCleanupAsync(
+    private async Task<bool> OfferBatchDoneCleanupAsync(
         string doneDirectory,
         IReadOnlyList<string> movedDoneFiles,
         BatchRunProgressTracker progressTracker,
@@ -271,7 +404,7 @@ internal sealed partial class BatchMuxViewModel
         if (doneFiles.Count == 0)
         {
             DeleteEmptyBatchCleanupDirectory(doneDirectory);
-            return;
+            return true;
         }
 
         if (_dialogService.ConfirmBatchRecycleDoneFiles(doneFiles.Count, doneDirectory))
@@ -300,13 +433,16 @@ internal sealed partial class BatchMuxViewModel
             }
 
             DeleteEmptyBatchCleanupDirectory(doneDirectory);
-            return;
+            return !recycleResult.WasCanceled && !cancellationToken.IsCancellationRequested;
         }
 
         if (_dialogService.AskOpenDoneDirectory(doneDirectory))
         {
             _dialogService.OpenPathWithDefaultApp(doneDirectory);
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return true;
     }
 
     /// <summary>

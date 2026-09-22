@@ -18,6 +18,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             SetStatus("Erzeuge Vorschau...", 0);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             PlanRefreshProblemText = string.Empty;
             ApplyPlanPresentation(_currentPlan);
             PreviewText = _services.SeriesEpisodeMux.BuildPreviewText(_currentPlan);
@@ -52,6 +53,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
             SetBusy(true);
             SetExecutionStatus(SingleEpisodeExecutionStatusKind.Running);
             _currentPlan = await GetOrBuildPlanAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var outputSnapshotBeforeRun = FileStateSnapshot.TryCreate(_currentPlan.OutputFilePath);
             var outputExistedBeforeRun = outputSnapshotBeforeRun is not null;
             PlanRefreshProblemText = string.Empty;
@@ -333,6 +335,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         try
         {
             var plan = await GetOrBuildPlanAsync(cancellationToken, assignCurrentPlan: false);
+            cancellationToken.ThrowIfCancellationRequested();
             PlanRefreshProblemText = string.Empty;
             ApplyPlanPresentation(plan);
             return true;
@@ -364,6 +367,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void ApplyPlanPresentation(SeriesEpisodeMuxPlan plan)
     {
+        _planSummaryRefreshPending = false;
         _currentPlan = plan;
         RefreshOutputTargetStatusFromPlan(plan);
         SetPlanNotes(plan.Notes);
@@ -436,6 +440,8 @@ internal sealed partial class SingleEpisodeMuxViewModel
         _planCache.Invalidate(this);
         _currentPlan = null;
         PlanRefreshProblemText = string.Empty;
+        _planSummaryRefreshPending = false;
+        _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
         OutputTargetStatusText = string.Empty;
         PlanSummaryText = string.Empty;
         UsageSummary = null;
@@ -659,11 +665,28 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void SchedulePlanSummaryRefresh()
     {
+        if (_isApplyingSharedState)
+        {
+            return;
+        }
+
+        if (_isBusy || _currentOperationCts is not null)
+        {
+            _planSummaryRefreshPending = true;
+            return;
+        }
+
         _planSummaryRefresh.Schedule(RefreshPlanSummaryAsync);
     }
 
     private async Task RefreshPlanSummaryAsync(int version, CancellationToken cancellationToken)
     {
+        if (!_planSummaryRefresh.IsCurrent(version) || cancellationToken.IsCancellationRequested
+            || _currentOperationCts is not null)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(MainVideoPath)
             || string.IsNullOrWhiteSpace(OutputPath)
             || string.IsNullOrWhiteSpace(Title))

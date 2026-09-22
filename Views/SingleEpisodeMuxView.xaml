@@ -163,7 +163,7 @@
                                            Text="Wichtiger Hinweis vor dem Muxen" />
                                 <TextBlock Margin="0,4,0,0"
                                            TextWrapping="Wrap"
-                                           Text="{Binding PrimaryActionablePlanNote, Mode=OneWay}" />
+                                           Text="{Binding ActionablePlanNotesDisplayText, Mode=OneWay}" />
                             </StackPanel>
                             <Button Grid.Column="1"
                                     MinWidth="132"
@@ -233,7 +233,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Header="Metadaten">
+            <GroupBox Header="Metadaten" IsEnabled="{Binding IsInteractive, Mode=OneWay}">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -318,6 +318,7 @@
 
         <Expander
                   Header="Korrekturen und Ausgabe"
+                  IsEnabled="{Binding IsInteractive, Mode=OneWay}"
                   Margin="0,0,0,12"
                   ToolTip="Nur bei Bedarf &#246;ffnen, um automatische Zuordnungen oder die Ausgabedatei manuell anzupassen."
                   IsExpanded="False">
@@ -483,6 +484,7 @@
                              AcceptsTab="True"
                              IsReadOnly="True"
                              MinHeight="220"
+                             MaxHeight="320"
                              TextWrapping="NoWrap"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Auto"

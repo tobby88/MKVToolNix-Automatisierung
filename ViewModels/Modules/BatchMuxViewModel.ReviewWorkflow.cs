@@ -31,17 +31,25 @@ internal sealed partial class BatchMuxViewModel
             return;
         }
 
-        var approved = await EnsurePendingChecksApprovedAsync(readyItems);
-        if (approved)
+        SetBusy(true);
+        try
         {
-            _dialogService.ShowInfo("Hinweis", "Alle offenen Quellen-, TVDB- und Hinweisprüfungen wurden abgeschlossen.");
+            var approved = await EnsurePendingChecksApprovedAsync(readyItems);
+            if (approved)
+            {
+                _dialogService.ShowInfo("Hinweis", "Alle offenen Quellen-, TVDB- und Hinweisprüfungen wurden abgeschlossen.");
+            }
+        }
+        finally
+        {
+            SetBusy(false);
         }
     }
 
     /// <summary>
     /// Führt die manuelle Quellenprüfung für einen einzelnen Batch-Eintrag aus.
     /// </summary>
-    private async Task<bool> ReviewEpisodeAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
+    private async Task<bool> ReviewEpisodeAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation, CancellationToken cancellationToken = default)
     {
         return await _reviewWorkflow.ReviewManualSourceAsync(
             item,
@@ -60,14 +68,14 @@ internal sealed partial class BatchMuxViewModel
             isBatchPreparation
                 ? $"Alternative Quelle für '{item.Title}' gewählt"
                 : "Auf alternative Quelle umgestellt",
-            tentativeExclusions => ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions));
+            tentativeExclusions => ApplyDetectionToItemAsync(item, item.DetectionSeedPath, tentativeExclusions, cancellationToken));
     }
 
     /// <summary>
     /// Führt die TVDB-/Metadatenprüfung für einen einzelnen Batch-Eintrag aus und aktualisiert
     /// anschließend bei Bedarf Archivvergleich und Detaildarstellung.
     /// </summary>
-    private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation)
+    private async Task<bool> ReviewEpisodeMetadataAsync(BatchEpisodeItemViewModel item, bool isBatchPreparation, CancellationToken cancellationToken = default)
     {
         // Die explizite Detailaktion im Batch soll den TVDB-Dialog immer wieder öffnen können.
         // Nur die automatische Pflichtprüfungs-Schleife filtert weiterhin separat auf offene Fälle.
@@ -97,13 +105,14 @@ internal sealed partial class BatchMuxViewModel
                 RefreshAutomaticOutputPath(item);
             });
 
+        cancellationToken.ThrowIfCancellationRequested();
         // Eine manuelle TVDB- oder lokale Metadatenkorrektur kann Zielpfad, Titel und damit auch
         // Archivhinweise verändern. Der Pflichtcheck darf danach nicht mit einer alten Vorschau
         // weiterlaufen, sonst verschwinden Hinweise wie "Mehrfachfolge prüfen" bis zur nächsten
         // manuellen Detailaktualisierung.
         if (outcome != EpisodeMetadataReviewOutcome.Cancelled && episodeChanged)
         {
-            await RefreshComparisonForItemAsync(item, preserveCurrentPresentation: false);
+            await RefreshComparisonForItemAsync(item, preserveCurrentPresentation: false, cancellationToken: cancellationToken);
         }
         else if (ReferenceEquals(SelectedEpisodeItem, item))
         {
@@ -118,7 +127,7 @@ internal sealed partial class BatchMuxViewModel
     /// </summary>
     private bool CanReviewPendingSources()
     {
-        return !_isBusy && EpisodeItems.Any(item => item.IsSelected && item.HasPendingChecks);
+        return IsInteractive && EpisodeItems.Any(item => item.IsSelected && item.HasPendingChecks);
     }
 
     /// <summary>
@@ -133,6 +142,7 @@ internal sealed partial class BatchMuxViewModel
         var processedAnyChecks = false;
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var pendingSourceItems = readyItems
                 .Where(item => item.RequiresManualCheck && !item.IsManualCheckApproved)
                 .ToList();
@@ -143,7 +153,14 @@ internal sealed partial class BatchMuxViewModel
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     SelectedEpisodeItem = item;
-                    var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true);
+                    if (item.ManualCheckFilePaths.Count == 0)
+                    {
+                        _dialogService.ShowWarning("Quellenprüfung fehlt", "Eine prüfpflichtige Episode hat keine prüfbare Quelle. Bitte den Eintrag neu erkennen lassen.");
+                        return false;
+                    }
+
+                    var approved = await ReviewEpisodeAsync(item, isBatchPreparation: true, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!approved)
                     {
                         return false;
@@ -163,7 +180,7 @@ internal sealed partial class BatchMuxViewModel
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     SelectedEpisodeItem = item;
-                    var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true);
+                    var approved = await ReviewEpisodeMetadataAsync(item, isBatchPreparation: true, cancellationToken);
                     if (!approved)
                     {
                         return false;
@@ -183,7 +200,7 @@ internal sealed partial class BatchMuxViewModel
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     SelectedEpisodeItem = item;
-                    if (!_dialogService.ConfirmPlanReview(item.Title, item.PrimaryActionablePlanNote))
+                    if (!_dialogService.ConfirmPlanReview(item.Title, item.ActionablePlanNotesDisplayText))
                     {
                         SetStatus("Hinweisprüfung abgebrochen", ProgressValue);
                         return false;

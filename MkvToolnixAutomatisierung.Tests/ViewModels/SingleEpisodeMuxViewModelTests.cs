@@ -24,6 +24,46 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public async Task BeginCurrentOperation_CancelsBackgroundPlan_AndDefersNewRefreshes()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.Title = "Pilot";
+        var controller = Assert.IsType<DebouncedRefreshController>(typeof(SingleEpisodeMuxViewModel)
+            .GetField("_planSummaryRefresh", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(viewModel));
+        var pending = Assert.IsAssignableFrom<Task>(controller.CurrentTask);
+        var begin = typeof(SingleEpisodeMuxViewModel).GetMethod("BeginCurrentOperation", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var complete = typeof(SingleEpisodeMuxViewModel).GetMethod("CompleteCurrentOperation", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var operation = Assert.IsType<CancellationTokenSource>(begin.Invoke(viewModel, []));
+        try
+        {
+            Assert.Null(controller.CurrentTask);
+            await pending;
+            viewModel.SetSubtitles([]);
+            Assert.Null(controller.CurrentTask);
+        }
+        finally
+        {
+            complete.Invoke(viewModel, [operation]);
+        }
+
+        Assert.NotNull(controller.CurrentTask);
+        controller.Cancel(invalidateInFlightRefreshes: true);
+    }
+
+    [Fact]
+    public void ClearingTitle_RemovesStaleUpToDateStatus()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.Title = "Pilot";
+        InvokeApplyPlanPresentation(viewModel, SeriesEpisodeMuxPlan.CreateSkip("mkvmerge.exe", @"C:\Temp\output.mkv", "Pilot", "Aktuell"));
+
+        viewModel.Title = string.Empty;
+
+        Assert.Equal(SingleEpisodeExecutionStatusKind.Ready, viewModel.ExecutionStatusKind);
+        Assert.False(viewModel.HasPlanSummary);
+    }
+
+    [Fact]
     public void ShouldPreserveManualTitle_ReturnsTrue_ForSameDetectionSeedPath()
     {
         var result = SingleEpisodeManualTitlePolicy.ShouldPreserve(
@@ -557,7 +597,7 @@ public sealed class SingleEpisodeMuxViewModelTests
             types: [typeof(CancellationToken)],
             modifiers: null);
         Assert.NotNull(method);
-        return Assert.IsType<Task<SeriesEpisodeMuxPlan>>(method!.Invoke(viewModel, [CancellationToken.None]));
+        return Assert.IsAssignableFrom<Task<SeriesEpisodeMuxPlan>>(method!.Invoke(viewModel, [CancellationToken.None]));
     }
 
     private static Task<bool> InvokeRefreshPlanSummaryImmediatelyAsync(SingleEpisodeMuxViewModel viewModel)
@@ -566,7 +606,7 @@ public sealed class SingleEpisodeMuxViewModelTests
             "RefreshPlanSummaryImmediatelyAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
-        return Assert.IsType<Task<bool>>(method!.Invoke(viewModel, [CancellationToken.None]));
+        return Assert.IsAssignableFrom<Task<bool>>(method!.Invoke(viewModel, [CancellationToken.None]));
     }
 
     private static void InvokeApplyPlanPresentation(SingleEpisodeMuxViewModel viewModel, SeriesEpisodeMuxPlan plan)

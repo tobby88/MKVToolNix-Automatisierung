@@ -13,7 +13,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zentrales ViewModel des Einzelmodus; die Partial-Dateien trennen Auswahl/Erkennung und Ausführung.
 /// </summary>
-internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchiveConfigurationAwareModule
+internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArchiveConfigurationAwareModule, IModuleInteractionState
 {
     private const int DetectionProgressStageEnd = 80;
     private const int MetadataProgressValue = 88;
@@ -31,6 +31,9 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private string _statusText = "Bereit";
     private int _progressValue;
     private bool _isBusy;
+    private bool _isSiblingOperationActive;
+    private bool _planSummaryRefreshPending;
+    private bool _archiveConfigurationRefreshPending;
     private string _lastSuggestedTitle = string.Empty;
     private bool _isApplyingSharedState;
     private string _outputTargetStatusText = string.Empty;
@@ -55,22 +58,22 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
             text => PreviewText += text);
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
-        SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        SelectSubtitlesCommand = new RelayCommand(SelectSubtitles, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        OpenMainVideoCommand = new RelayCommand(OpenMainVideo, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath));
-        OpenAudioDescriptionCommand = new RelayCommand(OpenAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(AudioDescriptionPath));
-        OpenSubtitlesCommand = new RelayCommand(OpenSubtitles, () => !_isBusy && SubtitlePaths.Count > 0);
-        OpenAttachmentsCommand = new RelayCommand(OpenAttachments, () => !_isBusy && AttachmentPaths.Count > 0);
-        OpenOutputCommand = new RelayCommand(OpenOutput, () => !_isBusy && File.Exists(OutputPath));
-        SelectOutputCommand = new RelayCommand(SelectOutput, () => !_isBusy);
-        RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
-        OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
-        TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => !_isBusy && ManualCheckFilePaths.Count > 0, unexpectedCommandErrorHandler);
-        ApprovePlanReviewCommand = new RelayCommand(ApprovePendingPlanReview, () => !_isBusy && HasPendingPlanReview);
-        CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => !_isBusy, unexpectedCommandErrorHandler);
+        SelectMainVideoCommand = new AsyncRelayCommand(SelectMainVideoAsync, () => IsInteractive, unexpectedCommandErrorHandler);
+        SelectAudioDescriptionCommand = new AsyncRelayCommand(SelectAudioDescriptionAsync, () => IsInteractive, unexpectedCommandErrorHandler);
+        SelectSubtitlesCommand = new RelayCommand(SelectSubtitles, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath));
+        SelectAttachmentCommand = new RelayCommand(SelectAttachments, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath));
+        OpenMainVideoCommand = new RelayCommand(OpenMainVideo, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath));
+        OpenAudioDescriptionCommand = new RelayCommand(OpenAudioDescription, () => IsInteractive && !string.IsNullOrWhiteSpace(AudioDescriptionPath));
+        OpenSubtitlesCommand = new RelayCommand(OpenSubtitles, () => IsInteractive && SubtitlePaths.Count > 0);
+        OpenAttachmentsCommand = new RelayCommand(OpenAttachments, () => IsInteractive && AttachmentPaths.Count > 0);
+        OpenOutputCommand = new RelayCommand(OpenOutput, () => IsInteractive && File.Exists(OutputPath));
+        SelectOutputCommand = new RelayCommand(SelectOutput, () => IsInteractive);
+        RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
+        OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
+        TestSelectedSourcesCommand = new AsyncRelayCommand(ReviewSourcesAsync, () => IsInteractive && ManualCheckFilePaths.Count > 0, unexpectedCommandErrorHandler);
+        ApprovePlanReviewCommand = new RelayCommand(ApprovePendingPlanReview, () => IsInteractive && HasPendingPlanReview);
+        CreatePreviewCommand = new AsyncRelayCommand(CreatePreviewAsync, () => IsInteractive, unexpectedCommandErrorHandler);
+        ExecuteMuxCommand = new AsyncRelayCommand(ExecuteMuxAsync, () => IsInteractive, unexpectedCommandErrorHandler);
         CancelCurrentOperationCommand = new RelayCommand(CancelCurrentOperation, () => CanCancelCurrentOperation);
     }
 
@@ -278,6 +281,25 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 
     public bool CanCancelCurrentOperation => _currentOperationCts is { IsCancellationRequested: false };
 
+    public bool IsInteractive => !_isBusy && !_isSiblingOperationActive;
+
+    internal bool IsOperationActive => _isBusy;
+
+    /// <summary>Verhindert auch direkte Commands, solange der andere Mux-Tab arbeitet.</summary>
+    internal void SetSiblingOperationActive(bool isActive)
+    {
+        if (_isSiblingOperationActive == isActive)
+        {
+            return;
+        }
+
+        _isSiblingOperationActive = isActive;
+        OnPropertyChanged(nameof(IsInteractive));
+        RefreshCommands();
+    }
+
+    internal Task? PlanSummaryRefreshTask => _planSummaryRefresh.CurrentTask;
+
     public string CancelCurrentOperationTooltip => CanCancelCurrentOperation
         ? "Bricht die laufende Erkennungs-, Vorschau-, Kopier- oder Mux-Aktion ab."
         : "Derzeit läuft keine abbrechbare Einzelaktion.";
@@ -285,7 +307,12 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
     private void SetBusy(bool isBusy)
     {
         _isBusy = isBusy;
+        OnPropertyChanged(nameof(IsInteractive));
         RefreshCommands();
+        if (!isBusy && _currentOperationCts is null)
+        {
+            RefreshDeferredState();
+        }
     }
 
     private void RefreshCommands()
@@ -311,8 +338,14 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
 
     private CancellationTokenSource BeginCurrentOperation()
     {
-        _currentOperationCts?.Cancel();
-        _currentOperationCts?.Dispose();
+        if (_currentOperationCts is not null)
+        {
+            throw new InvalidOperationException("Eine Einzelaktion läuft bereits.");
+        }
+
+        // Ein Hintergrundplan darf weder den aktiven Plan noch dessen Laufstatus ersetzen.
+        _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
+        _planSummaryRefreshPending = false;
         BeginOperationProgressScope();
         _currentOperationCts = new CancellationTokenSource();
         NotifyCurrentOperationChanged();
@@ -331,6 +364,27 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         _currentOperationCts.Dispose();
         _currentOperationCts = null;
         NotifyCurrentOperationChanged();
+        RefreshDeferredState();
+    }
+
+    private void RefreshDeferredState()
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        if (_archiveConfigurationRefreshPending)
+        {
+            _archiveConfigurationRefreshPending = false;
+            HandleArchiveConfigurationChanged();
+        }
+
+        if (_planSummaryRefreshPending)
+        {
+            _planSummaryRefreshPending = false;
+            SchedulePlanSummaryRefresh();
+        }
     }
 
     private void CancelCurrentOperation()
@@ -341,6 +395,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         }
 
         _currentOperationCts.Cancel();
+        Interlocked.Increment(ref _detectionProgressVersion);
         InvalidateOperationProgressCallbacks();
         SetStatus("Abbruch angefordert...", ProgressValue);
         NotifyCurrentOperationChanged();

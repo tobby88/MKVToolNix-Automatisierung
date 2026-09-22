@@ -20,17 +20,24 @@ internal sealed partial class BatchMuxViewModel
         IReadOnlyCollection<string>? excludedSourcePaths,
         CancellationToken cancellationToken = default)
     {
+        var ownsBusyState = !_isBusy;
+        var progressVersion = BeginSelectedItemDetectionProgressSession();
         try
         {
-            SetBusy(true);
+            if (ownsBusyState)
+            {
+                SetBusy(true);
+            }
             SetStatus("Eintrag wird neu erkannt...", 0);
 
             var result = await _services.BatchScan.ScanAsync(
                 selectedVideoPath,
                 OutputDirectory,
-                HandleSelectedItemDetectionProgress,
+                update => HandleSelectedItemDetectionProgress(progressVersion, update, cancellationToken),
                 excludedSourcePaths,
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            CompleteSelectedItemDetectionProgressSession(progressVersion);
             var outputPath = result.OutputPath;
             var outputAlreadyExists = File.Exists(outputPath);
             var isArchiveTargetPath = _services.OutputPaths.IsArchivePath(outputPath);
@@ -70,7 +77,11 @@ internal sealed partial class BatchMuxViewModel
         }
         finally
         {
-            SetBusy(false);
+            CompleteSelectedItemDetectionProgressSession(progressVersion);
+            if (ownsBusyState)
+            {
+                SetBusy(false);
+            }
         }
     }
 
@@ -208,16 +219,34 @@ internal sealed partial class BatchMuxViewModel
         DispatchBatchProgress(ApplyUpdate);
     }
 
-    private void HandleSelectedItemDetectionProgress(DetectionProgressUpdate update)
+    private int _selectedItemDetectionProgressVersion;
+
+    private int BeginSelectedItemDetectionProgressSession() => Interlocked.Increment(ref _selectedItemDetectionProgressVersion);
+
+    private void CompleteSelectedItemDetectionProgressSession(int version)
     {
+        Interlocked.CompareExchange(ref _selectedItemDetectionProgressVersion, version + 1, version);
+    }
+
+    private void HandleSelectedItemDetectionProgress(int version, DetectionProgressUpdate update, CancellationToken cancellationToken)
+    {
+        void ApplyIfCurrent()
+        {
+            if (!cancellationToken.IsCancellationRequested
+                && Volatile.Read(ref _selectedItemDetectionProgressVersion) == version)
+            {
+                SetStatus(update.StatusText, update.ProgressPercent);
+            }
+        }
+
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())
         {
-            SetStatus(update.StatusText, update.ProgressPercent);
+            ApplyIfCurrent();
             return;
         }
 
-        _ = dispatcher.BeginInvoke(() => SetStatus(update.StatusText, update.ProgressPercent));
+        _ = dispatcher.BeginInvoke(ApplyIfCurrent);
     }
 
 }

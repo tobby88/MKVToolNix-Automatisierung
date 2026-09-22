@@ -4,10 +4,10 @@
              xmlns:views="clr-namespace:MkvToolnixAutomatisierung.Views">
     <Grid>
         <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
-            <TabItem Header="Einzel-Mux">
+            <TabItem Header="Einzel-Mux" IsEnabled="{Binding IsSingleTabEnabled, Mode=OneWay}">
                 <views:SingleEpisodeMuxView DataContext="{Binding SingleMux}" />
             </TabItem>
-            <TabItem Header="Batch-Mux">
+            <TabItem Header="Batch-Mux" IsEnabled="{Binding IsBatchTabEnabled, Mode=OneWay}">
                 <views:BatchMuxView DataContext="{Binding BatchMux}" />
             </TabItem>
         </TabControl>

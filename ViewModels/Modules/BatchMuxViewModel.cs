@@ -15,7 +15,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Zentrales ViewModel des Batch-Moduls; die Teil-Dateien trennen Scan, Planung, Review und Ausführung.
 /// </summary>
-internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
+internal sealed partial class BatchMuxViewModel : IModuleInteractionState, IArchiveConfigurationAwareModule
 {
     private const string DoneFolderName = "done";
     private const int AutomaticCompareProgressStart = 80;
@@ -37,6 +37,8 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     private string _logText = string.Empty;
     private int _progressValue;
     private bool _isBusy;
+    private bool _isSiblingOperationActive;
+    private bool _archiveConfigurationRefreshPending;
     private bool _isSelectedItemPlanSummaryFrozen;
     private BatchEpisodeItemViewModel? _selectedEpisodeItem;
 
@@ -66,27 +68,27 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         _episodeCollection.AutomaticOutputInputsChanged += RefreshAutomaticOutputPath;
         _episodeCollection.SelectedItemPlanInputsChanged += ScheduleSelectedItemPlanSummaryRefresh;
 
-        SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => !_isBusy, unexpectedCommandErrorHandler);
-        SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory));
-        ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => !_isBusy && !string.IsNullOrWhiteSpace(SourceDirectory), unexpectedCommandErrorHandler);
+        SelectSourceDirectoryCommand = new AsyncRelayCommand(SelectSourceDirectoryAsync, () => IsInteractive, unexpectedCommandErrorHandler);
+        SelectOutputDirectoryCommand = new RelayCommand(SelectOutputDirectory, () => IsInteractive && !string.IsNullOrWhiteSpace(SourceDirectory));
+        ScanDirectoryCommand = new AsyncRelayCommand(ScanDirectoryAsync, () => IsInteractive && !string.IsNullOrWhiteSpace(SourceDirectory), unexpectedCommandErrorHandler);
         SelectAllEpisodesCommand = new RelayCommand(SelectAllEpisodes, CanSelectAllEpisodes);
         DeselectAllEpisodesCommand = new RelayCommand(DeselectAllEpisodes, CanDeselectAllEpisodes);
-        ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => !_isBusy && SelectedEpisodeItem is not null);
+        ToggleSelectedEpisodeSelectionCommand = new RelayCommand(ToggleSelectedEpisodeSelection, () => IsInteractive && SelectedEpisodeItem is not null);
         ReviewPendingSourcesCommand = new AsyncRelayCommand(ReviewPendingSourcesAsync, CanReviewPendingSources, unexpectedCommandErrorHandler);
-        OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => !_isBusy && HasSelectedVideoFiles(), unexpectedCommandErrorHandler);
-        OpenSelectedAudioDescriptionCommand = new RelayCommand(OpenSelectedAudioDescription, () => !_isBusy && !string.IsNullOrWhiteSpace(SelectedEpisodeItem?.AudioDescriptionPath));
-        OpenSelectedSubtitlesCommand = new RelayCommand(OpenSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem?.SubtitlePaths.Count > 0);
-        OpenSelectedAttachmentsCommand = new RelayCommand(OpenSelectedAttachments, () => !_isBusy && SelectedEpisodeItem?.AttachmentPaths.Count > 0);
-        OpenSelectedOutputCommand = new RelayCommand(OpenSelectedOutput, () => !_isBusy && File.Exists(SelectedEpisodeItem?.OutputPath));
-        ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
-        RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => !_isBusy && EpisodeItems.Any(), unexpectedCommandErrorHandler);
-        RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => !_isBusy && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
-        EditSelectedAudioDescriptionCommand = new RelayCommand(EditSelectedAudioDescription, () => !_isBusy && SelectedEpisodeItem is not null);
-        EditSelectedSubtitlesCommand = new RelayCommand(EditSelectedSubtitles, () => !_isBusy && SelectedEpisodeItem is not null);
-        EditSelectedAttachmentsCommand = new RelayCommand(EditSelectedAttachments, () => !_isBusy && SelectedEpisodeItem is not null);
-        EditSelectedOutputCommand = new RelayCommand(EditSelectedOutput, () => !_isBusy && SelectedEpisodeItem is not null);
-        ApproveSelectedPlanReviewCommand = new RelayCommand(ApproveSelectedPlanReview, () => !_isBusy && SelectedEpisodeItem?.HasPendingPlanReview == true);
-        RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => !_isBusy && EpisodeItems.Any(item => item.IsSelected), unexpectedCommandErrorHandler);
+        OpenSelectedSourcesCommand = new AsyncRelayCommand(OpenSelectedSourcesAsync, () => IsInteractive && HasSelectedVideoFiles(), unexpectedCommandErrorHandler);
+        OpenSelectedAudioDescriptionCommand = new RelayCommand(OpenSelectedAudioDescription, () => IsInteractive && !string.IsNullOrWhiteSpace(SelectedEpisodeItem?.AudioDescriptionPath));
+        OpenSelectedSubtitlesCommand = new RelayCommand(OpenSelectedSubtitles, () => IsInteractive && SelectedEpisodeItem?.SubtitlePaths.Count > 0);
+        OpenSelectedAttachmentsCommand = new RelayCommand(OpenSelectedAttachments, () => IsInteractive && SelectedEpisodeItem?.AttachmentPaths.Count > 0);
+        OpenSelectedOutputCommand = new RelayCommand(OpenSelectedOutput, () => IsInteractive && File.Exists(SelectedEpisodeItem?.OutputPath));
+        ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => IsInteractive && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
+        RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => IsInteractive && EpisodeItems.Any(), unexpectedCommandErrorHandler);
+        RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => IsInteractive && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
+        EditSelectedAudioDescriptionCommand = new RelayCommand(EditSelectedAudioDescription, () => IsInteractive && SelectedEpisodeItem is not null);
+        EditSelectedSubtitlesCommand = new RelayCommand(EditSelectedSubtitles, () => IsInteractive && SelectedEpisodeItem is not null);
+        EditSelectedAttachmentsCommand = new RelayCommand(EditSelectedAttachments, () => IsInteractive && SelectedEpisodeItem is not null);
+        EditSelectedOutputCommand = new RelayCommand(EditSelectedOutput, () => IsInteractive && SelectedEpisodeItem is not null);
+        ApproveSelectedPlanReviewCommand = new RelayCommand(ApproveSelectedPlanReview, () => IsInteractive && SelectedEpisodeItem?.HasPendingPlanReview == true);
+        RunBatchCommand = new AsyncRelayCommand(RunBatchAsync, () => IsInteractive && EpisodeItems.Any(item => item.IsSelected), unexpectedCommandErrorHandler);
         CancelBatchOperationCommand = new RelayCommand(CancelCurrentBatchOperation, () => CanCancelBatchOperation);
     }
 
@@ -221,7 +223,22 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
 
     public int PendingCheckCount => _episodeCollection.PendingCheckCount;
 
-    public bool IsInteractive => !_isBusy;
+    public bool IsInteractive => !_isBusy && !_isSiblingOperationActive;
+
+    internal bool IsOperationActive => _isBusy;
+
+    /// <summary>Verhindert auch direkte Commands, solange der andere Mux-Tab arbeitet.</summary>
+    internal void SetSiblingOperationActive(bool isActive)
+    {
+        if (_isSiblingOperationActive == isActive)
+        {
+            return;
+        }
+
+        _isSiblingOperationActive = isActive;
+        OnPropertyChanged(nameof(IsInteractive));
+        RefreshCommands();
+    }
 
     public string ScanDirectoryTooltip => "Scannt den Quellordner nach Episoden und erstellt Vorschläge für Quellen, Titel und Zielpfade.";
 
@@ -283,6 +300,12 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     public void HandleArchiveConfigurationChanged()
     {
+        if (_isBusy)
+        {
+            _archiveConfigurationRefreshPending = true;
+            return;
+        }
+
         _planCache.Clear();
 
         using (EpisodeItemsView.DeferRefresh())
@@ -323,6 +346,11 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         _isBusy = isBusy;
         OnPropertyChanged(nameof(IsInteractive));
         RefreshCommands();
+        if (!isBusy && _archiveConfigurationRefreshPending)
+        {
+            _archiveConfigurationRefreshPending = false;
+            HandleArchiveConfigurationChanged();
+        }
     }
 
     /// <summary>
@@ -377,7 +405,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private bool CanSelectAllEpisodes()
     {
-        return !_isBusy
+        return IsInteractive
             && (_episodeCollection.HasUnselectedVisibleItems
                 || (SelectedFilterMode.Key != BatchEpisodeFilterMode.All && _episodeCollection.HasUnselectedItems));
     }
@@ -388,7 +416,7 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
     /// </summary>
     private bool CanDeselectAllEpisodes()
     {
-        return !_isBusy
+        return IsInteractive
             && (_episodeCollection.HasSelectedVisibleItems
                 || (SelectedFilterMode.Key != BatchEpisodeFilterMode.All && _episodeCollection.HasSelectedItems));
     }
@@ -583,4 +611,3 @@ internal sealed partial class BatchMuxViewModel : INotifyPropertyChanged, IArchi
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
-

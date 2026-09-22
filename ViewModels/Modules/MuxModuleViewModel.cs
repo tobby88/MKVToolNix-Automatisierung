@@ -7,12 +7,13 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// Gruppiert Einzel- und Batch-Mux als einen gemeinsamen Workflow-Schritt.
 /// </summary>
 /// <remarks>
-/// Die fachlichen ViewModels bleiben absichtlich getrennt. Der Wrapper ist nur die Shell-Schicht,
-/// damit globale Archivänderungen weiterhin beide Mux-Tabs erreichen.
+/// Die fachlichen ViewModels bleiben getrennt. Der Wrapper koordiniert ihre Interaktionssperre
+/// und reicht globale Archivänderungen an beide Mux-Tabs weiter.
 /// </remarks>
-internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfigurationAwareModule
+internal sealed class MuxModuleViewModel : IModuleInteractionState, IArchiveConfigurationAwareModule
 {
     private int _selectedTabIndex;
+    private bool _isUpdatingInteractionState;
 
     public MuxModuleViewModel(
         SingleEpisodeMuxViewModel singleMux,
@@ -20,6 +21,9 @@ internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfi
     {
         SingleMux = singleMux;
         BatchMux = batchMux;
+        SingleMux.PropertyChanged += HandleChildPropertyChanged;
+        BatchMux.PropertyChanged += HandleChildPropertyChanged;
+        UpdateInteractionState();
     }
 
     /// <inheritdoc />
@@ -35,6 +39,12 @@ internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfi
     /// </summary>
     public BatchMuxViewModel BatchMux { get; }
 
+    public bool IsInteractive => SingleMux.IsInteractive && BatchMux.IsInteractive;
+
+    // Der aktive Tab bleibt bedienbar, insbesondere sein Abbruchknopf.
+    public bool IsSingleTabEnabled => IsInteractive || SelectedTabIndex == 0;
+    public bool IsBatchTabEnabled => IsInteractive || SelectedTabIndex == 1;
+
     /// <summary>
     /// Aktuell sichtbarer Mux-Tab. Die Auswahl bleibt erhalten, solange das Hauptfenster läuft.
     /// </summary>
@@ -43,13 +53,21 @@ internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfi
         get => _selectedTabIndex;
         set
         {
-            if (_selectedTabIndex == value)
+            if (_selectedTabIndex == value || value is < 0 or > 1)
             {
+                return;
+            }
+
+            if (!IsInteractive)
+            {
+                OnPropertyChanged();
                 return;
             }
 
             _selectedTabIndex = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSingleTabEnabled));
+            OnPropertyChanged(nameof(IsBatchTabEnabled));
         }
     }
 
@@ -58,6 +76,39 @@ internal sealed class MuxModuleViewModel : INotifyPropertyChanged, IArchiveConfi
     {
         SingleMux.HandleArchiveConfigurationChanged();
         BatchMux.HandleArchiveConfigurationChanged();
+    }
+
+    private void HandleChildPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName == nameof(IsInteractive))
+        {
+            UpdateInteractionState();
+        }
+    }
+
+    private void UpdateInteractionState()
+    {
+        if (_isUpdatingInteractionState)
+        {
+            return;
+        }
+
+        _isUpdatingInteractionState = true;
+        try
+        {
+            // Nur eigene Operationen weiterreichen, nicht die vom Geschwister geerbte Sperre.
+            // UI-Commands starten synchron bis SetBusy; deshalb bleibt auch ExecuteAsync geschützt.
+            SingleMux.SetSiblingOperationActive(BatchMux.IsOperationActive);
+            BatchMux.SetSiblingOperationActive(SingleMux.IsOperationActive);
+        }
+        finally
+        {
+            _isUpdatingInteractionState = false;
+        }
+
+        OnPropertyChanged(nameof(IsInteractive));
+        OnPropertyChanged(nameof(IsSingleTabEnabled));
+        OnPropertyChanged(nameof(IsBatchTabEnabled));
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

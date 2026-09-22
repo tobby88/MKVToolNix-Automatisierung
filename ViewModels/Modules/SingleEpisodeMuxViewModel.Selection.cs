@@ -142,6 +142,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
         string selectedVideoPath,
         IReadOnlyCollection<string>? excludedSourcePaths = null)
     {
+        var ownsBusyState = !_isBusy;
         var operationSource = BeginCurrentOperation();
         var detectionProgressVersion = 0;
         try
@@ -159,6 +160,7 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 excludedSourcePaths,
                 onDetectionCompleted: () => SetStatus("TVDB-Metadaten werden abgeglichen...", MetadataProgressValue),
                 cancellationToken: cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             CompleteDetectionProgressSession(detectionProgressVersion);
             detectionProgressVersion = 0;
             var detected = detectionResult.Detected;
@@ -221,7 +223,10 @@ internal sealed partial class SingleEpisodeMuxViewModel
                 CompleteDetectionProgressSession(detectionProgressVersion);
             }
 
-            SetBusy(false);
+            if (ownsBusyState)
+            {
+                SetBusy(false);
+            }
             CompleteCurrentOperation(operationSource);
         }
     }
@@ -523,6 +528,21 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private async Task OpenTvdbLookupAsync()
     {
+        _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
+        _planSummaryRefreshPending = true;
+        SetBusy(true);
+        try
+        {
+            await OpenTvdbLookupCoreAsync();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task OpenTvdbLookupCoreAsync()
+    {
         var outcome = await _reviewWorkflow.ReviewMetadataAsync(
             this,
             SetStatus,
@@ -557,6 +577,21 @@ internal sealed partial class SingleEpisodeMuxViewModel
     }
 
     private async Task ReviewSourcesAsync()
+    {
+        _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
+        _planSummaryRefreshPending = true;
+        SetBusy(true);
+        try
+        {
+            await ReviewSourcesCoreAsync();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task ReviewSourcesCoreAsync()
     {
         await _reviewWorkflow.ReviewManualSourceAsync(
             this,
@@ -638,6 +673,12 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     public void HandleArchiveConfigurationChanged()
     {
+        if (_isBusy)
+        {
+            _archiveConfigurationRefreshPending = true;
+            return;
+        }
+
         InvalidateCurrentPlan();
         if (UsesAutomaticOutputPath)
         {
@@ -682,9 +723,18 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private void InvalidateCurrentPlan()
     {
+        _planSummaryRefresh.Cancel(invalidateInFlightRefreshes: true);
         _planCache.Invalidate(this);
         ClearPlanPresentation();
         PlanRefreshProblemText = string.Empty;
+        if (!_isBusy && !_isApplyingSharedState)
+        {
+            SetExecutionStatus(string.IsNullOrWhiteSpace(MainVideoPath)
+                || string.IsNullOrWhiteSpace(OutputPath)
+                || string.IsNullOrWhiteSpace(Title)
+                    ? SingleEpisodeExecutionStatusKind.Ready
+                    : SingleEpisodeExecutionStatusKind.ComparisonPending);
+        }
     }
 
 }
