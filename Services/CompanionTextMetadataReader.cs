@@ -69,7 +69,11 @@ internal static class CompanionTextMetadataReader
     {
         try
         {
-            return encoding.GetString(bytes);
+            // StreamReader entfernt BOMs und erkennt UTF-16/UTF-32 mit BOM. Ein BOM
+            // vor "Sender:" darf den ersten Metadatenwert nicht unsichtbar machen.
+            using var stream = new MemoryStream(bytes, writable: false);
+            using var reader = new StreamReader(stream, encoding, detectEncodingFromByteOrderMarks: true);
+            return reader.ReadToEnd();
         }
         catch
         {
@@ -79,8 +83,11 @@ internal static class CompanionTextMetadataReader
 
     private static string? ReadLabeledValue(string content, string label)
     {
-        var match = Regex.Match(content, $@"^{Regex.Escape(label)}\s*:\s*(.+)$", RegexOptions.Multiline);
-        return match.Success ? match.Groups[1].Value.Trim() : null;
+        // Horizontale Abstände statt \s: Ein leeres Feld darf nicht die nächste Zeile
+        // (z. B. "Dauer:") als Titel oder Sender verschlucken.
+        var match = Regex.Match(content, $@"^{Regex.Escape(label)}[^\S\r\n]*:[^\S\r\n]*([^\r\n]*)\r?$", RegexOptions.Multiline);
+        var value = match.Success ? match.Groups[1].Value.Trim() : null;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static CompanionTextDetails ParseDetailed(string content)

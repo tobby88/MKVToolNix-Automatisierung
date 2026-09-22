@@ -28,4 +28,13 @@ public sealed class MojibakeRepairTests
 
         Assert.Equal("Straße - Teil 1", normalized);
     }
+
+    [Theory]
+    [InlineData("Mâcon")]
+    [InlineData("Âge tendre")]
+    [InlineData("Ein Titel mit 漢字 und â")]
+    public void NormalizeLikelyMojibake_DoesNotDamageLegitimateSuspiciousCharacters(string text)
+    {
+        Assert.Equal(text, MojibakeRepair.NormalizeLikelyMojibake(text));
+    }
 }

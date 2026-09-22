@@ -88,7 +88,11 @@ internal static class MojibakeRepair
 
         try
         {
-            var repaired = Encoding.UTF8.GetString(encoding.GetBytes(value));
+            // Ein Verdachtszeichen kann legitimer Text sein (z. B. Mâcon). Nur eine
+            // verlustfreie Rückübersetzung ist ein Reparaturkandidat; keine '?' oder U+FFFD erzeugen.
+            var strictEncoding = (Encoding)encoding.Clone();
+            strictEncoding.EncoderFallback = EncoderFallback.ExceptionFallback;
+            var repaired = new UTF8Encoding(false, true).GetString(strictEncoding.GetBytes(value));
             return string.IsNullOrWhiteSpace(repaired) ? null : repaired;
         }
         catch
