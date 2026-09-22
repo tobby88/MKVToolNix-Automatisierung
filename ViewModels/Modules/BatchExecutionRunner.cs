@@ -29,7 +29,9 @@ internal sealed class BatchExecutionRunner
             .Where(plan => plan is not null)
             .Cast<FileCopyPlan>()
             .GroupBy(plan => plan.SourceFilePath, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
+            .SelectMany(group => group
+                .GroupBy(plan => plan.DestinationFilePath, StringComparer.OrdinalIgnoreCase)
+                .Select(destinationGroup => destinationGroup.First()))
             .ToList();
 
         var copyPlansToExecute = copyPlans
@@ -101,15 +103,38 @@ internal sealed class BatchExecutionRunner
         var warningCount = 0;
         var errorCount = 0;
         var upToDateCount = 0;
+        var wasCanceled = false;
         var movedDoneFiles = new List<string>();
         var failedDoneMoveFiles = new List<string>();
         var newOutputFiles = new List<string>();
         var newOutputMetadata = new List<BatchOutputMetadataEntry>();
+        var inputOwners = executablePlans
+            .SelectMany(entry => GetPlanInputFiles(entry.Plan).Select(path => (Path: path, Entry: entry)))
+            .GroupBy(value => value.Path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Select(value => value.Entry).ToList(), StringComparer.OrdinalIgnoreCase);
+        var outputPaths = executablePlans.Select(entry => entry.Plan.OutputFilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         for (var index = 0; index < executablePlans.Count; index++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                wasCanceled = true;
+                break;
+            }
             var workItem = executablePlans[index];
+            // Gemeinsam genutzte Quellen bleiben bewusst liegen, auch wenn eine andere Episode
+            // später fehlschlägt. Kein Done-Move darf einen weiteren vorbereiteten Plan zerstören.
+            var cleanupCandidates = BuildDoneCleanupFileList(workItem);
+            var cleanupWorkItem = workItem with
+            {
+                CleanupFiles = cleanupCandidates.Where(path => !outputPaths.Contains(path)
+                    && (!inputOwners.TryGetValue(path, out var owners)
+                        || owners.All(owner => ReferenceEquals(owner, workItem)))).ToList()
+            };
+            if (cleanupWorkItem.CleanupFiles.Count != cleanupCandidates.Count)
+            {
+                appendLog("QUELLENSCHUTZ: Gemeinsam verwendete Quellen oder Batch-Ziele bleiben am bisherigen Ort.");
+            }
             var item = workItem.Item;
             var plan = workItem.Plan;
             item.RefreshArchivePresence();
@@ -128,7 +153,7 @@ internal sealed class BatchExecutionRunner
                     appendLog($"  KEIN MUX: {plan.SkipReason ?? "Zieldatei bereits aktuell."}");
 
                     var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
-                        workItem,
+                        cleanupWorkItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
@@ -145,7 +170,8 @@ internal sealed class BatchExecutionRunner
                     {
                         appendLog(
                             $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
-                        throw new OperationCanceledException(cancellationToken);
+                        wasCanceled = true;
+                        break;
                     }
 
                     continue;
@@ -173,7 +199,7 @@ internal sealed class BatchExecutionRunner
                     }
 
                     var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
-                        workItem,
+                        cleanupWorkItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
@@ -190,7 +216,8 @@ internal sealed class BatchExecutionRunner
                     {
                         appendLog(
                             $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
-                        throw new OperationCanceledException(cancellationToken);
+                        wasCanceled = true;
+                        break;
                     }
                 }
                 else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
@@ -205,7 +232,7 @@ internal sealed class BatchExecutionRunner
                     }
 
                     var doneMoveResult = await MoveEpisodeFilesToDoneAsync(
-                        workItem,
+                        cleanupWorkItem,
                         doneDirectory,
                         index + 1,
                         progressTracker,
@@ -221,7 +248,8 @@ internal sealed class BatchExecutionRunner
                     {
                         appendLog(
                             $"  ABGEBROCHEN: Done-Verschiebung nach {doneMoveResult.MovedFiles.Count} Datei(en), {doneMoveResult.PendingFiles.Count} Datei(en) noch offen.");
-                        throw new OperationCanceledException(cancellationToken);
+                        wasCanceled = true;
+                        break;
                     }
                 }
                 else
@@ -232,9 +260,14 @@ internal sealed class BatchExecutionRunner
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                item.SetStatus(BatchEpisodeStatusKind.Cancelled);
+                // Ein bereits veröffentlichter Mux-Erfolg bleibt auch bei Cleanup-Abbruch erhalten.
+                if (item.StatusKind == BatchEpisodeStatusKind.Running)
+                {
+                    item.SetStatus(BatchEpisodeStatusKind.Cancelled);
+                }
                 appendLog($"  ABGEBROCHEN: {item.MainVideoFileName}");
-                throw;
+                wasCanceled = true;
+                break;
             }
             catch (Exception ex)
             {
@@ -258,7 +291,8 @@ internal sealed class BatchExecutionRunner
             movedDoneFiles,
             failedDoneMoveFiles,
             newOutputFiles,
-            newOutputMetadata);
+            newOutputMetadata,
+            WasCanceled: wasCanceled || cancellationToken.IsCancellationRequested);
     }
 
     private async Task<BatchDoneMoveResult> MoveEpisodeFilesToDoneAsync(
@@ -270,7 +304,7 @@ internal sealed class BatchExecutionRunner
         CancellationToken cancellationToken = default)
     {
         var item = workItem.Item;
-        var cleanupFiles = BuildDoneCleanupFileList(workItem);
+        var cleanupFiles = workItem.CleanupFiles;
         if (cleanupFiles.Count == 0)
         {
             return new BatchDoneMoveResult([], [], [], WasCanceled: false);
@@ -326,6 +360,13 @@ internal sealed class BatchExecutionRunner
             .ToList();
     }
 
+    private static IEnumerable<string> GetPlanInputFiles(SeriesEpisodeMuxPlan plan)
+    {
+        return plan.GetReferencedInputFiles()
+            .Concat(plan.WorkingCopy is null ? [] : new[] { plan.WorkingCopy.DestinationFilePath })
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
     private static string BuildWarningStatusText(SeriesEpisodeMuxPlan plan, MuxExecutionResult result)
     {
         return result.HasWarning
@@ -372,7 +413,8 @@ internal sealed record BatchCopyPreparation(
     long TotalCopyBytes);
 
 /// <summary>
-/// Zusammenfassung eines kompletten Batch-Laufs für UI und Log-Speicherung.
+/// Zusammenfassung eines vollständigen oder abgebrochenen Batch-Laufs für UI und Log-Speicherung.
+/// Ein Abbruch verwirft keine bereits veröffentlichten Ausgaben oder abgeschlossenen Done-Moves.
 /// </summary>
 internal sealed record BatchExecutionOutcome(
     int SuccessCount,
@@ -382,7 +424,11 @@ internal sealed record BatchExecutionOutcome(
     IReadOnlyList<string> MovedDoneFiles,
     IReadOnlyList<string> FailedDoneMoveFiles,
     IReadOnlyList<string> NewOutputFiles,
-    IReadOnlyList<BatchOutputMetadataEntry> NewOutputMetadata);
+    IReadOnlyList<BatchOutputMetadataEntry> NewOutputMetadata,
+    bool WasCanceled = false)
+{
+    public static BatchExecutionOutcome Empty => new(0, 0, 0, 0, [], [], [], []);
+}
 
 /// <summary>
 /// Ergebnis des Done-Verschiebens, damit erfolgreiche Mux-Läufe bei gesperrten Quelldateien

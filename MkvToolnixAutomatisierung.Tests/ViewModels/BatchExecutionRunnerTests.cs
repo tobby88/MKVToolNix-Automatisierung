@@ -19,6 +19,59 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void BuildCopyPreparation_KeepsDifferentDestinations_ForSameSource()
+    {
+        var source = CreateFile("archive.mkv");
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), new StubMuxWorkflowCoordinator(), new StubCleanupService());
+        var item = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "out.mkv"));
+        var first = CreatePlan(item.OutputPath, CreateCopyPlan(source, Path.Combine(_tempDirectory, "work-1.mkv"), 10));
+        var second = CreatePlan(item.OutputPath, CreateCopyPlan(source, Path.Combine(_tempDirectory, "work-2.mkv"), 10));
+
+        var preparation = runner.BuildCopyPreparation([new(item, first, []), new(item, second, [])]);
+
+        Assert.Equal(2, preparation.CopyPlans.Count);
+        Assert.Equal(20, preparation.TotalCopyBytes);
+    }
+
+    [Fact]
+    public async Task ExecutePlansAsync_DoesNotMoveInputsOfOtherPlans_OrBatchOutputs()
+    {
+        var firstOutput = Path.Combine(_tempDirectory, "first.mkv");
+        var secondOutput = Path.Combine(_tempDirectory, "second.mkv");
+        var firstItem = CreateBatchEpisodeItem(firstOutput);
+        var secondItem = CreateBatchEpisodeItem(secondOutput);
+        var firstPlan = CreatePlan(firstOutput);
+        var secondPlan = CreatePlan(secondOutput);
+        var secondSource = secondPlan.GetReferencedInputFiles().First();
+        var uniqueCleanup = CreateFile("unique-source.mp4");
+        var movedSources = new List<string>();
+        var cleanup = new StubCleanupService
+        {
+            MoveOverride = (paths, _, _) =>
+            {
+                movedSources.AddRange(paths);
+                return Task.FromResult(new FileMoveResult([], []));
+            }
+        };
+        var workflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (plan, _) =>
+            {
+                File.WriteAllText(plan.OutputFilePath, "mux output");
+                return Task.FromResult(new MuxExecutionResult(0, false, 100));
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), workflow, cleanup);
+
+        await runner.ExecutePlansAsync(
+            [new(firstItem, firstPlan, [uniqueCleanup, secondSource, secondOutput]), new(secondItem, secondPlan, [])],
+            Path.Combine(_tempDirectory, "done"), new BatchRunProgressTracker(2, (_, _) => { }), _ => { });
+
+        Assert.Equal([uniqueCleanup], movedSources);
+        Assert.True(File.Exists(secondSource));
+    }
+
+    [Fact]
     public void BuildCopyPreparation_DeduplicatesSources_AndFiltersReusableCopies()
     {
         var sourceA = CreateFile("source-a.mkv");
@@ -386,7 +439,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         await executionStarted.Task;
         cancellationSource.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => executionTask);
+        var outcome = await executionTask;
+        Assert.True(outcome.WasCanceled);
+        Assert.Equal(0, outcome.SuccessCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Empty(outcome.NewOutputFiles);
         Assert.Equal(BatchEpisodeStatusKind.Cancelled, item.StatusKind);
         Assert.Contains(logs, line => line.Contains("ABGEBROCHEN", StringComparison.Ordinal));
     }
@@ -413,7 +470,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         var item = CreateBatchEpisodeItem(outputPath);
         var logs = new List<string>();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runner.ExecutePlansAsync(
+        var outcome = await runner.ExecutePlansAsync(
         [
             new BatchExecutionWorkItem(
                 item,
@@ -428,11 +485,106 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             Path.Combine(_tempDirectory, "done"),
             new BatchRunProgressTracker(1, (_, _) => { }),
             logs.Add,
-            cancellationSource.Token));
+            cancellationSource.Token);
 
-        Assert.Equal(BatchEpisodeStatusKind.Cancelled, item.StatusKind);
+        Assert.True(outcome.WasCanceled);
+        Assert.Equal(1, outcome.UpToDateCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Equal(movedDoneFile, Assert.Single(outcome.MovedDoneFiles));
+        Assert.Equal(BatchEpisodeStatusKind.UpToDate, item.StatusKind);
         Assert.Contains(logs, line => line.Contains("NOCH OFFEN", StringComparison.Ordinal));
         Assert.Contains(logs, line => line.Contains("Done-Verschiebung", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecutePlansAsync_CancelSecondMux_PreservesFirstOutputAndMetadata()
+    {
+        using var cancellationSource = new CancellationTokenSource();
+        var first = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "first-success.mkv"));
+        var second = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "second-cancelled.mkv"));
+        var calls = 0;
+        var workflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (plan, token) =>
+            {
+                calls++;
+                if (calls == 2)
+                {
+                    cancellationSource.Cancel();
+                    token.ThrowIfCancellationRequested();
+                }
+
+                File.WriteAllText(plan.OutputFilePath, "completed output");
+                return Task.FromResult(new MuxExecutionResult(0, false, 100));
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), workflow, new StubCleanupService());
+
+        var outcome = await runner.ExecutePlansAsync(
+            [new(first, CreatePlan(first.OutputPath), []), new(second, CreatePlan(second.OutputPath), [])],
+            Path.Combine(_tempDirectory, "done"), new BatchRunProgressTracker(2, (_, _) => { }),
+            _ => { }, cancellationSource.Token);
+
+        Assert.True(outcome.WasCanceled);
+        Assert.Equal(1, outcome.SuccessCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Equal(first.OutputPath, Assert.Single(outcome.NewOutputFiles));
+        Assert.Equal(first.OutputPath, Assert.Single(outcome.NewOutputMetadata).OutputPath);
+        Assert.Equal(BatchEpisodeStatusKind.Success, first.StatusKind);
+        Assert.Equal(BatchEpisodeStatusKind.Cancelled, second.StatusKind);
+        Assert.False(File.Exists(second.OutputPath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecutePlansAsync_CancelDoneMove_PreservesPublishedMuxResult(bool throwCancellation)
+    {
+        using var cancellationSource = new CancellationTokenSource();
+        var first = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "published.mkv"));
+        var second = CreateBatchEpisodeItem(Path.Combine(_tempDirectory, "not-started.mkv"));
+        var cleanupSource = CreateFile("cleanup-after-publish.txt");
+        var movedFile = Path.Combine(_tempDirectory, "done", "moved.txt");
+        var cleanup = new StubCleanupService
+        {
+            MoveOverride = (_, _, token) =>
+            {
+                if (throwCancellation)
+                {
+                    cancellationSource.Cancel();
+                    token.ThrowIfCancellationRequested();
+                }
+
+                // Shell-Cleanup kann auch ohne gesetzten Token einen Benutzerabbruch melden.
+                return Task.FromResult(new FileMoveResult([movedFile], [], [cleanupSource], WasCanceled: true));
+            }
+        };
+        var workflow = new StubMuxWorkflowCoordinator
+        {
+            ExecuteMuxOverride = (plan, _) =>
+            {
+                File.WriteAllText(plan.OutputFilePath, "published output");
+                return Task.FromResult(new MuxExecutionResult(0, false, 100));
+            }
+        };
+        var runner = new BatchExecutionRunner(new StubFileCopyService(), workflow, cleanup);
+
+        var outcome = await runner.ExecutePlansAsync(
+            [new(first, CreatePlan(first.OutputPath), [cleanupSource]), new(second, CreatePlan(second.OutputPath), [])],
+            Path.Combine(_tempDirectory, "done"), new BatchRunProgressTracker(2, (_, _) => { }),
+            _ => { }, cancellationSource.Token);
+
+        Assert.True(outcome.WasCanceled);
+        Assert.Equal(1, outcome.SuccessCount);
+        Assert.Equal(0, outcome.ErrorCount);
+        Assert.Equal(first.OutputPath, Assert.Single(outcome.NewOutputFiles));
+        Assert.Equal(first.OutputPath, Assert.Single(outcome.NewOutputMetadata).OutputPath);
+        Assert.Equal(BatchEpisodeStatusKind.Success, first.StatusKind);
+        Assert.Single(workflow.TemporaryCleanupModes);
+        if (!throwCancellation)
+        {
+            Assert.Equal(movedFile, Assert.Single(outcome.MovedDoneFiles));
+        }
     }
 
     [Fact]
