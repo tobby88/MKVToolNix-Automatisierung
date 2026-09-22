@@ -592,6 +592,187 @@ public sealed class EpisodeMetadataLookupServiceTests
         Assert.Equal(0, store.UpdateCallCount);
     }
 
+    [Fact]
+    public async Task SharedLookups_RetryAfterSynchronousFailures()
+    {
+        var searchCalls = 0;
+        var episodeCalls = 0;
+        var imdbCalls = 0;
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => ++searchCalls == 1 ? throw new InvalidOperationException("retry") : [],
+            EpisodesResultFactory = _ => ++episodeCalls == 1 ? throw new InvalidOperationException("retry") : [],
+            EpisodeImdbIdResultFactory = _ => ++imdbCalls == 1 ? throw new InvalidOperationException("retry") : "tt1234567"
+        };
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new AppMetadataSettings { TvdbApiKey = "key" }), client);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SearchSeriesAsync("Series"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadEpisodesAsync(42));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LoadEpisodeImdbIdAsync(100));
+        Assert.Empty(await service.SearchSeriesAsync("Series"));
+        Assert.Empty(await service.LoadEpisodesAsync(42));
+        Assert.Equal("tt1234567", await service.LoadEpisodeImdbIdAsync(100));
+        Assert.Equal(2, searchCalls);
+        Assert.Equal(2, episodeCalls);
+        Assert.Equal(2, imdbCalls);
+    }
+
+    [Fact]
+    public async Task SharedLookups_PreCancelledCallerStartsNoRequests_EvenOnCacheHit()
+    {
+        var client = new FakeTvdbClient();
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new AppMetadataSettings { TvdbApiKey = "key" }), client);
+        await service.SearchSeriesAsync("Cached");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.SearchSeriesAsync("Cached", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.SearchSeriesAsync("New", cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoadEpisodesAsync(42, cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.LoadEpisodeImdbIdAsync(100, cancellation.Token));
+        Assert.Equal(1, client.SearchSeriesCallCount);
+        Assert.Equal(0, client.LoadEpisodesCallCount);
+        Assert.Equal(0, client.LoadEpisodeImdbIdCallCount);
+    }
+
+    [Fact]
+    public async Task ExplicitSettings_UseTheSameTrimmedCredentialsAsTheCacheKey()
+    {
+        var client = new FakeTvdbClient();
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new AppMetadataSettings()), client);
+        var settings = new AppMetadataSettings { TvdbApiKey = " key ", TvdbPin = " pin " };
+
+        await service.SearchSeriesAsync("Series", settings);
+        Assert.Equal("key", client.LastApiKey);
+        Assert.Equal("pin", client.LastPin);
+        await service.LoadEpisodesAsync(42, settings);
+        Assert.Equal("key", client.LastApiKey);
+        Assert.Equal("pin", client.LastPin);
+    }
+
+    [Theory]
+    [InlineData("xx", true)]
+    [InlineData("01", false)]
+    public async Task ResolveAutomaticallyAsync_ReviewsAmbiguityWithinOneSeries(string season, bool requiresReview)
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings { TvdbApiKey = "key" });
+        var service = new EpisodeMetadataLookupService(store, new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => [new(42, "Series", null, null)],
+            EpisodesResultFactory = _ => [new(100, "Same title", 1, 1, null), new(101, "Same title", 2, 1, null)]
+        });
+
+        var result = await service.ResolveAutomaticallyAsync(new("Series", "Same title", season, "01"));
+
+        Assert.NotNull(result.Selection);
+        Assert.Equal(requiresReview, result.RequiresReview);
+        Assert.Equal(requiresReview ? 0 : 1, store.UpdateCallCount);
+    }
+
+    [Fact]
+    public void SaveSeriesMapping_DoesNotPersistEmptyNormalizedSeries()
+    {
+        var store = new FakeMetadataStore(new AppMetadataSettings());
+        var service = new EpisodeMetadataLookupService(store, new FakeTvdbClient());
+        service.SaveSeriesMapping("---", new(42, "Series", null, null));
+        Assert.Equal(0, store.UpdateCallCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SuccessfulCaches_ExpireIncludingEmptyResults_WithoutExtendingLifetimeOnReads(bool emptyResults)
+    {
+        var clock = new ManualTimeProvider();
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesResultFactory = _ => emptyResults ? [] : [new(42, "Series", null, null)],
+            EpisodesResultFactory = _ => emptyResults ? [] : [new(100, "Pilot", 1, 1, null)],
+            EpisodeImdbIdResultFactory = _ => emptyResults ? null : "tt1234567"
+        };
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }), client, clock);
+
+        async Task ReadAllAsync()
+        {
+            await service.SearchSeriesAsync("Series");
+            await service.LoadEpisodesAsync(42);
+            await service.LoadEpisodeImdbIdAsync(100);
+        }
+
+        await ReadAllAsync();
+        clock.Advance(EpisodeMetadataLookupService.SuccessfulLookupCacheLifetime - TimeSpan.FromMinutes(1));
+        await ReadAllAsync();
+        Assert.Equal(1, client.SearchSeriesCallCount);
+        Assert.Equal(1, client.LoadEpisodesCallCount);
+        Assert.Equal(1, client.LoadEpisodeImdbIdCallCount);
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await ReadAllAsync();
+        Assert.Equal(2, client.SearchSeriesCallCount);
+        Assert.Equal(2, client.LoadEpisodesCallCount);
+        Assert.Equal(2, client.LoadEpisodeImdbIdCallCount);
+    }
+
+    [Theory]
+    [InlineData("series")]
+    [InlineData("episodes")]
+    [InlineData("imdb")]
+    public async Task SuccessfulCaches_EvictOldestEntryAtCapacity(string cacheKind)
+    {
+        var clock = new ManualTimeProvider();
+        var client = new FakeTvdbClient();
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }), client, clock);
+        var capacity = cacheKind switch
+        {
+            "series" => EpisodeMetadataLookupService.MaximumSeriesSearchCacheEntries,
+            "episodes" => EpisodeMetadataLookupService.MaximumEpisodeCacheEntries,
+            _ => EpisodeMetadataLookupService.MaximumEpisodeImdbCacheEntries
+        };
+
+        async Task ReadAsync(int id)
+        {
+            switch (cacheKind)
+            {
+                case "series": await service.SearchSeriesAsync($"Series {id}"); break;
+                case "episodes": await service.LoadEpisodesAsync(id); break;
+                default: await service.LoadEpisodeImdbIdAsync(id); break;
+            }
+        }
+
+        for (var id = 1; id <= capacity + 1; id++)
+        {
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            await ReadAsync(id);
+        }
+        await ReadAsync(capacity + 1);
+        Assert.Equal(capacity + 1, client.SearchSeriesCallCount + client.LoadEpisodesCallCount + client.LoadEpisodeImdbIdCallCount);
+
+        await ReadAsync(1);
+        Assert.Equal(capacity + 2, client.SearchSeriesCallCount + client.LoadEpisodesCallCount + client.LoadEpisodeImdbIdCallCount);
+    }
+
+    [Fact]
+    public async Task SuccessfulCaches_DoNotRetainOversizedEpisodeCatalogs()
+    {
+        var episodes = Enumerable.Range(1, EpisodeMetadataLookupService.MaximumCachedListItems + 1)
+            .Select(id => new TvdbEpisodeRecord(id, "Episode", 1, id, null)).ToArray();
+        var client = new FakeTvdbClient { EpisodesResultFactory = _ => episodes };
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }), client);
+
+        Assert.Same(episodes, await service.LoadEpisodesAsync(42));
+        Assert.Same(episodes, await service.LoadEpisodesAsync(42));
+        Assert.Equal(2, client.LoadEpisodesCallCount);
+    }
+
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 9, 22, 12, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan elapsed) => _now += elapsed;
+    }
+
     private sealed class FakeMetadataStore : IAppMetadataStore
     {
         public FakeMetadataStore(AppMetadataSettings initialSettings)

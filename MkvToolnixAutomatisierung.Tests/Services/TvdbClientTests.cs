@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using MkvToolnixAutomatisierung.Services.Metadata;
 using Xunit;
 
@@ -309,6 +310,82 @@ public sealed class TvdbClientTests
 
         httpClient.Dispose();
         Assert.True(handler.IsDisposed);
+    }
+
+    [Fact]
+    public async Task Authentication_RemainsRequestLocal_AndDoesNotLeakIntoAnotherLogin()
+    {
+        var loginCount = 0;
+        var tokens = new List<string?>();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request =>
+            {
+                if (request.RequestUri!.AbsolutePath == "/v4/login")
+                {
+                    Assert.Null(request.Headers.Authorization);
+                    return JsonResponse(JsonSerializer.Serialize(new { data = new { token = $"token-{++loginCount}" } }));
+                }
+
+                tokens.Add(request.Headers.Authorization?.Parameter);
+                return JsonResponse("""{"data":[]}""");
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        await client.SearchSeriesAsync("first-key", null, "Series");
+        await client.SearchSeriesAsync("second-key", null, "Series");
+
+        Assert.Null(httpClient.DefaultRequestHeaders.Authorization);
+        Assert.Equal(new[] { "token-1", "token-2" }, tokens);
+    }
+
+    [Fact]
+    public async Task SearchSeriesAsync_EmptyTranslationFallsBack_AndInvalidRecordsAreSkipped()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request => request.RequestUri!.AbsolutePath == "/v4/login"
+                ? JsonResponse("""{"data":{"token":"token"}}""")
+                : JsonResponse("""{"data":[null,5,{"tvdb_id":0,"name":"Invalid"},{"tvdb_id":42,"translations":{"deu":" "},"name_translated":"","name":"Original"}]}""")
+        });
+        using var client = new TvdbClient(httpClient);
+
+        var result = Assert.Single(await client.SearchSeriesAsync("key", null, "Original"));
+        Assert.Equal("Original", result.Name);
+        Assert.Equal(42, result.Id);
+    }
+
+    [Fact]
+    public async Task GetSeriesEpisodesAsync_MissingLocalizedEndpointUsesNeutralCatalogWithoutDuplicates()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request => request.RequestUri!.AbsolutePath switch
+            {
+                "/v4/login" => JsonResponse("""{"data":{"token":"token"}}"""),
+                "/v4/series/42/episodes/default/deu" => new(HttpStatusCode.NotFound),
+                _ => JsonResponse("""{"data":{"episodes":[{"id":100,"name":"Pilot"},{"id":100,"name":"Pilot"},null,{"id":-1,"name":"Invalid"}]}}""")
+            }
+        });
+        using var client = new TvdbClient(httpClient);
+
+        Assert.Equal(100, Assert.Single(await client.GetSeriesEpisodesAsync("key", null, 42, "deu")).Id);
+    }
+
+    [Theory]
+    [InlineData("IMDB", "tt\u0661\u0662\u0663\u0664\u0665\u0666\u0667")]
+    [InlineData("NotIMDB", "tt1234567")]
+    public async Task GetEpisodeImdbIdAsync_RejectsUnicodeDigitsAndOtherProviders(string source, string id)
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = request => request.RequestUri!.AbsolutePath == "/v4/login"
+                ? JsonResponse("""{"data":{"token":"token"}}""")
+                : JsonResponse(JsonSerializer.Serialize(new { data = new { remoteIds = new[] { new { sourceName = source, id } } } }))
+        });
+        using var client = new TvdbClient(httpClient);
+        Assert.Null(await client.GetEpisodeImdbIdAsync("key", null, 100));
     }
 
     private static HttpResponseMessage JsonResponse(string json)

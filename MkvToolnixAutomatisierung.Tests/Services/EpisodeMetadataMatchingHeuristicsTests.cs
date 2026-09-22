@@ -23,6 +23,8 @@ public sealed class EpisodeMetadataMatchingHeuristicsTests
     [InlineData("Rock & Roll: Teil 2", "rock und roll teil 2")]
     [InlineData("A😀B", "a b")]
     [InlineData("Café", "cafe")]
+    [InlineData("Mu\u0308nchen", "muenchen")]
+    [InlineData("O\u0308l", "oel")]
     public void NormalizeText_ReturnsExpectedCanonicalTitle(string source, string expected)
     {
         Assert.Equal(expected, EpisodeMetadataMatchingHeuristics.NormalizeText(source));

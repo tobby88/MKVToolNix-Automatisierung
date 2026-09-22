@@ -62,7 +62,7 @@ internal sealed class TvdbClient : ITvdbClient
     private const int MaxEpisodePages = 100;
     private static readonly Uri BaseAddress = new("https://api4.thetvdb.com/v4/");
     private static readonly Regex ImdbIdPattern = new(
-        @"^tt\d{7,10}$",
+        @"\Att[0-9]{7,10}\z",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private readonly HttpClient _httpClient;
@@ -131,7 +131,7 @@ internal sealed class TvdbClient : ITvdbClient
             var name = ReadTranslationString(item, "translations", "deu")
                     ?? ReadString(item, "name_translated")
                     ?? ReadString(item, "name");
-            if (id is null || string.IsNullOrWhiteSpace(name))
+            if (id is null or <= 0 || string.IsNullOrWhiteSpace(name))
             {
                 continue;
             }
@@ -166,6 +166,8 @@ internal sealed class TvdbClient : ITvdbClient
         string? language = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
         var useLanguage = !string.IsNullOrWhiteSpace(language);
         var localizedResults = await FetchSeriesEpisodesInternalAsync(
             apiKey, pin, seriesId, useLanguage ? language!.Trim() : null, cancellationToken);
@@ -229,8 +231,7 @@ internal sealed class TvdbClient : ITvdbClient
         foreach (var remoteIdElement in remoteIdsElement.EnumerateArray())
         {
             var sourceName = ReadString(remoteIdElement, "sourceName");
-            if (string.IsNullOrWhiteSpace(sourceName)
-                || !sourceName.Contains("imdb", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(sourceName?.Trim(), "IMDB", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -254,14 +255,16 @@ internal sealed class TvdbClient : ITvdbClient
     {
         var episodePath = string.IsNullOrWhiteSpace(language)
             ? $"series/{seriesId}/episodes/default"
-            : $"series/{seriesId}/episodes/default/{language}";
+            : $"series/{seriesId}/episodes/default/{Uri.EscapeDataString(language)}";
 
         var results = new List<TvdbEpisodeRecord>();
+        var seenIds = new HashSet<int>();
         var page = 0;
         var pageCount = 0;
 
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (pageCount++ >= MaxEpisodePages)
             {
                 throw new InvalidOperationException($"TVDB-Pagination abgebrochen, weil mehr als {MaxEpisodePages} Episodenseiten angefordert wurden.");
@@ -272,6 +275,12 @@ internal sealed class TvdbClient : ITvdbClient
                 pin,
                 $"{episodePath}?page={page}",
                 cancellationToken);
+            if (language is not null && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                // Eine fehlende Uebersetzung darf den sprachneutralen Katalog nicht blockieren.
+                break;
+            }
+
             response.EnsureSuccessStatusCode();
 
             using var document = await JsonDocument.ParseAsync(
@@ -287,7 +296,7 @@ internal sealed class TvdbClient : ITvdbClient
                 {
                     var id = ReadInt(item, "id");
                     var name = ReadString(item, "name");
-                    if (id is null || string.IsNullOrWhiteSpace(name))
+                    if (id is null or <= 0 || string.IsNullOrWhiteSpace(name) || !seenIds.Add(id.Value))
                     {
                         continue;
                     }
@@ -312,22 +321,22 @@ internal sealed class TvdbClient : ITvdbClient
         return results;
     }
 
-    private async Task EnsureAuthenticatedAsync(string apiKey, string? pin, CancellationToken cancellationToken)
+    private async Task<string> GetAuthenticationTokenAsync(
+        string apiKey,
+        string? pin,
+        CancellationToken cancellationToken,
+        string? rejectedToken = null)
     {
-        if (HasReusableToken(apiKey, pin))
-        {
-            return;
-        }
-
         await _authSync.WaitAsync(cancellationToken);
         try
         {
-            if (HasReusableToken(apiKey, pin))
+            if (HasReusableToken(apiKey, pin)
+                && !string.Equals(_bearerToken, rejectedToken, StringComparison.Ordinal))
             {
-                return;
+                return _bearerToken!;
             }
 
-            await AuthenticateAsync(apiKey, pin, cancellationToken);
+            return await AuthenticateAsync(apiKey, pin, cancellationToken);
         }
         finally
         {
@@ -335,21 +344,7 @@ internal sealed class TvdbClient : ITvdbClient
         }
     }
 
-    private async Task ReauthenticateAsync(string apiKey, string? pin, CancellationToken cancellationToken)
-    {
-        await _authSync.WaitAsync(cancellationToken);
-        try
-        {
-            InvalidateAuthenticationState();
-            await AuthenticateAsync(apiKey, pin, cancellationToken);
-        }
-        finally
-        {
-            _authSync.Release();
-        }
-    }
-
-    private async Task AuthenticateAsync(string apiKey, string? pin, CancellationToken cancellationToken)
+    private async Task<string> AuthenticateAsync(string apiKey, string? pin, CancellationToken cancellationToken)
     {
         var payload = new Dictionary<string, string>
         {
@@ -368,8 +363,11 @@ internal sealed class TvdbClient : ITvdbClient
             await response.Content.ReadAsStreamAsync(cancellationToken),
             cancellationToken: cancellationToken);
 
-        if (!document.RootElement.TryGetProperty("data", out var dataElement)
-            || !dataElement.TryGetProperty("token", out var tokenElement))
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("data", out var dataElement)
+            || dataElement.ValueKind != JsonValueKind.Object
+            || !dataElement.TryGetProperty("token", out var tokenElement)
+            || tokenElement.ValueKind != JsonValueKind.String)
         {
             throw new InvalidOperationException("TVDB-Antwort enthält kein 'data.token'-Feld.");
         }
@@ -384,7 +382,7 @@ internal sealed class TvdbClient : ITvdbClient
         _currentPin = pin;
         _bearerToken = token;
         _tokenValidUntilUtc = DateTimeOffset.UtcNow.AddDays(30);
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return token;
     }
 
     private async Task<HttpResponseMessage> SendAuthorizedGetAsync(
@@ -393,27 +391,30 @@ internal sealed class TvdbClient : ITvdbClient
         string relativePath,
         CancellationToken cancellationToken)
     {
-        await EnsureAuthenticatedAsync(apiKey, pin, cancellationToken);
+        var token = await GetAuthenticationTokenAsync(apiKey, pin, cancellationToken);
 
         var requestUri = BuildRequestUri(relativePath);
-        var response = await _httpClient.GetAsync(requestUri, cancellationToken);
+        var response = await SendGetWithTokenAsync(requestUri, token, cancellationToken);
         if (!ShouldRetryWithFreshAuthentication(response.StatusCode))
         {
             return response;
         }
 
         response.Dispose();
-        await ReauthenticateAsync(apiKey, pin, cancellationToken);
-        return await _httpClient.GetAsync(requestUri, cancellationToken);
+        token = await GetAuthenticationTokenAsync(apiKey, pin, cancellationToken, rejectedToken: token);
+        return await SendGetWithTokenAsync(requestUri, token, cancellationToken);
     }
 
-    private void InvalidateAuthenticationState()
+    private async Task<HttpResponseMessage> SendGetWithTokenAsync(
+        Uri requestUri,
+        string token,
+        CancellationToken cancellationToken)
     {
-        _currentApiKey = null;
-        _currentPin = null;
-        _bearerToken = null;
-        _tokenValidUntilUtc = DateTimeOffset.MinValue;
-        _httpClient.DefaultRequestHeaders.Authorization = null;
+        // Ein Token gehoert zur Anfrage, nicht zum geteilten HttpClient. Andere Zugangsdaten
+        // oder ein paralleler Login duerfen bereits gestartete Abfragen nicht umauthentifizieren.
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
     /// <summary>
@@ -465,9 +466,11 @@ internal sealed class TvdbClient : ITvdbClient
 
     private static string? ReadString(JsonElement element, string propertyName)
     {
-        return element.TryGetProperty(propertyName, out var property)
+        return element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(propertyName, out var property)
             && property.ValueKind == JsonValueKind.String
-            ? property.GetString()
+            && !string.IsNullOrWhiteSpace(property.GetString())
+            ? property.GetString()!.Trim()
             : null;
     }
 
@@ -476,7 +479,8 @@ internal sealed class TvdbClient : ITvdbClient
     /// </summary>
     private static string? ReadTranslationString(JsonElement element, string translationsProperty, string languageKey)
     {
-        return element.TryGetProperty(translationsProperty, out var translations)
+        return element.ValueKind == JsonValueKind.Object
+            && element.TryGetProperty(translationsProperty, out var translations)
             && translations.ValueKind == JsonValueKind.Object
             ? ReadString(translations, languageKey)
             : null;
@@ -484,7 +488,7 @@ internal sealed class TvdbClient : ITvdbClient
 
     private static int? ReadInt(JsonElement element, string propertyName)
     {
-        if (!element.TryGetProperty(propertyName, out var property))
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var property))
         {
             return null;
         }

@@ -28,7 +28,7 @@ internal static partial class EpisodeMetadataMatchingHeuristics
             return NormalizeWordCharacters(value, convertToLower: true);
         }
 
-        var normalized = ReplaceGermanTransliterations(value.ToLowerInvariant());
+        var normalized = ReplaceGermanTransliterations(value.Normalize(NormalizationForm.FormC).ToLowerInvariant());
         if (normalized.Contains("teil", StringComparison.Ordinal))
         {
             normalized = NormalizeMultipartEpisodeMarkers(normalized);
@@ -179,7 +179,7 @@ internal static partial class EpisodeMetadataMatchingHeuristics
         if (storedMapping is not null && candidates.All(candidate => candidate.Series.Id != storedMapping.TvdbSeriesId))
         {
             candidates.Add(new SeriesCandidate(
-                new TvdbSeriesSearchResult(storedMapping.TvdbSeriesId, storedMapping.TvdbSeriesName, null, null),
+                new TvdbSeriesSearchResult(storedMapping.TvdbSeriesId, storedMapping.TvdbSeriesName, null, null, storedMapping.OriginalLanguage),
                 5,
                 IsStoredFallback: true));
         }
@@ -238,11 +238,12 @@ internal static partial class EpisodeMetadataMatchingHeuristics
             prioritizedEpisodes = scoredEpisodes.Where(entry => entry.TitleSimilarity >= bestTitleSimilarity - 2);
         }
 
-        var bestEpisode = prioritizedEpisodes
+        var rankedEpisodes = prioritizedEpisodes
             .OrderByDescending(entry => entry.EpisodeScore)
             .ThenBy(entry => entry.Episode.SeasonNumber ?? int.MaxValue)
             .ThenBy(entry => entry.Episode.EpisodeNumber ?? int.MaxValue)
-            .FirstOrDefault();
+            .ToArray();
+        var bestEpisode = rankedEpisodes.FirstOrDefault();
 
         if (bestEpisode is null)
         {
@@ -290,7 +291,12 @@ internal static partial class EpisodeMetadataMatchingHeuristics
             exactTitleMatchCount,
             strongTitleMatchCount,
             seasonMatched,
-            episodeMatched);
+            episodeMatched)
+        {
+            EpisodeScoreGap = rankedEpisodes.Skip(1).FirstOrDefault(entry => entry.Episode.Id != bestEpisode.Episode.Id) is { } runnerUp
+                ? bestEpisode.EpisodeScore - runnerUp.EpisodeScore
+                : int.MaxValue
+        };
     }
 
     private static bool IsSeriesNameOnlyEpisodeTitle(
@@ -322,7 +328,7 @@ internal static partial class EpisodeMetadataMatchingHeuristics
 
     public static bool ShouldRequireReview(ScoredAutomaticMatch match)
     {
-        if (match.UsedStoredFallback)
+        if (match.UsedStoredFallback || match.SelectionMatch.EpisodeScoreGap < 8)
         {
             return true;
         }
@@ -573,7 +579,11 @@ internal sealed record ScoredEpisodeMatch(
     int ExactTitleMatchCount,
     int StrongTitleMatchCount,
     bool SeasonMatched,
-    bool EpisodeMatched);
+    bool EpisodeMatched)
+{
+    // Der Abstand zwischen Serien ersetzt nicht die Mehrdeutigkeitspruefung innerhalb einer Serie.
+    public int EpisodeScoreGap { get; init; } = int.MaxValue;
+}
 
 internal sealed record ScoredAutomaticMatch(
     TvdbSeriesSearchResult Series,

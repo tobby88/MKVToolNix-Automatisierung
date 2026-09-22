@@ -8,24 +8,33 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// </summary>
 internal sealed class EpisodeMetadataLookupService
 {
+    internal static readonly TimeSpan SuccessfulLookupCacheLifetime = TimeSpan.FromMinutes(30);
+    internal const int MaximumSeriesSearchCacheEntries = 128;
+    internal const int MaximumEpisodeCacheEntries = 16;
+    internal const int MaximumEpisodeImdbCacheEntries = 1024;
+    internal const int MaximumCachedListItems = 20_000;
     private readonly IAppMetadataStore _store;
     private readonly ITvdbClient _tvdbClient;
-    private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, IReadOnlyList<TvdbSeriesSearchResult>> _seriesSearchCache = new();
-    private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, IReadOnlyList<TvdbEpisodeRecord>> _episodeCache = new();
-    private readonly ConcurrentDictionary<TvdbEpisodeImdbCacheKey, string> _episodeImdbCache = new();
-    private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, Task<IReadOnlyList<TvdbSeriesSearchResult>>> _seriesSearchInFlight = new();
-    private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, Task<IReadOnlyList<TvdbEpisodeRecord>>> _episodeLoadsInFlight = new();
-    private readonly ConcurrentDictionary<TvdbEpisodeImdbCacheKey, Task<string?>> _episodeImdbLoadsInFlight = new();
+    private readonly TimeProvider _timeProvider;
+    private readonly object _successCacheSync = new();
+    private readonly Dictionary<TvdbSeriesSearchCacheKey, SuccessfulLookup<IReadOnlyList<TvdbSeriesSearchResult>>> _seriesSearchCache = new();
+    private readonly Dictionary<TvdbEpisodeCacheKey, SuccessfulLookup<IReadOnlyList<TvdbEpisodeRecord>>> _episodeCache = new();
+    private readonly Dictionary<TvdbEpisodeImdbCacheKey, SuccessfulLookup<string>> _episodeImdbCache = new();
+    private readonly ConcurrentDictionary<TvdbSeriesSearchCacheKey, Lazy<Task<IReadOnlyList<TvdbSeriesSearchResult>>>> _seriesSearchInFlight = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeCacheKey, Lazy<Task<IReadOnlyList<TvdbEpisodeRecord>>>> _episodeLoadsInFlight = new();
+    private readonly ConcurrentDictionary<TvdbEpisodeImdbCacheKey, Lazy<Task<string?>>> _episodeImdbLoadsInFlight = new();
 
     /// <summary>
     /// Initialisiert den TVDB-Lookup-Service mit persistentem Settings-Store und API-Client.
     /// </summary>
     /// <param name="store">Persistenter Store für Zugangsdaten und Serien-Mappings.</param>
     /// <param name="tvdbClient">HTTP-Client für TVDB-Serien- und Episodenabfragen.</param>
-    public EpisodeMetadataLookupService(IAppMetadataStore store, ITvdbClient tvdbClient)
+    /// <param name="timeProvider">Optionale Uhr für deterministisch prüfbare Cache-Lebensdauern.</param>
+    public EpisodeMetadataLookupService(IAppMetadataStore store, ITvdbClient tvdbClient, TimeProvider? timeProvider = null)
     {
         _store = store;
         _tvdbClient = tvdbClient;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -86,6 +95,7 @@ internal sealed class EpisodeMetadataLookupService
         AppMetadataSettings settings,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var normalizedQuery = EpisodeMetadataMatchingHeuristics.NormalizeText(query);
         if (string.IsNullOrWhiteSpace(normalizedQuery))
         {
@@ -97,20 +107,21 @@ internal sealed class EpisodeMetadataLookupService
             settings.TvdbApiKey.Trim(),
             settings.TvdbPin?.Trim() ?? string.Empty,
             normalizedQuery);
-        if (_seriesSearchCache.TryGetValue(cacheKey, out var cachedResults))
+        if (TryGetCachedResult(_seriesSearchCache, cacheKey, out var cachedResults))
         {
             return cachedResults;
         }
 
         var requestTask = _seriesSearchInFlight.GetOrAdd(
             cacheKey,
-            _ => ExecuteSharedLookupAsync(
+            _ => new Lazy<Task<IReadOnlyList<TvdbSeriesSearchResult>>>(() => ExecuteSharedLookupAsync(
                 cacheKey,
                 _seriesSearchCache,
                 _seriesSearchInFlight,
-                () => _tvdbClient.SearchSeriesAsync(settings.TvdbApiKey, settings.TvdbPin, query, CancellationToken.None)));
+                MaximumSeriesSearchCacheEntries,
+                () => _tvdbClient.SearchSeriesAsync(cacheKey.ApiKey, cacheKey.Pin, query, CancellationToken.None))));
 
-        return await requestTask.WaitAsync(cancellationToken);
+        return await requestTask.Value.WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -138,25 +149,28 @@ internal sealed class EpisodeMetadataLookupService
         AppMetadataSettings settings,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(seriesId);
         EnsureApiKeyConfigured(settings);
         var cacheKey = new TvdbEpisodeCacheKey(
             settings.TvdbApiKey.Trim(),
             settings.TvdbPin?.Trim() ?? string.Empty,
             seriesId);
-        if (_episodeCache.TryGetValue(cacheKey, out var cachedEpisodes))
+        if (TryGetCachedResult(_episodeCache, cacheKey, out var cachedEpisodes))
         {
             return cachedEpisodes;
         }
 
         var requestTask = _episodeLoadsInFlight.GetOrAdd(
             cacheKey,
-            _ => ExecuteSharedLookupAsync(
+            _ => new Lazy<Task<IReadOnlyList<TvdbEpisodeRecord>>>(() => ExecuteSharedLookupAsync(
                 cacheKey,
                 _episodeCache,
                 _episodeLoadsInFlight,
-                () => _tvdbClient.GetSeriesEpisodesAsync(settings.TvdbApiKey, settings.TvdbPin, seriesId, "deu", CancellationToken.None)));
+                MaximumEpisodeCacheEntries,
+                () => _tvdbClient.GetSeriesEpisodesAsync(cacheKey.ApiKey, cacheKey.Pin, seriesId, "deu", CancellationToken.None))));
 
-        return await requestTask.WaitAsync(cancellationToken);
+        return await requestTask.Value.WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -169,6 +183,7 @@ internal sealed class EpisodeMetadataLookupService
         int episodeId,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (episodeId <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(episodeId), "Die TVDB-Episoden-ID muss größer als null sein.");
@@ -180,15 +195,15 @@ internal sealed class EpisodeMetadataLookupService
             settings.TvdbApiKey.Trim(),
             settings.TvdbPin?.Trim() ?? string.Empty,
             episodeId);
-        if (_episodeImdbCache.TryGetValue(cacheKey, out var cachedImdbId))
+        if (TryGetCachedResult(_episodeImdbCache, cacheKey, out var cachedImdbId))
         {
             return string.IsNullOrEmpty(cachedImdbId) ? null : cachedImdbId;
         }
 
         var requestTask = _episodeImdbLoadsInFlight.GetOrAdd(
             cacheKey,
-            _ => ExecuteSharedEpisodeImdbLookupAsync(cacheKey, settings));
-        return await requestTask.WaitAsync(cancellationToken);
+            _ => new Lazy<Task<string?>>(() => ExecuteSharedEpisodeImdbLookupAsync(cacheKey)));
+        return await requestTask.Value.WaitAsync(cancellationToken);
     }
 
     /// <summary>
@@ -215,6 +230,7 @@ internal sealed class EpisodeMetadataLookupService
         EpisodeMetadataGuess guess,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var settings = LoadSettings();
         if (string.IsNullOrWhiteSpace(settings.TvdbApiKey))
         {
@@ -230,7 +246,7 @@ internal sealed class EpisodeMetadataLookupService
 
         try
         {
-            var searchResults = await SearchSeriesAsync(guess.SeriesName, cancellationToken);
+            var searchResults = await SearchSeriesAsync(guess.SeriesName, settings, cancellationToken);
             var storedMapping = FindSeriesMapping(guess.SeriesName);
             var seriesCandidates = BuildSeriesCandidates(guess, searchResults, storedMapping);
 
@@ -265,6 +281,7 @@ internal sealed class EpisodeMetadataLookupService
 
             if (!requiresReview)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 SaveSeriesMapping(guess.SeriesName, bestMatch.Series);
             }
 
@@ -317,6 +334,10 @@ internal sealed class EpisodeMetadataLookupService
     public void SaveSeriesMapping(string localSeriesName, TvdbSeriesSearchResult series)
     {
         var normalized = EpisodeMetadataMatchingHeuristics.NormalizeText(localSeriesName);
+        if (normalized.Length == 0 || series.Id <= 0)
+        {
+            return;
+        }
         _store.Update(settings =>
         {
             var existing = settings.SeriesMappings.FirstOrDefault(mapping =>
@@ -421,26 +442,38 @@ internal sealed class EpisodeMetadataLookupService
 
     /// <summary>
     /// Führt eine identische TVDB-Abfrage höchstens einmal gleichzeitig aus und teilt das Ergebnis
-    /// mit allen parallelen Aufrufern desselben Cache-Schlüssels.
+    /// mit allen parallelen Aufrufern desselben Cache-Schlüssels. Lazy startet den Fetch erst nach
+    /// Veröffentlichung des Eintrags: GetOrAdd darf seine Factory mehrfach ausführen, und auch
+    /// synchron abgeschlossene oder fehlgeschlagene Tasks müssen zuverlässig entfernt werden.
     /// </summary>
     /// <typeparam name="TCacheKey">Cache-Schlüsseltyp der Lookup-Art.</typeparam>
     /// <typeparam name="TResult">Elementtyp der zurückgelieferten Listenwerte.</typeparam>
     /// <param name="cacheKey">Eindeutiger Schlüssel der Anfrage.</param>
     /// <param name="cache">Ergebniscache für erfolgreiche Antworten.</param>
     /// <param name="inFlightCache">Zwischencache aktuell laufender identischer Requests.</param>
+    /// <param name="maximumCacheEntries">Höchstzahl erfolgreich gespeicherter Antworten dieser Lookup-Art.</param>
     /// <param name="fetchAsync">Eigentlicher TVDB-Fetch ohne aufrufergebundenes Cancellation-Token.</param>
     /// <returns>Das erfolgreiche Ergebnis der Lookup-Anfrage.</returns>
-    private static async Task<IReadOnlyList<TResult>> ExecuteSharedLookupAsync<TCacheKey, TResult>(
+    private async Task<IReadOnlyList<TResult>> ExecuteSharedLookupAsync<TCacheKey, TResult>(
         TCacheKey cacheKey,
-        ConcurrentDictionary<TCacheKey, IReadOnlyList<TResult>> cache,
-        ConcurrentDictionary<TCacheKey, Task<IReadOnlyList<TResult>>> inFlightCache,
+        Dictionary<TCacheKey, SuccessfulLookup<IReadOnlyList<TResult>>> cache,
+        ConcurrentDictionary<TCacheKey, Lazy<Task<IReadOnlyList<TResult>>>> inFlightCache,
+        int maximumCacheEntries,
         Func<Task<IReadOnlyList<TResult>>> fetchAsync)
         where TCacheKey : notnull
     {
         try
         {
+            if (TryGetCachedResult(cache, cacheKey, out var cached))
+            {
+                return cached;
+            }
+
             var results = await fetchAsync();
-            cache[cacheKey] = results;
+            if (results.Count <= MaximumCachedListItems)
+            {
+                CacheSuccessfulResult(cache, cacheKey, results, maximumCacheEntries);
+            }
             return results;
         }
         finally
@@ -450,19 +483,22 @@ internal sealed class EpisodeMetadataLookupService
     }
 
     private async Task<string?> ExecuteSharedEpisodeImdbLookupAsync(
-        TvdbEpisodeImdbCacheKey cacheKey,
-        AppMetadataSettings settings)
+        TvdbEpisodeImdbCacheKey cacheKey)
     {
         try
         {
+            if (TryGetCachedResult(_episodeImdbCache, cacheKey, out var cached))
+            {
+                return string.IsNullOrEmpty(cached) ? null : cached;
+            }
+
             var imdbId = await _tvdbClient.GetEpisodeImdbIdAsync(
-                settings.TvdbApiKey,
-                settings.TvdbPin,
+                cacheKey.ApiKey,
+                cacheKey.Pin,
                 cacheKey.EpisodeId,
                 CancellationToken.None);
-            // ConcurrentDictionary akzeptiert keine null-Werte. Ein leerer String ist hier der
-            // bewusst gecachte Zustand "TVDB kennt keine IMDb-Verknüpfung".
-            _episodeImdbCache[cacheKey] = imdbId ?? string.Empty;
+            // Auch der Zustand "keine IMDb-Verknüpfung" läuft nach derselben festen Frist ab.
+            CacheSuccessfulResult(_episodeImdbCache, cacheKey, imdbId ?? string.Empty, MaximumEpisodeImdbCacheEntries);
             return imdbId;
         }
         finally
@@ -470,6 +506,49 @@ internal sealed class EpisodeMetadataLookupService
             _episodeImdbLoadsInFlight.TryRemove(cacheKey, out _);
         }
     }
+
+    private bool TryGetCachedResult<TKey, TValue>(
+        Dictionary<TKey, SuccessfulLookup<TValue>> cache, TKey key, out TValue result)
+        where TKey : notnull
+    {
+        lock (_successCacheSync)
+        {
+            if (cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc > _timeProvider.GetUtcNow())
+            {
+                result = entry.Value;
+                return true;
+            }
+
+            cache.Remove(key);
+            result = default!;
+            return false;
+        }
+    }
+
+    private void CacheSuccessfulResult<TKey, TValue>(
+        Dictionary<TKey, SuccessfulLookup<TValue>> cache, TKey key, TValue value, int maximumEntries)
+        where TKey : notnull
+    {
+        lock (_successCacheSync)
+        {
+            var now = _timeProvider.GetUtcNow();
+            foreach (var expiredKey in cache.Where(pair => pair.Value.ExpiresAtUtc <= now).Select(pair => pair.Key).ToArray())
+            {
+                cache.Remove(expiredKey);
+            }
+
+            // Einfache FIFO-Verdrängung nach Ablaufzeit, keine zusätzliche Cache-Infrastruktur.
+            // Prüfung und Einfügen bleiben auch bei parallelen Fetch-Abschlüssen unter derselben Sperre.
+            if (cache.Count >= maximumEntries && !cache.ContainsKey(key))
+            {
+                cache.Remove(cache.MinBy(pair => pair.Value.ExpiresAtUtc).Key);
+            }
+
+            cache[key] = new SuccessfulLookup<TValue>(value, now + SuccessfulLookupCacheLifetime);
+        }
+    }
+
+    private sealed record SuccessfulLookup<T>(T Value, DateTimeOffset ExpiresAtUtc);
 }
 
 internal readonly record struct TvdbSeriesSearchCacheKey(string ApiKey, string Pin, string Query);
