@@ -39,7 +39,7 @@ internal sealed record ImdbDatasetImportProgress(
 /// </summary>
 internal sealed class ImdbDatasetIndexBuilder
 {
-    internal const int SchemaVersion = 3;
+    internal const int SchemaVersion = 4;
     private static readonly TimeSpan ProgressUpdateInterval = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
@@ -56,8 +56,13 @@ internal sealed class ImdbDatasetIndexBuilder
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        databasePath = Path.GetFullPath(databasePath);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-        File.Delete(databasePath);
+        // Der Builder darf nie versehentlich einen aktiven Index löschen.
+        using (new FileStream(databasePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+        }
 
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -76,7 +81,7 @@ internal sealed class ImdbDatasetIndexBuilder
         // dürfen insbesondere die fünf abschließenden CREATE-INDEX-Sortierungen unterstützen.
         await ExecuteNonQueryAsync(
             connection,
-            $"PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA locking_mode=EXCLUSIVE; PRAGMA cache_size=-131072; PRAGMA threads={sqliteWorkerThreads};",
+            $"PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA locking_mode=EXCLUSIVE; PRAGMA cache_size=-131072; PRAGMA threads={sqliteWorkerThreads};",
             cancellationToken);
         await ExecuteNonQueryAsync(
             connection,
@@ -143,6 +148,23 @@ internal sealed class ImdbDatasetIndexBuilder
             episodeLinks.Release();
         }
 
+        // Schon eine nutzbare Serie mit Episode reicht, auch für kleine synthetische Datensätze.
+        // Reine Serienlisten oder ausschließlich verwaiste Links dürfen keinen aktiven Index ersetzen.
+        using (var validationCommand = connection.CreateCommand())
+        {
+            validationCommand.CommandText = """
+                SELECT EXISTS(
+                    SELECT 1 FROM titles episode
+                    INNER JOIN titles series ON series.id = episode.parent_id
+                    WHERE episode.kind = 2 AND series.kind = 1);
+                """;
+            var hasLinkedEpisode = ImdbSqliteCancellation.Run(connection, cancellationToken, validationCommand.ExecuteScalar);
+            if (Convert.ToInt32(hasLinkedEpisode, CultureInfo.InvariantCulture) == 0)
+            {
+                throw new InvalidDataException("IMDb-Dateien title.basics/title.episode enthalten keine importierte Episode mit vorhandener Elternserie.");
+            }
+        }
+
         completedArchiveBytes += basicsArchiveLength;
         ImportGermanAliases(
             connection,
@@ -172,7 +194,7 @@ internal sealed class ImdbDatasetIndexBuilder
         metadataCommand.CommandText = "INSERT INTO metadata(key, value) VALUES ('version', $version), ('builtUtc', $builtUtc);";
         metadataCommand.Parameters.AddWithValue("$version", versionToken);
         metadataCommand.Parameters.AddWithValue("$builtUtc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
-        await metadataCommand.ExecuteNonQueryAsync(cancellationToken);
+        ImdbSqliteCancellation.Run(connection, cancellationToken, metadataCommand.ExecuteNonQuery);
     }
 
     private static void ReportFinalizationProgress(
@@ -263,6 +285,12 @@ internal sealed class ImdbDatasetIndexBuilder
                 var primaryTitleSpan = line[columns[2]];
                 var originalTitleSpan = line[columns[3]];
                 var primaryTitle = Encoding.UTF8.GetString(primaryTitleSpan);
+                if (idSpan.IsEmpty || idSpan.SequenceEqual("\\N"u8)
+                    || primaryTitleSpan.SequenceEqual("\\N"u8) || string.IsNullOrWhiteSpace(primaryTitle))
+                {
+                    return false;
+                }
+
                 if (mappedKind == 1)
                 {
                     seriesId.Value = Encoding.ASCII.GetString(idSpan);
@@ -322,7 +350,9 @@ internal sealed class ImdbDatasetIndexBuilder
             line =>
             {
                 Span<Range> columns = stackalloc Range[4];
-                if (!TryGetColumnRanges(line, columns))
+                if (!TryGetColumnRanges(line, columns)
+                    || line[columns[0]].IsEmpty || line[columns[0]].SequenceEqual("\\N"u8)
+                    || line[columns[1]].IsEmpty || line[columns[1]].SequenceEqual("\\N"u8))
                 {
                     return false;
                 }
@@ -335,7 +365,7 @@ internal sealed class ImdbDatasetIndexBuilder
                 return true;
             },
             cancellationToken);
-        lookup.PrepareForLookup();
+        lookup.PrepareForLookup(cancellationToken);
         return lookup;
     }
 
@@ -397,6 +427,11 @@ internal sealed class ImdbDatasetIndexBuilder
                 }
 
                 var aliasTitle = Encoding.UTF8.GetString(line[columns[2]]);
+                if (line[columns[2]].SequenceEqual("\\N"u8) || string.IsNullOrWhiteSpace(aliasTitle))
+                {
+                    return false;
+                }
+
                 id.Value = Encoding.ASCII.GetString(idSpan);
                 title.Value = aliasTitle;
                 normalized.Value = EpisodeMetadataMatchingHeuristics.NormalizeText(aliasTitle);
@@ -439,11 +474,14 @@ internal sealed class ImdbDatasetIndexBuilder
         long importedRowCount = 0;
         var elapsed = Stopwatch.StartNew();
         var lastProgressTimestamp = Stopwatch.GetTimestamp();
-        ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, fileStream.Position);
 
         void AppendLineSegment(ReadOnlySpan<byte> segment)
         {
             var requiredLength = bufferedLineLength + segment.Length;
+            if (requiredLength > 4 * 1024 * 1024)
+            {
+                throw new InvalidDataException($"IMDb-Datei {progressContext.DatasetName}: TSV-Zeile ist zu lang.");
+            }
             if (requiredLength > lineBuffer.Length)
             {
                 var replacement = ArrayPool<byte>.Shared.Rent(Math.Max(requiredLength, lineBuffer.Length * 2));
@@ -458,6 +496,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         void ProcessCompletedLine(ReadOnlySpan<byte> line)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!line.IsEmpty && line[^1] == (byte)'\r')
             {
                 line = line[..^1];
@@ -465,6 +504,18 @@ internal sealed class ImdbDatasetIndexBuilder
 
             if (isHeader)
             {
+                var validHeader = progressContext.DatasetName switch
+                {
+                    "title.basics" => line.StartsWith("tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\t"u8),
+                    "title.episode" => line.SequenceEqual("tconst\tparentTconst\tseasonNumber\tepisodeNumber"u8),
+                    "title.akas" => line.StartsWith("titleId\tordering\ttitle\tregion\tlanguage\t"u8),
+                    _ => false
+                };
+                if (!validHeader)
+                {
+                    throw new InvalidDataException($"IMDb-Datei {progressContext.DatasetName}: Unerwartete TSV-Kopfzeile.");
+                }
+
                 isHeader = false;
                 return;
             }
@@ -484,6 +535,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         try
         {
+            ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, fileStream.Position);
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -526,6 +578,16 @@ internal sealed class ImdbDatasetIndexBuilder
             if (bufferedLineLength > 0)
             {
                 ProcessCompletedLine(lineBuffer.AsSpan(0, bufferedLineLength));
+            }
+
+            if (isHeader)
+            {
+                throw new InvalidDataException($"IMDb-Datei {progressContext.DatasetName} ist leer.");
+            }
+
+            if (importedRowCount == 0)
+            {
+                throw new InvalidDataException($"IMDb-Datei {progressContext.DatasetName}: Keine verwendbaren Datensätze importiert ({rowCount} Datenzeilen gelesen).");
             }
 
             ReportImportProgress(progress, progressContext, rowCount, importedRowCount, elapsed.Elapsed, progressContext.ArchiveLength);
@@ -703,14 +765,15 @@ internal sealed class ImdbDatasetIndexBuilder
 
     private delegate bool Utf8LineProcessor(ReadOnlySpan<byte> line);
 
-    private static async Task ExecuteNonQueryAsync(
+    private static Task ExecuteNonQueryAsync(
         SqliteConnection connection,
         string commandText,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        using var command = connection.CreateCommand();
         command.CommandText = commandText;
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        ImdbSqliteCancellation.Run(connection, cancellationToken, command.ExecuteNonQuery);
+        return Task.CompletedTask;
     }
 
     private sealed record ImdbDatasetProgressContext(
@@ -760,12 +823,31 @@ internal sealed class ImdbDatasetIndexBuilder
                 episodeNumber);
         }
 
-        public void PrepareForLookup()
+        public void PrepareForLookup(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!_isOrdered)
             {
-                _numericLinks.Sort(static (left, right) => left.SortKey.CompareTo(right.SortKey));
+                var comparisons = 0;
+                try
+                {
+                    _numericLinks.Sort((left, right) =>
+                    {
+                        if ((++comparisons & 4095) == 0)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                        }
+
+                        return left.SortKey.CompareTo(right.SortKey);
+                    });
+                }
+                catch (InvalidOperationException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // List.Sort kapselt Ausnahmen des Comparers; Abbruch bleibt Abbruch.
+                    throw new OperationCanceledException(cancellationToken);
+                }
             }
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         public bool TryGet(
@@ -801,7 +883,8 @@ internal sealed class ImdbDatasetIndexBuilder
                     return true;
                 }
             }
-            else if (_textLinks.TryGetValue(Encoding.UTF8.GetString(id), out var textLink))
+            // Auch eine numerische ID kann wegen Parent/Staffel/Folge im Text-Fallback liegen.
+            if (_textLinks.TryGetValue(Encoding.UTF8.GetString(id), out var textLink))
             {
                 parentId = textLink.ParentId;
                 seasonNumber = textLink.SeasonNumber;
@@ -898,12 +981,13 @@ internal sealed class ImdbDatasetIndexBuilder
     private sealed class ImportedTitleIdSet
     {
         internal const int GrowthBlockSize = 4 * 1024 * 1024;
+        private const int MaximumDenseId = 128 * 1024 * 1024;
         private readonly HashSet<string> _nonNumericIds = new(StringComparer.Ordinal);
         private BitArray _numericIds = new(GrowthBlockSize);
 
         public void Add(ReadOnlySpan<byte> id)
         {
-            if (!TryParseNumericTitleId(id, out var numericId))
+            if (!TryParseNumericTitleId(id, out var numericId) || numericId >= MaximumDenseId)
             {
                 _nonNumericIds.Add(Encoding.UTF8.GetString(id));
                 return;
@@ -915,7 +999,7 @@ internal sealed class ImdbDatasetIndexBuilder
 
         public bool Contains(ReadOnlySpan<byte> id)
         {
-            if (!TryParseNumericTitleId(id, out var numericId))
+            if (!TryParseNumericTitleId(id, out var numericId) || numericId >= MaximumDenseId)
             {
                 return _nonNumericIds.Contains(Encoding.UTF8.GetString(id));
             }
@@ -1002,9 +1086,7 @@ internal sealed class ImdbDatasetSearchService
     private const int MinimumAutomaticScoreGap = 8;
     private readonly string _databasePath;
     private readonly object _cacheSync = new();
-    private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbSeriesCandidate>> _seriesCandidateCache = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, IReadOnlyList<ImdbEpisodeCatalogEntry>> _episodeCatalogCache = new(StringComparer.OrdinalIgnoreCase);
-    private ImdbDatabaseStamp? _cacheDatabaseStamp;
+    private SearchCache? _cache;
 
     public ImdbDatasetSearchService(string? databasePath = null)
     {
@@ -1038,7 +1120,7 @@ internal sealed class ImdbDatasetSearchService
         EpisodeMetadataGuess guess,
         int maximumResults = 20,
         CancellationToken cancellationToken = default) =>
-        Task.Run(() => SearchEpisodeCandidates(guess, maximumResults), cancellationToken);
+        Task.Run(() => SearchEpisodeCandidates(guess, maximumResults, cancellationToken), cancellationToken);
 
     /// <summary>
     /// Sucht Seriennamen asynchron und berücksichtigt dabei deutsche IMDb-Aliase sowie begrenzte Tippfehler-Toleranz.
@@ -1047,7 +1129,7 @@ internal sealed class ImdbDatasetSearchService
         string seriesQuery,
         int maximumResults = 12,
         CancellationToken cancellationToken = default) =>
-        Task.Run(() => SearchSeriesCandidates(seriesQuery, maximumResults), cancellationToken);
+        Task.Run(() => SearchSeriesCandidates(seriesQuery, maximumResults, cancellationToken), cancellationToken);
 
     /// <summary>
     /// Lädt alle Episoden einer gewählten Serie oder Staffel und sortiert ähnliche Titel nach vorne.
@@ -1066,7 +1148,8 @@ internal sealed class ImdbDatasetSearchService
                 episodeQuery,
                 seasonNumber,
                 guessedSeasonNumber,
-                guessedEpisodeNumber),
+                guessedEpisodeNumber,
+                cancellationToken),
             cancellationToken);
 
     internal static ImdbEpisodeCandidate? SelectAutomaticCandidate(IReadOnlyList<ImdbEpisodeCandidate> candidates)
@@ -1087,9 +1170,14 @@ internal sealed class ImdbDatasetSearchService
     /// </summary>
     /// <param name="guess">Lokale Serien-, Titel- und optionale Episodenerkennung.</param>
     /// <param name="maximumResults">Maximale Anzahl zurückzugebender Kandidaten.</param>
+    /// <param name="cancellationToken">Bricht SQL-Abfragen, Kataloglesen und Titelbewertung ab.</param>
     /// <returns>Nach absteigendem Match-Score sortierte IMDb-Episoden.</returns>
-    public IReadOnlyList<ImdbEpisodeCandidate> SearchEpisodeCandidates(EpisodeMetadataGuess guess, int maximumResults = 20)
+    public IReadOnlyList<ImdbEpisodeCandidate> SearchEpisodeCandidates(
+        EpisodeMetadataGuess guess,
+        int maximumResults = 20,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(guess);
         if (!IsAvailable || maximumResults <= 0)
         {
@@ -1102,25 +1190,16 @@ internal sealed class ImdbDatasetSearchService
             return [];
         }
 
-        EnsureCachesMatchCurrentDatabase();
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = _databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Shared,
-            Pooling = false
-        }.ToString());
-        connection.Open();
-        var seriesCandidates = _seriesCandidateCache.GetOrAdd(
+        using var connection = OpenReadOnlyConnection();
+        var cache = GetCacheForDatabase(connection, cancellationToken);
+        var seriesCandidates = cache.Series.GetOrAdd(
             normalizedSeries,
-            query => LoadSeriesCandidates(connection, query));
+            query => LoadSeriesCandidates(connection, query, cancellationToken));
         var results = new List<ImdbEpisodeCandidate>();
         foreach (var series in seriesCandidates)
         {
-            var episodeCatalog = _episodeCatalogCache.GetOrAdd(
-                series.ImdbId,
-                parentId => LoadEpisodeCatalog(connection, parentId));
-            results.AddRange(ScoreEpisodes(episodeCatalog, series, guess, includeUnmatched: false));
+            var episodeCatalog = GetEpisodeCatalog(cache, connection, series.ImdbId, cancellationToken);
+            results.AddRange(ScoreEpisodes(episodeCatalog, series, guess, includeUnmatched: false, cancellationToken));
         }
 
         return results
@@ -1137,8 +1216,12 @@ internal sealed class ImdbDatasetSearchService
     /// Präfixbereiche indexgestützt; ein kurzer stabiler Präfix liefert zusätzliche Kandidaten für
     /// die anschließende Fuzzy-Bewertung, ohne die große Alias-Tabelle vollständig zu scannen.
     /// </summary>
-    public IReadOnlyList<ImdbSeriesCandidate> SearchSeriesCandidates(string seriesQuery, int maximumResults = 12)
+    public IReadOnlyList<ImdbSeriesCandidate> SearchSeriesCandidates(
+        string seriesQuery,
+        int maximumResults = 12,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!IsAvailable || maximumResults <= 0)
         {
             return [];
@@ -1150,10 +1233,9 @@ internal sealed class ImdbDatasetSearchService
             return [];
         }
 
-        EnsureCachesMatchCurrentDatabase();
         using var connection = OpenReadOnlyConnection();
-        return _seriesCandidateCache
-            .GetOrAdd(normalizedSeries, query => LoadSeriesCandidates(connection, query))
+        return GetCacheForDatabase(connection, cancellationToken).Series
+            .GetOrAdd(normalizedSeries, query => LoadSeriesCandidates(connection, query, cancellationToken))
             .Take(maximumResults)
             .ToArray();
     }
@@ -1163,19 +1245,19 @@ internal sealed class ImdbDatasetSearchService
         string episodeQuery,
         int? seasonNumber,
         string? guessedSeasonNumber,
-        string? guessedEpisodeNumber)
+        string? guessedEpisodeNumber,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(series);
         if (!IsAvailable)
         {
             return [];
         }
 
-        EnsureCachesMatchCurrentDatabase();
         using var connection = OpenReadOnlyConnection();
-        var episodeCatalog = _episodeCatalogCache.GetOrAdd(
-            series.ImdbId,
-            parentId => LoadEpisodeCatalog(connection, parentId));
+        var cache = GetCacheForDatabase(connection, cancellationToken);
+        var episodeCatalog = GetEpisodeCatalog(cache, connection, series.ImdbId, cancellationToken);
         var guess = new EpisodeMetadataGuess(
             series.DisplayTitle,
             episodeQuery ?? string.Empty,
@@ -1185,7 +1267,8 @@ internal sealed class ImdbDatasetSearchService
                 episodeCatalog.Where(episode => seasonNumber is null || episode.SeasonNumber == seasonNumber),
                 series,
                 guess,
-                includeUnmatched: true)
+                includeUnmatched: true,
+                cancellationToken)
             .ToArray();
 
         return string.IsNullOrWhiteSpace(episodeQuery)
@@ -1208,14 +1291,28 @@ internal sealed class ImdbDatasetSearchService
         {
             DataSource = _databasePath,
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Shared,
+            Cache = SqliteCacheMode.Private,
             Pooling = false
         }.ToString());
-        connection.Open();
-        return connection;
+        try
+        {
+            connection.Open();
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 
-    private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(SqliteConnection connection, string normalizedSeries)
+    private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidates(
+        SqliteConnection connection, string normalizedSeries, CancellationToken cancellationToken) =>
+        ImdbSqliteCancellation.Run(connection, cancellationToken,
+            () => LoadSeriesCandidatesCore(connection, normalizedSeries, cancellationToken));
+
+    private static IReadOnlyList<ImdbSeriesCandidate> LoadSeriesCandidatesCore(
+        SqliteConnection connection, string normalizedSeries, CancellationToken cancellationToken)
     {
         var rows = new List<ImdbSeriesTitleRow>();
         var aliasTable = HasDedicatedSeriesAliasTable(connection) ? "series_aliases" : "aliases";
@@ -1256,6 +1353,7 @@ internal sealed class ImdbDatasetSearchService
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 rows.Add(new ImdbSeriesTitleRow(
                     reader.GetString(0),
                     reader.GetString(1),
@@ -1272,7 +1370,7 @@ internal sealed class ImdbDatasetSearchService
                 .Select(row => new
                 {
                     Row = row,
-                    Similarity = CalculateFuzzyTitleSimilarity(normalizedSeries, row.NormalizedTitle),
+                    Similarity = CalculateFuzzyTitleSimilarity(normalizedSeries, row.NormalizedTitle, cancellationToken),
                     Exact = string.Equals(normalizedSeries, row.NormalizedTitle, StringComparison.Ordinal)
                 })
                 .OrderByDescending(candidate => candidate.Exact)
@@ -1315,7 +1413,13 @@ internal sealed class ImdbDatasetSearchService
 
     private static IReadOnlyList<ImdbEpisodeCatalogEntry> LoadEpisodeCatalog(
         SqliteConnection connection,
-        string parentId)
+        string parentId,
+        CancellationToken cancellationToken) =>
+        ImdbSqliteCancellation.Run(connection, cancellationToken,
+            () => LoadEpisodeCatalogCore(connection, parentId, cancellationToken));
+
+    private static IReadOnlyList<ImdbEpisodeCatalogEntry> LoadEpisodeCatalogCore(
+        SqliteConnection connection, string parentId, CancellationToken cancellationToken)
     {
         using var command = connection.CreateCommand();
         command.CommandText =
@@ -1331,6 +1435,7 @@ internal sealed class ImdbDatasetSearchService
         var episodes = new Dictionary<string, MutableEpisodeCandidate>(StringComparer.OrdinalIgnoreCase);
         while (reader.Read())
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var id = reader.GetString(0);
             if (!episodes.TryGetValue(id, out var episode))
             {
@@ -1354,7 +1459,7 @@ internal sealed class ImdbDatasetSearchService
                 episode.PrimaryTitle,
                 episode.SeasonNumber,
                 episode.EpisodeNumber,
-                episode.Titles.ToArray()))
+                episode.Titles.Distinct(StringComparer.Ordinal).ToArray()))
             .ToArray();
     }
 
@@ -1362,10 +1467,12 @@ internal sealed class ImdbDatasetSearchService
         IEnumerable<ImdbEpisodeCatalogEntry> episodes,
         ImdbSeriesCandidate series,
         EpisodeMetadataGuess guess,
-        bool includeUnmatched)
+        bool includeUnmatched,
+        CancellationToken cancellationToken)
     {
         foreach (var episode in episodes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var titleCandidates = episode.Titles
                 .Select(title => new ImdbEpisodeTitleCandidate(title, IsLocalizedAlias: true))
                 .Append(new ImdbEpisodeTitleCandidate(episode.PrimaryTitle, IsLocalizedAlias: false))
@@ -1373,7 +1480,7 @@ internal sealed class ImdbDatasetSearchService
                 {
                     title.Title,
                     title.IsLocalizedAlias,
-                    Similarity = CalculateFuzzyTitleSimilarity(guess.EpisodeTitle, title.Title)
+                    Similarity = CalculateFuzzyTitleSimilarity(guess.EpisodeTitle, title.Title, cancellationToken)
                 })
                 .OrderByDescending(title => title.Similarity)
                 .ThenByDescending(title => title.IsLocalizedAlias)
@@ -1428,8 +1535,9 @@ internal sealed class ImdbDatasetSearchService
     /// Ergänzt die etablierte Tokenbewertung um eine zurückhaltende Damerau-Levenshtein-Komponente.
     /// Tippfehler werden damit sichtbar, erreichen aber nie die Schwelle eines automatischen exakten Treffers.
     /// </summary>
-    private static int CalculateFuzzyTitleSimilarity(string left, string right)
+    private static int CalculateFuzzyTitleSimilarity(string left, string right, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var establishedScore = EpisodeMetadataMatchingHeuristics.CalculateTitleSimilarity(left, right);
         if (establishedScore >= 22)
         {
@@ -1444,7 +1552,13 @@ internal sealed class ImdbDatasetSearchService
         }
 
         var maximumLength = Math.Max(normalizedLeft.Length, normalizedRight.Length);
-        var distance = CalculateDamerauLevenshteinDistance(normalizedLeft, normalizedRight);
+        // Mehr als 30% Längendifferenz kann die niedrigste Fuzzy-Schwelle nicht erreichen.
+        if (Math.Abs(normalizedLeft.Length - normalizedRight.Length) > maximumLength * 0.30d)
+        {
+            return establishedScore;
+        }
+
+        var distance = CalculateDamerauLevenshteinDistance(normalizedLeft, normalizedRight, cancellationToken);
         var ratio = 1d - (distance / (double)maximumLength);
         var fuzzyScore = ratio switch
         {
@@ -1456,65 +1570,106 @@ internal sealed class ImdbDatasetSearchService
         return Math.Max(establishedScore, fuzzyScore);
     }
 
-    private static int CalculateDamerauLevenshteinDistance(string left, string right)
+    internal static int CalculateDamerauLevenshteinDistance(
+        string left, string right, CancellationToken cancellationToken = default)
     {
-        var distances = new int[left.Length + 1, right.Length + 1];
-        for (var leftIndex = 0; leftIndex <= left.Length; leftIndex++)
+        cancellationToken.ThrowIfCancellationRequested();
+        if (right.Length > left.Length)
         {
-            distances[leftIndex, 0] = leftIndex;
+            (left, right) = (right, left);
         }
 
+        // Nur drei Zeilen sind für benachbarte Transpositionen erforderlich, keine O(n*m)-Matrix.
+        var previousPrevious = new int[right.Length + 1];
+        var previous = new int[right.Length + 1];
+        var current = new int[right.Length + 1];
         for (var rightIndex = 0; rightIndex <= right.Length; rightIndex++)
         {
-            distances[0, rightIndex] = rightIndex;
+            previous[rightIndex] = rightIndex;
         }
 
         for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            current[0] = leftIndex;
             for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
             {
                 var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
-                distances[leftIndex, rightIndex] = Math.Min(
+                current[rightIndex] = Math.Min(
                     Math.Min(
-                        distances[leftIndex - 1, rightIndex] + 1,
-                        distances[leftIndex, rightIndex - 1] + 1),
-                    distances[leftIndex - 1, rightIndex - 1] + substitutionCost);
+                        previous[rightIndex] + 1,
+                        current[rightIndex - 1] + 1),
+                    previous[rightIndex - 1] + substitutionCost);
 
                 if (leftIndex > 1
                     && rightIndex > 1
                     && left[leftIndex - 1] == right[rightIndex - 2]
                     && left[leftIndex - 2] == right[rightIndex - 1])
                 {
-                    distances[leftIndex, rightIndex] = Math.Min(
-                        distances[leftIndex, rightIndex],
-                        distances[leftIndex - 2, rightIndex - 2] + 1);
+                    current[rightIndex] = Math.Min(current[rightIndex], previousPrevious[rightIndex - 2] + 1);
                 }
             }
+
+            (previousPrevious, previous, current) = (previous, current, previousPrevious);
         }
 
-        return distances[left.Length, right.Length];
+        return previous[right.Length];
     }
 
-    private void EnsureCachesMatchCurrentDatabase()
+    private SearchCache GetCacheForDatabase(SqliteConnection connection, CancellationToken cancellationToken)
     {
         var file = new FileInfo(_databasePath);
-        var currentStamp = new ImdbDatabaseStamp(file.Length, file.LastWriteTimeUtc.Ticks);
-        if (_cacheDatabaseStamp == currentStamp)
-        {
-            return;
-        }
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT group_concat(key || '=' || value, '|') FROM (SELECT key, value FROM metadata ORDER BY key);";
+        var revision = ImdbSqliteCancellation.Run(connection, cancellationToken, () => Convert.ToString(command.ExecuteScalar()));
+        var currentStamp = new ImdbDatabaseStamp(file.Length, file.LastWriteTimeUtc.Ticks, revision);
 
         lock (_cacheSync)
         {
-            if (_cacheDatabaseStamp == currentStamp)
+            if (_cache?.Stamp != currentStamp)
             {
-                return;
+                // Laufende Suchen behalten ihre eigene Generation und können nach einem
+                // atomaren Datenbankwechsel keine alten Werte in den neuen Cache schreiben.
+                _cache = new SearchCache(currentStamp);
             }
 
-            _seriesCandidateCache.Clear();
-            _episodeCatalogCache.Clear();
-            _cacheDatabaseStamp = currentStamp;
+            if (_cache.Series.Count >= 128)
+            {
+                _cache.Series.Clear();
+            }
+
+            return _cache;
         }
+    }
+
+    private static IReadOnlyList<ImdbEpisodeCatalogEntry> GetEpisodeCatalog(
+        SearchCache cache, SqliteConnection connection, string parentId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (cache.Episodes.TryGetValue(parentId, out var existing))
+        {
+            return existing;
+        }
+
+        var episodes = LoadEpisodeCatalog(connection, parentId, cancellationToken);
+        if (episodes.Count <= 20_000)
+        {
+            if (cache.Episodes.Count >= 8)
+            {
+                cache.Episodes.Clear();
+            }
+
+            cache.Episodes[parentId] = episodes;
+        }
+
+        return episodes;
+    }
+
+    private sealed class SearchCache(ImdbDatabaseStamp stamp)
+    {
+        public ImdbDatabaseStamp Stamp { get; } = stamp;
+        public ConcurrentDictionary<string, IReadOnlyList<ImdbSeriesCandidate>> Series { get; } = new(StringComparer.Ordinal);
+        public ConcurrentDictionary<string, IReadOnlyList<ImdbEpisodeCatalogEntry>> Episodes { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed record ImdbEpisodeCatalogEntry(
@@ -1534,7 +1689,7 @@ internal sealed class ImdbDatasetSearchService
         string PrimaryTitle,
         int? StartYear);
 
-    private sealed record ImdbDatabaseStamp(long Length, long LastWriteTimeUtcTicks);
+    private sealed record ImdbDatabaseStamp(long Length, long LastWriteTimeUtcTicks, string? Revision);
 
     private sealed record MutableEpisodeCandidate(
         string Id,

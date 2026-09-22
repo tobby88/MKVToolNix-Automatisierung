@@ -264,6 +264,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             Path.Combine(_tempDirectory, "index.sqlite"));
 
         var result = await manager.EnsureCurrentAsync();
+        await manager.EnsureCurrentAsync();
 
         Assert.False(result.HasWarning);
         Assert.Equal(1, consent.CallCount);
@@ -531,6 +532,350 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         });
     }
 
+    [Theory]
+    [InlineData(70000, 1, "tt1000001")]
+    [InlineData(1, 70000, "tt1000001")]
+    [InlineData(1, 1, "tt3000000000")]
+    public async Task BuildAsync_PreservesNumericEpisodesStoredInTextFallback(int season, int episode, string parent)
+    {
+        var files = WriteSmallDatasetArchives();
+        File.WriteAllBytes(files.Episodes, Gzip($"tconst\tparentTconst\tseasonNumber\tepisodeNumber\ntt2000001\t{parent}\t{season}\t{episode}\n"));
+        if (parent != "tt1000001")
+        {
+            var basics = Gunzip(File.ReadAllBytes(files.Basics));
+            File.WriteAllBytes(files.Basics, Gzip(basics + $"{parent}\ttvSeries\tParent\tParent\t0\t2020\t\\N\t45\tCrime\n"));
+        }
+        var database = Path.Combine(_tempDirectory, "fallback.sqlite");
+
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "fallback");
+
+        Assert.Equal(parent, ReadText(database, "SELECT parent_id FROM titles WHERE id = 'tt2000001'"));
+        Assert.Equal(season, ReadScalar(database, "SELECT season_number FROM titles WHERE id = 'tt2000001'"));
+        Assert.Equal(episode, ReadScalar(database, "SELECT episode_number FROM titles WHERE id = 'tt2000001'"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_NeverDeletesExistingDestination_EvenWhenAlreadyCancelled()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "existing.sqlite");
+        File.WriteAllText(database, "existing-index");
+        var builder = new ImdbDatasetIndexBuilder();
+
+        await Assert.ThrowsAsync<IOException>(() => builder.BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "revision"));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => builder.BuildAsync(
+            database, files.Basics, files.Episodes, files.Aliases, "revision", cancellationToken: cancellation.Token));
+        Assert.Equal("existing-index", File.ReadAllText(database));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("tconst\twrongColumn\tseasonNumber\tepisodeNumber\n")]
+    public async Task BuildAsync_RejectsMissingOrChangedHeaders(string header)
+    {
+        var files = WriteSmallDatasetArchives();
+        File.WriteAllBytes(files.Episodes, Gzip(header));
+        await Assert.ThrowsAsync<InvalidDataException>(() => new ImdbDatasetIndexBuilder().BuildAsync(
+            Path.Combine(_tempDirectory, "invalid.sqlite"), files.Basics, files.Episodes, files.Aliases, "revision"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_CancellationDuringFinalizationDoesNotPublishVersion()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "cancelled.sqlite");
+        using var cancellation = new CancellationTokenSource();
+        var progress = new ActionProgress<ImdbDatasetImportProgress>(value =>
+        {
+            if (value.IsFinalizing)
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new ImdbDatasetIndexBuilder().BuildAsync(
+            database, files.Basics, files.Episodes, files.Aliases, "revision", progress, cancellation.Token));
+        Assert.Equal(0, ReadScalar(database, "SELECT COUNT(*) FROM metadata"));
+    }
+
+    [Fact]
+    public void SqliteCancellation_InterruptsRunningStatement_AndRemovesProgressHandler()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var cancellation = new CancellationTokenSource();
+        connection.CreateFunction("cancel_lookup", () => { cancellation.Cancel(); return 1; });
+        using var command = connection.CreateCommand();
+        command.CommandText = "WITH RECURSIVE numbers(n) AS (SELECT cancel_lookup() UNION ALL SELECT n+1 FROM numbers WHERE n<100000000) SELECT SUM(n) FROM numbers;";
+
+        var exception = Assert.Throws<OperationCanceledException>(() =>
+            ImdbSqliteCancellation.Run(connection, cancellation.Token, command.ExecuteScalar));
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        command.CommandText = "WITH RECURSIVE numbers(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM numbers WHERE n<2000) SELECT SUM(n) FROM numbers;";
+        Assert.Equal(2001000L, command.ExecuteScalar());
+    }
+
+    [Theory]
+    [InlineData("", "", 0)]
+    [InlineData("abc", "", 3)]
+    [InlineData("leipzig", "leipzgi", 1)]
+    [InlineData("ab", "ba", 1)]
+    [InlineData("kitten", "sitting", 3)]
+    public void FuzzyDistance_RetainsInsertionDeletionAndTranspositionSemantics(string left, string right, int expected)
+    {
+        Assert.Equal(expected, ImdbDatasetSearchService.CalculateDamerauLevenshteinDistance(left, right));
+        Assert.Equal(expected, ImdbDatasetSearchService.CalculateDamerauLevenshteinDistance(right, left));
+    }
+
+    [Fact]
+    public void FuzzyDistance_UsesLinearMemory_AndHonorsCancellation()
+    {
+        var left = new string('a', 2000);
+        var right = new string('b', 2000);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        Assert.Equal(2000, ImdbDatasetSearchService.CalculateDamerauLevenshteinDistance(left, right));
+        Assert.True(GC.GetAllocatedBytesForCurrentThread() - before < 200_000);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() => ImdbDatasetSearchService.CalculateDamerauLevenshteinDistance(left, right, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task SearchCache_UsesDatabaseRevision_EvenWhenFileSizeAndTimestampAreUnchanged()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "index.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "revision-1");
+        var search = new ImdbDatasetSearchService(database);
+        var series = Assert.Single(search.SearchSeriesCandidates("Der Alte"));
+        Assert.Equal(2, Assert.Single(await search.BrowseSeriesEpisodesAsync(series, "", null, null, null)).EpisodeNumber);
+        var oldLength = new FileInfo(database).Length;
+        var oldTime = File.GetLastWriteTimeUtc(database);
+        ExecuteSql(database, "UPDATE titles SET episode_number=3 WHERE id='tt2000001'; UPDATE metadata SET value='revision-2' WHERE key='version';");
+        File.SetLastWriteTimeUtc(database, oldTime);
+
+        Assert.Equal(oldLength, new FileInfo(database).Length);
+        Assert.Equal(3, Assert.Single(await search.BrowseSeriesEpisodesAsync(series, "", null, null, null)).EpisodeNumber);
+    }
+
+    [Fact]
+    public async Task LookupDialog_ClearsOldCatalog_AndKeepsPendingSeriesSearchWhenEpisodeTextChanges()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "dialog.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "revision");
+        using var vm = new ImdbLookupWindowViewModel(new("Der Alte", "", "xx", "xx"), null, new(database));
+        await vm.RefreshLocalCandidatesAsync();
+        Assert.Single(vm.LocalCandidates);
+
+        vm.SeriesSearchText = "SOKO Leipzig";
+        vm.EpisodeSearchText = "Zweite Folge";
+        Assert.False(vm.CanApplyLocalCandidate);
+        await vm.WaitForPendingLocalSearchAsync();
+        Assert.Equal("tt1000002", vm.SelectedLocalSeries?.ImdbId);
+        Assert.Equal(2, vm.LocalCandidates.Count);
+
+        var oldFilter = vm.SeasonFilters.First();
+        vm.SeriesSearchText = "";
+        vm.SelectedSeasonFilter = oldFilter;
+        Assert.Empty(vm.LocalCandidates);
+        Assert.Empty(vm.LocalSeriesCandidates);
+        Assert.Null(vm.SelectedLocalSeries);
+        Assert.False(vm.IsLocalSearchRunning);
+        Assert.False(vm.CanApplyLocalCandidate);
+    }
+
+    [Fact]
+    public async Task SearchAsync_CancelledTokenAppliesToAllEntryPoints()
+    {
+        var search = new ImdbDatasetSearchService(Path.Combine(_tempDirectory, "absent.sqlite"));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => search.SearchSeriesCandidatesAsync("Series", cancellationToken: cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => search.SearchEpisodeCandidatesAsync(new("Series", "Title", "01", "01"), cancellationToken: cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => search.BrowseSeriesEpisodesAsync(new("tt1234567", "Series", "Series", null, 30, true), "", null, null, null, cancellation.Token));
+    }
+
+    [Theory]
+    [InlineData("title.basics.tsv.gz", "")]
+    [InlineData("title.episode.tsv.gz", "")]
+    [InlineData("title.akas.tsv.gz", "")]
+    [InlineData("title.basics.tsv.gz", "tt9000001\tmovie\tIgnored\tIgnored\t0\t2020\t\\N\t90\tDrama\n")]
+    [InlineData("title.episode.tsv.gz", "\\N\t\\N\t1\t1\n")]
+    [InlineData("title.akas.tsv.gz", "tt2000001\t1\tIgnored\tFR\tfr\timdbDisplay\t\\N\t0\n")]
+    public async Task EnsureCurrentAsync_RejectsArchivesWithoutUsableRows_AndPreservesActiveIndex(string emptyArchive, string unusableRows)
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "active.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "old-version");
+        var oldBytes = File.ReadAllBytes(database);
+        var archives = BuildSmallDatasetByteMap();
+        var header = Gunzip(archives[emptyArchive]).Split('\n')[0];
+        archives[emptyArchive] = Gzip(header + "\n" + unusableRows);
+        using var http = new HttpClient(new DatasetHttpHandler(archives));
+        var store = new FakeMetadataStore(CreateInstalledDatasetSettings());
+        var manager = new ImdbDatasetManager(store, http, new(), new FixedConsent(true), _tempDirectory, database);
+
+        var result = await manager.EnsureCurrentAsync();
+
+        Assert.Contains(Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(emptyArchive)), Assert.Single(result.Warnings), StringComparison.Ordinal);
+        Assert.Equal(oldBytes, File.ReadAllBytes(database));
+        Assert.Equal("old-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
+        Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Empty(Directory.GetDirectories(_tempDirectory, ".staging-*"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildAsync_RequiresAnImportedEpisodeLinkedToAnImportedSeries(bool orphanedEpisode)
+    {
+        var files = WriteSmallDatasetArchives();
+        if (orphanedEpisode)
+        {
+            File.WriteAllBytes(files.Episodes, Gzip("tconst\tparentTconst\tseasonNumber\tepisodeNumber\ntt2000001\ttt9999999\t1\t1\n"));
+        }
+        else
+        {
+            var basics = Gunzip(File.ReadAllBytes(files.Basics));
+            File.WriteAllBytes(files.Basics, Gzip(string.Join('\n', basics.Split('\n').Where(line => !line.Contains("\ttvEpisode\t", StringComparison.Ordinal)))));
+        }
+        var database = Path.Combine(_tempDirectory, "unusable.sqlite");
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "not-published"));
+
+        Assert.Contains("Elternserie", error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, ReadScalar(database, "SELECT COUNT(*) FROM metadata"));
+    }
+
+    [Fact]
+    public async Task BuildAsync_AcceptsOneSeriesOneEpisodeAndOneAlias()
+    {
+        var files = WriteSmallDatasetArchives();
+        File.WriteAllBytes(files.Basics, Gzip("tconst\ttitleType\tprimaryTitle\toriginalTitle\tisAdult\tstartYear\tendYear\truntimeMinutes\tgenres\n"
+            + "tt1000001\ttvSeries\tSeries\tSeries\t0\t2020\t\\N\t45\tCrime\n"
+            + "tt2000001\ttvEpisode\tPilot\tPilot\t0\t2020\t\\N\t45\tCrime\n"));
+        File.WriteAllBytes(files.Episodes, Gzip("tconst\tparentTconst\tseasonNumber\tepisodeNumber\ntt2000001\ttt1000001\t1\t1\n"));
+        File.WriteAllBytes(files.Aliases, Gzip("titleId\tordering\ttitle\tregion\tlanguage\ttypes\tattributes\tisOriginalTitle\ntt2000001\t1\tPilot\tDE\tde\timdbDisplay\t\\N\t0\n"));
+        var database = Path.Combine(_tempDirectory, "minimal.sqlite");
+
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "minimal");
+
+        Assert.Equal("minimal", ReadText(database, "SELECT value FROM metadata WHERE key='version'"));
+        Assert.Single(new ImdbDatasetSearchService(database).SearchEpisodeCandidates(new("Series", "Pilot", "01", "01")));
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_ReportsActivatedIndex_WhenFinalSettingsSaveFails()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "active.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "old-version");
+        var store = new FakeMetadataStore(CreateInstalledDatasetSettings())
+        {
+            BeforeUpdateCommit = settings =>
+            {
+                if (settings.ImdbDataset.InstalledVersion != "old-version")
+                {
+                    throw new IOException("settings-write-failed");
+                }
+            }
+        };
+        using var http = new HttpClient(new DatasetHttpHandler(BuildSmallDatasetByteMap()));
+        var manager = new ImdbDatasetManager(store, http, new(), new FixedConsent(true), _tempDirectory, database);
+
+        var result = await manager.EnsureCurrentAsync();
+
+        var warning = Assert.Single(result.Warnings);
+        Assert.Contains("neue IMDb-Offlineindex ist bereits aktiv", warning, StringComparison.Ordinal);
+        Assert.Contains("settings-write-failed", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("Ein vorhandener Index bleibt aktiv", warning, StringComparison.Ordinal);
+        Assert.NotEqual("old-version", ReadText(database, "SELECT value FROM metadata WHERE key='version'"));
+        Assert.Single(new ImdbDatasetSearchService(database).SearchSeriesCandidates("Der Alte"));
+        Assert.Equal("old-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
+        Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Empty(Directory.GetDirectories(_tempDirectory, ".staging-*"));
+    }
+
+    [Theory]
+    [InlineData("etag")]
+    [InlineData("modified")]
+    [InlineData("precondition")]
+    public async Task EnsureCurrentAsync_RejectsRevisionChangesBetweenHeadAndGet(string change)
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "active.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "old-version");
+        var oldBytes = File.ReadAllBytes(database);
+        var conditionWasChecked = false;
+        using var http = new HttpClient(new DatasetHttpHandler(BuildSmallDatasetByteMap())
+        {
+            TransformResponse = (request, response) =>
+            {
+                if (change == "modified")
+                {
+                    response.Headers.ETag = null;
+                }
+                if (request.Method != HttpMethod.Get)
+                {
+                    return;
+                }
+
+                if (change == "modified")
+                {
+                    Assert.Equal(response.Content.Headers.LastModified, request.Headers.IfUnmodifiedSince);
+                    response.Content.Headers.LastModified = response.Content.Headers.LastModified!.Value.AddDays(1);
+                }
+                else
+                {
+                    Assert.Equal(response.Headers.ETag!.Tag, Assert.Single(request.Headers.IfMatch).Tag);
+                    if (change == "etag")
+                    {
+                        response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"changed-revision\"");
+                    }
+                    else
+                    {
+                        response.StatusCode = HttpStatusCode.PreconditionFailed;
+                    }
+                }
+                conditionWasChecked = true;
+            }
+        });
+        var store = new FakeMetadataStore(CreateInstalledDatasetSettings());
+        var manager = new ImdbDatasetManager(store, http, new(), new FixedConsent(true), _tempDirectory, database);
+
+        var result = await manager.EnsureCurrentAsync();
+
+        Assert.True(conditionWasChecked);
+        Assert.True(result.HasWarning);
+        Assert.Equal(oldBytes, File.ReadAllBytes(database));
+        Assert.Equal("old-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
+        Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
+        Assert.Empty(Directory.GetDirectories(_tempDirectory, ".staging-*"));
+    }
+
+    private static AppMetadataSettings CreateInstalledDatasetSettings() => new()
+    {
+        ImdbDataset = new()
+        {
+            ManagementPreferenceConfigured = true,
+            AutoManageEnabled = true,
+            InstalledVersion = "old-version",
+            InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion
+        }
+    };
+
+    private static string Gunzip(byte[] archive)
+    {
+        using var source = new MemoryStream(archive);
+        using var gzip = new GZipStream(source, CompressionMode.Decompress);
+        using var reader = new StreamReader(gzip, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
     private DatasetFiles WriteSmallDatasetArchives()
     {
         var bytes = BuildSmallDatasetByteMap();
@@ -660,6 +1005,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
 
     private sealed class DatasetHttpHandler(IReadOnlyDictionary<string, byte[]> files) : HttpMessageHandler
     {
+        public Action<HttpRequestMessage, HttpResponseMessage>? TransformResponse { get; init; }
         public int HeadRequestCount { get; private set; }
 
         public int GetRequestCount { get; private set; }
@@ -688,12 +1034,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             response.Content.Headers.ContentLength = bytes.Length;
             response.Content.Headers.LastModified = new DateTimeOffset(2026, 7, 21, 0, 0, 0, TimeSpan.Zero);
             response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue($"\"{fileName}-v1\"");
+            TransformResponse?.Invoke(request, response);
             return Task.FromResult(response);
         }
     }
 
     private sealed class FakeMetadataStore(AppMetadataSettings settings) : IAppMetadataStore
     {
+        public Action<AppMetadataSettings>? BeforeUpdateCommit { get; init; }
         public AppMetadataSettings CurrentSettings { get; private set; } = settings.Clone();
 
         public string SettingsFilePath => Path.Combine(Path.GetTempPath(), "settings.json");
@@ -706,6 +1054,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         {
             var updated = CurrentSettings.Clone();
             updateAction(updated);
+            BeforeUpdateCommit?.Invoke(updated);
             CurrentSettings = updated.Clone();
         }
     }

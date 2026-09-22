@@ -34,6 +34,11 @@ internal sealed class ImdbDatasetUpdateConsent : IImdbDatasetUpdateConsent
 {
     public bool ConfirmUpdate(ImdbDatasetUpdateOffer offer)
     {
+        if (Application.Current is { } application && !application.Dispatcher.CheckAccess())
+        {
+            return application.Dispatcher.Invoke(() => ConfirmUpdate(offer));
+        }
+
         var result = MessageBox.Show(
             ResolveOwner(),
             BuildMessage(offer),
@@ -138,6 +143,7 @@ internal sealed class ImdbDatasetManager
     private readonly IImdbDatasetUpdateConsent _consent;
     private readonly string _dataDirectory;
     private readonly string _databasePath;
+    private readonly SemaphoreSlim _updateSync = new(1, 1);
 
     public ImdbDatasetManager(
         IAppMetadataStore metadataStore,
@@ -162,6 +168,22 @@ internal sealed class ImdbDatasetManager
         IProgress<ManagedToolStartupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        await _updateSync.WaitAsync(cancellationToken);
+        try
+        {
+            return await EnsureCurrentCoreAsync(progress, cancellationToken);
+        }
+        finally
+        {
+            _updateSync.Release();
+        }
+    }
+
+    private async Task<ImdbDatasetStartupResult> EnsureCurrentCoreAsync(
+        IProgress<ManagedToolStartupProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         var settings = _metadataStore.Load();
         var datasetSettings = settings.ImdbDataset ?? new ImdbDatasetSettings();
         if (!datasetSettings.ManagementPreferenceConfigured)
@@ -179,20 +201,23 @@ internal sealed class ImdbDatasetManager
         }
 
         var databaseExists = File.Exists(_databasePath);
-        if (databaseExists
+        if ((databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
             && datasetSettings.LastCheckCompleted
             && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
             && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
+            && lastCheckedUtc <= DateTimeOffset.UtcNow
             && DateTimeOffset.UtcNow - lastCheckedUtc < SuccessfulCheckInterval)
         {
             return new ImdbDatasetStartupResult([]);
         }
 
+        var newIndexActivated = false;
         try
         {
             Report(progress, "IMDb-Daten werden geprüft...", "Prüfe offizielle Datensatzrevisionen.", 0d, false);
             var remoteFiles = await LoadRemoteMetadataAsync(cancellationToken);
             var versionToken = BuildVersionToken(remoteFiles);
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (databaseExists
                 && datasetSettings.InstalledSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
@@ -216,7 +241,9 @@ internal sealed class ImdbDatasetManager
                 InstalledVersionToken: datasetSettings.InstalledVersion,
                 InstalledRevisionUtc: datasetSettings.InstalledRevisionUtc,
                 InstalledAtUtc: datasetSettings.LastUpdatedUtc);
-            if (!_consent.ConfirmUpdate(offer))
+            var accepted = _consent.ConfirmUpdate(offer);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!accepted)
             {
                 // Eine bewusste Ablehnung unterdrückt das identische Angebot für das normale
                 // Prüfintervall. Abbruch und Fehler im anschließenden Update dürfen das nicht.
@@ -235,6 +262,7 @@ internal sealed class ImdbDatasetManager
             PersistDatasetSettings(datasetSettings);
             cancellationToken.ThrowIfCancellationRequested();
             await DownloadAndBuildAsync(remoteFiles, versionToken, progress, cancellationToken);
+            newIndexActivated = true;
             datasetSettings.InstalledVersion = versionToken;
             datasetSettings.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
             datasetSettings.InstalledRevisionUtc = remoteFiles.Max(file => file.LastModifiedUtc);
@@ -246,12 +274,20 @@ internal sealed class ImdbDatasetManager
             Report(progress, "IMDb-Offlineindex bereit", "Download und Indexaufbau abgeschlossen.", 100d, false);
             return new ImdbDatasetStartupResult([]);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !newIndexActivated)
         {
             throw;
         }
         catch (Exception ex)
         {
+            if (newIndexActivated)
+            {
+                // Der atomare Dateiaustausch ist bereits abgeschlossen; ein Settings-Fehler
+                // darf nicht den falschen Eindruck erwecken, weiterhin sei der alte Index aktiv.
+                return new ImdbDatasetStartupResult(
+                    [$"Der neue IMDb-Offlineindex ist bereits aktiv. Die abschließenden Statusinformationen konnten nicht vollständig gespeichert oder gemeldet werden. Bitte die Einstellungen prüfen.{Environment.NewLine}{ex.Message}"]);
+            }
+
             return new ImdbDatasetStartupResult(
                 [$"Der optionale IMDb-Offlineindex konnte nicht aktualisiert werden. Ein vorhandener Index bleibt aktiv.{Environment.NewLine}{ex.Message}"]);
         }
@@ -282,7 +318,10 @@ internal sealed class ImdbDatasetManager
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(_dataDirectory);
-        var stagingDirectory = Path.Combine(_dataDirectory, $".staging-{Guid.NewGuid():N}");
+        // File.Replace ist nur innerhalb desselben Volumes atomar, auch bei expliziten Test-/Datenpfaden.
+        var databaseDirectory = Path.GetDirectoryName(Path.GetFullPath(_databasePath))!;
+        Directory.CreateDirectory(databaseDirectory);
+        var stagingDirectory = Path.Combine(databaseDirectory, $".staging-{Guid.NewGuid():N}");
         Directory.CreateDirectory(stagingDirectory);
         try
         {
@@ -374,8 +413,25 @@ internal sealed class ImdbDatasetManager
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, remoteFile.Descriptor.DownloadUri);
+        if (remoteFile.ETag is { } etag)
+        {
+            // Keine Mischung aus HEAD-Revision und zwischenzeitlich erneuerten Downloads aktivieren.
+            request.Headers.IfMatch.Add(new EntityTagHeaderValue(etag));
+        }
+        else if (remoteFile.LastModifiedUtc is { } lastModified)
+        {
+            request.Headers.IfUnmodifiedSince = lastModified;
+        }
+
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
+        if ((remoteFile.ETag is not null && response.Headers.ETag is { } responseEtag
+                && !string.Equals(remoteFile.ETag, responseEtag.Tag, StringComparison.Ordinal))
+            || (remoteFile.LastModifiedUtc is { } expectedModified
+                && response.Content.Headers.LastModified is { } actualModified && expectedModified != actualModified))
+        {
+            throw new InvalidDataException($"IMDb-Datei {remoteFile.Descriptor.FileName} wurde während der Aktualisierung geändert.");
+        }
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var target = new FileStream(targetPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, useAsync: true);
         var buffer = new byte[1024 * 1024];
@@ -401,9 +457,17 @@ internal sealed class ImdbDatasetManager
 
     private void PersistDatasetSettings(ImdbDatasetSettings datasetSettings)
     {
-        var settings = _metadataStore.Load();
-        settings.ImdbDataset = datasetSettings.Clone();
-        _metadataStore.Save(settings);
+        _metadataStore.Update(settings =>
+        {
+            var updated = datasetSettings.Clone();
+            if (settings.ImdbDataset is { ManagementPreferenceConfigured: true } current)
+            {
+                updated.AutoManageEnabled = current.AutoManageEnabled;
+                updated.ManagementPreferenceConfigured = true;
+            }
+
+            settings.ImdbDataset = updated;
+        });
     }
 
     private static string BuildVersionToken(IReadOnlyList<ImdbRemoteDatasetFile> files)
@@ -418,15 +482,16 @@ internal sealed class ImdbDatasetManager
 
     private static void ReplaceDatabaseAtomically(string sourcePath, string targetPath)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(targetPath))!);
         if (!File.Exists(targetPath))
         {
             File.Move(sourcePath, targetPath);
             return;
         }
 
-        var backupPath = targetPath + ".bak";
-        File.Replace(sourcePath, targetPath, backupPath, ignoreMetadataErrors: true);
-        File.Delete(backupPath);
+        // Kein gemeinsamer .bak-Pfad und kein fehleranfälliges Cleanup nach dem Commit:
+        // File.Replace erhält bei einem fehlgeschlagenen Austausch bereits das alte Ziel.
+        File.Replace(sourcePath, targetPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
     }
 
     private static void TryDeleteDirectory(string path)
