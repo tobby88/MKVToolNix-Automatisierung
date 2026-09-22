@@ -14,6 +14,7 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private ModuleNavigationItem _selectedModule;
     private readonly MainWindowModuleServices _services;
+    private readonly IReadOnlyList<IModuleInteractionState> _moduleInteractionStates;
     private bool _isFfprobeAvailable;
     private string? _ffprobePath;
     private string? _ffprobeStatusDetail;
@@ -31,7 +32,13 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         _services = services;
         Modules = new ObservableCollection<ModuleNavigationItem>(modules);
         _selectedModule = Modules.First();
-        OpenSettingsCommand = new RelayCommand(OpenSettingsDialog);
+        _moduleInteractionStates = modules.Select(module => module.ContentViewModel)
+            .OfType<IModuleInteractionState>().ToArray();
+        OpenSettingsCommand = new RelayCommand(OpenSettingsDialog, () => CanChangeModuleOrSettings);
+        foreach (var module in _moduleInteractionStates)
+        {
+            module.PropertyChanged += HandleModuleStateChanged;
+        }
         RefreshToolStatus();
         RefreshArchiveStatus();
     }
@@ -194,12 +201,22 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public RelayCommand OpenSettingsCommand { get; }
 
+    /// <summary>
+    /// Verhindert konkurrierende Module und Konfigurationswechsel während eines Vorgangs.
+    /// Die aktuelle Ansicht bleibt einschließlich ihres Abbrechen-Buttons bedienbar.
+    /// </summary>
+    public bool CanChangeModuleOrSettings => _moduleInteractionStates.All(module => module.IsInteractive);
+
+    public string NavigationTooltip => CanChangeModuleOrSettings
+        ? "Modul oder Einstellungen auswählen"
+        : "Bitte den laufenden Vorgang abschließen oder abbrechen, bevor Modul oder Einstellungen gewechselt werden.";
+
     public ModuleNavigationItem SelectedModule
     {
         get => _selectedModule;
         set
         {
-            if (_selectedModule == value)
+            if (_selectedModule == value || !CanChangeModuleOrSettings)
             {
                 return;
             }
@@ -228,14 +245,12 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
     private void OpenSettingsDialog()
     {
         var previousArchiveRoot = ArchiveRootDirectory;
-        var accepted = _services.SettingsDialog.ShowDialog(
+        _services.SettingsDialog.ShowDialog(
             TryGetSettingsDialogOwner(),
             AppSettingsPage.Archive);
-        if (!accepted)
-        {
-            return;
-        }
 
+        // "Speichern und prüfen" kann bereits persistiert haben, bevor der Dialog
+        // anschließend abgebrochen wird. Auch dann müssen alle Module neu lesen.
         RefreshToolStatus();
         RefreshArchiveStatus();
         NotifyGlobalSettingsChanged();
@@ -245,6 +260,18 @@ internal sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         OnPropertyChanged(nameof(SystemStatusSummary));
+    }
+
+    private void HandleModuleStateChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (!string.IsNullOrEmpty(args.PropertyName) && args.PropertyName != nameof(IModuleInteractionState.IsInteractive))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(CanChangeModuleOrSettings));
+        OnPropertyChanged(nameof(NavigationTooltip));
+        OpenSettingsCommand.RaiseCanExecuteChanged();
     }
 
     private void RefreshToolStatus()

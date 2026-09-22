@@ -41,6 +41,7 @@ public sealed class AppCompositionRootTests
 
         Assert.Same(first, second);
         Assert.NotNull(archive);
+        Assert.All(first.Modules, module => Assert.IsAssignableFrom<IModuleInteractionState>(module.ContentViewModel));
     }
 
     [Fact]

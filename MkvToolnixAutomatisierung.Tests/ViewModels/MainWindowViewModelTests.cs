@@ -1,4 +1,5 @@
 using System.IO;
+using System.ComponentModel;
 using System.Threading;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
@@ -103,8 +104,10 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(1, archiveAwareModule.CallCount);
     }
 
-    [Fact]
-    public void OpenSettingsCommand_WhenAccepted_RefreshesStatuses_AndNotifiesAffectedModules()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OpenSettingsCommand_RefreshesPersistedChanges_EvenIfDialogIsLaterCancelled(bool accepted)
     {
         var archiveAwareModule = new StubArchiveAndSettingsAwareModule();
         var archiveRoot = Path.Combine(_tempDirectory, "archive-after-settings");
@@ -122,7 +125,7 @@ public sealed class MainWindowViewModelTests : IDisposable
                 FfprobePath = ffprobePath,
                 MkvToolNixDirectoryPath = Path.GetDirectoryName(mkvMergePath)!
             });
-        });
+        }, accepted);
         services = ViewModelTestContext.CreateMainWindowServices(
             toolPathStore,
             ffprobeLocator: new StubFfprobeLocator(ffprobePath),
@@ -142,6 +145,42 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.True(viewModel.IsMkvToolNixAvailable);
         Assert.Equal(1, archiveAwareModule.SettingsChangedCallCount);
         Assert.Equal(1, archiveAwareModule.ArchiveChangedCallCount);
+    }
+
+    [Fact]
+    public void BusyModule_BlocksSettingsAndModuleSwitch_UntilOperationEnds()
+    {
+        var busyModule = new StubBusyModule();
+        var modules = new[]
+        {
+            new ModuleNavigationItem("Aktiv", "", busyModule),
+            new ModuleNavigationItem("Weiter", "", new object())
+        };
+        var dialogCount = 0;
+        var settingsDialog = new StubSettingsDialog(() => dialogCount++);
+        var viewModel = new MainWindowViewModel(modules,
+            ViewModelTestContext.CreateMainWindowServices(CreateToolPathStore(),
+                ffprobeLocator: new StubFfprobeLocator(null),
+                mkvToolNixLocator: new StubMkvToolNixLocator(new FileNotFoundException()),
+                settingsDialog: settingsDialog));
+        var notifications = 0;
+        viewModel.OpenSettingsCommand.CanExecuteChanged += (_, _) => notifications++;
+
+        busyModule.SetInteractive(false);
+        Assert.False(viewModel.CanChangeModuleOrSettings);
+        Assert.False(viewModel.OpenSettingsCommand.CanExecute(null));
+        viewModel.OpenSettingsCommand.Execute(null);
+        viewModel.SelectedModule = modules[1];
+        Assert.Same(modules[0], viewModel.SelectedModule);
+        Assert.Equal(0, dialogCount);
+        Assert.Contains("abbrechen", viewModel.NavigationTooltip, StringComparison.Ordinal);
+
+        busyModule.SetInteractive(true);
+        viewModel.SelectedModule = modules[1];
+        viewModel.OpenSettingsCommand.Execute(null);
+        Assert.Same(modules[1], viewModel.SelectedModule);
+        Assert.Equal(1, dialogCount);
+        Assert.Equal(2, notifications);
     }
 
     [Fact]
@@ -284,7 +323,19 @@ public sealed class MainWindowViewModelTests : IDisposable
         }
     }
 
-    private sealed class StubSettingsDialog(Action onAccept) : IAppSettingsDialogService
+    private sealed class StubBusyModule : IModuleInteractionState
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public bool IsInteractive { get; private set; } = true;
+
+        public void SetInteractive(bool value)
+        {
+            IsInteractive = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsInteractive)));
+        }
+    }
+
+    private sealed class StubSettingsDialog(Action onAccept, bool accepted = true) : IAppSettingsDialogService
     {
         public AppSettingsPage? LastInitialPage { get; private set; }
         public System.Windows.Window? LastOwner { get; private set; }
@@ -294,7 +345,7 @@ public sealed class MainWindowViewModelTests : IDisposable
             LastOwner = owner;
             LastInitialPage = initialPage;
             onAccept();
-            return true;
+            return accepted;
         }
     }
 }
