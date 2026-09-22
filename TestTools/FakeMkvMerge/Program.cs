@@ -474,6 +474,15 @@ internal static class Program
     private static FakeMuxRunConfiguration LoadMuxConfig(string outputFilePath)
     {
         var configFilePath = outputFilePath + ".mkvmerge.run.json";
+        var outputDirectory = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(outputFilePath))!);
+        if (!File.Exists(configFilePath)
+            && outputDirectory.Name.StartsWith(".mux-", StringComparison.Ordinal)
+            && outputDirectory.Parent is not null)
+        {
+            // Der echte Runner schreibt zunächst in eine Transaktion neben das Ziel.
+            // Tests konfigurieren weiterhin das öffentliche Ausgabeziel, nicht eine Zufalls-ID.
+            configFilePath = Path.Combine(outputDirectory.Parent.FullName, Path.GetFileNameWithoutExtension(outputFilePath)) + ".mkvmerge.run.json";
+        }
         if (!File.Exists(configFilePath))
         {
             return FakeMuxRunConfiguration.Default;

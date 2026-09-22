@@ -49,6 +49,7 @@ internal sealed class FileCopyService : IFileCopyService
         Action<long, long>? onProgress = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureSourceUnchanged(copyPlan);
 
         var destinationDirectory = Path.GetDirectoryName(copyPlan.DestinationFilePath);
@@ -94,6 +95,7 @@ internal sealed class FileCopyService : IFileCopyService
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             EnsureSourceUnchanged(copyPlan);
             File.Move(temporaryDestinationPath, copyPlan.DestinationFilePath, overwrite: true);
             File.SetLastWriteTimeUtc(copyPlan.DestinationFilePath, copyPlan.SourceLastWriteUtc);

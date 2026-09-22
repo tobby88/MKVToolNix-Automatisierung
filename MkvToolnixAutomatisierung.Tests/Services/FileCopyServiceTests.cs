@@ -126,6 +126,21 @@ public sealed class FileCopyServiceTests : IDisposable
         Assert.Empty(Directory.GetFiles(_tempDirectory, ".copy.bin.copy-*.tmp"));
     }
 
+    [Fact]
+    public async Task CopyAsync_CancelledFromFinalProgressDoesNotPublishCopy()
+    {
+        var source = Path.Combine(_tempDirectory, "source.bin");
+        var destination = Path.Combine(_tempDirectory, "copy.bin");
+        await File.WriteAllBytesAsync(source, [1, 2, 3]);
+        await File.WriteAllTextAsync(destination, "old");
+        using var cancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new FileCopyService().CopyAsync(
+            new FileCopyPlan(source, destination, 3, File.GetLastWriteTimeUtc(source)),
+            (copied, total) => { if (copied == total) cancellation.Cancel(); }, cancellation.Token));
+        Assert.Equal("old", await File.ReadAllTextAsync(destination));
+        Assert.Empty(Directory.GetFiles(_tempDirectory, ".copy.bin.copy-*.tmp"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

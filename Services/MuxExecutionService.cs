@@ -26,6 +26,18 @@ public sealed class MuxExecutionService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Nur mkvmerge-Pläne haben --output. mkvpropedit bleibt ein bewusst direkter
+        // Header-Eingriff. Die fachliche Planung/Vorschau behält immer den finalen Pfad.
+        var outputIndex = arguments.ToList().IndexOf("--output");
+        using var outputTransaction = outputIndex >= 0 && outputIndex + 1 < arguments.Count
+            ? new MuxOutputTransaction(arguments[outputIndex + 1])
+            : null;
+        var executionArguments = arguments.ToArray();
+        if (outputTransaction is not null)
+        {
+            executionArguments[outputIndex + 1] = outputTransaction.TemporaryOutputPath;
+        }
+
         var startInfo = new ProcessStartInfo
         {
             FileName = executablePath,
@@ -37,7 +49,7 @@ public sealed class MuxExecutionService
             CreateNoWindow = true
         };
 
-        foreach (var argument in arguments)
+        foreach (var argument in executionArguments)
         {
             startInfo.ArgumentList.Add(argument);
         }
@@ -78,7 +90,24 @@ public sealed class MuxExecutionService
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Die Abbruchregistrierung beendet den Prozess. Vor dem Aufräumen muss er
+            // die temporäre Datei tatsächlich freigegeben haben, nicht nur den Kill erhalten.
+            await process.WaitForExitAsync(CancellationToken.None);
+            throw;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (outputTransaction is not null && process.ExitCode is 0 or 1)
+        {
+            outputTransaction.Commit(cancellationToken);
+        }
+
         return process.ExitCode;
     }
 }
