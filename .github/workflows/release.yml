@@ -23,6 +23,9 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_PRERELEASE: ${{ inputs.prerelease }}
 
     steps:
       - name: Checkout
@@ -33,7 +36,7 @@ jobs:
       - name: Validate version input
         shell: pwsh
         run: |
-          if ('${{ inputs.version }}' -notmatch '^\d+\.\d+\.\d+$') {
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$') {
             throw "Version muss im Format Major.Minor.Patch angegeben werden, z. B. 1.4.0."
           }
 
@@ -62,20 +65,21 @@ jobs:
 
       - name: Publish framework-dependent single-file release
         shell: pwsh
-        run: .\scripts\publish-release.ps1 -Version '${{ inputs.version }}' -RuntimeIdentifier 'win-x64'
+        run: .\scripts\publish-release.ps1 -Version $env:RELEASE_VERSION -RuntimeIdentifier 'win-x64'
 
       - name: Build release notes
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .\scripts\build-release-notes.ps1 -Version '${{ inputs.version }}' -OutputPath '.\artifacts\release\release-notes.md'
+        run: .\scripts\build-release-notes.ps1 -Version $env:RELEASE_VERSION -OutputPath '.\artifacts\release\release-notes.md'
 
       - name: Create git tag
         shell: pwsh
         run: |
-          $tagName = 'v${{ inputs.version }}'
-          git show-ref --verify --quiet "refs/tags/$tagName"
-          if ($LASTEXITCODE -eq 0) {
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tagName = "v$env:RELEASE_VERSION"
+          $existingTag = git tag --list $tagName
+          if ($existingTag) {
             throw "Das Tag $tagName existiert bereits."
           }
 
@@ -89,8 +93,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tagName = 'v${{ inputs.version }}'
-          $assetPath = ".\artifacts\release\MkvToolnixAutomatisierung-v${{ inputs.version }}-win-x64.exe"
+          $PSNativeCommandUseErrorActionPreference = $true
+          $tagName = "v$env:RELEASE_VERSION"
+          $assetPath = ".\artifacts\release\MkvToolnixAutomatisierung-v$env:RELEASE_VERSION-win-x64.exe"
           $releaseArgs = @(
             'release',
             'create',
@@ -99,10 +104,11 @@ jobs:
             '--title',
             $tagName,
             '--notes-file',
-            '.\artifacts\release\release-notes.md'
+            '.\artifacts\release\release-notes.md',
+            '--verify-tag'
           )
 
-          if ('${{ inputs.prerelease }}' -eq 'true') {
+          if ($env:RELEASE_PRERELEASE -eq 'true') {
             $releaseArgs += '--prerelease'
           }
 

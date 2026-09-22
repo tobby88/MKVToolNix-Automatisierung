@@ -27,6 +27,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Der Push-Diff braucht auch den vorherigen Commit, nicht nur HEAD.
+          fetch-depth: 0
 
       - name: Update existing GitHub release
         env:
@@ -41,9 +44,12 @@ jobs:
             $versions = @($env:INPUT_VERSION)
           } else {
             if (-not [string]::IsNullOrWhiteSpace($env:EVENT_BEFORE) -and $env:EVENT_BEFORE -notmatch '^0+$') {
-              $changedFiles = git diff --name-only $env:EVENT_BEFORE $env:EVENT_SHA
+              $changedFiles = git diff --name-only --diff-filter=AM $env:EVENT_BEFORE $env:EVENT_SHA
             } else {
-              $changedFiles = git diff-tree --no-commit-id --name-only -r $env:EVENT_SHA
+              $changedFiles = git diff-tree --root --no-commit-id --name-only --diff-filter=AM -r $env:EVENT_SHA
+            }
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Geänderte Release-Notes konnten nicht bestimmt werden.'
             }
 
             $versions = @($changedFiles |
@@ -67,6 +73,18 @@ jobs:
               throw "Release-Notes-Datei nicht gefunden: $notesPath"
             }
 
+            $releaseLookup = & gh release view "v$version" --json tagName 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              if (($releaseLookup -join "`n") -match 'release not found') {
+                Write-Host "v$version ist noch nicht veröffentlicht; der Release-Workflow übernimmt die vorbereiteten Notes."
+                continue
+              }
+              throw "Release v$version konnte nicht abgefragt werden: $releaseLookup"
+            }
+
             Write-Host "Aktualisiere GitHub-Release v$version aus $notesPath"
             & gh release edit "v$version" --notes-file $notesPath
+            if ($LASTEXITCODE -ne 0) {
+              throw "Release-Notes für v$version konnten nicht aktualisiert werden."
+            }
           }

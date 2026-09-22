@@ -22,6 +22,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # Auch Push-Updates eines bestehenden PRs müssen mit dem PAT CI auslösen können.
+          token: ${{ secrets.SCREENSHOT_PR_TOKEN || github.token }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -39,6 +41,7 @@ jobs:
           SCREENSHOT_PR_TOKEN_CONFIGURED: ${{ secrets.SCREENSHOT_PR_TOKEN != '' }}
         run: |
           $changes = git status --porcelain -- docs/images/readme
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshot-Änderungen konnten nicht bestimmt werden.' }
           if (-not $changes) {
             Write-Host 'README-Screenshots sind bereits aktuell.'
             return
@@ -46,13 +49,20 @@ jobs:
 
           $branch = 'automation/readme-screenshots'
           git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { throw 'Git-Benutzername konnte nicht gesetzt werden.' }
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { throw 'Git-E-Mail konnte nicht gesetzt werden.' }
           git checkout -B $branch
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshot-Branch konnte nicht vorbereitet werden.' }
           git add docs/images/readme
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshots konnten nicht vorgemerkt werden.' }
           git commit -m 'Update README screenshots'
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshot-Commit konnte nicht erstellt werden.' }
           git push origin "HEAD:$branch" --force
+          if ($LASTEXITCODE -ne 0) { throw 'Screenshot-Branch konnte nicht gepusht werden.' }
 
           $existingPr = gh pr list --head $branch --base master --state open --json number --jq '.[0].number'
+          if ($LASTEXITCODE -ne 0) { throw 'Vorhandene Screenshot-PRs konnten nicht abgefragt werden.' }
           if ($existingPr) {
             Write-Host "Bestehender Screenshot-PR #$existingPr wurde aktualisiert."
             return
