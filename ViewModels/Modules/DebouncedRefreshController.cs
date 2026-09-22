@@ -8,6 +8,7 @@ internal sealed class DebouncedRefreshController : IDisposable
     private readonly TimeSpan _delay;
     private CancellationTokenSource? _currentRefreshCts;
     private int _version;
+    private bool _disposed;
 
     /// <summary>
     /// Erstellt einen Controller mit fester Debounce-Dauer.
@@ -31,6 +32,7 @@ internal sealed class DebouncedRefreshController : IDisposable
     public void Schedule(Func<int, CancellationToken, Task> refreshAsync)
     {
         ArgumentNullException.ThrowIfNull(refreshAsync);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         CancelCore();
 
@@ -39,7 +41,7 @@ internal sealed class DebouncedRefreshController : IDisposable
         _currentRefreshCts = cancellationSource;
         var completionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         CurrentTask = completionSource.Task;
-        _ = RunRefreshAsync(refreshAsync, version, cancellationSource.Token, completionSource);
+        _ = RunRefreshAsync(refreshAsync, version, cancellationSource, completionSource);
     }
 
     /// <summary>
@@ -66,20 +68,22 @@ internal sealed class DebouncedRefreshController : IDisposable
     /// <returns><see langword="true"/>, wenn die Version noch aktuell ist.</returns>
     public bool IsCurrent(int version)
     {
-        return version == Volatile.Read(ref _version);
+        return !_disposed && version == Volatile.Read(ref _version);
     }
 
     public void Dispose()
     {
-        Cancel();
+        _disposed = true;
+        Cancel(invalidateInFlightRefreshes: true);
     }
 
     private async Task RunRefreshAsync(
         Func<int, CancellationToken, Task> refreshAsync,
         int version,
-        CancellationToken cancellationToken,
+        CancellationTokenSource cancellationSource,
         TaskCompletionSource completionSource)
     {
+        var cancellationToken = cancellationSource.Token;
         Exception? failure = null;
 
         try
@@ -96,10 +100,15 @@ internal sealed class DebouncedRefreshController : IDisposable
         }
         finally
         {
-            if (IsCurrent(version))
+            if (ReferenceEquals(_currentRefreshCts, cancellationSource))
             {
+                _currentRefreshCts = null;
                 CurrentTask = null;
             }
+
+            // Laufende Nutzer des Tokens duerfen auch nach Cancel noch Registrierungen anlegen.
+            // Erst die abgeschlossene Aktion gibt ihre Tokenquelle frei.
+            cancellationSource.Dispose();
 
             if (failure is null)
             {
@@ -114,8 +123,8 @@ internal sealed class DebouncedRefreshController : IDisposable
 
     private void CancelCore()
     {
-        _currentRefreshCts?.Cancel();
-        _currentRefreshCts?.Dispose();
+        var cancellationSource = _currentRefreshCts;
         _currentRefreshCts = null;
+        cancellationSource?.Cancel();
     }
 }

@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using MkvToolnixAutomatisierung.Services;
@@ -25,6 +26,61 @@ public sealed class SelectionGridInteractionTests
     public SelectionGridInteractionTests(PortableStorageFixture storageFixture)
     {
         storageFixture.Reset();
+    }
+
+    [Fact]
+    public async Task SelectionColumnSource_AcceptsInlineContent_InsteadOfThrowingVisualTreeException()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var item = "Auswahl";
+            var grid = new DataGrid { AutoGenerateColumns = false, ItemsSource = new[] { item } };
+            var column = new DataGridTextColumn { Binding = new Binding(".") };
+            grid.Columns.Add(column);
+            var window = CreateHostWindow(grid);
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+                var text = Assert.IsType<TextBlock>(column.GetCellContent(item));
+                var run = new Run("Auswahl");
+                text.Inlines.Clear();
+                text.Inlines.Add(run);
+
+                Assert.True(DataGridSelectionInput.IsSelectionColumnSource(grid, run));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task ReadOnlyLogAutoScroll_PreservesSelectedText()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var textBox = new TextBox { IsReadOnly = true, Text = "Kopierbarer Logtext\nNeue Zeile" };
+            var window = CreateHostWindow(textBox);
+            try
+            {
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+                textBox.Select(0, 11);
+
+                ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(textBox);
+                ReadOnlyTextBoxAutoScroll.ScrollToEndDeferred(textBox);
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.Equal("Kopierbarer", textBox.SelectedText);
+                Assert.Equal(0, textBox.SelectionStart);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     [Fact]

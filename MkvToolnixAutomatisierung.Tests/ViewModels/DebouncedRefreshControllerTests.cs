@@ -6,6 +6,45 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 public sealed class DebouncedRefreshControllerTests
 {
     [Fact]
+    public async Task Cancel_KeepsTokenSourceAlive_UntilRunningRefreshFinishes()
+    {
+        using var controller = new DebouncedRefreshController(TimeSpan.Zero);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        controller.Schedule(async (_, token) =>
+        {
+            await release.Task;
+            Assert.True(token.WaitHandle.WaitOne(0));
+        });
+        var running = Assert.IsAssignableFrom<Task>(controller.CurrentTask);
+
+        controller.Cancel(invalidateInFlightRefreshes: true);
+        release.SetResult();
+        await running;
+
+        Assert.Null(controller.CurrentTask);
+    }
+
+    [Fact]
+    public async Task Dispose_InvalidatesRunningRefresh_AndRejectsNewSchedules()
+    {
+        var controller = new DebouncedRefreshController(TimeSpan.Zero);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var version = 0;
+        controller.Schedule(async (current, _) =>
+        {
+            version = current;
+            await release.Task;
+        });
+        var running = controller.CurrentTask!;
+
+        controller.Dispose();
+        Assert.False(controller.IsCurrent(version));
+        Assert.Throws<ObjectDisposedException>(() => controller.Schedule((_, _) => Task.CompletedTask));
+        release.SetResult();
+        await running;
+    }
+
+    [Fact]
     public async Task Schedule_ExecutesOnlyLatestPlannedRefresh()
     {
         var controller = new DebouncedRefreshController(TimeSpan.FromMilliseconds(20));

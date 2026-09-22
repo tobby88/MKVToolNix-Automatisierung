@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 
 namespace MkvToolnixAutomatisierung.Views;
 
@@ -185,7 +186,13 @@ internal static class DataGridSelectionInput
                 return typed;
             }
 
-            current = VisualTreeHelper.GetParent(current);
+            current = current switch
+            {
+                Visual or Visual3D => VisualTreeHelper.GetParent(current),
+                FrameworkContentElement content => content.Parent,
+                ContentElement content => ContentOperations.GetParent(content),
+                _ => LogicalTreeHelper.GetParent(current)
+            };
         }
 
         return null;

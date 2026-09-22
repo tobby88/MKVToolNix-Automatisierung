@@ -6,6 +6,41 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 public sealed class AsyncRelayCommandTests
 {
     [Fact]
+    public async Task ExecuteAsync_IgnoresReentry_AndRestoresStateAfterCancellation()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var changes = 0;
+        var command = new AsyncRelayCommand(async () =>
+        {
+            calls++;
+            await release.Task;
+            throw new OperationCanceledException();
+        }, _ => Assert.Fail("Cancellation is not an error."));
+        command.CanExecuteChanged += (_, _) => changes++;
+
+        var running = command.ExecuteAsync();
+        await command.ExecuteAsync();
+        Assert.Equal(1, calls);
+        release.SetResult();
+        await running;
+
+        Assert.True(command.CanExecute(null));
+        Assert.Equal(2, changes);
+    }
+
+    [Fact]
+    public void RelayCommand_Execute_RespectsDisabledState()
+    {
+        var called = false;
+        var command = new RelayCommand(() => called = true, () => false);
+
+        command.Execute(null);
+
+        Assert.False(called);
+    }
+
+    [Fact]
     public async Task Execute_InvokesInjectedErrorHandler_ForUnexpectedException()
     {
         Exception? capturedException = null;

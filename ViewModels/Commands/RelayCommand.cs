@@ -29,7 +29,13 @@ internal sealed class RelayCommand : ICommand
     public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
 
     /// <inheritdoc/>
-    public void Execute(object? parameter) => _execute();
+    public void Execute(object? parameter)
+    {
+        if (CanExecute(parameter))
+        {
+            _execute();
+        }
+    }
 
     /// <summary>Löst <see cref="CanExecuteChanged"/> aus, damit WPF den aktivierten Zustand neu bewertet.</summary>
     public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
