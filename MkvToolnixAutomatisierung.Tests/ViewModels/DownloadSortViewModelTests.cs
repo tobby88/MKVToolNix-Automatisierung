@@ -299,6 +299,59 @@ public sealed class DownloadSortViewModelTests
         }
     }
 
+    [Fact]
+    public async Task RunSortCommand_PreservesDeselectedRemainingPackage_AfterAutomaticRescan()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var first = Path.Combine(root, "Testserie-First-123.mp4");
+            var second = Path.Combine(root, "Testserie-Second-456.mp4");
+            CreateEmptyFile(first);
+            CreateEmptyFile(second);
+            var vm = CreateViewModel();
+            ApplyScanResult(vm, root, new DownloadSortService().Scan(root));
+            vm.Items.Single(item => item.FilePaths.Contains(second)).IsSelected = false;
+
+            await vm.RunSortCommand.ExecuteAsync();
+
+            Assert.False(File.Exists(first));
+            Assert.True(File.Exists(second));
+            Assert.False(Assert.Single(vm.Items).IsSelected);
+            Assert.False(vm.RunSortCommand.CanExecute(null));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CanceledRescan_DisablesSortingUntilFreshScan()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            CreateEmptyFile(Path.Combine(root, "Testserie-Pilot-123.mp4"));
+            var vm = CreateViewModel();
+            ApplyScanResult(vm, root, new DownloadSortService().Scan(root));
+            Assert.True(vm.RunSortCommand.CanExecute(null));
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            var scan = typeof(DownloadSortViewModel).GetMethod("ScanCoreWithoutBusyAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => (Task)scan.Invoke(vm, [false, cancellation.Token])!);
+
+            Assert.False(vm.RunSortCommand.CanExecute(null));
+            await vm.ScanCommand.ExecuteAsync();
+            Assert.True(vm.RunSortCommand.CanExecute(null));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static void ApplyScanResult(DownloadSortViewModel viewModel, string sourceDirectory, DownloadSortScanResult scanResult)
     {
         SetSourceDirectory(viewModel, sourceDirectory);

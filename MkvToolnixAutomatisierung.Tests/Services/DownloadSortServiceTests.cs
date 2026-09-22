@@ -759,12 +759,13 @@ public sealed class DownloadSortServiceTests : IDisposable
         CreateEmptyFile(subtitlePath);
 
         var scanResult = _service.Scan(_rootDirectory);
+        var item = Assert.Single(scanResult.Items);
+        Assert.Equal(DownloadSortItemState.Conflict, item.State);
+        // Die UI bietet den Konflikt nicht mehr an. Apply muss trotzdem auch einen
+        // veralteten oder direkt übergebenen Request ohne Teilverschiebung abweisen.
         var applyResult = _service.Apply(
             _rootDirectory,
-            scanResult.Items
-                .Where(item => DownloadSortItemStates.IsSortable(item.State))
-                .Select(item => new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.SuggestedFolderName, item.DefectiveFilePaths))
-                .ToList(),
+            [new DownloadSortMoveRequest(item.DisplayName, item.FilePaths, item.SuggestedFolderName, item.DefectiveFilePaths)],
             scanResult.FolderRenames);
 
         Assert.Equal(0, applyResult.MovedGroupCount);
@@ -924,6 +925,191 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.Equal(2, applyResult.MovedFileCount);
         Assert.Contains(applyResult.LogLines, line => line == "VERSCHOBEN: 'Serie-Folge-1234.mp4' -> 'Serie\\Serie-Folge-1234.mp4'");
         Assert.Contains(applyResult.LogLines, line => line == "VERSCHOBEN: 'Serie-Folge-1234.txt' -> 'Serie\\Serie-Folge-1234.txt'");
+    }
+
+    [Fact]
+    public void Apply_MissingVideoWithoutTarget_DoesNotMoveItsSidecars()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot-123.mp4");
+        var text = Path.ChangeExtension(video, ".txt");
+        CreateEmptyFile(text);
+
+        var result = _service.Apply(_rootDirectory, [new DownloadSortMoveRequest("Pilot", [video, text], "Serie")], []);
+
+        Assert.Equal(0, result.MovedFileCount);
+        Assert.Equal(1, result.SkippedGroupCount);
+        Assert.True(File.Exists(text));
+        Assert.False(Directory.Exists(Path.Combine(_rootDirectory, "Serie")));
+        Assert.Equal(DownloadSortItemState.Conflict, _service.EvaluateTarget(_rootDirectory, [video, text], "Serie", []).State);
+    }
+
+    [Fact]
+    public void Apply_LockedVideo_DoesNotOverwriteSidecars_AndContinuesOtherGroups()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot-123.mp4");
+        var text = Path.ChangeExtension(video, ".txt");
+        var other = Path.Combine(_rootDirectory, "Other-Pilot-456.mp4");
+        CreateEmptyFile(video);
+        CreateEmptyFile(text);
+        CreateEmptyFile(other);
+        var targetText = Path.Combine(_rootDirectory, "Serie", Path.GetFileName(text));
+        CreateEmptyFile(targetText);
+        File.WriteAllText(targetText, "must survive");
+        using var lockedVideo = File.Open(video, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = _service.Apply(_rootDirectory,
+            [new DownloadSortMoveRequest("Pilot", [text, video], "Serie"), new DownloadSortMoveRequest("Other", [other], "Other")], []);
+
+        Assert.Equal(1, result.MovedFileCount);
+        Assert.True(File.Exists(text));
+        Assert.Equal("must survive", File.ReadAllText(targetText));
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "Other", Path.GetFileName(other))));
+        Assert.Contains(result.LogLines, line => line.StartsWith("FEHLER:", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.LogLines, line => line.StartsWith("ERSETZT:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Apply_DirectoryAtSidecarDestination_BlocksWholeGroup()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot.mp4");
+        var text = Path.ChangeExtension(video, ".txt");
+        CreateEmptyFile(video);
+        CreateEmptyFile(text);
+        Directory.CreateDirectory(Path.Combine(_rootDirectory, "Serie", Path.GetFileName(text)));
+
+        var result = _service.Apply(_rootDirectory, [new DownloadSortMoveRequest("Pilot", [video, text], "Serie")], []);
+
+        Assert.Equal(0, result.MovedFileCount);
+        Assert.True(File.Exists(video));
+        Assert.True(File.Exists(text));
+        Assert.Equal(DownloadSortItemState.Conflict, _service.EvaluateTarget(_rootDirectory, [video, text], "Serie", []).State);
+    }
+
+    [Fact]
+    public void EvaluateTarget_DefectiveDestinationConflict_MatchesApply()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot.mp4");
+        CreateEmptyFile(video);
+        CreateEmptyFile(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(video)));
+
+        var evaluation = _service.EvaluateTarget(_rootDirectory, [video], "defekt", [], [video]);
+        var result = _service.Apply(_rootDirectory, [new DownloadSortMoveRequest("Pilot", [video], "defekt", [video])], []);
+
+        Assert.Equal(DownloadSortItemState.Conflict, evaluation.State);
+        Assert.Equal(0, result.MovedFileCount);
+        Assert.True(File.Exists(video));
+    }
+
+    [Fact]
+    public void Apply_NormalizesAndDeduplicatesDefectivePaths()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot.mp4");
+        CreateEmptyFile(video);
+        var dottedVideo = Path.Combine(_rootDirectory, ".", Path.GetFileName(video));
+        var evaluation = _service.EvaluateTarget(_rootDirectory, [dottedVideo, video], "defekt", [], [video]);
+
+        var result = _service.Apply(_rootDirectory, [new DownloadSortMoveRequest("Pilot", [dottedVideo, video], "defekt", [video])], []);
+
+        Assert.Equal(DownloadSortItemState.Defective, evaluation.State);
+        Assert.Equal(1, result.MovedFileCount);
+        Assert.True(File.Exists(Path.Combine(_rootDirectory, "defekt", Path.GetFileName(video))));
+        Assert.DoesNotContain(result.LogLines, line => line.StartsWith("FEHLER:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_UppercaseTxtCompanion_GoesWithDefectiveVideo()
+    {
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot-123.mp4");
+        CreateEmptyFile(video);
+        var text = Path.ChangeExtension(video, ".TXT");
+        CreateCompanionText(text, "Serie", "Pilot", sizeText: "100,0 MiB");
+
+        var candidate = Assert.Single(_service.Scan(_rootDirectory).Items);
+
+        Assert.Equal(DownloadSortItemState.Defective, candidate.State);
+        Assert.Equal(2, candidate.DefectiveFilePaths!.Count);
+        Assert.Contains(text, candidate.DefectiveFilePaths);
+    }
+
+    [Fact]
+    public void Apply_UnrelatedSelectedVideo_DoesNotPermitMovingDeselectedVideoSidecars()
+    {
+        var firstVideo = Path.Combine(_rootDirectory, "Serie-First.mp4");
+        var secondVideo = Path.Combine(_rootDirectory, "Serie-Second.mp4");
+        var secondSubtitle = Path.ChangeExtension(secondVideo, ".de.srt");
+        CreateEmptyFile(firstVideo);
+        CreateEmptyFile(secondVideo);
+        CreateEmptyFile(secondSubtitle);
+
+        var result = _service.Apply(_rootDirectory,
+            [new DownloadSortMoveRequest("Mixed", [firstVideo, secondSubtitle], "Serie")], []);
+
+        Assert.Equal(0, result.MovedFileCount);
+        Assert.True(File.Exists(secondSubtitle));
+        Assert.Equal(DownloadSortItemState.Conflict, _service.EvaluateTarget(_rootDirectory, [firstVideo, secondSubtitle], "Serie", []).State);
+    }
+
+    [Fact]
+    public void Scan_DoesNotRenameFolder_WhenAnotherPackageIsUnidentified()
+    {
+        var folder = Path.Combine(_rootDirectory, "Legacy");
+        var known = Path.Combine(folder, "Die Heiland-Pilot.mp4");
+        CreateEmptyFile(known);
+        CreateCompanionText(Path.ChangeExtension(known, ".txt"), "Die Heiland", "Pilot");
+        CreateEmptyFile(Path.Combine(folder, "Doku-Unbekannt.mp4"));
+
+        Assert.Empty(_service.Scan(_rootDirectory).FolderRenames);
+    }
+
+    [Fact]
+    public void Apply_DoesNotRenameReservedSourceFolder()
+    {
+        var existing = Path.Combine(_rootDirectory, "done", "existing.txt");
+        CreateEmptyFile(existing);
+        var video = Path.Combine(_rootDirectory, "Serie-Pilot.mp4");
+        CreateEmptyFile(video);
+
+        var result = _service.Apply(_rootDirectory, [new DownloadSortMoveRequest("Pilot", [video], "Serie")],
+            [new DownloadSortFolderRenamePlan("done", "Serie", "unsafe")]);
+
+        Assert.Equal(0, result.RenamedFolderCount);
+        Assert.True(File.Exists(existing));
+    }
+
+    [Fact]
+    public void Apply_CancellationBetweenGroups_ReturnsCompletedWorkAndLog()
+    {
+        var first = Path.Combine(_rootDirectory, "Serie-First.mp4");
+        var second = Path.Combine(_rootDirectory, "Serie-Second.mp4");
+        CreateEmptyFile(first);
+        CreateEmptyFile(second);
+        using var cancellation = new CancellationTokenSource();
+        var requests = new CancelingMoveRequests(
+            new DownloadSortMoveRequest("First", [first], "Serie"),
+            new DownloadSortMoveRequest("Second", [second], "Serie"), cancellation);
+
+        var result = _service.Apply(_rootDirectory, requests, [], cancellation.Token);
+
+        Assert.True(result.WasCanceled);
+        Assert.Equal(1, result.MovedFileCount);
+        Assert.False(File.Exists(first));
+        Assert.True(File.Exists(second));
+        Assert.Contains(result.LogLines, line => line.StartsWith("VERSCHOBEN:", StringComparison.Ordinal));
+        Assert.Contains(result.LogLines, line => line.StartsWith("ABGEBROCHEN:", StringComparison.Ordinal));
+    }
+
+    private sealed class CancelingMoveRequests(DownloadSortMoveRequest first, DownloadSortMoveRequest second, CancellationTokenSource cancellation)
+        : IReadOnlyList<DownloadSortMoveRequest>
+    {
+        public int Count => 2;
+        public DownloadSortMoveRequest this[int index] => index == 0 ? first : second;
+        public IEnumerator<DownloadSortMoveRequest> GetEnumerator()
+        {
+            yield return first;
+            cancellation.Cancel();
+            yield return second;
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     public void Dispose()

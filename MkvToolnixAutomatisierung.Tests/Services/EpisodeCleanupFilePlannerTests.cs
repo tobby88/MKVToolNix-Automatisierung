@@ -102,6 +102,70 @@ public sealed class EpisodeCleanupFilePlannerTests : IDisposable
         Assert.DoesNotContain(unrelatedText, cleanupFiles);
     }
 
+    [Fact]
+    public void BuildCleanupFileList_ProtectsLanguageAndAccessibilitySidecarsOfExcludedSource()
+    {
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+        var excluded = CreateFile(Path.Combine(_tempDirectory, "srf.mp4"));
+        var subtitle = CreateFile(Path.Combine(_tempDirectory, "srf.de.forced.srt"));
+        var accessibility = CreateFile(Path.Combine(_tempDirectory, "srf.eng.sdh.ass"));
+        var other = CreateFile(Path.Combine(_tempDirectory, "srf.extra.srt"));
+
+        var files = planner.BuildCleanupFileList([excluded, subtitle, accessibility, other],
+            Path.Combine(_tempDirectory, "output.mkv"), sourceRoot: _tempDirectory, excludedSourcePaths: [excluded]);
+
+        Assert.Equal([other], files);
+    }
+
+    [Fact]
+    public void BuildRejectedSourceCleanupFileList_IncludesOnlyRecognizedLanguageSidecars()
+    {
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+        var rejected = CreateFile(Path.Combine(_tempDirectory, "srf.mp4"));
+        var subtitle = CreateFile(Path.Combine(_tempDirectory, "srf.de.forced.srt"));
+        var other = CreateFile(Path.Combine(_tempDirectory, "srf.extra.srt"));
+
+        var files = planner.BuildRejectedSourceCleanupFileList([rejected], Path.Combine(_tempDirectory, "output.mkv"), sourceRoot: _tempDirectory);
+
+        Assert.Contains(rejected, files);
+        Assert.Contains(subtitle, files);
+        Assert.DoesNotContain(other, files);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildRejectedSourceCleanupFileList_DoesNotExpandProtectedOutputOrWorkingCopy(bool workingCopy)
+    {
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+        var protectedMedia = CreateFile(Path.Combine(_tempDirectory, "protected.mkv"));
+        CreateFile(Path.Combine(_tempDirectory, "protected.srt"));
+        CreateFile(Path.Combine(_tempDirectory, "protected.de.srt"));
+
+        var files = planner.BuildRejectedSourceCleanupFileList([protectedMedia],
+            workingCopy ? Path.Combine(_tempDirectory, "output.mkv") : protectedMedia,
+            workingCopyPath: workingCopy ? protectedMedia : null,
+            sourceRoot: _tempDirectory);
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public void BuildCleanupFileList_DeduplicatesEquivalentFullPaths()
+    {
+        var archiveService = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        var planner = new EpisodeCleanupFilePlanner(new EpisodeOutputPathService(archiveService));
+        var source = CreateFile(Path.Combine(_tempDirectory, "source.srt"));
+
+        var files = planner.BuildCleanupFileList([source, Path.Combine(_tempDirectory, ".", "source.srt")],
+            Path.Combine(_tempDirectory, "output.mkv"), sourceRoot: _tempDirectory);
+
+        Assert.Equal([source], files);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

@@ -149,6 +149,35 @@ public sealed class EpisodeCleanupServiceTests : IDisposable
         Assert.True(File.Exists(secondSource));
     }
 
+    [Fact]
+    public async Task MoveFilesToDirectoryAsync_SkipsDirectoryNameCollisions()
+    {
+        var source = CreateFile("source.txt", "data");
+        var target = Path.Combine(_tempDirectory, "done");
+        Directory.CreateDirectory(Path.Combine(target, "source.txt"));
+        Directory.CreateDirectory(Path.Combine(target, "source (2).txt"));
+
+        var result = await new EpisodeCleanupService().MoveFilesToDirectoryAsync([source], target);
+
+        Assert.Equal([Path.Combine(target, "source (3).txt")], result.MovedFiles);
+        Assert.Empty(result.FailedFiles);
+        Assert.Equal("data", File.ReadAllText(result.MovedFiles[0]));
+    }
+
+    [Fact]
+    public async Task RecycleFilesAsync_DeduplicatesEquivalentPaths_BeforeCallingRecycle()
+    {
+        var source = CreateFile("source.txt", "data");
+        var recycled = new List<string>();
+        var service = new EpisodeCleanupService(File.Move, recycled.Add);
+
+        var result = await service.RecycleFilesAsync([source, Path.Combine(_tempDirectory, ".", "source.txt")]);
+
+        Assert.Equal([source], recycled);
+        Assert.Equal([source], result.RecycledFiles);
+        Assert.True(File.Exists(source));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

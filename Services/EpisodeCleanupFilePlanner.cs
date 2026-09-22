@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
@@ -5,6 +7,9 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal sealed class EpisodeCleanupFilePlanner
 {
+    private static readonly Regex CompanionSuffixPattern = new(
+        @"^(?:\.(?:de|deu|ger|en|eng|nds|fr|fra|fre|es|spa|it|ita|nl|nld|dut|sv|swe|da|dan|no|nor|fi|fin|pl|pol|pt|por|tr|tur|forced|sdh|cc|hoh|hi))*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly HashSet<string> CompanionExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".txt",
@@ -52,6 +57,7 @@ internal sealed class EpisodeCleanupFilePlanner
         return candidatePaths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Where(File.Exists)
+            .Select(Path.GetFullPath)
             .Where(path => string.IsNullOrWhiteSpace(sourceRoot)
                 || PathComparisonHelper.IsPathWithinRoot(path, sourceRoot))
             .Where(path => !_outputPaths.IsArchivePath(path))
@@ -81,8 +87,11 @@ internal sealed class EpisodeCleanupFilePlanner
         string? workingCopyPath = null,
         string? sourceRoot = null)
     {
+        // Zuerst die Medienquellen selbst schützen. Sonst würden bei einem versehentlich
+        // als verworfen markierten Output zwar die MKV, aber nicht ihre Sidecars herausfallen.
+        var safeRejectedSources = BuildCleanupFileList(rejectedSourcePaths, outputPath, workingCopyPath, sourceRoot);
         return BuildCleanupFileList(
-            ExpandRejectedSourceCleanupCandidates(rejectedSourcePaths),
+            ExpandRejectedSourceCleanupCandidates(safeRejectedSources),
             outputPath,
             workingCopyPath,
             sourceRoot,
@@ -111,7 +120,26 @@ internal sealed class EpisodeCleanupFilePlanner
             {
                 yield return Path.Combine(directory, stem + companionExtension);
             }
+
+            if (Directory.Exists(directory))
+            {
+                foreach (var candidate in Directory.EnumerateFiles(directory, stem + ".*", SearchOption.TopDirectoryOnly))
+                {
+                    if (IsCompanion(candidate, stem))
+                    {
+                        yield return candidate;
+                    }
+                }
+            }
         }
+    }
+
+    private static bool IsCompanion(string candidatePath, string sourceStem)
+    {
+        var candidateStem = Path.GetFileNameWithoutExtension(candidatePath);
+        return CompanionExtensions.Contains(Path.GetExtension(candidatePath))
+            && candidateStem.StartsWith(sourceStem, StringComparison.OrdinalIgnoreCase)
+            && CompanionSuffixPattern.IsMatch(candidateStem[sourceStem.Length..]);
     }
 
     private static IReadOnlyList<CleanupExclusion> BuildCleanupExclusions(IEnumerable<string>? excludedSourcePaths)
@@ -141,9 +169,9 @@ internal sealed class EpisodeCleanupFilePlanner
 
         public CleanupExclusion(string sourcePath)
         {
-            _sourcePath = sourcePath;
-            _sourceDirectory = Path.GetDirectoryName(sourcePath);
-            _sourceStem = Path.GetFileNameWithoutExtension(sourcePath);
+            _sourcePath = Path.GetFullPath(sourcePath);
+            _sourceDirectory = Path.GetDirectoryName(_sourcePath);
+            _sourceStem = Path.GetFileNameWithoutExtension(_sourcePath);
             _sourceCanOwnCompanions = MediaExtensions.Contains(Path.GetExtension(sourcePath));
         }
 
@@ -159,9 +187,8 @@ internal sealed class EpisodeCleanupFilePlanner
                 return false;
             }
 
-            return CompanionExtensions.Contains(Path.GetExtension(candidatePath))
-                && PathComparisonHelper.AreSamePath(Path.GetDirectoryName(candidatePath), _sourceDirectory)
-                && string.Equals(Path.GetFileNameWithoutExtension(candidatePath), _sourceStem, StringComparison.OrdinalIgnoreCase);
+            return IsCompanion(candidatePath, _sourceStem)
+                && PathComparisonHelper.AreSamePath(Path.GetDirectoryName(candidatePath), _sourceDirectory);
         }
     }
 }

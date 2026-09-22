@@ -9,7 +9,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// <summary>
 /// Verwaltet Scan, Vorschau und Ausfuehrung des Download-Sortiermoduls.
 /// </summary>
-internal sealed class DownloadSortViewModel : INotifyPropertyChanged
+internal sealed class DownloadSortViewModel : IModuleInteractionState
 {
     private readonly DownloadSortModuleServices _services;
     private readonly IUserDialogService _dialogService;
@@ -24,6 +24,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private string _logText = string.Empty;
     private int _progressValue;
     private bool _isBusy;
+    private bool _requiresScan;
     private CancellationTokenSource? _currentOperationCts;
 
     /// <summary>
@@ -109,7 +110,9 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
             }
 
             _sourceDirectory = value;
+            _requiresScan = true;
             OnPropertyChanged();
+            RefreshSummaryAndCommands();
         }
     }
 
@@ -260,6 +263,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         }
 
         _currentFolderRenames = scanResult.FolderRenames;
+        _requiresScan = false;
         Items.Clear();
         RefreshTargetFolderOptions(scanResult);
 
@@ -310,6 +314,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         try
         {
             SetBusy(true);
+            _requiresScan = true;
             StatusText = "Sortiere Dateien ein...";
             ProgressValue = 30;
 
@@ -321,6 +326,10 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
                 () => _services.DownloadSort.Apply(SourceDirectory, requests, _currentFolderRenames, operationCts.Token),
                 operationCts.Token);
             AppendLog(applyResult.LogLines);
+            if (applyResult.WasCanceled)
+            {
+                throw new OperationCanceledException(operationCts.Token);
+            }
             if (applyResult.LogLines.Any(line => line.StartsWith("FEHLER:", StringComparison.OrdinalIgnoreCase)))
             {
                 _dialogService.ShowWarning(
@@ -488,6 +497,7 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     private bool CanRunSort()
     {
         return !_isBusy
+            && !_requiresScan
             && Directory.Exists(SourceDirectory)
             && Items.Any(item => item.IsSelected && DownloadSortItemStates.IsSortable(item.State));
     }
@@ -703,6 +713,10 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task ScanCoreWithoutBusyAsync(bool resetLog, CancellationToken cancellationToken)
     {
+        _requiresScan = true;
+        var deselectedPaths = Items.Where(item => !item.IsSelected)
+            .SelectMany(item => item.FilePaths)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (resetLog)
         {
             LogText = string.Empty;
@@ -711,12 +725,39 @@ internal sealed class DownloadSortViewModel : INotifyPropertyChanged
         StatusText = "Analysiere lose Mediathek-Dateien...";
         ProgressValue = 15;
 
-        IProgress<DownloadSortScanProgress> scanProgress = new Progress<DownloadSortScanProgress>(HandleDownloadSortScanProgress);
-        var scanResult = await Task.Run(
-            () => _services.DownloadSort.Scan(SourceDirectory, scanProgress.Report, cancellationToken),
-            cancellationToken);
+        var scanActive = true;
+        IProgress<DownloadSortScanProgress> scanProgress = new Progress<DownloadSortScanProgress>(progress =>
+        {
+            if (scanActive && !cancellationToken.IsCancellationRequested)
+            {
+                HandleDownloadSortScanProgress(progress);
+            }
+        });
+        DownloadSortScanResult scanResult;
+        var sourceDirectory = SourceDirectory;
+        try
+        {
+            scanResult = await Task.Run(
+                () => _services.DownloadSort.Scan(sourceDirectory, scanProgress.Report, cancellationToken),
+                cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        finally
+        {
+            // Bereits gepostete Progress-Callbacks dürfen Abschluss/Abbruch nicht überschreiben.
+            scanActive = false;
+        }
 
         ApplyScanResult(scanResult);
+        if (!resetLog)
+        {
+            foreach (var item in Items.Where(item => item.FilePaths.Any(deselectedPaths.Contains)))
+            {
+                item.IsSelected = false;
+            }
+
+            RefreshSummaryAndCommands();
+        }
         ProgressValue = 100;
         StatusText = ItemCount == 0
             ? "Keine losen Download-Dateien gefunden"

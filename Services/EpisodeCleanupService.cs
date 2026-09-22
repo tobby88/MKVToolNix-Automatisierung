@@ -243,7 +243,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
     private static string BuildUniqueTargetPath(string targetDirectory, string fileName)
     {
         var destinationPath = Path.Combine(targetDirectory, fileName);
-        if (!File.Exists(destinationPath))
+        if (!File.Exists(destinationPath) && !Directory.Exists(destinationPath))
         {
             return destinationPath;
         }
@@ -255,7 +255,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
         while (true)
         {
             destinationPath = Path.Combine(targetDirectory, $"{fileNameWithoutExtension} ({suffix}){extension}");
-            if (!File.Exists(destinationPath))
+            if (!File.Exists(destinationPath) && !Directory.Exists(destinationPath))
             {
                 return destinationPath;
             }
@@ -271,6 +271,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
     {
         return filePaths
             .Where(File.Exists)
+            .Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

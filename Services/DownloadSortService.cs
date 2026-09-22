@@ -173,8 +173,24 @@ internal sealed class DownloadSortService
         ArgumentNullException.ThrowIfNull(filePaths);
         ArgumentNullException.ThrowIfNull(folderRenames);
 
+        if (!TryNormalizeDirectRootFilePaths(rootDirectory, filePaths, out var safeFilePaths, out _)
+            || safeFilePaths.Any(path => !File.Exists(path)))
+        {
+            return new DownloadSortTargetEvaluation(DownloadSortItemState.Conflict,
+                "Quelldateien fehlen oder liegen nicht direkt im Download-Ordner. Bitte neu scannen.");
+        }
+
         var defectiveFilePathSet = CreateDefectiveFilePathSet(defectiveFilePaths);
-        var regularFilePaths = filePaths
+        defectiveFilePathSet.IntersectWith(safeFilePaths);
+        if (defectiveFilePathSet.Count > 0
+            && (!TryBuildSafeRootChildPath(rootDirectory, DefectiveFolderName, out var defectiveDirectory)
+                || FindExistingTargetFile(defectiveFilePathSet.ToList(), defectiveDirectory) is not null))
+        {
+            return new DownloadSortTargetEvaluation(DownloadSortItemState.Conflict,
+                "Der Defekt-Zielpfad ist bereits belegt oder unsicher. Bitte prüfen.");
+        }
+
+        var regularFilePaths = safeFilePaths
             .Where(path => !defectiveFilePathSet.Contains(path))
             .ToList();
         if (regularFilePaths.Count == 0)
@@ -186,6 +202,12 @@ internal sealed class DownloadSortService
                 : new DownloadSortTargetEvaluation(
                     DownloadSortItemState.Defective,
                     string.Empty);
+        }
+
+        if (FindBlockingLooseVideoCompanion(rootDirectory, regularFilePaths) is { } looseVideo)
+        {
+            return new DownloadSortTargetEvaluation(DownloadSortItemState.Conflict,
+                $"Passende lose MP4 '{Path.GetFileName(looseVideo)}' wurde nicht mit ausgewählt.");
         }
 
         return EvaluateRegularTarget(rootDirectory, regularFilePaths, targetFolderName, folderRenames);
@@ -230,11 +252,19 @@ internal sealed class DownloadSortService
         var renamePlan = folderRenames.FirstOrDefault(plan =>
             string.Equals(plan.TargetFolderName, normalizedFolderName, StringComparison.OrdinalIgnoreCase));
 
-        var effectiveExistingDirectory = Path.Combine(rootDirectory, normalizedFolderName);
+        if (!TryBuildSafeRootChildPath(rootDirectory, normalizedFolderName, out var effectiveExistingDirectory))
+        {
+            return new DownloadSortTargetEvaluation(DownloadSortItemState.Conflict,
+                "Der Zielordner ist belegt oder kein sicherer direkter Download-Unterordner.");
+        }
+
         if (!Directory.Exists(effectiveExistingDirectory)
             && renamePlan is not null)
         {
-            effectiveExistingDirectory = Path.Combine(rootDirectory, renamePlan.CurrentFolderName);
+            if (!TryBuildSafeRootChildPath(rootDirectory, renamePlan.CurrentFolderName, out effectiveExistingDirectory))
+            {
+                return new DownloadSortTargetEvaluation(DownloadSortItemState.Conflict, "Der umzubenennende Serienordner ist nicht sicher zugreifbar.");
+            }
         }
 
         var replacementDecision = EvaluateExistingTargetFiles(filePaths, effectiveExistingDirectory);
@@ -283,6 +313,7 @@ internal sealed class DownloadSortService
         EnsureDirectoryExists(rootDirectory);
         ArgumentNullException.ThrowIfNull(moveRequests);
         ArgumentNullException.ThrowIfNull(folderRenames);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var logLines = new List<string>();
         var renamedFolderCount = 0;
@@ -298,10 +329,14 @@ internal sealed class DownloadSortService
                              StringComparison.OrdinalIgnoreCase)))
                      .DistinctBy(plan => plan.CurrentFolderName, StringComparer.OrdinalIgnoreCase))
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             if (!TryBuildSafeRootChildPath(rootDirectory, renamePlan.CurrentFolderName, out var sourcePath)
                 || !TryBuildSafeRootChildPath(rootDirectory, renamePlan.TargetFolderName, out var destinationPath)
+                || IsReservedTargetFolderName(renamePlan.CurrentFolderName)
                 || IsReservedTargetFolderName(renamePlan.TargetFolderName))
             {
                 logLines.Add($"UEBERSPRUNGEN: Ordner-Umbenennung '{renamePlan.CurrentFolderName}' -> '{renamePlan.TargetFolderName}' ist kein sicherer direkter Download-Unterordner.");
@@ -336,12 +371,22 @@ internal sealed class DownloadSortService
 
         foreach (var request in moveRequests)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             if (!TryNormalizeDirectRootFilePaths(rootDirectory, request.FilePaths, out var safeFilePaths, out var unsafeFilePath))
             {
                 skippedGroupCount++;
                 logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Quelldatei '{Path.GetFileName(unsafeFilePath)}' liegt nicht direkt im gewaehlten Download-Ordner.");
+                continue;
+            }
+
+            if (safeFilePaths.Count == 0 || safeFilePaths.Any(path => !File.Exists(path)))
+            {
+                skippedGroupCount++;
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Quelldatei existiert nicht mehr. Bitte neu scannen.");
                 continue;
             }
 
@@ -377,8 +422,13 @@ internal sealed class DownloadSortService
             string? targetDirectory = null;
             if (regularFilePaths.Count > 0)
             {
-                targetDirectory = Path.Combine(rootDirectory, targetFolderName);
-                Directory.CreateDirectory(targetDirectory);
+                if (!TryBuildSafeRootChildPath(rootDirectory, targetFolderName, out targetDirectory))
+                {
+                    skippedGroupCount++;
+                    logLines.Add($"KONFLIKT: {request.DisplayName} -> Zielordner ist belegt oder unsicher.");
+                    continue;
+                }
+
                 replacementDecision = EvaluateExistingTargetFiles(regularFilePaths, targetDirectory);
             }
             else
@@ -393,10 +443,12 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            var defectiveFilePaths = request.FilePaths.Where(defectiveFilePathSet.Contains).ToList();
+            var defectiveFilePaths = safeFilePaths.Where(defectiveFilePathSet.Contains).ToList();
             var defectiveDirectory = Path.Combine(rootDirectory, DefectiveFolderName);
             var defectiveTargetConflict = FindExistingTargetFile(defectiveFilePaths, defectiveDirectory);
-            if (!string.IsNullOrWhiteSpace(defectiveTargetConflict))
+            if (defectiveFilePaths.Count > 0
+                && (!TryBuildSafeRootChildPath(rootDirectory, DefectiveFolderName, out defectiveDirectory)
+                    || !string.IsNullOrWhiteSpace(defectiveTargetConflict)))
             {
                 skippedGroupCount++;
                 logLines.Add(
@@ -405,19 +457,24 @@ internal sealed class DownloadSortService
             }
 
             var groupMovedCount = 0;
+            var regularMovedCount = 0;
+            var defectiveMovedCount = 0;
             if (targetDirectory is not null)
             {
-                groupMovedCount += MoveFiles(regularFilePaths, targetDirectory, targetFolderName, logLines);
+                regularMovedCount = MoveFiles(regularFilePaths, targetDirectory, targetFolderName, logLines, cancellationToken);
+                groupMovedCount += regularMovedCount;
             }
 
             if (defectiveFilePaths.Count > 0)
             {
-                Directory.CreateDirectory(defectiveDirectory);
-                groupMovedCount += MoveFiles(
+                defectiveMovedCount = MoveFiles(
                     defectiveFilePaths,
                     defectiveDirectory,
                     DefectiveFolderName,
-                    logLines);
+                    logLines,
+                    cancellationToken,
+                    allowReplacement: false);
+                groupMovedCount += defectiveMovedCount;
             }
 
             movedFileCount += groupMovedCount;
@@ -430,23 +487,23 @@ internal sealed class DownloadSortService
             }
 
             movedGroupCount++;
-            if (replacementDecision.ReplaceableConflicts.Count > 0)
-            {
-                logLines.Add($"ERSETZT: {request.DisplayName} -> {FormatConflictFileList(replacementDecision.ReplaceableConflicts)}");
-            }
-
-            if (regularFilePaths.Count > 0)
+            if (regularMovedCount > 0)
             {
                 var operationLabel = string.Equals(targetFolderName, DefectiveFolderName, StringComparison.OrdinalIgnoreCase)
                     ? "DEFEKT"
                     : "SORTIERT";
-                logLines.Add($"{operationLabel}: {request.DisplayName} -> {targetFolderName} ({regularFilePaths.Count} Datei(en))");
+                logLines.Add($"{operationLabel}: {request.DisplayName} -> {targetFolderName} ({regularMovedCount} Datei(en))");
             }
 
-            if (defectiveFilePathSet.Count > 0)
+            if (defectiveMovedCount > 0)
             {
-                logLines.Add($"DEFEKT: {request.DisplayName} -> {DefectiveFolderName} ({defectiveFilePathSet.Count} Datei(en))");
+                logLines.Add($"DEFEKT: {request.DisplayName} -> {DefectiveFolderName} ({defectiveMovedCount} Datei(en))");
             }
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            logLines.Add($"ABGEBROCHEN: {movedFileCount} Datei(en) und {renamedFolderCount} Ordner wurden bereits verschoben/umbenannt. Bitte neu scannen.");
         }
 
         return new DownloadSortApplyResult(
@@ -454,22 +511,30 @@ internal sealed class DownloadSortService
             movedFileCount,
             renamedFolderCount,
             skippedGroupCount,
-            logLines);
+            logLines,
+            WasCanceled: cancellationToken.IsCancellationRequested);
     }
 
     /// <summary>
     /// Verschiebt eine vorbereitete Teilmenge von Dateien in genau einen Zielordner und protokolliert
-    /// einzelne Move-Fehler, ohne den restlichen Gruppenlauf abzubrechen.
+    /// einzelne Move-Fehler. Nach einem Fehler bleiben die restlichen Begleiter bei der Quelle.
     /// </summary>
     private static int MoveFiles(
         IReadOnlyList<string> filePaths,
         string targetDirectory,
         string targetFolderName,
-        ICollection<string> logLines)
+        ICollection<string> logLines,
+        CancellationToken cancellationToken,
+        bool allowReplacement = true)
     {
         var movedCount = 0;
-        foreach (var filePath in filePaths)
+        foreach (var filePath in filePaths.OrderBy(GetExtensionPriority))
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+
             var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
             if (Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
             {
@@ -478,15 +543,26 @@ internal sealed class DownloadSortService
 
             try
             {
-                if (MoveFileSafely(filePath, destinationPath, targetFolderName, logLines))
+                Directory.CreateDirectory(targetDirectory);
+                if (!allowReplacement)
                 {
-                    movedCount++;
-                    logLines.Add($"VERSCHOBEN: '{Path.GetFileName(filePath)}' -> '{targetFolderName}\\{Path.GetFileName(destinationPath)}'");
+                    // Der Defekt-Ordner ist kein Ersatzziel. Auch eine erst nach der
+                    // Vorprüfung erschienene Datei darf hier niemals überschrieben werden.
+                    File.Move(filePath, destinationPath, overwrite: false);
                 }
+                else if (!MoveFileSafely(filePath, destinationPath, targetFolderName, logLines))
+                {
+                    break;
+                }
+
+                movedCount++;
+                logLines.Add($"VERSCHOBEN: '{Path.GetFileName(filePath)}' -> '{targetFolderName}\\{Path.GetFileName(destinationPath)}'");
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logLines.Add($"FEHLER: '{Path.GetFileName(filePath)}' konnte nicht nach '{targetFolderName}' verschoben werden: {ex.Message}");
+                // Insbesondere nach einem Video-Fehler müssen die Sidecars bei der Quelle bleiben.
+                break;
             }
         }
 
@@ -552,6 +628,7 @@ internal sealed class DownloadSortService
             }
 
             File.Move(temporaryPath, destinationPath, overwrite: true);
+            logLines.Add($"ERSETZT: '{Path.GetFileName(destinationPath)}' in '{targetFolderName}'");
             return true;
         }
         catch
@@ -595,7 +672,7 @@ internal sealed class DownloadSortService
                 continue;
             }
 
-            if (File.Exists(destinationPath))
+            if (File.Exists(destinationPath) || Directory.Exists(destinationPath))
             {
                 return destinationPath;
             }
@@ -615,13 +692,8 @@ internal sealed class DownloadSortService
         string rootDirectory,
         IReadOnlyList<string> filePaths)
     {
-        if (filePaths.Any(path => VideoExtensions.Contains(Path.GetExtension(path))))
-        {
-            return null;
-        }
-
         foreach (var filePath in filePaths
-                     .Where(path => !string.IsNullOrWhiteSpace(path))
+                     .Where(path => !string.IsNullOrWhiteSpace(path) && !VideoExtensions.Contains(Path.GetExtension(path)))
                      .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var companionVideoPath = BuildLogicalVideoCompanionPath(filePath);
@@ -681,9 +753,11 @@ internal sealed class DownloadSortService
         if (ShouldRouteOnlyTxtCompanionToDefective(group.FilePaths, defectiveFilePaths))
         {
             var textCompanionPath = Path.ChangeExtension(defectiveVideoCandidates[0].FilePath, ".txt");
-            if (remainingFilePaths.Remove(textCompanionPath))
+            var actualTextCompanion = remainingFilePaths.FirstOrDefault(path =>
+                string.Equals(path, textCompanionPath, StringComparison.OrdinalIgnoreCase));
+            if (actualTextCompanion is not null && remainingFilePaths.Remove(actualTextCompanion))
             {
-                defectiveFilePaths.Add(textCompanionPath);
+                defectiveFilePaths.Add(actualTextCompanion);
             }
         }
 
@@ -827,18 +901,18 @@ internal sealed class DownloadSortService
                 $"Pruefe Serienordner {index + 1}/{directoryPaths.Length}: {currentFolderName}",
                 InterpolateProgress(8, 28, index, Math.Max(1, directoryPaths.Length)));
 
-            if (IsReservedTargetFolderName(currentFolderName))
+            if (IsReservedTargetFolderName(currentFolderName)
+                || (File.GetAttributes(directoryPath) & FileAttributes.ReparsePoint) != 0)
             {
                 continue;
             }
 
             var detectedFolderNames = EnumerateLogicalGroups(directoryPath, cancellationToken)
                 .Select(group => DetectFolderProposal(group.FilePaths).SuggestedFolderName)
-                .Where(folderName => !string.IsNullOrWhiteSpace(folderName))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            if (detectedFolderNames.Count != 1)
+            if (detectedFolderNames.Count != 1 || string.IsNullOrWhiteSpace(detectedFolderNames[0]))
             {
                 continue;
             }
@@ -1275,7 +1349,8 @@ internal sealed class DownloadSortService
         }
 
         childPath = candidatePath;
-        return true;
+        return !File.Exists(candidatePath)
+            && (!Directory.Exists(candidatePath) || (File.GetAttributes(candidatePath) & FileAttributes.ReparsePoint) == 0);
     }
 
     /// <summary>
@@ -1367,7 +1442,10 @@ internal sealed class DownloadSortService
                 return false;
             }
 
-            normalizedFilePaths.Add(fullPath);
+            if (!normalizedFilePaths.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+            {
+                normalizedFilePaths.Add(fullPath);
+            }
         }
 
         return true;
@@ -1412,6 +1490,13 @@ internal sealed class DownloadSortService
         foreach (var filePath in filePaths)
         {
             var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
+            if (Directory.Exists(destinationPath))
+            {
+                return new DownloadSortReplacementDecision(replaceableConflicts,
+                    new DownloadSortTargetFileConflict(filePath, destinationPath, 0, 0,
+                        BlockingReason: $"Der Zieldateipfad '{Path.GetFileName(destinationPath)}' ist durch einen Ordner belegt."));
+            }
+
             if (File.Exists(destinationPath)
                 && !Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
             {
@@ -1504,24 +1589,17 @@ internal sealed class DownloadSortService
 
     private static string BuildBlockingConflictNote(DownloadSortTargetFileConflict conflict)
     {
+        if (conflict.BlockingReason is not null)
+        {
+            return conflict.BlockingReason;
+        }
+
         if (conflict.SourceMissing)
         {
             return $"Quelldatei '{Path.GetFileName(conflict.SourcePath)}' existiert nicht mehr. Bitte neu scannen.";
         }
 
         return $"Vorhandene Zieldatei '{Path.GetFileName(conflict.TargetPath)}' ist deutlich größer ({FormatFileSize(conflict.TargetLengthBytes)} statt {FormatFileSize(conflict.SourceLengthBytes)}). Bitte prüfen.";
-    }
-
-    private static string FormatConflictFileList(IReadOnlyList<DownloadSortTargetFileConflict> conflicts)
-    {
-        var shownNames = conflicts
-            .Take(3)
-            .Select(conflict => Path.GetFileName(conflict.TargetPath))
-            .ToList();
-        var suffix = conflicts.Count > shownNames.Count
-            ? $" und {conflicts.Count - shownNames.Count} weitere"
-            : string.Empty;
-        return string.Join(", ", shownNames) + suffix;
     }
 
     private static string FormatFileSize(long bytes)
@@ -1591,7 +1669,8 @@ internal sealed class DownloadSortService
         string TargetPath,
         long SourceLengthBytes,
         long TargetLengthBytes,
-        bool SourceMissing = false);
+        bool SourceMissing = false,
+        string? BlockingReason = null);
 }
 
 /// <summary>
@@ -1704,4 +1783,5 @@ internal sealed record DownloadSortApplyResult(
     int MovedFileCount,
     int RenamedFolderCount,
     int SkippedGroupCount,
-    IReadOnlyList<string> LogLines);
+    IReadOnlyList<string> LogLines,
+    bool WasCanceled = false);
