@@ -262,10 +262,9 @@ internal sealed class EpisodeOutputPathService
             var episodeCodeMatches = titleMatches
                 .Where(path => Path.GetFileName(path).Contains(episodeToken, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            if (episodeCodeMatches.Count == 1)
-            {
-                return episodeCodeMatches[0];
-            }
+            // Ein identischer Titel widerlegt keine bekannte Episodennummer. Andernfalls
+            // könnte eine AD-only-Quelle z. B. die gleichnamige Folge einer anderen Staffel ändern.
+            return episodeCodeMatches.Count == 1 ? episodeCodeMatches[0] : null;
         }
 
         return titleMatches.Count == 1

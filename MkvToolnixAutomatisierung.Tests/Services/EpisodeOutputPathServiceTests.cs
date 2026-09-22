@@ -196,6 +196,22 @@ public sealed class EpisodeOutputPathServiceTests : IDisposable
         Assert.Null(resolvedPath);
     }
 
+    [Theory]
+    [InlineData("05", "07")]
+    [InlineData("04", "08")]
+    public void TryResolveExistingArchiveOutputPath_RejectsSameTitleWithConflictingKnownEpisode(string season, string episode)
+    {
+        var archiveRoot = Path.Combine(_tempDirectory, "archive-root");
+        var archiveFile = Path.Combine(archiveRoot, "Beispielserie", "Season 4", "Beispielserie - S04E07 - Ostern.mkv");
+        Directory.CreateDirectory(Path.GetDirectoryName(archiveFile)!);
+        File.WriteAllText(archiveFile, "archive");
+        var archive = new SeriesArchiveService(new MkvMergeProbeService(), new AppArchiveSettingsStore(new AppSettingsStore()));
+        archive.ConfigureArchiveRootDirectory(archiveRoot);
+        var service = new EpisodeOutputPathService(archive);
+
+        Assert.Null(service.TryResolveExistingArchiveOutputPath(archiveRoot, "Beispielserie", season, episode, "Ostern"));
+    }
+
     [Fact]
     public void TryResolveExistingSpecialArchiveMatch_ReturnsSpecialsFile_AndMetadataFromArchiveName()
     {
