@@ -39,6 +39,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         @"^\s*(?<series>.+?)\s+-\s+S(?<season>\d{2,4}|xx)E(?<episode>\d{2,4}(?:-E\d{2,4})?|xx)\s+-\s+(?<title>.+?)\s*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex SeasonFolderPattern = new(@"^Season\s+(?:\d+|xx)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex SubtitleSidecarSuffixPattern = new(
+        @"^(?:\.(?:de|deu|ger|en|eng|nds|fr|fra|fre|es|spa|it|ita|nl|nld|dut|sv|swe|da|dan|no|nor|fi|fin|pl|pol|pt|por|tr|tur|forced|sdh|cc|hoh|hi))*\.(?:srt|ass|ssa|vtt|ttml|sub|idx)$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly string[] SidecarSuffixes =
     [
         ".nfo",
@@ -124,6 +127,24 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return await ApplyCoreAsync(request, output, cancellationToken);
+        }
+        finally
+        {
+            // Auch ein fehlgeschlagener/abgebrochener Header-Eingriff kann die Datei bereits
+            // verändert haben. Ein Folgescan darf dann keinen alten Probe-Snapshot verwenden.
+            _probeService.Invalidate([request.FilePath, request.RenameOperation?.TargetPath ?? request.FilePath]);
+        }
+    }
+
+    private async Task<ArchiveMaintenanceApplyResult> ApplyCoreAsync(
+        ArchiveMaintenanceApplyRequest request,
+        IProgress<string>? output,
+        CancellationToken cancellationToken)
+    {
         if (!request.HasWritableChanges)
         {
             return new ArchiveMaintenanceApplyResult(
@@ -135,11 +156,48 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         }
 
         var outputLines = new List<string>();
+        var outputLock = new object();
         var currentPath = request.FilePath;
         void AddOutputLine(string line)
         {
-            outputLines.Add(line);
-            output?.Report(line);
+            // stdout und stderr können gleichzeitig melden.
+            lock (outputLock)
+            {
+                outputLines.Add(line);
+                output?.Report(line);
+            }
+        }
+
+        if (request.RenameOperation is { } plannedRename)
+        {
+            try
+            {
+                if (!PathComparisonHelper.AreSamePath(request.FilePath, plannedRename.SourcePath))
+                {
+                    throw new IOException("Die Umbenennungsquelle stimmt nicht mit der bearbeiteten MKV überein.");
+                }
+
+                ValidateRename(plannedRename);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                return new ArchiveMaintenanceApplyResult(request.FilePath, currentPath, false,
+                    $"Umbenennen fehlgeschlagen: {ex.Message}", outputLines);
+            }
+        }
+
+        if (request.NfoTextEdit is { } plannedTextEdit)
+        {
+            var nfo = (_nfoProviderIds ?? new EmbyNfoProviderIdService()).ReadEpisodeMetadata(currentPath);
+            if (!nfo.NfoExists || nfo.WarningMessage is not null
+                || !string.Equals(nfo.Title?.Trim() ?? string.Empty, plannedTextEdit.CurrentTitle?.Trim() ?? string.Empty, StringComparison.Ordinal)
+                || !string.Equals(nfo.SortTitle?.Trim() ?? string.Empty, plannedTextEdit.CurrentSortTitle?.Trim() ?? string.Empty, StringComparison.Ordinal)
+                || nfo.IsTitleLocked != plannedTextEdit.CurrentTitleLocked
+                || nfo.IsSortTitleLocked != plannedTextEdit.CurrentSortTitleLocked)
+            {
+                return new ArchiveMaintenanceApplyResult(request.FilePath, currentPath, false,
+                    "NFO-Titel oder Sperren haben sich seit dem Scan geändert oder sind nicht lesbar. Bitte neu scannen.", outputLines);
+            }
         }
 
         if (request.ContainerTitleEdit is not null || request.TrackHeaderEdits.Count > 0)
@@ -153,11 +211,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                 mkvPropEditPath,
                 arguments,
                 "mkvpropedit",
-                line =>
-                {
-                    outputLines.Add(line);
-                    output?.Report(line);
-                },
+                AddOutputLine,
                 cancellationToken);
             if (exitCode != 0)
             {
@@ -174,6 +228,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
         if (request.ProviderIdEdit is not null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
             var updateResult = providerIdService.UpdateProviderIds(
                 currentPath,
@@ -193,6 +248,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
         if (request.NfoTextEdit is not null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
             var updateResult = providerIdService.UpdateTextFields(
                 currentPath,
@@ -215,6 +271,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
         if (request.RenameOperation is not null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 currentPath = ApplyRename(request.RenameOperation);
@@ -222,6 +279,11 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
             {
+                if (!File.Exists(request.FilePath) && File.Exists(request.RenameOperation.TargetPath))
+                {
+                    currentPath = request.RenameOperation.TargetPath;
+                }
+
                 var message = $"Umbenennen fehlgeschlagen: {ex.Message}";
                 AddOutputLine(message);
                 return new ArchiveMaintenanceApplyResult(
@@ -233,7 +295,6 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             }
         }
 
-        _probeService.Invalidate([request.FilePath, currentPath]);
         return new ArchiveMaintenanceApplyResult(
             request.FilePath,
             currentPath,
@@ -281,14 +342,22 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         ArchiveExpectedEpisodeMetadata? expectedMetadata = null)
     {
         var parsedName = TryParseEpisodeFileName(filePath);
-        var expectedTitle = expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath);
         var nfoResult = new EmbyNfoProviderIdService().ReadEpisodeMetadata(filePath);
+        var expectedTitle = ResolveExpectedTitleFromNfoAndTvdb(nfoResult,
+            expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath));
+        if (expectedMetadata is not null)
+        {
+            expectedMetadata = expectedMetadata with { Title = expectedTitle };
+        }
         var normalization = ArchiveHeaderNormalizationService.BuildForArchiveFile(
             filePath,
             container,
             expectedTitle,
             expectedMetadata?.OriginalLanguage);
-        var renameOperation = BuildRenameOperation(filePath, parsedName, expectedMetadata);
+        var renameMetadata = expectedMetadata ?? (parsedName is not null && nfoResult.IsTitleLocked
+            ? new ArchiveExpectedEpisodeMetadata(expectedTitle, parsedName.SeasonNumber, parsedName.EpisodeNumber, null)
+            : null);
+        var renameOperation = BuildRenameOperation(filePath, parsedName, renameMetadata);
         var issues = BuildRemuxIssues(container);
         var changeNotes = ArchiveHeaderNormalizationService
             .BuildHeaderChangeNotes(normalization.ContainerTitleEdit, normalization.TrackHeaderEdits)
@@ -309,7 +378,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             nfoResult.NfoExists,
             issues,
             changeNotes,
-            ErrorMessage: null,
+            ErrorMessage: nfoResult.WarningMessage is null ? null : $"NFO konnte nicht sicher gelesen werden: {nfoResult.WarningMessage}",
             nfoResult.Title,
             nfoResult.SortTitle,
             nfoResult.IsTitleLocked,
@@ -356,7 +425,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             return new ArchiveExpectedEpisodeMetadata(
                 ResolveExpectedTitleFromNfoAndTvdb(nfoResult, episode.Name),
                 episode.SeasonNumber?.ToString("00") ?? parsedName.SeasonNumber,
-                episode.EpisodeNumber?.ToString("00") ?? parsedName.EpisodeNumber,
+                EpisodeFileNameHelper.IsEpisodeRange(parsedName.EpisodeNumber)
+                    ? parsedName.EpisodeNumber
+                    : episode.EpisodeNumber?.ToString("00") ?? parsedName.EpisodeNumber,
                 mapping.OriginalLanguage);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or HttpRequestException)
@@ -450,7 +521,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         for (var attempt = 0; attempt < 20; attempt++)
         {
             var candidate = Path.Combine(directory, $".case-rename-{Guid.NewGuid():N}.tmp");
-            if (!File.Exists(candidate))
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
             {
                 return candidate;
             }
@@ -501,10 +572,31 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         var targetBasePath = Path.Combine(
             Path.GetDirectoryName(targetMediaPath) ?? string.Empty,
             Path.GetFileNameWithoutExtension(targetMediaPath));
-        return SidecarSuffixes
+        var operations = SidecarSuffixes
             .Select(suffix => new ArchiveSidecarRenameOperation(sourceBasePath + suffix, targetBasePath + suffix))
             .Where(operation => File.Exists(operation.SourcePath))
             .ToList();
+        var directory = Path.GetDirectoryName(sourceMediaPath);
+        if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+        {
+            var sourceStem = Path.GetFileNameWithoutExtension(sourceMediaPath);
+            foreach (var path in Directory.EnumerateFiles(directory, sourceStem + ".*", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(path);
+                if (!fileName.StartsWith(sourceStem, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var suffix = fileName[sourceStem.Length..];
+                if (SubtitleSidecarSuffixPattern.IsMatch(suffix))
+                {
+                    operations.Add(new ArchiveSidecarRenameOperation(path, targetBasePath + suffix));
+                }
+            }
+        }
+
+        return operations;
     }
 
     /// <summary>
@@ -515,6 +607,11 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceMediaPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetFileName);
+        if (targetFileName.Trim().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || !string.Equals(Path.GetExtension(targetFileName.Trim()), ".mkv", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Der Zielname muss ein einzelner gültiger MKV-Dateiname sein.", nameof(targetFileName));
+        }
 
         var targetPath = BuildTargetMediaPath(sourceMediaPath, targetFileName.Trim());
         return CreateRenameOperation(sourceMediaPath, targetPath);
@@ -749,25 +846,37 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         return value ? "ja" : "nein";
     }
 
-    private static string ApplyRename(ArchiveRenameOperation renameOperation)
+    private static void ValidateRename(ArchiveRenameOperation renameOperation)
     {
         if (!File.Exists(renameOperation.SourcePath))
         {
             throw new FileNotFoundException("Die umzubenennende MKV wurde nicht gefunden.", renameOperation.SourcePath);
         }
 
-        if (TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
+        if (Directory.Exists(renameOperation.TargetPath)
+            || TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
         {
             throw new IOException($"Die Ziel-MKV existiert bereits: {renameOperation.TargetPath}");
         }
 
         foreach (var sidecar in renameOperation.Sidecars)
         {
-            if (TargetExistsAsDifferentFile(sidecar.SourcePath, sidecar.TargetPath))
+            if (!File.Exists(sidecar.SourcePath))
+            {
+                throw new FileNotFoundException("Eine geplante Begleitdatei fehlt. Bitte neu scannen.", sidecar.SourcePath);
+            }
+
+            if (Directory.Exists(sidecar.TargetPath)
+                || TargetExistsAsDifferentFile(sidecar.SourcePath, sidecar.TargetPath))
             {
                 throw new IOException($"Eine Ziel-Begleitdatei existiert bereits: {sidecar.TargetPath}");
             }
         }
+    }
+
+    private static string ApplyRename(ArchiveRenameOperation renameOperation)
+    {
+        ValidateRename(renameOperation);
 
         Directory.CreateDirectory(Path.GetDirectoryName(renameOperation.TargetPath) ?? ".");
         foreach (var sidecarDirectory in renameOperation.Sidecars
@@ -778,10 +887,44 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             Directory.CreateDirectory(sidecarDirectory!);
         }
 
-        MoveFileWithCaseRenameSupport(renameOperation.SourcePath, renameOperation.TargetPath);
-        foreach (var sidecar in renameOperation.Sidecars)
+        var movedFiles = new List<ArchiveSidecarRenameOperation>();
+        try
         {
-            MoveFileWithCaseRenameSupport(sidecar.SourcePath, sidecar.TargetPath);
+            // Die Gruppe wird nicht mitten im Rename abgebrochen: erst vollständig
+            // verschieben oder rückwärts zurückrollen, damit MKV und NFO zusammenbleiben.
+            foreach (var move in new[] { new ArchiveSidecarRenameOperation(renameOperation.SourcePath, renameOperation.TargetPath) }
+                         .Concat(renameOperation.Sidecars))
+            {
+                if (!ShouldRenamePath(move.SourcePath, move.TargetPath))
+                {
+                    continue;
+                }
+
+                MoveFileWithCaseRenameSupport(move.SourcePath, move.TargetPath);
+                movedFiles.Add(move);
+            }
+        }
+        catch (Exception moveError) when (moveError is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            var rollbackErrors = new List<string>();
+            foreach (var move in movedFiles.AsEnumerable().Reverse())
+            {
+                try
+                {
+                    MoveFileWithCaseRenameSupport(move.TargetPath, move.SourcePath);
+                }
+                catch (Exception rollbackError) when (rollbackError is IOException or UnauthorizedAccessException or NotSupportedException)
+                {
+                    rollbackErrors.Add($"{move.TargetPath}: {rollbackError.Message}");
+                }
+            }
+
+            if (rollbackErrors.Count > 0)
+            {
+                throw new IOException($"{moveError.Message} Rückverschieben unvollständig: {string.Join("; ", rollbackErrors)}", moveError);
+            }
+
+            throw;
         }
 
         return renameOperation.TargetPath;

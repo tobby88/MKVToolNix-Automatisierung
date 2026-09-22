@@ -427,9 +427,100 @@ public sealed class ArchiveMaintenanceViewModelTests
         Assert.True(item.IsSelected);
 
         item.IsSelected = false;
+        item.TargetContainerTitle = "Weitere Korrektur";
 
         Assert.False(item.IsSelected);
         Assert.True(item.CanSelect);
+    }
+
+    [Fact]
+    public void ManualChange_DoesNotReselectExplicitlyDeselectedItem_AfterValidationRecovers()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis());
+        item.IsSelected = false;
+
+        item.TargetFileName = "invalid.txt";
+        item.TargetFileName = item.CurrentFileName;
+
+        Assert.True(item.CanSelect);
+        Assert.False(item.IsSelected);
+    }
+
+    [Fact]
+    public void SuppressFileNameChange_AlsoSuppressesSeasonOnlyMove_AndRestoresIt()
+    {
+        const string source = @"C:\Archiv\Serie\Season 1\Serie - S02E01 - Pilot.mkv";
+        var rename = ArchiveMaintenanceService.BuildManualRenameOperation(source, Path.GetFileName(source));
+        var analysis = CreateNeutralAnalysis(source) with { RenameOperation = rename };
+        var item = new ArchiveMaintenanceItemViewModel(analysis);
+
+        Assert.True(item.CanSuppressFileNameChange);
+        Assert.Contains("Season 2", item.ChangeSummary);
+        var suppression = item.SuppressFileNameChange();
+
+        Assert.NotNull(suppression);
+        Assert.Null(item.CreateApplyRequest().RenameOperation);
+        var rescanned = new ArchiveMaintenanceItemViewModel(analysis);
+        rescanned.ApplySuppressedChanges([suppression!]);
+        Assert.Null(rescanned.CreateApplyRequest().RenameOperation);
+
+        rescanned.RestoreFileNameSuggestion();
+
+        Assert.NotNull(rescanned.CreateApplyRequest().RenameOperation);
+        Assert.True(rescanned.IsSelected);
+    }
+
+    [Fact]
+    public void ResetFileNameToCurrent_KeepsCurrentSeasonLocation()
+    {
+        const string source = @"C:\Archiv\Serie\Season 1\Serie - S02E01 - Pilot.mkv";
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis(source) with
+        {
+            RenameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(source, Path.GetFileName(source))
+        });
+
+        item.ResetTargetFileNameToCurrent();
+
+        Assert.Null(item.CreateApplyRequest().RenameOperation);
+        Assert.False(item.IsSelected);
+    }
+
+    [Fact]
+    public void VisibleHeaderCorrectionGroups_DoesNotMergeDifferentTracksWithSameName()
+    {
+        var original = CreateAnalysisWithTrackCorrectionCandidate();
+        var track = original.TrackHeaderCorrectionCandidates.Single();
+        var item = new ArchiveMaintenanceItemViewModel(original with
+        {
+            TrackHeaderCorrectionCandidates = [track, track with { Selector = "track:2" }]
+        }) { ShowAllHeaderCorrections = true };
+
+        Assert.Equal(2, item.VisibleHeaderCorrectionGroupCount);
+        Assert.All(item.VisibleHeaderCorrectionGroups, group => Assert.Single(group.Values));
+    }
+
+    [Fact]
+    public void FailedAnalysis_DoesNotShowNoFindingsMessage()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateNeutralAnalysis() with { ErrorMessage = "NFO gesperrt" });
+
+        Assert.False(item.HasNoDetailFindings);
+        Assert.Contains("NFO gesperrt", item.DetailSummaryText);
+    }
+
+    [Fact]
+    public void MarkApplyFailed_UsesActualPath_AndPreventsStaleRetry()
+    {
+        var item = new ArchiveMaintenanceItemViewModel(CreateWritableAnalysis());
+        const string actualPath = @"C:\Archiv\Serie\Season 1\Teilweise.mkv";
+
+        item.MarkApplyFailed(actualPath, "Rollback fehlgeschlagen");
+
+        Assert.Equal(actualPath, item.FilePath);
+        Assert.False(item.CanSelect);
+        Assert.False(item.CanEditManualCorrections);
+        Assert.False(item.IsSelected);
+        Assert.Equal("Fehler", item.StatusText);
     }
 
     [Fact]

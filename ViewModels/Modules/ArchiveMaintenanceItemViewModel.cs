@@ -19,6 +19,10 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private ArchiveMaintenanceItemAnalysis _analysis;
     private bool _isSelected;
+    private bool _selectionExplicitlyCleared;
+    private bool _keepCurrentFilePath;
+    private string? _cachedRenameFileName;
+    private ArchiveRenameOperation? _cachedRename;
     private bool _wasApplied;
     private string _targetFileName;
     private string _targetContainerTitle;
@@ -63,8 +67,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         : HeaderCorrections.Where(correction => correction.HasChange);
 
     public IEnumerable<ArchiveMaintenanceHeaderCorrectionGroupViewModel> VisibleHeaderCorrectionGroups => VisibleHeaderCorrections
-        .GroupBy(correction => correction.DisplayLabel, StringComparer.Ordinal)
-        .Select(group => new ArchiveMaintenanceHeaderCorrectionGroupViewModel(group.Key, group.ToList()));
+        .GroupBy(correction => correction.Selector, StringComparer.Ordinal)
+        .Select(group => new ArchiveMaintenanceHeaderCorrectionGroupViewModel(group.First().DisplayLabel, group.ToList()));
 
     public bool ShowAllHeaderCorrections
     {
@@ -139,6 +143,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             }
 
             _targetFileName = normalizedValue;
+            _keepCurrentFilePath = false;
             OnPropertyChanged();
             NotifyManualCorrectionChanged();
         }
@@ -267,7 +272,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public bool CanSuppressFileNameChange => CanEditManualCorrections
         && !HasSuppressedFileNameChange
-        && !string.Equals(CurrentFileName, SuggestedFileName, StringComparison.Ordinal);
+        && _analysis.RenameOperation is not null;
 
     public bool CanRestoreFileNameSuggestion => CanEditManualCorrections && HasSuppressedFileNameChange;
 
@@ -329,6 +334,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         get => _isSelected;
         set
         {
+            _selectionExplicitlyCleared = !value;
             var normalizedValue = value && CanSelect;
             if (_isSelected == normalizedValue)
             {
@@ -478,7 +484,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
                 lines.AddRange(_analysis.Issues.Select(issue => "- " + issue.Message));
             }
 
-            if (_analysis.RenameOperation is { Sidecars.Count: > 0 } renameOperation)
+            if (CreateCurrentRenameOperation() is { Sidecars.Count: > 0 } renameOperation)
             {
                 lines.Add(string.Empty);
                 lines.Add("Begleitdateien werden mit umbenannt:");
@@ -510,12 +516,18 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public bool HasSidecarRenameNotes => SidecarRenameNotes.Count > 0;
 
-    public bool HasNoDetailFindings => !HasWritableDetailChanges && !HasIssues && !HasSidecarRenameNotes;
+    public bool HasNoDetailFindings => !_analysis.HasError && string.IsNullOrWhiteSpace(ManualValidationMessage)
+        && !HasWritableDetailChanges && !HasIssues && !HasSidecarRenameNotes;
 
     public string DetailSummaryText
     {
         get
         {
+            if (_analysis.HasError)
+            {
+                return "Analyse fehlgeschlagen: " + _analysis.ErrorMessage;
+            }
+
             if (!string.IsNullOrWhiteSpace(ManualValidationMessage))
             {
                 return "Manuelle Korrektur prüfen: " + ManualValidationMessage;
@@ -543,6 +555,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public ArchiveMaintenanceApplyRequest CreateApplyRequest()
     {
+        // Bindings fragen die Vorschau sehr oft ab. Sidecars erst hier erneut lesen,
+        // damit die Ausführung trotzdem den aktuellen Dateibestand berücksichtigt.
+        _cachedRenameFileName = null;
         return new ArchiveMaintenanceApplyRequest(
             _analysis.FilePath,
             CreateCurrentRenameOperation(),
@@ -585,6 +600,17 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         _removeImdbId = false;
         _suppressedChangeKinds.Clear();
         HeaderCorrections.Clear();
+        OnPropertyChanged(string.Empty);
+    }
+
+    /// <summary>
+    /// Nach Teilfehlern sind Header/NFO oder Pfad möglicherweise bereits verändert.
+    /// Weitere Schreibversuche brauchen deshalb einen neuen Scan statt des alten Plans.
+    /// </summary>
+    public void MarkApplyFailed(string currentFilePath, string message)
+    {
+        _analysis = _analysis with { FilePath = currentFilePath, ErrorMessage = message };
+        _isSelected = false;
         OnPropertyChanged(string.Empty);
     }
 
@@ -633,6 +659,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public void ResetTargetFileNameToCurrent()
     {
         TargetFileName = CurrentFileName;
+        _keepCurrentFilePath = true;
+        NotifyManualCorrectionChanged();
     }
 
     public void ResetTargetContainerTitleToCurrent()
@@ -664,7 +692,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     public ArchiveMaintenanceSuppressedChange? SuppressFileNameChange()
     {
-        return SuppressChange(FileNameChangeKind, CurrentFileName, SuggestedFileName, () => TargetFileName = CurrentFileName);
+        return SuppressChange(FileNameChangeKind, CurrentRenameSuppressionValue, SuggestedRenameSuppressionValue, ResetTargetFileNameToCurrent);
     }
 
     public ArchiveMaintenanceSuppressedChange? SuppressContainerTitleChange()
@@ -675,8 +703,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     public void RestoreFileNameSuggestion()
     {
         _suppressedChangeKinds.Remove(FileNameChangeKind);
+        _keepCurrentFilePath = false;
         TargetFileName = SuggestedFileName;
-        NotifySuppressionStateChanged();
+        NotifyManualCorrectionChanged();
     }
 
     public void RestoreContainerTitleSuggestion()
@@ -690,10 +719,13 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     {
         foreach (var suppressedChange in suppressedChanges)
         {
-            if (MatchesSuppression(suppressedChange, FileNameChangeKind, CurrentFileName, SuggestedFileName))
+            if (MatchesSuppression(suppressedChange, FileNameChangeKind, CurrentRenameSuppressionValue, SuggestedRenameSuppressionValue)
+                || (SuggestionChangesDirectory && !string.Equals(CurrentFileName, SuggestedFileName, StringComparison.Ordinal)
+                    && MatchesSuppression(suppressedChange, FileNameChangeKind, CurrentFileName, SuggestedFileName)))
             {
                 _suppressedChangeKinds.Add(FileNameChangeKind);
                 _targetFileName = CurrentFileName;
+                _keepCurrentFilePath = true;
             }
             else if (MatchesSuppression(suppressedChange, ContainerTitleChangeKind, CurrentContainerTitle, SuggestedContainerTitle))
             {
@@ -712,6 +744,15 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
     }
 
     private string SuggestedFileName => Path.GetFileName(_analysis.RenameOperation?.TargetPath ?? _analysis.FilePath);
+
+    // Bei reinen Season-Korrekturen ist der Dateiname identisch. Die gespeicherte
+    // Ablehnung muss daher auch den tatsächlich vorgeschlagenen Zielordner erkennen.
+    private bool SuggestionChangesDirectory => _analysis.RenameOperation is { } rename
+        && !string.Equals(Path.GetDirectoryName(rename.SourcePath), Path.GetDirectoryName(rename.TargetPath), StringComparison.Ordinal);
+
+    private string CurrentRenameSuppressionValue => SuggestionChangesDirectory ? FilePath : CurrentFileName;
+
+    private string SuggestedRenameSuppressionValue => SuggestionChangesDirectory ? _analysis.RenameOperation!.TargetPath : SuggestedFileName;
 
     private string SuggestedContainerTitle => _analysis.ContainerTitleEdit?.ExpectedTitle ?? CurrentContainerTitle;
 
@@ -765,7 +806,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         return ArchiveHeaderNormalizationService
             .BuildHeaderChangeNotes(CreateCurrentContainerTitleEdit(), CreateCurrentTrackHeaderEdits())
             .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
-                ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
+                ? [BuildRenameChangeNote(renameOperation)]
                 : [])
             .Concat(BuildNfoTextChangeNotes(CreateCurrentNfoTextEdit()))
             .Concat(BuildProviderIdChangeNotes())
@@ -777,7 +818,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         return BuildContainerTitleChangeNotes(CreateCurrentContainerTitleEdit())
             .Concat(BuildTrackHeaderDetailChangeNotes(CreateCurrentTrackHeaderEdits()))
             .Concat(CreateCurrentRenameOperation() is ArchiveRenameOperation renameOperation
-                ? [$"Dateiname: {Path.GetFileName(renameOperation.SourcePath)} -> {Path.GetFileName(renameOperation.TargetPath)}"]
+                ? [BuildRenameChangeNote(renameOperation)]
                 : [])
             .Concat(BuildNfoTextChangeNotes(CreateCurrentNfoTextEdit()))
             .Concat(BuildProviderIdChangeNotes())
@@ -854,12 +895,28 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private ArchiveRenameOperation? CreateCurrentRenameOperation()
     {
-        if (_analysis.HasError || _wasApplied || !IsTargetFileNameUsable())
+        if (_analysis.HasError || _wasApplied || !IsTargetFileNameUsable()
+            || ((_keepCurrentFilePath || HasSuppressedFileNameChange)
+                && string.Equals(TargetFileName.Trim(), CurrentFileName, StringComparison.Ordinal)))
         {
             return null;
         }
 
-        return ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, TargetFileName);
+        var fileName = TargetFileName.Trim();
+        if (!string.Equals(_cachedRenameFileName, fileName, StringComparison.Ordinal))
+        {
+            _cachedRename = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
+            _cachedRenameFileName = fileName;
+        }
+
+        return _cachedRename;
+    }
+
+    private static string BuildRenameChangeNote(ArchiveRenameOperation rename)
+    {
+        return PathComparisonHelper.AreSamePath(Path.GetDirectoryName(rename.SourcePath), Path.GetDirectoryName(rename.TargetPath))
+            ? $"Dateiname: {Path.GetFileName(rename.SourcePath)} -> {Path.GetFileName(rename.TargetPath)}"
+            : $"Dateipfad: {rename.SourcePath} -> {rename.TargetPath}";
     }
 
     private ContainerTitleEditOperation? CreateCurrentContainerTitleEdit()
@@ -1012,7 +1069,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             return BuildProviderIdValidationMessage();
         }
 
-        var renameOperation = ArchiveMaintenanceService.BuildManualRenameOperation(_analysis.FilePath, fileName);
+        var renameOperation = CreateCurrentRenameOperation();
         if (renameOperation is not null && TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
         {
             return "Die Ziel-MKV existiert bereits.";
@@ -1027,7 +1084,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
 
     private static bool TargetExistsAsDifferentFile(string sourcePath, string targetPath)
     {
-        return PathComparisonHelper.FileExistsAsDifferentEntry(sourcePath, targetPath);
+        return Directory.Exists(targetPath) || PathComparisonHelper.FileExistsAsDifferentEntry(sourcePath, targetPath);
     }
 
     private bool AreProviderIdsUsable()
@@ -1086,7 +1143,7 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
             _isSelected = false;
             OnPropertyChanged(nameof(IsSelected));
         }
-        else if (canSelect && !_isSelected)
+        else if (canSelect && !_isSelected && !_selectionExplicitlyCleared)
         {
             _isSelected = true;
             OnPropertyChanged(nameof(IsSelected));

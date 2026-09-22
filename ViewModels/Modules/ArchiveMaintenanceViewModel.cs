@@ -13,7 +13,7 @@ namespace MkvToolnixAutomatisierung.ViewModels.Modules;
 /// ViewModel für die Archivpflege: rekursiver Scan vorhandener Archiv-MKVs, Review der geplanten
 /// Header-/Dateinamenskorrekturen und explizites Anwenden ausgewählter Änderungen.
 /// </summary>
-internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlobalSettingsAwareModule
+internal sealed class ArchiveMaintenanceViewModel : IModuleInteractionState, IGlobalSettingsAwareModule
 {
     private readonly ArchiveMaintenanceModuleServices _services;
     private readonly IUserDialogService _dialogService;
@@ -284,9 +284,15 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
         _scanCancellationSource = scanCancellationSource;
         IsScanning = true;
         IsBusy = true;
+        foreach (var item in Items)
+        {
+            item.PropertyChanged -= Item_OnPropertyChanged;
+        }
+
         Items.Clear();
         SelectedItem = null;
         LogText = string.Empty;
+        ProgressValue = 0;
         RefreshCounts();
         try
         {
@@ -300,10 +306,10 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                 StatusText = update.StatusText;
                 ProgressValue = update.ProgressPercent;
             });
-            var result = await _services.ArchiveMaintenance.ScanAsync(
-                RootDirectory,
-                progress,
-                scanCancellationSource.Token);
+            var rootDirectory = RootDirectory;
+            var result = await Task.Run(() => _services.ArchiveMaintenance.ScanAsync(
+                rootDirectory, progress, scanCancellationSource.Token), scanCancellationSource.Token);
+            scanCancellationSource.Token.ThrowIfCancellationRequested();
             var suppressedChanges = _services.ArchiveSettings.Load().SuppressedMaintenanceChanges;
             foreach (var item in result.Items
                          .OrderBy(analysis => Path.GetFileName(analysis.FilePath), StringComparer.OrdinalIgnoreCase)
@@ -359,16 +365,17 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
                 ProgressValue = index * 100 / selectedItems.Count;
                 AppendLog(StatusText);
                 var reportedOutputLines = new List<string>();
-                var result = await _services.ArchiveMaintenance.ApplyAsync(
-                    item.CreateApplyRequest(),
-                    new Progress<string>(line =>
+                var request = item.CreateApplyRequest();
+                var output = new InlineProgress<string>(line =>
                     {
                         reportedOutputLines.Add(line);
                         AppendToolOutputLog(line);
-                    }));
+                    });
+                var result = await Task.Run(() => _services.ArchiveMaintenance.ApplyAsync(request, output));
                 AppendResultOutputLines(result.OutputLines, reportedOutputLines);
                 if (!result.Success)
                 {
+                    item.MarkApplyFailed(result.CurrentFilePath, result.Message);
                     AppendLog($"FEHLER: {item.FileName}: {result.Message}");
                     continue;
                 }
@@ -736,12 +743,25 @@ internal sealed class ArchiveMaintenanceViewModel : INotifyPropertyChanged, IGlo
     private sealed class InlineProgress<T> : IProgress<T>
     {
         private readonly Action<T> _handler;
+        private readonly SynchronizationContext? _context = SynchronizationContext.Current;
 
         public InlineProgress(Action<T> handler)
         {
             _handler = handler;
         }
 
-        public void Report(T value) => _handler(value);
+        public void Report(T value)
+        {
+            // Synchrone Zustellung verhindert verspätete Meldungen nach dem Abschluss
+            // und hält UI-Bindungen auch bei Worker- und Prozess-Callbacks auf dem UI-Thread.
+            if (_context is not null && !ReferenceEquals(SynchronizationContext.Current, _context))
+            {
+                _context.Send(_ => _handler(value), null);
+            }
+            else
+            {
+                _handler(value);
+            }
+        }
     }
 }

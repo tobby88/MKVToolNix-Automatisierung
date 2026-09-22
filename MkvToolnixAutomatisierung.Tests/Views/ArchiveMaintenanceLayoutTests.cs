@@ -9,6 +9,35 @@ namespace MkvToolnixAutomatisierung.Tests.Views;
 public sealed class ArchiveMaintenanceLayoutTests
 {
     [Fact]
+    public async Task ManualEditorAndFileSelector_AreDisabledWhileBusy()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var view = new ArchiveMaintenanceView { DataContext = new { IsInteractive = false } };
+            var window = new Window { Content = view, Width = 1200, Height = 820, Left = -2000, Top = -2000 };
+            try
+            {
+                window.Show();
+                var expander = Assert.IsType<Expander>(view.FindName("ManualCorrectionExpander"));
+                expander.IsExpanded = true;
+                await WpfTestHost.WaitForIdleAsync();
+
+                Assert.False(expander.IsEnabled);
+                Assert.False(Assert.IsType<ComboBox>(view.FindName("ArchiveItemSelector")).IsEnabled);
+
+                view.DataContext = new { IsInteractive = true };
+                await WpfTestHost.WaitForIdleAsync();
+                Assert.True(expander.IsEnabled);
+                Assert.True(Assert.IsType<ComboBox>(view.FindName("ArchiveItemSelector")).IsEnabled);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public async Task ManualCorrectionExpander_HidesPlannedMaintenanceArea_WhenExpanded()
     {
         await WpfTestHost.RunAsync(async () =>

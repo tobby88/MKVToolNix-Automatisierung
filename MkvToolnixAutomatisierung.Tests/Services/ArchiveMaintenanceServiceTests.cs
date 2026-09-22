@@ -425,6 +425,224 @@ public sealed class ArchiveMaintenanceServiceTests
         Assert.Equal("Lippmann wird vermisst", result);
     }
 
+    [Fact]
+    public async Task ApplyAsync_RollsBackMediaAndMovedSidecars_WhenLaterSidecarIsLocked()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        var nfo = directory.CreateFile("Alt.nfo", "nfo");
+        var image = directory.CreateFile("Alt.jpg", "image");
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(media, "Neu.mkv")!;
+        operation = operation with { Sidecars = operation.Sidecars.OrderBy(sidecar => sidecar.SourcePath.EndsWith(".nfo", StringComparison.Ordinal)).ToList() };
+        using var lockedNfo = File.Open(nfo, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, operation, null, [], null));
+
+        Assert.False(result.Success);
+        Assert.Equal(media, result.CurrentFilePath);
+        Assert.Equal("media", File.ReadAllText(media));
+        Assert.Equal("image", File.ReadAllText(image));
+        Assert.True(File.Exists(nfo));
+        Assert.False(File.Exists(operation.TargetPath));
+        Assert.False(File.Exists(Path.ChangeExtension(operation.TargetPath, ".jpg")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApplyAsync_PreflightsRenameCollision_BeforeChangingNfo(bool targetIsDirectory)
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        const string originalNfo = "<episodedetails><tvdbid>123</tvdbid></episodedetails>";
+        var nfo = directory.CreateFile("Alt.nfo", originalNfo);
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(media, "Neu.mkv")!;
+        if (targetIsDirectory)
+        {
+            Directory.CreateDirectory(operation.TargetPath);
+        }
+        else
+        {
+            File.WriteAllText(operation.TargetPath, "existing");
+        }
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, operation, null, [],
+            new ArchiveProviderIdEditOperation(new EmbyProviderIds("456", null), false)));
+
+        Assert.False(result.Success);
+        Assert.Equal(originalNfo, File.ReadAllText(nfo));
+        Assert.Equal("media", File.ReadAllText(media));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RejectsMissingPlannedSidecar_BeforeMovingMedia()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        var nfo = directory.CreateFile("Alt.nfo", "nfo");
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(media, "Neu.mkv")!;
+        File.Delete(nfo);
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, operation, null, [], null));
+
+        Assert.False(result.Success);
+        Assert.True(File.Exists(media));
+        Assert.False(File.Exists(operation.TargetPath));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_AllowsExtensionOnlyCaseRename_WithoutMovingUnchangedSidecars()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Pilot.mkv", "media");
+        var nfo = directory.CreateFile("Pilot.nfo", "nfo");
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(media, "Pilot.MKV")!;
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, operation, null, [], null));
+
+        Assert.True(result.Success);
+        Assert.Equal("Pilot.MKV", Path.GetFileName(result.CurrentFilePath));
+        Assert.Equal("nfo", File.ReadAllText(nfo));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_MovesSubtitleSidecarsToNewSeason_WithoutTakingOtherEpisodes()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var stem = Path.Combine("Serie", "Season 1", "Serie - S01E01 - Alt");
+        var media = directory.CreateFile(stem + ".mkv", "media");
+        var subtitle = directory.CreateFile(stem + ".de.forced.srt", "subtitle");
+        var unrelated = directory.CreateFile(stem + ".extra.srt", "other");
+        var operation = ArchiveMaintenanceService.BuildManualRenameOperation(media, "Serie - S02E01 - Neu.mkv")!;
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, operation, null, [], null));
+
+        Assert.True(result.Success);
+        Assert.EndsWith(Path.Combine("Season 2", "Serie - S02E01 - Neu.mkv"), result.CurrentFilePath);
+        Assert.False(File.Exists(subtitle));
+        Assert.Equal("subtitle", File.ReadAllText(Path.ChangeExtension(result.CurrentFilePath, ".de.forced.srt")));
+        Assert.Equal("other", File.ReadAllText(unrelated));
+    }
+
+    [Theory]
+    [InlineData("..\\outside.mkv")]
+    [InlineData("C:\\outside.mkv")]
+    [InlineData("wrong.txt")]
+    public void BuildManualRenameOperation_RejectsPathsAndNonMkvNames(string target)
+    {
+        Assert.Throws<ArgumentException>(() => ArchiveMaintenanceService.BuildManualRenameOperation(@"C:\Archiv\Pilot.mkv", target));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_AlreadyCanceled_DoesNotWriteNfoOrRename()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        const string xml = "<episodedetails><tvdbid>123</tvdbid></episodedetails>";
+        var nfo = directory.CreateFile("Alt.nfo", xml);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateService().ApplyAsync(
+            new ArchiveMaintenanceApplyRequest(media, ArchiveMaintenanceService.BuildManualRenameOperation(media, "Neu.mkv"), null, [],
+                new ArchiveProviderIdEditOperation(new EmbyProviderIds("456", null), false)), cancellationToken: cancellation.Token));
+
+        Assert.True(File.Exists(media));
+        Assert.Equal(xml, File.ReadAllText(nfo));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_CancellationAfterProviderEdit_StopsTextEditAndRename()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        var nfo = directory.CreateFile("Alt.nfo", "<episodedetails><tvdbid>123</tvdbid><title>Alt</title></episodedetails>");
+        using var cancellation = new CancellationTokenSource();
+        var request = new ArchiveMaintenanceApplyRequest(media, ArchiveMaintenanceService.BuildManualRenameOperation(media, "Neu.mkv"), null, [],
+            new ArchiveProviderIdEditOperation(new EmbyProviderIds("456", null), false),
+            new ArchiveNfoTextEditOperation("Alt", "Neu", null, null, false, true, false, false));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateService().ApplyAsync(request,
+            new CallbackProgress(_ => cancellation.Cancel()), cancellation.Token));
+
+        Assert.True(File.Exists(media));
+        Assert.Contains("456", File.ReadAllText(nfo));
+        Assert.Contains("<title>Alt</title>", File.ReadAllText(nfo));
+        Assert.False(File.Exists(request.RenameOperation!.TargetPath));
+    }
+
+    [Fact]
+    public async Task ApplyAsync_RejectsNfoLockChangedSinceScan_BeforeProviderEdits()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Alt.mkv", "media");
+        const string xml = "<episodedetails><title>Alt</title><lockedfields>Name</lockedfields></episodedetails>";
+        var nfo = directory.CreateFile("Alt.nfo", xml);
+
+        var result = await CreateService().ApplyAsync(new ArchiveMaintenanceApplyRequest(media, null, null, [],
+            new ArchiveProviderIdEditOperation(new EmbyProviderIds("456", null), false),
+            new ArchiveNfoTextEditOperation("Alt", "Neu", null, null, false, true, false, false)));
+
+        Assert.False(result.Success);
+        Assert.Contains("neu scannen", result.Message);
+        Assert.Equal(xml, File.ReadAllText(nfo));
+    }
+
+    [Fact]
+    public void AnalyzeContainer_UsesLockedNfoTitle_WithoutTvdbLookup()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Serie - S01E01 - Dateititel.mkv", "media");
+        directory.CreateFile("Serie - S01E01 - Dateititel.nfo", "<episodedetails><title>Gesperrter Titel</title><lockedfields>Name</lockedfields></episodedetails>");
+
+        var analysis = ArchiveMaintenanceService.AnalyzeContainer(media, new ContainerMetadata("Gesperrter Titel", [], []));
+
+        Assert.Equal("Gesperrter Titel", analysis.ExpectedTitle);
+        Assert.Null(analysis.ContainerTitleEdit);
+        Assert.EndsWith("Gesperrter Titel.mkv", analysis.RenameOperation!.TargetPath);
+    }
+
+    [Fact]
+    public void AnalyzeContainer_UnreadableNfo_IsNotReportedAsSafe()
+    {
+        using var directory = new ArchiveTestDirectory();
+        var media = directory.CreateFile("Serie - S01E01 - Titel.mkv", "media");
+        directory.CreateFile("Serie - S01E01 - Titel.nfo", "<broken");
+
+        var analysis = ArchiveMaintenanceService.AnalyzeContainer(media, new ContainerMetadata("Titel", [], []));
+
+        Assert.True(analysis.HasError);
+        Assert.Contains("NFO", analysis.ErrorMessage);
+    }
+
+    private static ArchiveMaintenanceService CreateService() => new(new MkvMergeProbeService(), new StubMkvToolNixLocator(), new MuxExecutionService());
+
+    private sealed class CallbackProgress(Action<string> callback) : IProgress<string>
+    {
+        public void Report(string value) => callback(value);
+    }
+
+    private sealed class ArchiveTestDirectory : IDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), "archive-review-" + Guid.NewGuid().ToString("N"));
+
+        public string CreateFile(string name, string content)
+        {
+            var path = Path.Combine(_path, name);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, content);
+            return path;
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(_path))
+            {
+                Directory.Delete(_path, recursive: true);
+            }
+        }
+    }
+
     private static ContainerTrackMetadata CreateVideoTrack(int trackId)
     {
         return new ContainerTrackMetadata(
