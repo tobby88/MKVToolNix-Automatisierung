@@ -2,7 +2,7 @@
 
 ## Schichten
 
-Das Projekt verwendet jetzt drei Testebenen:
+Das Projekt kombiniert automatisierte Tests mit manueller GUI-Prüfung:
 
 - Unit-Tests in `MkvToolnixAutomatisierung.Tests`
   - fokussieren einzelne Services, Parser und ViewModel-Regeln
@@ -45,6 +45,12 @@ Die Integrationstests verwenden `TestTools/FakeMkvMerge`. Das Hilfsprogramm simu
 Dadurch lassen sich Planung, Prozesssteuerung, Fortschrittsparsing und Cleanup reproduzierbar testen, ohne auf externe Binärdateien oder Live-Mediendateien angewiesen zu sein.
 
 Der Integrationstest-Build stößt den Build dieses Hilfsprogramms automatisch mit derselben Konfiguration an. Die Tests bleiben damit auch ohne direkte Projekt-Referenz auf das Tool reproduzierbar.
+
+## Datenerhalt und Abbruch
+
+Regressionen prüfen die Veröffentlichung temporärer Mux-Ausgaben bei Exit-Code 0/1 sowie den Erhalt vorhandener Ziele bei Fehlern, Abbruch, leeren Ausgaben und fehlerhaften Ausgabe-Callbacks. Weitere Dateisystemtests decken Rename-Rollback mit Sidecars, geschützte Cleanup-Quellen, gesperrte Sortierziele und den Erhalt portabler MediathekView-Daten ab. Alle schreibenden Tests verwenden isolierte Testordner, keine echten Medienarchive.
+
+WPF-Tests prüfen Dispatcher-Zustände, Auswahl/Fokus, Busy-Sperren und die Freigabe tatsächlich angezeigter Pläne. HTTP-Fakes und kleine echte SQLite-/GZip-Datensätze prüfen Providerantworten und Cancellation ohne externe Accounts. Das ersetzt keine vollständige Live-Emby-Prüfung, keinen echten Medienmux und keinen Leistungsbenchmark mit dem gesamten IMDb-Datenbestand.
 
 ## Lokal ausführen
 

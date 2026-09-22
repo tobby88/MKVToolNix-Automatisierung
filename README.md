@@ -42,6 +42,8 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/releases/1.4.2.md). Die portable EXE gibt es beim [aktuellen Release](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest).
 
+Die noch nicht veröffentlichten Review-Korrekturen mit Testnachweisen und verbleibenden Grenzen stehen im [Gesamtreview vom 22. September 2026](docs/reviews/2026-09-22/README.md).
+
 ## Screenshots
 
 ### Download
@@ -76,6 +78,7 @@ Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
 - MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten; optional kann sie die portable Windows-ZIP-Version auch selbst unter `.\Tools` herunterladen und aktuell halten.
+- Alte verwaltete MediathekView-Installationen bleiben bei Updates als Rückfallkopie erhalten, da sie beliebige eigene Downloads oder Einstellungen enthalten können. Sie benötigen zusätzlichen Speicher und sollten nur nach Prüfung der enthaltenen Benutzerdaten manuell entfernt werden.
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
@@ -85,6 +88,8 @@ Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/
 ## Portable Modus
 
 Die App ist bewusst portabel gedacht und nicht für eine klassische Installation vorgesehen.
+
+Während eines laufenden Modulvorgangs sind Modulwechsel und globale Einstellungen gesperrt. So können andere Ansichten nicht gleichzeitig dieselben Quellen bearbeiten oder mitten im Abgleich die Serververbindung ändern. Die aktuelle Ansicht und ihre vorhandene Abbruchfunktion bleiben zugänglich.
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
@@ -124,6 +129,8 @@ Beide Tabs verwenden dieselbe zentrale Mux-Planung. Das betrifft insbesondere lo
 
 Die Vorschau zeigt nicht nur den `mkvmerge`-Aufruf, sondern fasst auch zusammen, was mit vorhandenen Archivspuren, neuen Quellen und direkten Header-Anpassungen passieren soll. Wenn eine bestehende Archiv-MKV bereits alle benötigten Inhalte enthält, kann die App statt eines kompletten Remux auch nur relevante Matroska-Headerdaten direkt aktualisieren.
 
+Ein vollständiger Mux schreibt zunächst in einen eigenen `.mux-*`-Unterordner am Ausgabeziel, ausschließlich mit der Endung `.tmp`. So liegt während des Schreibens keine zusätzliche MKV für Embys Live-Erkennung vor. Erst nach erfolgreichem Mux wird die fertige Datei auf den endgültigen Namen verschoben; ein vorhandenes Archivziel bleibt bis dahin erhalten. Dafür muss am Ziel genügend freier Speicher für die neue Datei vorhanden sein. Direkte Header-Änderungen erfolgen dagegen weiterhin an der vorhandenen Datei.
+
 ### Einzel-Mux-Tab
 
 1. `Hauptvideo wählen`.
@@ -157,6 +164,8 @@ Zusätzlich beim Batch-Lauf:
 
 - bleibt das Batch-Protokoll im Batch-Tab sichtbar
 - können fertig verarbeitete Quellen in einen `done`-Ordner verschoben werden
+
+Bei einem Batch-Abbruch bleiben bereits abgeschlossene Ausgaben samt Metadatenreport erhalten. Die Reports werden vor dem optionalen Papierkorb-Aufräumen gespeichert. Gemeinsam von mehreren Plänen verwendete Quellen bleiben vorsichtshalber am Quellort; das Protokoll kennzeichnet diesen Quellenschutz. Doppelte Ausgabeziele und Ziele, die eine andere ausgewählte Episode als Quelle braucht, werden vor dem Schreiben blockiert.
 
 ## Typischer Workflow: Archivpflege
 
@@ -192,9 +201,9 @@ Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby s
 
 Beim abschließenden Speichern sichert die App die Provider-Auswahl, bewusste `Kein Eintrag`-Entscheidungen und den Bearbeitungsstand je MKV in der JSON. Die ursprünglichen Mux-Metadaten bleiben dabei erhalten. Teilweise bearbeitete Reports kommen in `partial`; sobald alle relevanten Einträge erledigt sind, wechseln sie in den danebenliegenden Ordner `done`. Ungeklärte fehlende IDs, eine fehlende NFO oder ein noch nötiger, aber fehlgeschlagener Emby-Refresh verhindern den vollständigen Abschluss. Ohne konfigurierte Emby-Zugangsdaten zählt wie bisher der erfolgreich abgeschlossene lokale NFO-Abgleich; `trailers` und `backdrops` benötigen keinen Provider-ID-Sync.
 
-Reports aus beiden Ordnern können erneut gewählt werden. Gespeicherte manuelle Entscheidungen werden wiederhergestellt. `Kein Eintrag` lässt sich durch Entfernen des Hakens oder durch Eintragen einer ID zurücknehmen. Beim erneuten Speichern wird der Status neu bewertet; ein wieder offener Report wechselt aus `done` zurück nach `partial`. Unveränderte NFOs werden nicht erneut geschrieben; ein Emby-Refresh wird nur bei Änderungen oder abweichenden Server-IDs angefordert.
+Reports aus beiden Ordnern können erneut gewählt werden. Gespeicherte manuelle Entscheidungen werden wiederhergestellt. `Kein Eintrag` lässt sich durch Entfernen des Hakens oder durch Eintragen einer ID zurücknehmen. Beim erneuten Speichern wird der Status neu bewertet; ein wieder offener Report wechselt aus `done` zurück nach `partial`. Unveränderte NFOs werden nicht erneut geschrieben; ein Emby-Refresh wird nur bei Änderungen oder abweichenden Server-IDs angefordert. Eine bereits erfolgreich angeforderte Aktualisierung wird in derselben Sitzung ohne neue NFO-Änderung oder erneute Serverprüfung nicht wiederholt. `done` bestätigt den lokalen Abschluss und die erforderliche Refresh-Anforderung, nicht den beobachteten Abschluss der Metadatenarbeit auf dem Server.
 
-Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Die lokale Suche läuft asynchron und aktualisiert sich nach einer kurzen Eingabepause automatisch. Sie bietet passende Serien einschließlich deutscher Aliasnamen an; nach Auswahl einer Serie können alle Episoden oder nur die tatsächlich vorhandenen IMDb-Staffeln angezeigt werden. Ähnliche Episodentitel stehen oben, während Staffel und Folge wegen möglicher Abweichungen zu TVDB nur als Zusatzsignal dienen. Eine auf der IMDb-Titelseite kopierte ID oder URL wird beim Zurückkehren automatisch aus der Zwischenablage übernommen; sie kann alternativ direkt eingetragen werden. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
+Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Die lokale Suche läuft asynchron und aktualisiert sich nach einer kurzen Eingabepause automatisch. Sie bietet passende Serien einschließlich deutscher Aliasnamen an; nach Auswahl einer Serie können alle Episoden oder nur die tatsächlich vorhandenen IMDb-Staffeln angezeigt werden. Ähnliche Episodentitel stehen oben, während Staffel und Folge wegen möglicher Abweichungen zu TVDB nur als Zusatzsignal dienen. Nach einer aus dem Dialog gestarteten Browsersuche wird eine neu kopierte gültige IMDb-ID oder URL bei der ersten Rückkehr automatisch übernommen, sofern die ID-Eingabe zwischenzeitlich nicht manuell verändert wurde. Alter Zwischenablageinhalt überschreibt keine Vorbelegung. Alternativ bleiben direkte Eingabe und `Zwischenablage übernehmen` möglich. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
 
 ### Optionaler IMDb-Offlineindex
 
@@ -203,6 +212,8 @@ Der Offlineindex wird unter `.\Data\IMDb\imdb-episodes.sqlite` gespeichert. Für
 Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Datensätze auch die aktuelle Datei (`1/3` bis `3/3`), deren geschätzten Prozentstand und den über alle drei Archive gewichteten Gesamtstand. Die Prozentwerte basieren auf den tatsächlich gelesenen Archivbytes; ein zusätzlicher vollständiger Zähllauf wird bewusst vermieden.
 
 Vor einem angebotenen Update stellt die Nachfrage den vorhandenen und den verfügbaren Datenstand mit Revisionsdatum und kurzer Versionskennung direkt gegenüber. Bei älteren Indexen, für die noch keine Quelldatenrevision gespeichert wurde, zeigt sie ersatzweise das Datum des letzten erfolgreichen Indexaufbaus.
+
+Auch Änderungen an den Importregeln können einen Neuaufbau erfordern. Die aktuelle Schemafassung 4 berücksichtigt korrigierte Episodenzuordnungen und Unicode-Normalisierung. Ein bestehender Index bleibt bis zum erfolgreichen, ausdrücklich genehmigten Neuaufbau verwendbar; der große Download erfolgt nicht ungefragt. Abbruch wirkt auch während der abschließenden SQLite-Indexierung.
 
 Speicherbedarf, Stand September 2026:
 

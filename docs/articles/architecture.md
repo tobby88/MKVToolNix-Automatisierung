@@ -55,6 +55,8 @@ Wichtig dabei:
    - Die Umsetzung ist zusätzlich entlang der Verantwortungen `Preparation`, `AttachmentReuse` und `UsageReporting` auf mehrere Partial-Dateien verteilt, damit Archivvergleich, TXT-heuristische Attachment-Zuordnung und GUI-/Diff-Aufbereitung unabhängig angepasst werden können.
 5. `SeriesEpisodeMuxPlan` beschreibt den vollständigen mkvmerge-Aufruf.
 6. `MuxWorkflowCoordinator` führt Arbeitskopie, Mux und temporäres Aufräumen aus.
+   - `MuxExecutionService` schreibt Remuxe über `MuxOutputTransaction` zunächst in einen eigenen `.mux-*`-Unterordner am Ziel. Die Datei endet auf `.tmp`, nicht auf einer von Emby erkannten Medienendung. Erst Exit-Code 0 oder 1 veröffentlicht eine nichtleere Ausgabe am endgültigen Pfad; Fehler und Abbruch lassen eine vorher vorhandene Ziel-MKV bestehen.
+   - Vor der Veröffentlichung wird der ursprüngliche Dateizustand erneut verglichen. Der Austausch bleibt auf demselben Dateisystem und benötigt keinen zweiten vollständigen Kopiervorgang. Das ist keine prozessübergreifende Dateisperre; direkte `mkvpropedit`-Änderungen erfolgen weiterhin in-place.
 7. `BatchRunLogService` schreibt bei Einzel- und Batch-Läufen gemeinsame Sitzungslogs und separate Reportdateien in `.\Logs`.
    - Das persistierte Sitzungslog sammelt gezielt zusammengehörige Mux-Läufe, damit Planung, Arbeitskopien und Ausführung zusammen diagnostizierbar bleiben, ohne für jede Episode ein kaum aussagekräftiges Kleinstprotokoll anzulegen.
    - Die bisherige TXT-Liste neuer Ausgabedateien bleibt als einfache menschenlesbare Prüfliste erhalten.
@@ -67,6 +69,12 @@ Wichtig dabei:
    - Die bereits bekannte TVDB-Episoden-ID dient außerdem als eindeutiger Schlüssel für deren IMDb-Remote-ID. Fehlt die TVDB-Verknüpfung oder ist TVDB nicht erreichbar, wird der optionale lokale IMDb-Index geprüft. Nur eindeutige exakte Titelkombinationen werden automatisch übernommen; danach bleibt der browsergestützte Pflichtcheck als letzter Fallback.
 
 Die Provider-Quellen, Konfliktregeln und Schreibgrenzen sind im Artikel [Metadaten- und Provider-Datenfluss](metadata-providers.md) detaillierter beschrieben.
+
+## Vorgangsgrenzen
+
+Die Modul-ViewModels melden über `IModuleInteractionState` ihren interaktiven Zustand an die Shell. Während laufender Arbeit bleiben Modulwechsel und globale Einstellungen gesperrt; im Mux-Bereich gilt dies auch für den Wechsel zwischen Einzel und Batch. Der aktive Bereich bleibt für seine vorhandenen Abbruchaktionen erreichbar. Das schützt den normalen UI-Ablauf, ersetzt aber keine Sperre gegen andere Programme oder eine zweite App-Instanz.
+
+Archivpflege prüft Rename-Kollisionen vor schreibenden Schritten. Fehler beim Verschieben von MKV und Sidecars lösen einen rückwärts ausgeführten Rename-Rollback aus; bei fehlgeschlagenem Rollback werden die verbleibenden Pfade gemeldet. Header-, NFO- und Dateinamensänderungen bilden trotzdem keine gemeinsame Datenbanktransaktion. Nach einem Fehler ist ein neuer Scan erforderlich.
 
 ## Warum DocFX
 
