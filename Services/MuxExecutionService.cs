@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Text;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -14,9 +15,14 @@ public sealed class MuxExecutionService
     /// <param name="executablePath">Pfad zur auszuführenden MKVToolNix-Executable.</param>
     /// <param name="arguments">Bereits aufgelöste Argumentliste des Plans.</param>
     /// <param name="toolDisplayName">Lesbarer Name des gestarteten Werkzeugs für Fehlermeldungen.</param>
-    /// <param name="onOutput">Optionaler Callback für Standardausgabe und Standardfehler.</param>
+    /// <param name="onOutput">Optionaler, pro Aufruf serialisierter Callback für Standardausgabe und Standardfehler.</param>
     /// <param name="cancellationToken">Optionales Abbruchsignal. Bei Abbruch wird der gestartete Prozess beendet.</param>
     /// <returns>Exitcode des Prozesses.</returns>
+    /// <remarks>
+    /// Fehler im Ausgabe-Callback beenden den Prozess und werden über den zurückgegebenen Task
+    /// weitergereicht. Sie dürfen weder einen Prozess-Eventthread unbehandelt verlassen noch
+    /// die Veröffentlichung einer nur teilweise verarbeiteten Ausgabe zulassen.
+    /// </remarks>
     public async Task<int> ExecuteAsync(
         string executablePath,
         IReadOnlyList<string> arguments,
@@ -56,7 +62,7 @@ public sealed class MuxExecutionService
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"{toolDisplayName} konnte nicht gestartet werden.");
-        using var registration = cancellationToken.Register(() =>
+        void StopProcess()
         {
             try
             {
@@ -69,23 +75,30 @@ public sealed class MuxExecutionService
             {
                 // Ein bereits beendeter Prozess darf den Abbruchpfad nicht stören.
             }
-        });
+        }
+        using var registration = cancellationToken.Register(StopProcess);
 
-        process.OutputDataReceived += (_, args) =>
+        var outputSync = new object();
+        ExceptionDispatchInfo? outputFailure = null;
+        void ForwardOutput(object sender, DataReceivedEventArgs args)
         {
-            if (!string.IsNullOrWhiteSpace(args.Data))
+            if (string.IsNullOrWhiteSpace(args.Data)) return;
+            lock (outputSync)
             {
-                onOutput?.Invoke(MojibakeRepair.NormalizeLikelyMojibake(args.Data));
+                if (outputFailure is not null) return;
+                try
+                {
+                    onOutput?.Invoke(MojibakeRepair.NormalizeLikelyMojibake(args.Data));
+                }
+                catch (Exception exception)
+                {
+                    outputFailure = ExceptionDispatchInfo.Capture(exception);
+                    StopProcess();
+                }
             }
-        };
-
-        process.ErrorDataReceived += (_, args) =>
-        {
-            if (!string.IsNullOrWhiteSpace(args.Data))
-            {
-                onOutput?.Invoke(MojibakeRepair.NormalizeLikelyMojibake(args.Data));
-            }
-        };
+        }
+        process.OutputDataReceived += ForwardOutput;
+        process.ErrorDataReceived += ForwardOutput;
 
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -103,6 +116,10 @@ public sealed class MuxExecutionService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        lock (outputSync)
+        {
+            outputFailure?.Throw();
+        }
         if (outputTransaction is not null && process.ExitCode is 0 or 1)
         {
             outputTransaction.Commit(cancellationToken);

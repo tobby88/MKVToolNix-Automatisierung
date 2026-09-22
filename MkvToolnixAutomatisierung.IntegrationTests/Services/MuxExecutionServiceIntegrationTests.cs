@@ -42,6 +42,23 @@ public sealed class MuxExecutionServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteAsync_OutputCallbackFailureStopsProcessAndPreservesArchive()
+    {
+        var (source, output) = CreateFiles();
+        FakeMkvMergeTestHelper.WriteMuxRunFile(output, 0, createOutput: true, delayBeforeExitMilliseconds: 30_000);
+        var expected = new InvalidOperationException("output consumer failed");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(() => new MuxExecutionService().ExecuteAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(), ["--output", output, source], "mkvmerge",
+            _ => throw expected, timeout.Token));
+
+        Assert.Same(expected, actual);
+        Assert.Equal("old archive", await File.ReadAllTextAsync(output));
+        Assert.Empty(Directory.GetDirectories(_directory));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_SuccessWithoutOutputDoesNotDestroyExistingArchive()
     {
         var (source, output) = CreateFiles();
