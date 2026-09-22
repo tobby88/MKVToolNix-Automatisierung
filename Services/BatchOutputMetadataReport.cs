@@ -13,6 +13,10 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </remarks>
 public sealed class BatchOutputMetadataReport
 {
+    /// <summary>Unbekannte optionale Felder bleiben beim Emby-Roundtrip erhalten.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>
     /// Version des JSON-Schemas. Neue optionale Felder dürfen ohne Versionssprung ergänzt werden;
     /// inkompatible Strukturänderungen müssen diese Zahl erhöhen.
@@ -50,6 +54,10 @@ public sealed class BatchOutputMetadataReport
 /// </summary>
 public sealed class BatchOutputMetadataEntry
 {
+    /// <summary>Zusatzdaten anderer Report-Verbraucher, die Emby nicht verändern darf.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>
     /// Vollständiger Pfad zur neu erzeugten MKV-Datei.
     /// </summary>
@@ -121,6 +129,10 @@ public sealed class BatchOutputMetadataEntry
 /// </summary>
 public sealed record BatchOutputEmbyReview
 {
+    /// <summary>Optionale Review-Erweiterungen neuerer kompatibler Versionen.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>Zuletzt gewählte TVDB-Episoden-ID.</summary>
     public string? TvdbId { get; init; }
     /// <summary>Zuletzt gewählte IMDb-ID.</summary>
@@ -140,6 +152,10 @@ public sealed record BatchOutputEmbyReview
 /// </summary>
 public sealed class BatchOutputProviderIds
 {
+    /// <summary>Weitere Anbieter werden unverändert durchgereicht.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>
     /// TVDB-Episoden-ID, die in eine Episoden-NFO als TVDB-ID übernommen werden kann.
     /// </summary>
@@ -156,6 +172,10 @@ public sealed class BatchOutputProviderIds
 /// </summary>
 public sealed class BatchOutputTvdbMetadata
 {
+    /// <summary>Weitere Herkunftsmetadaten bleiben beim Emby-Roundtrip erhalten.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+
     /// <summary>
     /// TVDB-Serien-ID.
     /// </summary>
@@ -192,6 +212,20 @@ internal static class BatchOutputMetadataReportJson
 
     public static BatchOutputMetadataReport? Deserialize(string json)
     {
-        return JsonSerializer.Deserialize<BatchOutputMetadataReport>(json, JsonOptions);
+        var report = JsonSerializer.Deserialize<BatchOutputMetadataReport>(json, JsonOptions);
+        if (report is not null)
+        {
+            if (report.SchemaVersion != 1)
+            {
+                throw new InvalidDataException($"Nicht unterstützte Metadatenreport-Version: {report.SchemaVersion}.");
+            }
+
+            if (report.Items is null || report.Items.Any(item => item is null))
+            {
+                throw new InvalidDataException("Der Metadatenreport enthält keine gültige Eintragsliste.");
+            }
+        }
+
+        return report;
     }
 }

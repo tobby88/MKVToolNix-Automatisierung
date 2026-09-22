@@ -438,6 +438,253 @@ public sealed class EmbyNfoProviderIdServiceTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Updates_PreserveUnrelatedXmlIncludingCarriageReturns(bool updateText)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, """
+                <?xml version="1.0" encoding="utf-8"?>
+                <episodedetails custom="a&#x9;b">
+                  <!--keep this comment-->
+                  <title>Old</title>
+                  <plot>First&#xD;Second &amp; Third<![CDATA[<literal>]]></plot>
+                  <x:extension xmlns:x="urn:custom" attr="a&#xD;b"><x:value>kept</x:value></x:extension>
+                  <uniqueid type="tmdb">777</uniqueid>
+                </episodedetails>
+                """);
+            var before = System.Xml.Linq.XDocument.Load(nfoPath);
+            var service = new EmbyNfoProviderIdService();
+
+            var result = updateText
+                ? service.UpdateTextFields(mediaPath, new EmbyNfoTextFields("New", null))
+                : service.UpdateProviderIds(mediaPath, new EmbyProviderIds("123", null));
+
+            Assert.True(result.Success, result.Message);
+            var after = System.Xml.Linq.XDocument.Load(nfoPath);
+            Assert.Equal("First\rSecond & Third<literal>", after.Root!.Element("plot")!.Value);
+            Assert.True(System.Xml.Linq.XNode.DeepEquals(before.Root!.Element("plot"), after.Root.Element("plot")));
+            Assert.True(System.Xml.Linq.XNode.DeepEquals(
+                before.Root.Element(System.Xml.Linq.XName.Get("extension", "urn:custom")),
+                after.Root.Element(System.Xml.Linq.XName.Get("extension", "urn:custom"))));
+            Assert.Equal(before.Root.Attribute("custom")!.Value, after.Root.Attribute("custom")!.Value);
+            Assert.Contains("<!--keep this comment-->", File.ReadAllText(nfoPath), StringComparison.Ordinal);
+            Assert.Equal("777", after.Root.Elements("uniqueid").Single(element => (string?)element.Attribute("type") == "tmdb").Value);
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("<movie><title>Movie</title></movie>")]
+    [InlineData("<episodedetails xmlns=\"urn:unknown\"><title>Episode</title></episodedetails>")]
+    [InlineData("<!DOCTYPE episodedetails [<!ENTITY title 'Entity'>]><episodedetails><title>&title;</title></episodedetails>")]
+    [InlineData("<episodedetails><title>broken")]
+    public void UnsupportedOrMalformedNfo_IsReportedAndNeverChanged(string xml)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, xml);
+            var before = File.ReadAllBytes(nfoPath);
+            var service = new EmbyNfoProviderIdService();
+
+            Assert.NotNull(service.ReadEpisodeMetadata(mediaPath).WarningMessage);
+            Assert.False(service.UpdateProviderIds(mediaPath, new EmbyProviderIds("123", null)).Success);
+            Assert.False(service.UpdateTextFields(mediaPath, new EmbyNfoTextFields("New", null)).Success);
+            Assert.Equal(before, File.ReadAllBytes(nfoPath));
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ProviderIds_IgnoreEmptyDefaultsAndPreserveCanonicalAttributes()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, """
+                <episodedetails><uniqueid type="tvdb">123</uniqueid><uniqueid type="tvdb" default="true" source="keep" /><imdbid /><imdbid>tt1234567</imdbid></episodedetails>
+                """);
+            var service = new EmbyNfoProviderIdService();
+            var ids = service.ReadProviderIds(mediaPath).ProviderIds;
+            Assert.Equal("123", ids.TvdbId);
+            Assert.Equal("tt1234567", ids.ImdbId);
+
+            Assert.True(service.UpdateProviderIds(mediaPath, new EmbyProviderIds(" 123 ", null)).Success);
+            var canonical = Assert.Single(System.Xml.Linq.XDocument.Load(nfoPath).Root!.Elements("uniqueid"));
+            Assert.Equal("true", canonical.Attribute("default")!.Value);
+            Assert.Equal("keep", canonical.Attribute("source")!.Value);
+            Assert.Equal("123", canonical.Value);
+            var bytes = File.ReadAllBytes(nfoPath);
+            Assert.False(service.UpdateProviderIds(mediaPath, new EmbyProviderIds(" 123 ", null)).NfoChanged);
+            Assert.Equal(bytes, File.ReadAllBytes(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpdateTextFields_MergesDuplicateLocksWithoutDroppingUnrelatedFields()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, "<episodedetails><lockedfields>Name|Actors</lockedfields><lockedfields>SortName|Studios</lockedfields></episodedetails>");
+            var service = new EmbyNfoProviderIdService();
+            Assert.True(service.ReadEpisodeMetadata(mediaPath).IsSortTitleLocked);
+
+            var result = service.UpdateTextFields(mediaPath, new EmbyNfoTextFields(null, null, LockTitle: false));
+
+            Assert.True(result.Success, result.Message);
+            var locks = Assert.Single(System.Xml.Linq.XDocument.Load(nfoPath).Root!.Elements("lockedfields"));
+            Assert.Equal("Actors|SortName|Studios", locks.Value);
+            Assert.False(service.UpdateTextFields(mediaPath, new EmbyNfoTextFields(null, null, LockTitle: false)).NfoChanged);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UpdateTextFields_WithUnchangedSignificantWhitespace_IsANoOp()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            const string xml = "<episodedetails><title> Title </title><sorttitle> Sort </sorttitle></episodedetails>";
+            File.WriteAllText(nfoPath, xml);
+
+            var result = new EmbyNfoProviderIdService().UpdateTextFields(mediaPath, new EmbyNfoTextFields(" Title ", " Sort "));
+
+            Assert.True(result.Success);
+            Assert.False(result.NfoChanged);
+            Assert.Equal(xml, File.ReadAllText(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("true", "Genres", true, true)]
+    [InlineData("TRUE", "", true, true)]
+    [InlineData(" true ", "Name", true, true)]
+    [InlineData("false", "Name|Genres", true, false)]
+    [InlineData("false", "SortName", false, true)]
+    [InlineData("", "Genres", false, false)]
+    public void ReadEpisodeMetadata_GlobalLockAlsoLocksBothTitleFields(
+        string lockData, string lockedFields, bool titleLocked, bool sortTitleLocked)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, $"<episodedetails><lockdata>{lockData}</lockdata><lockedfields>{lockedFields}</lockedfields></episodedetails>");
+
+            var metadata = new EmbyNfoProviderIdService().ReadEpisodeMetadata(mediaPath);
+
+            Assert.Null(metadata.WarningMessage);
+            Assert.Equal(titleLocked, metadata.IsTitleLocked);
+            Assert.Equal(sortTitleLocked, metadata.IsSortTitleLocked);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    public void UpdateTextFields_RejectsIndividualUnlockUnderGlobalLockWithoutAnyWrite(bool? lockTitle, bool? lockSortTitle)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, "<episodedetails><title>Alt</title><lockdata>true</lockdata><lockedfields>Name|Actors</lockedfields><lockedfields>SortName|Studios</lockedfields></episodedetails>");
+            var before = File.ReadAllBytes(nfoPath);
+            var service = new EmbyNfoProviderIdService();
+
+            var result = service.UpdateTextFields(mediaPath, new EmbyNfoTextFields("Neu", null, lockTitle, lockSortTitle));
+
+            Assert.False(result.Success);
+            Assert.False(result.NfoChanged);
+            Assert.Contains("lockdata=true", result.Message, StringComparison.Ordinal);
+            Assert.Equal(before, File.ReadAllBytes(nfoPath));
+            Assert.True(service.ReadEpisodeMetadata(mediaPath).IsTitleLocked);
+            Assert.True(service.ReadEpisodeMetadata(mediaPath).IsSortTitleLocked);
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UpdateTextFields_PreservesGlobalAndUnrelatedLocksDuringExplicitTextEdit(bool explicitLocks)
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var nfoPath = Path.ChangeExtension(mediaPath, ".nfo");
+            File.WriteAllText(nfoPath, "<episodedetails><title>Alt</title><lockdata>true</lockdata><lockedfields>Actors|Studios</lockedfields></episodedetails>");
+            var service = new EmbyNfoProviderIdService();
+            var fields = new EmbyNfoTextFields("Neu", null,
+                LockTitle: explicitLocks ? true : null, LockSortTitle: explicitLocks ? true : null);
+
+            var result = service.UpdateTextFields(mediaPath, fields);
+
+            Assert.True(result.Success, result.Message);
+            Assert.True(result.NfoChanged);
+            var root = System.Xml.Linq.XDocument.Load(nfoPath).Root!;
+            Assert.Equal("Neu", root.Element("title")!.Value);
+            Assert.Equal("true", root.Element("lockdata")!.Value);
+            Assert.Equal("Actors|Studios", Assert.Single(root.Elements("lockedfields")).Value);
+            var beforeRepeat = File.ReadAllBytes(nfoPath);
+            var repeated = service.UpdateTextFields(mediaPath, fields);
+            Assert.True(repeated.Success);
+            Assert.False(repeated.NfoChanged);
+            Assert.Equal(beforeRepeat, File.ReadAllBytes(nfoPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-tests", Guid.NewGuid().ToString("N"));

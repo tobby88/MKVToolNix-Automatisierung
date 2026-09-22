@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -333,6 +334,165 @@ public sealed class EmbyClientTests
             ServerUrl = "http://emby.local:8096",
             ApiKey = "token-123"
         };
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_PrefersExactMatchOverEarlierSuffixMatch()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse("""
+                {"Items":[
+                  {"Id":"wrong","Path":"smb://other/share/Show/Season/Episode.mkv"},
+                  {"Id":"exact","Path":"/media/Show/Season/Episode.mkv"}
+                ]}
+                """)
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var result = await client.FindItemByPathAsync(CreateSettings(), "/media/Show/Season/Episode.mkv");
+
+        Assert.Equal("exact", result?.Id);
+    }
+
+    [Theory]
+    [InlineData("smb://first/share/Show/Season/Episode.mkv", "smb://second/share/Show/Season/Episode.mkv")]
+    [InlineData("/media/Show/Season/Episode.mkv", "/media/Show/Season/Episode.mkv")]
+    public async Task FindItemByPathAsync_RejectsAmbiguousMatches(string firstPath, string secondPath)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Items = new[] { new { Id = "first", Path = firstPath }, new { Id = "second", Path = secondPath } }
+        });
+        using var httpClient = new HttpClient(new StubHttpMessageHandler { Responder = _ => JsonResponse(json) });
+        using var client = new EmbyClient(httpClient);
+
+        Assert.Null(await client.FindItemByPathAsync(CreateSettings(), "/media/Show/Season/Episode.mkv"));
+    }
+
+    [Theory]
+    [InlineData("/media/Show/Season/Episode.mkv", "/media/show/Season/Episode.mkv")]
+    [InlineData("/media/Show/Season/Episode.mkv", "/other/Show/Season/Episode.mkv")]
+    [InlineData("Z:\\Show\\Season\\Episode.mkv", "Y:\\Show\\Season\\Episode.mkv")]
+    [InlineData("/Episode.mkv", "smb://server/share/Episode.mkv")]
+    public async Task FindItemByPathAsync_DoesNotGuessSamePlatformOrShallowPaths(string lookupPath, string itemPath)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new { Items = new[] { new { Id = "wrong", Path = itemPath } } });
+        using var httpClient = new HttpClient(new StubHttpMessageHandler { Responder = _ => JsonResponse(json) });
+        using var client = new EmbyClient(httpClient);
+
+        Assert.Null(await client.FindItemByPathAsync(CreateSettings(), lookupPath));
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_MatchesEscapedAndUnescapedSmbPaths()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => JsonResponse("""{"Items":[null,{"Id":"episode","Path":"smb://server/Shows/My Show/Episode.mkv"}]}""")
+        });
+        using var client = new EmbyClient(httpClient);
+
+        var result = await client.FindItemByPathAsync(CreateSettings(), "smb://server/Shows/My%20Show/Episode.mkv");
+
+        Assert.Equal("episode", result?.Id);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("42")]
+    public async Task GetSystemInfoAsync_RejectsNonObjectJson(string json)
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler { Responder = _ => JsonResponse(json) });
+        using var client = new EmbyClient(httpClient);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSystemInfoAsync(CreateSettings()));
+
+        Assert.Contains("JSON", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetSystemInfoAsync_TimesOutWhileReadingResponseBody()
+    {
+        using var body = new WaitingContent();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = body }
+        }) { Timeout = TimeSpan.FromMilliseconds(100) };
+        using var client = new EmbyClient(httpClient);
+        using var safetyTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSystemInfoAsync(CreateSettings(), safetyTimeout.Token));
+
+        Assert.Contains("Timeout", error.Message, StringComparison.Ordinal);
+        Assert.False(safetyTimeout.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task GetSystemInfoAsync_PropagatesUserCancellationWhileReadingBody()
+    {
+        using var body = new WaitingContent();
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = body }
+        });
+        using var client = new EmbyClient(httpClient);
+        using var cancellation = new CancellationTokenSource();
+        var request = client.GetSystemInfoAsync(CreateSettings(), cancellation.Token);
+        await body.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+    }
+
+    [Theory]
+    [InlineData("http://emby.local?api_key=secret")]
+    [InlineData("http://emby.local/#/dashboard")]
+    [InlineData("http://user:password@emby.local")]
+    public async Task GetSystemInfoAsync_RejectsNonBaseServerAddresses(string serverUrl)
+    {
+        var called = false;
+        using var httpClient = new HttpClient(new StubHttpMessageHandler
+        {
+            Responder = _ => { called = true; return JsonResponse("{}"); }
+        });
+        using var client = new EmbyClient(httpClient);
+        var settings = CreateSettings();
+        settings.ServerUrl = serverUrl;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetSystemInfoAsync(settings));
+
+        Assert.False(called);
+    }
+
+    [Fact]
+    public void GetProviderId_IsCaseInsensitiveForAnyDictionaryAndTrimsValues()
+    {
+        var item = new EmbyItem("id", "Name", "path", new Dictionary<string, string> { ["imdb"] = " tt1234567 " });
+
+        Assert.Equal("tt1234567", item.GetProviderId("Imdb"));
+    }
+
+    private sealed class WaitingContent : HttpContent
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+            => SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     private static HttpResponseMessage JsonResponse(string json)

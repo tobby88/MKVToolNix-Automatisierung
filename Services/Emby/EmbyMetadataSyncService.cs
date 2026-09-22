@@ -63,12 +63,14 @@ internal sealed class EmbyMetadataSyncService
         }
 
         var libraries = await _embyClient.GetLibrariesAsync(settings, cancellationToken);
-        var exactMatch = libraries
+        var exactMatches = libraries
             .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
-            .FirstOrDefault(match => PathComparisonHelper.AreSamePath(match.MatchedLocation, archiveRootPath));
-        if (exactMatch is not null)
+            .Where(match => PathComparisonHelper.AreSamePath(match.MatchedLocation, archiveRootPath))
+            .DistinctBy(match => match.Library.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (exactMatches.Count > 0)
         {
-            return exactMatch;
+            return exactMatches.Count == 1 ? exactMatches[0] : null;
         }
 
         var directPathRelationshipMatch = FindBestDirectPathRelationshipLibrary(libraries, archiveRootPath);
@@ -140,7 +142,9 @@ internal sealed class EmbyMetadataSyncService
         EmbyLibraryMatch? libraryMatch = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var localAnalysis = AnalyzeLocalFile(mediaFilePath);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!queryEmby || !localAnalysis.MediaFileExists)
         {
             return localAnalysis;
@@ -292,7 +296,7 @@ internal sealed class EmbyMetadataSyncService
     {
         if (!File.Exists(reportPath))
         {
-            return SingleReportCompletionResult.Empty;
+            throw new FileNotFoundException("Der Metadatenreport wurde vor dem Speichern entfernt oder verschoben.", reportPath);
         }
 
         var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath));
@@ -320,10 +324,17 @@ internal sealed class EmbyMetadataSyncService
                 continue;
             }
 
-            if (hasReview && item.EmbyReview != reviews![item.OutputPath])
+            if (hasReview)
             {
-                item.EmbyReview = reviews![item.OutputPath];
-                changed = true;
+                var updatedReview = reviews![item.OutputPath] with
+                {
+                    ExtensionData = reviews[item.OutputPath].ExtensionData ?? item.EmbyReview?.ExtensionData
+                };
+                if (item.EmbyReview != updatedReview)
+                {
+                    item.EmbyReview = updatedReview;
+                    changed = true;
+                }
             }
             if (item.EmbySyncDone != completed)
             {
@@ -353,7 +364,7 @@ internal sealed class EmbyMetadataSyncService
             try
             {
                 File.WriteAllText(temporaryPath, BatchOutputMetadataReportJson.Serialize(report));
-                File.Move(temporaryPath, reportPath, overwrite: true);
+                File.Replace(temporaryPath, reportPath, destinationBackupFileName: null);
             }
             finally
             {
@@ -676,6 +687,11 @@ internal sealed class EmbyMetadataSyncService
         var relativeSegments = relativePath
             .Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+        if (libraryLocation.Contains("://", StringComparison.Ordinal))
+        {
+            relativeSegments = relativeSegments.Select(Uri.EscapeDataString).ToArray();
+        }
+
         return relativeSegments.Length == 0
             ? trimmedLibraryLocation
             : trimmedLibraryLocation + preferredSeparator + string.Join(preferredSeparator, relativeSegments);
@@ -771,6 +787,11 @@ internal sealed class EmbyMetadataSyncService
 
     private static IReadOnlyList<string> GetComparablePathSegments(string path)
     {
+        if (path.Contains("://", StringComparison.Ordinal) && Uri.TryCreate(path, UriKind.Absolute, out var uri))
+        {
+            path = Uri.UnescapeDataString(uri.AbsolutePath);
+        }
+
         return path
             .Replace('\\', '/')
             .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -859,7 +880,7 @@ internal sealed record EmbyFileAnalysis(
         return item is null
             ? EmbyProviderIds.Empty
             : new EmbyProviderIds(
-                item.GetProviderId("Tvdb") ?? item.GetProviderId("TvdbSeries"),
+                item.GetProviderId("Tvdb"),
                 item.GetProviderId("Imdb"));
     }
 }

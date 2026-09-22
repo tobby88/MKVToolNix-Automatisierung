@@ -594,6 +594,157 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Contains(expectedLookupPath, client.FindRequests);
     }
 
+    [Fact]
+    public void ReportProgress_PreservesUnknownFieldsAtEveryLevelIncludingReview()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var mediaPath = Path.Combine(directory, "Episode.mkv");
+            var reportPath = Path.Combine(directory, "run.json");
+            File.WriteAllText(reportPath, $$$"""
+                {
+                  "schemaVersion":1,
+                  "futureRoot":{"values":[1,null,"keep"]},
+                  "items":[{
+                    "outputPath":{{{System.Text.Json.JsonSerializer.Serialize(mediaPath)}}},
+                    "futureItem":"keep",
+                    "providerIds":{"tvdb":"100","tmdb":"200"},
+                    "tvdb":{"episodeId":100,"futureOrigin":true},
+                    "embyReview":{"tvdbId":"100","futureReview":{"keep":true}}
+                  }]
+                }
+                """);
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+            var reviews = new Dictionary<string, BatchOutputEmbyReview>(StringComparer.OrdinalIgnoreCase)
+            {
+                [mediaPath] = new() { TvdbId = "100", ImdbUnavailable = true, ImdbManuallyReviewed = true }
+            };
+
+            var result = service.MarkOutputReportsDone([reportPath], [mediaPath], reviews);
+
+            Assert.Empty(result.FailedReports);
+            var savedPath = Assert.Single(result.MovedReports).TargetPath;
+            using var saved = System.Text.Json.JsonDocument.Parse(File.ReadAllText(savedPath));
+            var root = saved.RootElement;
+            var item = root.GetProperty("items")[0];
+            Assert.Equal("keep", root.GetProperty("futureRoot").GetProperty("values")[2].GetString());
+            Assert.Equal("keep", item.GetProperty("futureItem").GetString());
+            Assert.Equal("200", item.GetProperty("providerIds").GetProperty("tmdb").GetString());
+            Assert.True(item.GetProperty("tvdb").GetProperty("futureOrigin").GetBoolean());
+            Assert.True(item.GetProperty("embyReview").GetProperty("futureReview").GetProperty("keep").GetBoolean());
+            var bytes = File.ReadAllBytes(savedPath);
+            var repeated = service.MarkOutputReportsDone([savedPath], [mediaPath], reviews);
+            Assert.Empty(repeated.UpdatedReportPaths);
+            Assert.Empty(repeated.MovedReports);
+            Assert.Equal(bytes, File.ReadAllBytes(savedPath));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"schemaVersion\":2,\"items\":[]}")]
+    [InlineData("{\"schemaVersion\":0,\"items\":[]}")]
+    [InlineData("{\"schemaVersion\":1,\"items\":null}")]
+    [InlineData("{\"schemaVersion\":1,\"items\":[null]}")]
+    public void InvalidReport_IsRejectedWithoutRewritingOrMoving(string json)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "mkv-auto-emby-report-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var reportPath = Path.Combine(directory, "run.json");
+            File.WriteAllText(reportPath, json);
+            var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+            Assert.Throws<InvalidDataException>(() => service.LoadNewOutputReport(reportPath));
+            var completion = service.MarkOutputReportsDone([reportPath], [Path.Combine(directory, "Episode.mkv")]);
+
+            Assert.Single(completion.FailedReports);
+            Assert.Empty(completion.MovedReports);
+            Assert.Equal(json, File.ReadAllText(reportPath));
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MarkOutputReportsDone_ReportsDisappearedSource()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.json");
+        var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+
+        var completion = service.MarkOutputReportsDone([missingPath], [Path.ChangeExtension(missingPath, ".mkv")]);
+
+        Assert.Single(completion.FailedReports);
+        Assert.Empty(completion.UpdatedReportPaths);
+        Assert.Empty(completion.MovedReports);
+    }
+
+    [Fact]
+    public async Task FindSeriesLibraryAsync_DoesNotChooseBetweenDuplicateExactLibraryRoots()
+    {
+        const string root = @"Z:\Videos\Serien";
+        var client = new RecordingEmbyClient
+        {
+            Libraries = [new("first", "First", [root], null, null), new("second", "Second", [root], null, null)]
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        Assert.Null(await service.FindSeriesLibraryAsync(new AppEmbySettings(), root));
+    }
+
+    [Fact]
+    public async Task FindItemByPathAsync_TranslatesEscapedSmbLibraryRoots()
+    {
+        const string root = @"Z:\Videos\Meine Serien";
+        const string mediaPath = root + @"\Season 01\Episode #1.mkv";
+        const string location = "smb://server/share/Videos/Meine%20Serien";
+        const string expectedPath = location + "/Season%2001/Episode%20%231.mkv";
+        var client = new RecordingEmbyClient
+        {
+            Libraries = [new("library", "Series", [location], null, null)],
+            ItemByPath = new Dictionary<string, EmbyItem>
+            {
+                [expectedPath] = new("episode", "Episode", expectedPath, new Dictionary<string, string>())
+            }
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+
+        var item = await service.FindItemByPathAsync(new AppEmbySettings(), mediaPath, root);
+
+        Assert.Equal("episode", item?.Id);
+        Assert.Equal(expectedPath, Assert.Single(client.FindRequests));
+    }
+
+    [Fact]
+    public async Task AnalyzeFileAsync_ObservesCancellationEvenForLocalOnlyAnalysis()
+    {
+        var service = new EmbyMetadataSyncService(new ThrowingEmbyClient(), new EmbyNfoProviderIdService());
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.AnalyzeFileAsync(
+            new AppEmbySettings(), Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".mkv"),
+            queryEmby: false, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void EffectiveProviderIds_DoesNotUseSeriesIdAsEpisodeId()
+    {
+        var item = new EmbyItem("episode", "Episode", "Episode.mkv", new Dictionary<string, string> { ["TvdbSeries"] = "999" });
+        var analysis = new EmbyFileAnalysis("Episode.mkv", "Episode.nfo", true, true, EmbyProviderIds.Empty, item, null);
+
+        Assert.Null(analysis.EffectiveProviderIds.TvdbId);
+    }
+
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)

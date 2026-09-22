@@ -145,24 +145,18 @@ internal sealed class EmbyClient : IEmbyClient
             return null;
         }
 
-        foreach (var itemElement in itemsElement.EnumerateArray())
-        {
-            var item = ParseItem(itemElement);
-            if (item is null)
-            {
-                continue;
-            }
-
-            if (AreSameEmbyPath(item.Path, mediaFilePath)
-                || AreEquivalentEmbyPath(item.Path, mediaFilePath))
-            {
-                return item;
-            }
-        }
-
-        // Emby behandelt den Path-Filter nicht in allen Versionen als harte Gleichheitsbedingung.
-        // Ein nicht exakt passender Einzeltreffer ist deshalb genauso unsicher wie mehrere Treffer.
-        return null;
+        var items = itemsElement.EnumerateArray()
+            .Select(ParseItem)
+            .OfType<EmbyItem>()
+            .ToList();
+        // Exact matches always outrank suffix mappings, regardless of the response order.
+        // Never refresh an arbitrary first item when several candidates remain plausible.
+        var exactMatches = items.Where(item => AreSameEmbyPath(item.Path, mediaFilePath)).ToList();
+        var matches = exactMatches.Count > 0
+            ? exactMatches
+            : items.Where(item => AreEquivalentEmbyPath(item.Path, mediaFilePath)).ToList();
+        var distinctMatches = matches.DistinctBy(item => item.Id, StringComparer.OrdinalIgnoreCase).ToList();
+        return distinctMatches.Count == 1 ? distinctMatches[0] : null;
     }
 
     /// <inheritdoc />
@@ -240,9 +234,11 @@ internal sealed class EmbyClient : IEmbyClient
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            // Include the response body in HttpClient.Timeout; headers alone may arrive while
+            // a stalled JSON/error body would otherwise keep the workflow busy indefinitely.
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
         }
-        catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
             throw new InvalidOperationException("Emby-Anfrage hat den Timeout überschritten.", ex);
         }
@@ -287,6 +283,12 @@ internal sealed class EmbyClient : IEmbyClient
         {
             throw new InvalidOperationException("Bitte zuerst einen Emby-API-Key eintragen.");
         }
+
+        if (!string.IsNullOrEmpty(serverUri.Query) || !string.IsNullOrEmpty(serverUri.Fragment)
+            || !string.IsNullOrEmpty(serverUri.UserInfo))
+        {
+            throw new InvalidOperationException("Die Emby-Serveradresse darf keine Zugangsdaten, Query-Parameter oder Fragmentkennung enthalten.");
+        }
     }
 
     private static Uri BuildRequestUri(string serverUrl, string relativePath, IReadOnlyDictionary<string, string?> queryParameters)
@@ -314,7 +316,14 @@ internal sealed class EmbyClient : IEmbyClient
         await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
         try
         {
-            return await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+            var document = await JsonDocument.ParseAsync(contentStream, cancellationToken: cancellationToken);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                document.Dispose();
+                throw new InvalidOperationException("Emby hat kein gültiges JSON-Objekt geliefert.");
+            }
+
+            return document;
         }
         catch (System.Text.Json.JsonException ex)
         {
@@ -352,6 +361,11 @@ internal sealed class EmbyClient : IEmbyClient
 
     private static EmbyItem? ParseItem(JsonElement itemElement)
     {
+        if (itemElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         var id = ReadString(itemElement, "Id");
         var name = ReadString(itemElement, "Name") ?? string.Empty;
         var path = ReadString(itemElement, "Path") ?? string.Empty;
@@ -383,28 +397,50 @@ internal sealed class EmbyClient : IEmbyClient
         var normalizedRight = NormalizeEmbyPath(right);
         return normalizedLeft is not null
             && normalizedRight is not null
-            && string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+            && string.Equals(normalizedLeft, normalizedRight,
+                GetPathKind(left!) == "posix" && GetPathKind(right!) == "posix"
+                    ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? NormalizeEmbyPath(string? path)
     {
-        return string.IsNullOrWhiteSpace(path)
-            ? null
-            : path.Replace('\\', '/').TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var normalized = path.Replace('\\', '/').TrimEnd('/');
+        return normalized.Contains("://", StringComparison.Ordinal)
+            ? Uri.UnescapeDataString(normalized) : normalized;
     }
 
     private static bool AreEquivalentEmbyPath(string? left, string? right)
     {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)
+            || GetPathKind(left) == GetPathKind(right))
+        {
+            return false;
+        }
+
         var leftSegments = GetComparablePathSegments(left);
         var rightSegments = GetComparablePathSegments(right);
-        if (leftSegments.Count == 0 || rightSegments.Count == 0)
+        if (leftSegments.Count < 3 || rightSegments.Count < 3)
         {
             return false;
         }
 
         var commonSuffixSegmentCount = CountCommonSuffixSegments(leftSegments, rightSegments);
-        var requiredSuffixSegmentCount = Math.Min(3, Math.Min(leftSegments.Count, rightSegments.Count));
-        return commonSuffixSegmentCount >= requiredSuffixSegmentCount;
+        return commonSuffixSegmentCount >= 3;
+    }
+
+    private static string GetPathKind(string path)
+    {
+        if (path.Contains("://", StringComparison.Ordinal) && Uri.TryCreate(path, UriKind.Absolute, out var uri))
+        {
+            return uri.Scheme;
+        }
+
+        return path.StartsWith('/') && !path.StartsWith("//", StringComparison.Ordinal) ? "posix" : "windows";
     }
 
     private static int CountCommonSuffixSegments(IReadOnlyList<string> leftSegments, IReadOnlyList<string> rightSegments)
@@ -456,6 +492,11 @@ internal sealed class EmbyClient : IEmbyClient
 
     private static EmbyLibraryFolder? ParseLibraryFolder(JsonElement itemElement)
     {
+        if (itemElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         var id = ReadString(itemElement, "ItemId") ?? ReadString(itemElement, "Id");
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -498,7 +539,8 @@ internal sealed class EmbyClient : IEmbyClient
         }
 
         if (property.ValueKind == JsonValueKind.Number
-            && property.TryGetDouble(out var number))
+            && property.TryGetDouble(out var number)
+            && double.IsFinite(number))
         {
             return number;
         }
@@ -536,8 +578,9 @@ internal sealed record EmbyItem(
     /// </summary>
     public string? GetProviderId(string providerName)
     {
-        return ProviderIds.TryGetValue(providerName, out var providerId)
-            ? providerId
-            : null;
+        var providerId = ProviderIds.TryGetValue(providerName, out var exactValue)
+            ? exactValue
+            : ProviderIds.FirstOrDefault(pair => string.Equals(pair.Key, providerName, StringComparison.OrdinalIgnoreCase)).Value;
+        return string.IsNullOrWhiteSpace(providerId) ? null : providerId.Trim();
     }
 }

@@ -1,3 +1,4 @@
+using System.Xml;
 using System.Xml.Linq;
 
 namespace MkvToolnixAutomatisierung.Services.Emby;
@@ -37,7 +38,7 @@ internal sealed class EmbyNfoProviderIdService
     /// Liest Provider-IDs und die editierbaren Emby-Titelfelder aus einer NFO.
     /// </summary>
     /// <param name="mediaFilePath">Pfad zur MKV-Datei.</param>
-    /// <returns>NFO-Metadaten inklusive Titel, Sortiertitel und Provider-IDs.</returns>
+    /// <returns>NFO-Metadaten einschließlich wirksamer Titelfeld-Sperren aus <c>lockdata</c> und <c>lockedfields</c>.</returns>
     public EmbyNfoMetadataReadResult ReadEpisodeMetadata(string mediaFilePath)
     {
         var nfoPath = GetNfoPath(mediaFilePath);
@@ -56,7 +57,7 @@ internal sealed class EmbyNfoProviderIdService
 
         try
         {
-            var document = XDocument.Load(nfoPath, LoadOptions.PreserveWhitespace);
+            var document = LoadEpisodeDocument(nfoPath);
             var root = document.Root;
             if (root is null)
             {
@@ -111,6 +112,9 @@ internal sealed class EmbyNfoProviderIdService
     /// <returns>Ergebnis mit Änderungsstatus und Hinweistext.</returns>
     public EmbyNfoUpdateResult UpdateProviderIds(string mediaFilePath, EmbyProviderIds providerIds, bool removeImdbId = false, bool removeTvdbId = false)
     {
+        ArgumentNullException.ThrowIfNull(providerIds);
+        providerIds = new EmbyProviderIds(providerIds.TvdbId?.Trim(), providerIds.ImdbId?.Trim());
+
         var nfoPath = GetNfoPath(mediaFilePath);
         if (!File.Exists(nfoPath))
         {
@@ -124,7 +128,7 @@ internal sealed class EmbyNfoProviderIdService
 
         try
         {
-            var document = XDocument.Load(nfoPath, LoadOptions.PreserveWhitespace);
+            var document = LoadEpisodeDocument(nfoPath);
             var root = document.Root;
             if (root is null)
             {
@@ -181,6 +185,7 @@ internal sealed class EmbyNfoProviderIdService
     /// Aktualisiert den sichtbaren Episodentitel und Sortiertitel in einer vorhandenen NFO.
     /// Geänderte Felder werden per <c>lockedfields</c> vor Emby-Überschreibungen geschützt.
     /// </summary>
+    /// <remarks>Eine globale <c>lockdata</c>-Sperre bleibt erhalten; einzelne Felder lassen sich darunter nicht entsperren.</remarks>
     /// <param name="mediaFilePath">Pfad zur MKV-Datei.</param>
     /// <param name="textFields">Zielwerte für die editierbaren NFO-Titelfelder.</param>
     /// <returns>Ergebnis mit Änderungsstatus und Hinweistext.</returns>
@@ -196,18 +201,24 @@ internal sealed class EmbyNfoProviderIdService
 
         try
         {
-            var document = XDocument.Load(nfoPath, LoadOptions.PreserveWhitespace);
+            var document = LoadEpisodeDocument(nfoPath);
             var root = document.Root;
             if (root is null)
             {
                 return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false, "Die NFO enthält kein XML-Wurzelelement.");
             }
 
+            if (IsMetadataLocked(root) && (textFields.LockTitle is false || textFields.LockSortTitle is false))
+            {
+                return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: false,
+                    "Die NFO ist global durch lockdata=true gesperrt. Einzelne Titelfelder können nicht entsperrt werden, ohne andere Metadaten freizugeben. Bitte die globale Sperre in Emby prüfen.");
+            }
+
             var changed = false;
             var titleChanged = textFields.Title is not null
-                               && !string.Equals(ReadOptionalElementValue(root, "title") ?? string.Empty, textFields.Title, StringComparison.Ordinal);
+                               && !string.Equals(root.Element("title")?.Value ?? string.Empty, textFields.Title, StringComparison.Ordinal);
             var sortTitleChanged = textFields.SortTitle is not null
-                                   && !string.Equals(ReadOptionalElementValue(root, "sorttitle") ?? string.Empty, textFields.SortTitle, StringComparison.Ordinal);
+                                   && !string.Equals(root.Element("sorttitle")?.Value ?? string.Empty, textFields.SortTitle, StringComparison.Ordinal);
 
             if (titleChanged)
             {
@@ -246,6 +257,7 @@ internal sealed class EmbyNfoProviderIdService
                 (string?)element.Attribute("type"),
                 uniqueIdType,
                 StringComparison.OrdinalIgnoreCase))
+            .Where(element => !string.IsNullOrWhiteSpace(element.Value))
             .ToList();
         var uniqueId = matchingUniqueIds.FirstOrDefault(IsDefaultUniqueId)
                        ?? matchingUniqueIds.FirstOrDefault();
@@ -255,8 +267,8 @@ internal sealed class EmbyNfoProviderIdService
             return uniqueIdValue;
         }
 
-        var legacyValue = root.Element(legacyElementName)?.Value.Trim();
-        return string.IsNullOrWhiteSpace(legacyValue) ? null : legacyValue;
+        return root.Elements(legacyElementName).Select(element => element.Value.Trim())
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static string? ReadOptionalElementValue(XElement root, string elementName)
@@ -267,10 +279,13 @@ internal sealed class EmbyNfoProviderIdService
 
     private static bool IsLockedField(XElement root, string fieldName)
     {
-        return root.Element("lockedfields")?.Value
+        return IsMetadataLocked(root) || root.Elements("lockedfields").SelectMany(element => element.Value
             .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(field => string.Equals(field, fieldName, StringComparison.OrdinalIgnoreCase)) == true;
+            ).Any(field => string.Equals(field, fieldName, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static bool IsMetadataLocked(XElement root) => root.Elements("lockdata")
+        .Any(element => string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
 
     private static bool SetUniqueId(XElement root, string type, string value, bool isDefault)
     {
@@ -281,7 +296,8 @@ internal sealed class EmbyNfoProviderIdService
                 type,
                 StringComparison.OrdinalIgnoreCase))
             .ToList();
-        var uniqueId = matchingUniqueIds.FirstOrDefault();
+        var uniqueId = matchingUniqueIds.FirstOrDefault(IsDefaultUniqueId)
+                       ?? matchingUniqueIds.FirstOrDefault();
 
         var changed = false;
         if (uniqueId is null)
@@ -300,7 +316,7 @@ internal sealed class EmbyNfoProviderIdService
         }
         else
         {
-            foreach (var duplicateUniqueId in matchingUniqueIds.Skip(1).ToList())
+            foreach (var duplicateUniqueId in matchingUniqueIds.Where(element => element != uniqueId))
             {
                 duplicateUniqueId.Remove();
                 changed = true;
@@ -367,7 +383,7 @@ internal sealed class EmbyNfoProviderIdService
             changed = true;
         }
 
-        if (string.Equals(element.Value.Trim(), value, StringComparison.Ordinal))
+        if (string.Equals(element.Value, value, StringComparison.Ordinal))
         {
             return changed;
         }
@@ -378,17 +394,28 @@ internal sealed class EmbyNfoProviderIdService
 
     private static bool SetLockedFields(XElement root, bool? lockName, bool? lockSortName)
     {
+        // Die globale Sperre schützt bereits alle Felder; keine zusätzlichen Feldsperren verändern.
+        if (IsMetadataLocked(root))
+        {
+            return false;
+        }
+
         if (lockName is null && lockSortName is null)
         {
             return false;
         }
 
-        var lockedFieldsElement = root.Element("lockedfields");
-        var fields = lockedFieldsElement is null
-            ? new List<string>()
-            : lockedFieldsElement.Value
-                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList();
+        var lockedFieldsElements = root.Elements("lockedfields").ToList();
+        var lockedFieldsElement = lockedFieldsElements.FirstOrDefault();
+        // Merge unrelated locks before removing duplicate containers, not just the first one.
+        var fields = lockedFieldsElements
+            .SelectMany(element => element.Value.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToList();
+        foreach (var duplicate in lockedFieldsElements.Skip(1))
+        {
+            duplicate.Remove();
+        }
+        var duplicatesRemoved = lockedFieldsElements.Count > 1;
 
         ApplyLockedField(fields, "Name", lockName);
         ApplyLockedField(fields, "SortName", lockSortName);
@@ -431,7 +458,7 @@ internal sealed class EmbyNfoProviderIdService
 
         if (string.Equals(lockedFieldsElement.Value.Trim(), expectedValue, StringComparison.Ordinal))
         {
-            return false;
+            return duplicatesRemoved;
         }
 
         lockedFieldsElement.Value = expectedValue;
@@ -490,6 +517,22 @@ internal sealed class EmbyNfoProviderIdService
             StringComparison.OrdinalIgnoreCase);
     }
 
+    private static XDocument LoadEpisodeDocument(string nfoPath)
+    {
+        using var reader = XmlReader.Create(nfoPath, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null
+        });
+        var document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        if (document.Root?.Name != "episodedetails")
+        {
+            throw new XmlException("Die NFO ist keine unterstützte Episoden-NFO (episodedetails ohne XML-Namespace erwartet).");
+        }
+
+        return document;
+    }
+
     private static void SaveAtomically(XDocument document, string nfoPath)
     {
         var directory = Path.GetDirectoryName(nfoPath);
@@ -498,7 +541,17 @@ internal sealed class EmbyNfoProviderIdService
             $".{Path.GetFileName(nfoPath)}.{Guid.NewGuid():N}.tmp");
         try
         {
-            document.Save(tempPath);
+            // Entitize preserves significant CR characters (e.g. &#xD; in plot text).
+            // Default XML saving would silently normalize them on the next read.
+            using (var writer = XmlWriter.Create(tempPath, new XmlWriterSettings
+            {
+                Indent = false,
+                NewLineHandling = NewLineHandling.Entitize,
+                OmitXmlDeclaration = document.Declaration is null
+            }))
+            {
+                document.Save(writer);
+            }
             File.Replace(tempPath, nfoPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
         }
         finally
