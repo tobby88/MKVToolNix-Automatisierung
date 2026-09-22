@@ -94,16 +94,28 @@ public partial class ImdbLookupWindow : Window
         await _viewModel.RefreshLocalCandidatesAsync(_localSearchCancellationSource.Token);
     }
 
+    private void Window_OnActivated(object? sender, EventArgs e)
+    {
+        if (!_viewModel.IsBrowserClipboardImportPending)
+        {
+            return;
+        }
+
+        try
+        {
+            _viewModel.TryImportBrowserClipboardText(ReadClipboardText());
+        }
+        catch (COMException)
+        {
+            _viewModel.CancelBrowserClipboardImport();
+        }
+    }
+
     private void Window_OnClosed(object? sender, EventArgs e)
     {
         _localSearchCancellationSource.Cancel();
         _localSearchCancellationSource.Dispose();
         _viewModel.Dispose();
-    }
-
-    private void Window_OnActivated(object? sender, EventArgs e)
-    {
-        TryImportClipboard(showInvalidMessage: false);
     }
 
     private void OpenSelectedSearch()
@@ -113,28 +125,29 @@ public partial class ImdbLookupWindow : Window
             return;
         }
 
+        _viewModel.CancelBrowserClipboardImport();
         try
         {
-            var process = Process.Start(new ProcessStartInfo
+            _viewModel.PrepareBrowserClipboardImport(ReadClipboardText());
+        }
+        catch (COMException)
+        {
+            // Ohne lesbaren Ausgangswert nur den expliziten Clipboard-Button verwenden.
+        }
+
+        try
+        {
+            // Shell-Aktivierung eines vorhandenen Browsers kann ohne neuen Prozess erfolgreich sein.
+            using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = _viewModel.SelectedSearchOption.TargetUrl,
                 UseShellExecute = true
             });
-            if (process is null)
-            {
-                MessageBox.Show(
-                    this,
-                    "Die IMDb-Suche konnte nicht im Browser geöffnet werden.",
-                    "Hinweis",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
             _viewModel.MarkSelectedSearchOpened();
         }
         catch (Exception ex)
         {
+            _viewModel.CancelBrowserClipboardImport();
             MessageBox.Show(
                 this,
                 $"Die IMDb-Suche konnte nicht im Browser geöffnet werden.{Environment.NewLine}{Environment.NewLine}Technische Details: {ex.Message}",
@@ -143,6 +156,8 @@ public partial class ImdbLookupWindow : Window
                 MessageBoxImage.Warning);
         }
     }
+
+    private static string? ReadClipboardText() => Clipboard.ContainsText() ? Clipboard.GetText() : null;
 
     private void TryImportClipboard(bool showInvalidMessage)
     {

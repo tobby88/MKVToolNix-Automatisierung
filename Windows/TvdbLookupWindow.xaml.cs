@@ -31,6 +31,7 @@ public partial class TvdbLookupWindow : Window
         _settingsDialog = settingsDialog;
         DataContext = _viewModel;
         Loaded += TvdbLookupWindow_Loaded;
+        Closed += (_, _) => _viewModel.Dispose();
     }
 
     /// <summary>

@@ -84,6 +84,10 @@ public sealed class ImdbLookupWindowViewModelTests
     [InlineData("nottt1234567bad")]
     [InlineData("tt12345678901")]
     [InlineData("https://example.com/title/tt7654321/")]
+    [InlineData("Link: https://example.com/title/tt7654321/")]
+    [InlineData("ftp://www.imdb.com/title/tt7654321/")]
+    [InlineData("tt\u0661\u0662\u0663\u0664\u0665\u0666\u0667")]
+    [InlineData("tt1234567\u0668")]
     public void TryBuildImdbId_RejectsUnsupportedInput(string input)
     {
         var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: null) { ImdbInput = input };
@@ -120,5 +124,128 @@ public sealed class ImdbLookupWindowViewModelTests
         Assert.True(success);
         Assert.Equal("tt0826760", vm.ImdbInput);
         Assert.Contains("bereits eingetragen", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("tt1234567")]
+    public void BrowserClipboardImport_WithoutExplicitBrowserStart_DoesNotTouchInput(string? currentImdbId)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: currentImdbId);
+        var originalStatus = vm.StatusText;
+
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.False(vm.TryImportBrowserClipboardText("https://www.imdb.com/title/tt0826760/"));
+        Assert.Equal(currentImdbId ?? string.Empty, vm.ImdbInput);
+        Assert.Equal(originalStatus, vm.StatusText);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("old text")]
+    [InlineData("https://www.imdb.com/title/tt7654321/")]
+    public void BrowserClipboardImport_AfterExplicitStart_ImportsNewValidTextOnlyOnce(string? previousClipboardText)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        vm.PrepareBrowserClipboardImport(previousClipboardText);
+
+        Assert.True(vm.IsBrowserClipboardImportPending);
+        Assert.True(vm.TryImportBrowserClipboardText("https://www.imdb.com/title/tt0826760/"));
+        Assert.Equal("tt0826760", vm.ImdbInput);
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.False(vm.TryImportBrowserClipboardText("tt9999999"));
+        Assert.Equal("tt0826760", vm.ImdbInput);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("old text")]
+    [InlineData("tt0826760")]
+    [InlineData("https://www.imdb.com/title/tt0826760/")]
+    public void BrowserClipboardImport_UnchangedText_DoesNotOverwriteInputOrRemainArmed(string? clipboardText)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        var originalStatus = vm.StatusText;
+        vm.PrepareBrowserClipboardImport(clipboardText);
+
+        Assert.False(vm.TryImportBrowserClipboardText(clipboardText));
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.False(vm.TryImportBrowserClipboardText("tt9999999"));
+        Assert.Equal("tt1234567", vm.ImdbInput);
+        Assert.Equal(originalStatus, vm.StatusText);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    [InlineData("no IMDb ID")]
+    [InlineData("https://example.com/title/tt0826760/")]
+    public void BrowserClipboardImport_InvalidNewText_ConsumesPermissionWithoutChangingInput(string? clipboardText)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        vm.PrepareBrowserClipboardImport("old text");
+
+        Assert.False(vm.TryImportBrowserClipboardText(clipboardText));
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.False(vm.TryImportBrowserClipboardText("tt0826760"));
+        Assert.Equal("tt1234567", vm.ImdbInput);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BrowserClipboardImport_ManualChangesIncludingUndo_AreNeverOverwritten(bool undoChange)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        vm.PrepareBrowserClipboardImport("old text");
+        vm.ImdbInput = "manually edited";
+        if (undoChange)
+        {
+            vm.ImdbInput = "tt1234567";
+        }
+
+        Assert.False(vm.TryImportBrowserClipboardText("tt0826760"));
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.Equal(undoChange ? "tt1234567" : "manually edited", vm.ImdbInput);
+
+        // Der bewusste Button-Import bleibt unabhängig von der automatischen Freigabe möglich.
+        Assert.True(vm.TryImportClipboardText("tt0826760"));
+        Assert.Equal("tt0826760", vm.ImdbInput);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BrowserClipboardImport_CancelledOrDisposedVisit_CannotImport(bool dispose)
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        vm.PrepareBrowserClipboardImport("old text");
+        if (dispose)
+        {
+            vm.Dispose();
+            vm.PrepareBrowserClipboardImport("old text");
+        }
+        else
+        {
+            vm.CancelBrowserClipboardImport();
+        }
+
+        Assert.False(vm.IsBrowserClipboardImportPending);
+        Assert.False(vm.TryImportBrowserClipboardText("tt0826760"));
+        Assert.Equal("tt1234567", vm.ImdbInput);
+    }
+
+    [Fact]
+    public void BrowserClipboardImport_NewExplicitVisit_UsesFreshClipboardAndInputSnapshot()
+    {
+        using var vm = new ImdbLookupWindowViewModel(guess: null, currentImdbId: "tt1234567");
+        vm.PrepareBrowserClipboardImport("first visit");
+        Assert.False(vm.TryImportBrowserClipboardText("first visit"));
+        vm.ImdbInput = "tt7654321";
+        vm.PrepareBrowserClipboardImport("second visit");
+
+        Assert.True(vm.TryImportBrowserClipboardText("tt0826760"));
+        Assert.Equal("tt0826760", vm.ImdbInput);
     }
 }

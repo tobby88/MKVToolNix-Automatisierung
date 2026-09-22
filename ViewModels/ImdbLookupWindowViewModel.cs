@@ -19,16 +19,18 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDisposable
 {
     private static readonly TimeSpan LocalSearchDebounceDelay = TimeSpan.FromMilliseconds(250);
-    private static readonly Regex BareImdbIdPattern = new(@"^tt\d{7,10}$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex StandaloneImdbIdPattern = new(@"(?<![A-Za-z0-9])(?<id>tt\d{7,10})(?![A-Za-z0-9])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex BareImdbIdPattern = new(@"\Att[0-9]{7,10}\z", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex StandaloneImdbIdPattern = new(@"(?<![\p{L}\p{N}])(?<id>tt[0-9]{7,10})(?![\p{L}\p{N}])", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex AbsoluteUrlPattern = new(@"https?://[^\s<>""]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex ImdbTitlePathPattern = new(@"^/(?:[a-z]{2}(?:-[a-z]{2})?/)?title/(?<id>tt\d{7,10})(?:[/?#]|$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ImdbTitlePathPattern = new(@"^/(?:[a-z]{2}(?:-[a-z]{2})?/)?title/(?<id>tt[0-9]{7,10})(?:/|\z)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private readonly EpisodeMetadataGuess? _guess;
     private readonly ImdbDatasetSearchService? _imdbDatasetSearch;
     private string _seriesSearchText;
     private string _episodeSearchText;
     private string _searchText;
     private string _imdbInput;
+    private int _imdbInputRevision;
+    private (string? ClipboardText, int InputRevision)? _pendingBrowserClipboardImport;
     private string _comparisonSummaryText;
     private string _statusText;
     private SearchOptionItem? _selectedSearchOption;
@@ -41,6 +43,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
     private int _localSearchRevision;
     private CancellationTokenSource? _liveSearchCancellationSource;
     private Task _pendingLiveSearch = Task.CompletedTask;
+    private string? _seriesQueryForCandidates;
+    private bool _disposed;
     private IReadOnlyList<ImdbEpisodeCandidate> _unfilteredLocalCandidates = [];
 
     internal ImdbLookupWindowViewModel(
@@ -229,6 +233,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             }
 
             _imdbInput = normalized;
+            _imdbInputRevision++;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanApply));
             RebuildSearchOptions();
@@ -271,7 +276,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
 
     public bool CanOpenSelectedSearch => SelectedSearchOption is not null;
 
-    public bool CanApplyLocalCandidate => SelectedLocalCandidate is not null;
+    public bool CanApplyLocalCandidate => !_disposed && !IsLocalSearchRunning && SelectedLocalCandidate is not null;
 
     /// <summary>
     /// Kennzeichnet eine laufende SQLite-Suche.
@@ -289,6 +294,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             _isLocalSearchRunning = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanRefreshLocalCandidates));
+            OnPropertyChanged(nameof(CanApplyLocalCandidate));
         }
     }
 
@@ -306,13 +312,17 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
     /// Sucht lokalisierte Serienkandidaten und lädt anschließend den vollständigen Episodenkatalog
     /// der bevorzugten Serie. Änderungen während der Suche verwerfen veraltete Ergebnisse.
     /// </summary>
-    public async Task RefreshLocalCandidatesAsync(CancellationToken cancellationToken = default)
+    public Task RefreshLocalCandidatesAsync(CancellationToken cancellationToken = default)
+    {
+        ScheduleLocalRefresh(refreshSeries: true, immediate: true, cancellationToken);
+        return _pendingLiveSearch;
+    }
+
+    private async Task RefreshLocalCandidatesCoreAsync(int searchRevision, CancellationToken cancellationToken)
     {
         if (_imdbDatasetSearch?.IsAvailable != true)
         {
-            ReplaceItems(LocalSeriesCandidates, []);
-            ReplaceItems(LocalCandidates, []);
-            SelectedLocalCandidate = null;
+            ClearLocalResults();
             LocalDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
             OnPropertyChanged(nameof(CanRefreshLocalCandidates));
             return;
@@ -320,22 +330,20 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
 
         if (string.IsNullOrWhiteSpace(SeriesSearchText))
         {
-            ReplaceItems(LocalSeriesCandidates, []);
-            ReplaceItems(LocalCandidates, []);
-            SelectedLocalCandidate = null;
+            ClearLocalResults();
             LocalDatasetStatusText = "Für die lokale Suche fehlt der Serienname.";
             OnPropertyChanged(nameof(CanRefreshLocalCandidates));
             return;
         }
 
-        var searchRevision = _localSearchRevision;
+        var seriesQuery = SeriesSearchText.Trim();
         var previousSeriesId = SelectedLocalSeries?.ImdbId;
         IsLocalSearchRunning = true;
         LocalDatasetStatusText = "Lokale IMDb-Serien werden gesucht...";
         try
         {
             var seriesCandidates = await _imdbDatasetSearch.SearchSeriesCandidatesAsync(
-                SeriesSearchText.Trim(),
+                seriesQuery,
                 cancellationToken: cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (searchRevision != _localSearchRevision)
@@ -343,10 +351,10 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
                 return;
             }
 
-            ReplaceItems(LocalSeriesCandidates, seriesCandidates);
             _suppressLocalSeriesRefresh = true;
             try
             {
+                ReplaceItems(LocalSeriesCandidates, seriesCandidates);
                 SelectedLocalSeries = LocalSeriesCandidates.FirstOrDefault(candidate =>
                                           string.Equals(candidate.ImdbId, previousSeriesId, StringComparison.OrdinalIgnoreCase))
                                       ?? LocalSeriesCandidates.FirstOrDefault();
@@ -355,6 +363,8 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             {
                 _suppressLocalSeriesRefresh = false;
             }
+
+            _seriesQueryForCandidates = seriesQuery;
 
             if (SelectedLocalSeries is null)
             {
@@ -370,12 +380,19 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            if (searchRevision == _localSearchRevision)
+            {
+                ClearLocalResults();
+                LocalDatasetStatusText = "Lokale IMDb-Suche abgebrochen.";
+            }
         }
         catch (Exception ex)
         {
-            ReplaceItems(LocalCandidates, []);
-            SelectedLocalCandidate = null;
-            LocalDatasetStatusText = $"Lokale IMDb-Suche fehlgeschlagen: {ex.Message}";
+            if (searchRevision == _localSearchRevision)
+            {
+                ClearLocalResults();
+                LocalDatasetStatusText = $"Lokale IMDb-Suche fehlgeschlagen: {ex.Message}";
+            }
         }
         finally
         {
@@ -395,6 +412,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             _unfilteredLocalCandidates = [];
             ReplaceItems(LocalCandidates, []);
             ReplaceItems(SeasonFilters, []);
+            SelectedLocalCandidate = null;
             return;
         }
 
@@ -427,6 +445,44 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
         {
             StatusText = $"IMDb-Suche geöffnet: {SelectedSearchOption.DisplayText}";
         }
+    }
+
+    /// <summary>
+    /// Nur ein ausdrücklich gestarteter Browserbesuch erlaubt einen automatischen Clipboard-Import.
+    /// </summary>
+    internal bool IsBrowserClipboardImportPending => !_disposed && _pendingBrowserClipboardImport.HasValue;
+
+    /// <summary>
+    /// Merkt den Clipboard-Text und die Eingaberevision unmittelbar vor dem Browserstart.
+    /// </summary>
+    /// <param name="clipboardText">Vor dem Start gelesener Text; null bedeutet keine Textdaten.</param>
+    internal void PrepareBrowserClipboardImport(string? clipboardText)
+    {
+        _pendingBrowserClipboardImport = _disposed ? null : (clipboardText, _imdbInputRevision);
+    }
+
+    /// <summary>
+    /// Verwirft die Freigabe bei fehlgeschlagenem Browserstart oder nicht lesbarer Zwischenablage.
+    /// </summary>
+    internal void CancelBrowserClipboardImport() => _pendingBrowserClipboardImport = null;
+
+    /// <summary>
+    /// Übernimmt bei der ersten Rückkehr ausschließlich neuen gültigen Text bei unveränderter Eingabe.
+    /// </summary>
+    /// <param name="clipboardText">Bei der Rückkehr gelesener Text, ohne Zugriff auf die Zwischenablage im ViewModel.</param>
+    internal bool TryImportBrowserClipboardText(string? clipboardText)
+    {
+        var pendingImport = _pendingBrowserClipboardImport;
+        CancelBrowserClipboardImport();
+        if (_disposed || pendingImport is not { } snapshot
+            || snapshot.InputRevision != _imdbInputRevision
+            || string.Equals(snapshot.ClipboardText, clipboardText, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Die Revision schützt auch eine manuell geänderte und anschließend zurückgesetzte ID.
+        return TryImportClipboardText(clipboardText);
     }
 
     public bool TryBuildImdbId(out string? imdbId, out string? validationMessage)
@@ -465,7 +521,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
     /// </summary>
     public bool ApplySelectedLocalCandidate()
     {
-        if (SelectedLocalCandidate is not { } candidate)
+        if (!CanApplyLocalCandidate || SelectedLocalCandidate is not { } candidate)
         {
             return false;
         }
@@ -496,15 +552,15 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             return true;
         }
 
-        if (Uri.TryCreate(normalized, UriKind.Absolute, out var unsupportedUri)
-            && (string.Equals(unsupportedUri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(unsupportedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)))
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out _)
+            && normalized.Contains("://", StringComparison.Ordinal))
         {
             imdbId = null;
             return false;
         }
 
-        var standaloneMatch = StandaloneImdbIdPattern.Match(normalized);
+        // IDs innerhalb fremder URLs sind keine eigenstaendigen IMDb-Kennungen.
+        var standaloneMatch = StandaloneImdbIdPattern.Match(AbsoluteUrlPattern.Replace(normalized, string.Empty));
         if (standaloneMatch.Success)
         {
             imdbId = standaloneMatch.Groups["id"].Value.ToLowerInvariant();
@@ -528,26 +584,34 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
         RebuildSearchOptions();
     }
 
-    private void ScheduleLocalRefresh(bool refreshSeries, bool immediate = false)
+    private void ScheduleLocalRefresh(bool refreshSeries, bool immediate = false, CancellationToken cancellationToken = default)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _localSearchRevision++;
         _liveSearchCancellationSource?.Cancel();
         _liveSearchCancellationSource?.Dispose();
-        _liveSearchCancellationSource = new CancellationTokenSource();
+        _liveSearchCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var revision = _localSearchRevision;
-        var cancellationToken = _liveSearchCancellationSource.Token;
+        cancellationToken = _liveSearchCancellationSource.Token;
+        IsLocalSearchRunning = false;
+        _pendingLiveSearch = Task.CompletedTask;
         if (_imdbDatasetSearch?.IsAvailable != true)
         {
+            ClearLocalResults();
             LocalDatasetStatusText = "Der lokale IMDb-Index ist nicht aktiviert oder noch nicht installiert.";
         }
         else if (string.IsNullOrWhiteSpace(SeriesSearchText))
         {
-            ReplaceItems(LocalSeriesCandidates, []);
-            ReplaceItems(LocalCandidates, []);
+            ClearLocalResults();
             LocalDatasetStatusText = "Für die lokale Suche fehlt der Serienname.";
         }
         else
         {
+            IsLocalSearchRunning = true;
             LocalDatasetStatusText = immediate
                 ? "Lokale IMDb-Suche wird aktualisiert..."
                 : "Eingabe erkannt; lokale IMDb-Suche wird gleich aktualisiert...";
@@ -579,9 +643,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
                 return;
             }
 
-            if (refreshSeries)
+            if (refreshSeries || !string.Equals(_seriesQueryForCandidates, SeriesSearchText.Trim(), StringComparison.Ordinal))
             {
-                await RefreshLocalCandidatesAsync(cancellationToken);
+                await RefreshLocalCandidatesCoreAsync(revision, cancellationToken);
             }
             else
             {
@@ -595,6 +659,7 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
         {
             if (revision == _localSearchRevision)
             {
+                ClearLocalResults();
                 LocalDatasetStatusText = $"Lokale IMDb-Suche fehlgeschlagen: {ex.Message}";
             }
         }
@@ -604,6 +669,26 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
             {
                 IsLocalSearchRunning = false;
             }
+        }
+    }
+
+    private void ClearLocalResults()
+    {
+        _suppressLocalSeriesRefresh = true;
+        try
+        {
+            _seriesQueryForCandidates = null;
+            _unfilteredLocalCandidates = [];
+            SelectedLocalSeries = null;
+            SelectedLocalCandidate = null;
+            ReplaceItems(LocalSeriesCandidates, []);
+            ReplaceItems(LocalCandidates, []);
+            ReplaceItems(SeasonFilters, []);
+            SelectedSeasonFilter = null;
+        }
+        finally
+        {
+            _suppressLocalSeriesRefresh = false;
         }
     }
 
@@ -789,7 +874,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
     private static bool TryExtractImdbIdFromUrl(string input, out string? imdbId)
     {
         imdbId = null;
-        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri) || !IsSupportedImdbHost(uri.Host))
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+            || !IsSupportedImdbHost(uri.Host))
         {
             return false;
         }
@@ -844,6 +931,9 @@ internal sealed class ImdbLookupWindowViewModel : INotifyPropertyChanged, IDispo
     /// </summary>
     public void Dispose()
     {
+        _disposed = true;
+        CancelBrowserClipboardImport();
+        _localSearchRevision++;
         _liveSearchCancellationSource?.Cancel();
         _liveSearchCancellationSource?.Dispose();
         _liveSearchCancellationSource = null;

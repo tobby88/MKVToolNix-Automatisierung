@@ -8,7 +8,7 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// <summary>
 /// Kapselt Zustand und Suchlogik des TVDB-Dialogs, damit das Fenster selbst nur noch UI-Ereignisse weiterreicht.
 /// </summary>
-internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
+internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly EpisodeMetadataLookupService _lookupService;
     private readonly EpisodeMetadataGuess _guess;
@@ -23,6 +23,9 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     private string _statusText = "Bereit";
     private SelectableSeriesItem? _selectedSeriesItem;
     private SelectableEpisodeItem? _selectedEpisodeItem;
+    private CancellationTokenSource? _requestCancellationSource;
+    private int _requestRevision;
+    private bool _disposed;
 
     /// <summary>
     /// Initialisiert das ViewModel für den manuellen TVDB-Abgleich einer Episode.
@@ -115,6 +118,7 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
 
             if (!_suppressSeriesSelectionChanged)
             {
+                _episodes.Clear();
                 SelectedEpisodeItem = null;
                 ReplaceItems(EpisodeResults, []);
                 UpdateComparisonSummary();
@@ -205,7 +209,7 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     /// <summary>
     /// Aktiviert die Übernehmen-Aktion erst, wenn Serie und Episode ausgewählt sind.
     /// </summary>
-    public bool CanApply => SelectedSeriesItem is not null && SelectedEpisodeItem is not null;
+    public bool CanApply => !_disposed && SelectedSeriesItem is not null && SelectedEpisodeItem is not null;
 
     /// <summary>
     /// Lädt nach einem zentralen Settings-Update die gespeicherten Zugangsdaten neu.
@@ -216,7 +220,7 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Behält die lokale Erkennung bei, speichert aber vorher mögliche Credential-Änderungen.
+    /// Behaelt die lokale Erkennung bei. Zugangsdaten werden ausschliesslich zentral gespeichert.
     /// </summary>
     public void RememberLocalDetectionChoice()
     {
@@ -234,6 +238,12 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     {
         selection = null;
         validationMessage = null;
+
+        if (_disposed || IsBusy)
+        {
+            validationMessage = "Bitte warten, bis die aktuelle TVDB-Abfrage abgeschlossen ist.";
+            return false;
+        }
 
         if (SelectedSeriesItem is null)
         {
@@ -282,5 +292,29 @@ internal sealed partial class TvdbLookupWindowViewModel : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    private (int Revision, CancellationToken Token) BeginRequest()
+    {
+        _requestRevision++;
+        _requestCancellationSource?.Cancel();
+        _requestCancellationSource?.Dispose();
+        _requestCancellationSource = new CancellationTokenSource();
+        return (_requestRevision, _requestCancellationSource.Token);
+    }
+
+    /// <summary>Beendet beim Schliessen das Warten auf gemeinsame Provider-Requests.</summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _requestRevision++;
+        _requestCancellationSource?.Cancel();
+        _requestCancellationSource?.Dispose();
+        _requestCancellationSource = null;
     }
 }

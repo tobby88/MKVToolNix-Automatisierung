@@ -50,6 +50,9 @@ public sealed class TvdbLookupWindowTests
 
                 Assert.True(viewModel.CanApply);
                 Assert.False(applyButton.IsEnabled);
+                var cancelButton = FindButtonByContent(window, "Abbrechen");
+                Assert.True(cancelButton.IsEnabled);
+                Assert.True(cancelButton.IsCancel);
 
                 client.ReleaseBlockedSeriesSearch();
                 await runningSearch;

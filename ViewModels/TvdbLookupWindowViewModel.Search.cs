@@ -25,6 +25,12 @@ internal sealed partial class TvdbLookupWindowViewModel
     /// <param name="autoLoadEpisodes">Lädt nach erfolgreicher Seriensuche direkt die Episodenliste der bevorzugten Serie.</param>
     public async Task SearchSeriesAsync(bool autoLoadEpisodes)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var (revision, cancellationToken) = BeginRequest();
         try
         {
             SetBusy(true, "Suche Serie bei TVDB...");
@@ -37,11 +43,23 @@ internal sealed partial class TvdbLookupWindowViewModel
                 return;
             }
 
-            var results = await _lookupService.SearchSeriesAsync(SeriesSearchText.Trim(), currentSettings);
+            var results = await _lookupService.SearchSeriesAsync(SeriesSearchText.Trim(), currentSettings, cancellationToken);
+            if (revision != _requestRevision)
+            {
+                return;
+            }
 
             _seriesResults.Clear();
             _seriesResults.AddRange(results);
-            ReplaceItems(SeriesResults, results.Select(result => new SelectableSeriesItem(result)));
+            _suppressSeriesSelectionChanged = true;
+            try
+            {
+                ReplaceItems(SeriesResults, results.Select(result => new SelectableSeriesItem(result)));
+            }
+            finally
+            {
+                _suppressSeriesSelectionChanged = false;
+            }
 
             _episodes.Clear();
             ReplaceItems(EpisodeResults, []);
@@ -55,7 +73,8 @@ internal sealed partial class TvdbLookupWindowViewModel
                 return;
             }
 
-            var preferredSeries = _lookupService.FindPreferredSeriesResult(_guess, _seriesResults) ?? _seriesResults[0];
+            var currentGuess = _guess with { SeriesName = SeriesSearchText.Trim(), EpisodeTitle = EpisodeSearchText.Trim() };
+            var preferredSeries = _lookupService.FindPreferredSeriesResult(currentGuess, _seriesResults) ?? _seriesResults[0];
             var preferredItem = SeriesResults.FirstOrDefault(result => result.Series.Id == preferredSeries.Id) ?? SeriesResults[0];
 
             _suppressSeriesSelectionChanged = true;
@@ -66,22 +85,31 @@ internal sealed partial class TvdbLookupWindowViewModel
 
             if (autoLoadEpisodes)
             {
-                await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
+                await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true, revision, cancellationToken);
             }
             else
             {
                 UpdateComparisonSummary();
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            StatusText = ProviderLookupErrorFormatter.FormatTvdbSearchFailure(ex);
-            ClearLoadedResults();
-            UpdateComparisonSummary();
+        }
+        catch (Exception ex)
+        {
+            if (revision == _requestRevision)
+            {
+                StatusText = ProviderLookupErrorFormatter.FormatTvdbSearchFailure(ex);
+                ClearLoadedResults();
+                UpdateComparisonSummary();
+            }
         }
         finally
         {
-            SetBusy(false, StatusText);
+            if (revision == _requestRevision)
+            {
+                SetBusy(false, StatusText);
+            }
         }
     }
 
@@ -90,12 +118,13 @@ internal sealed partial class TvdbLookupWindowViewModel
     /// </summary>
     public async Task HandleSelectedSeriesSelectionChangedAsync()
     {
-        if (_suppressSeriesSelectionChanged || IsBusy || SelectedSeriesItem is null)
+        if (_suppressSeriesSelectionChanged || _disposed || SelectedSeriesItem is null)
         {
             return;
         }
 
-        await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true);
+        var (revision, cancellationToken) = BeginRequest();
+        await LoadEpisodesForSelectedSeriesAsync(autoSelectBest: true, revision, cancellationToken);
     }
 
     private void ClearLoadedResults()
@@ -103,16 +132,22 @@ internal sealed partial class TvdbLookupWindowViewModel
         _seriesResults.Clear();
         _episodes.Clear();
         _suppressSeriesSelectionChanged = true;
-        SelectedSeriesItem = null;
-        _suppressSeriesSelectionChanged = false;
-        SelectedEpisodeItem = null;
-        ReplaceItems(SeriesResults, []);
-        ReplaceItems(EpisodeResults, []);
+        try
+        {
+            SelectedSeriesItem = null;
+            SelectedEpisodeItem = null;
+            ReplaceItems(SeriesResults, []);
+            ReplaceItems(EpisodeResults, []);
+        }
+        finally
+        {
+            _suppressSeriesSelectionChanged = false;
+        }
     }
 
-    private async Task LoadEpisodesForSelectedSeriesAsync(bool autoSelectBest)
+    private async Task LoadEpisodesForSelectedSeriesAsync(bool autoSelectBest, int revision, CancellationToken cancellationToken)
     {
-        if (SelectedSeriesItem is null)
+        if (SelectedSeriesItem is not { } selectedSeries)
         {
             return;
         }
@@ -121,7 +156,11 @@ internal sealed partial class TvdbLookupWindowViewModel
         {
             SetBusy(true, "Lade Episodenliste...");
             var currentSettings = BuildTransientSettings();
-            var episodes = await _lookupService.LoadEpisodesAsync(SelectedSeriesItem.Series.Id, currentSettings);
+            var episodes = await _lookupService.LoadEpisodesAsync(selectedSeries.Series.Id, currentSettings, cancellationToken);
+            if (revision != _requestRevision || !ReferenceEquals(selectedSeries, SelectedSeriesItem))
+            {
+                return;
+            }
 
             _episodes.Clear();
             _episodes.AddRange(episodes);
@@ -132,17 +171,26 @@ internal sealed partial class TvdbLookupWindowViewModel
                 StatusText = $"{_episodes.Count} Episode(n) geladen.";
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            StatusText = ProviderLookupErrorFormatter.FormatTvdbEpisodeFailure(ex);
-            _episodes.Clear();
-            ReplaceItems(EpisodeResults, []);
-            SelectedEpisodeItem = null;
-            UpdateComparisonSummary();
+        }
+        catch (Exception ex)
+        {
+            if (revision == _requestRevision)
+            {
+                StatusText = ProviderLookupErrorFormatter.FormatTvdbEpisodeFailure(ex);
+                _episodes.Clear();
+                ReplaceItems(EpisodeResults, []);
+                SelectedEpisodeItem = null;
+                UpdateComparisonSummary();
+            }
         }
         finally
         {
-            SetBusy(false, StatusText);
+            if (revision == _requestRevision)
+            {
+                SetBusy(false, StatusText);
+            }
         }
     }
 
@@ -170,7 +218,8 @@ internal sealed partial class TvdbLookupWindowViewModel
             return;
         }
 
-        var match = _lookupService.FindBestEpisodeMatch(_guess, SelectedSeriesItem.Series, _episodes);
+        var currentGuess = _guess with { SeriesName = SeriesSearchText.Trim(), EpisodeTitle = EpisodeSearchText.Trim() };
+        var match = _lookupService.FindBestEpisodeMatch(currentGuess, SelectedSeriesItem.Series, filteredEpisodes);
         if (match is null)
         {
             StatusText = "Keine Episode automatisch sicher vorgewählt.";

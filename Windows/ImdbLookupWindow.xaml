@@ -183,7 +183,7 @@
             <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                 <Button Width="150" Margin="0,0,12,0" Padding="10,6" Click="NoImdbButton_Click" Content="Keine IMDb-ID" />
-                <Button Width="120" Margin="0,0,12,0" Padding="10,6" Click="CancelButton_Click" Content="Abbrechen" />
+                <Button Width="120" Margin="0,0,12,0" Padding="10,6" IsCancel="True" Click="CancelButton_Click" Content="Abbrechen" />
                 <Button Width="140" Padding="10,6" IsEnabled="{Binding CanApply}" Click="ApplyButton_Click" Content="Übernehmen" />
             </StackPanel>
         </DockPanel>

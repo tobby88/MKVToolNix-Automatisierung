@@ -200,6 +200,87 @@ public sealed class TvdbLookupWindowViewModelTests
         Assert.Contains("S00E07", viewModel.SelectedEpisodeItem?.DisplayText, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("S1E2")]
+    [InlineData("S01-E02")]
+    [InlineData("1x2")]
+    [InlineData("Staffel 1, Folge 2")]
+    public void EpisodeFilter_AcceptsUnpaddedCodesWithoutMatchingLongerEpisodeNumbers(string query)
+    {
+        TvdbEpisodeRecord[] episodes = [new(1, "First", 1, 2, null), new(2, "Other", 1, 20, null)];
+        Assert.Equal(1, Assert.Single(TvdbLookupEpisodeFilter.FilterEpisodes(episodes, query)).Id);
+    }
+
+    [Fact]
+    public async Task ChangingSeries_CannotResurrectPreviousSeriesEpisodesThroughFilter()
+    {
+        using var vm = new TvdbLookupWindowViewModel(
+            CreateServiceWithEpisodes([new(100, "Pilot", 1, 1, null)]), new("Beispielserie", "Pilot", "01", "01"));
+        await vm.InitializeAsync();
+        Assert.Single(vm.EpisodeResults);
+
+        vm.SelectedSeriesItem = new(new(43, "Different series", null, null));
+        vm.EpisodeSearchText = "";
+
+        Assert.Empty(vm.EpisodeResults);
+        Assert.False(vm.CanApply);
+    }
+
+    [Fact]
+    public async Task TimeoutIsShownAsProviderError_NotEscapedCancellation()
+    {
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }),
+            new FakeTvdbClient { SearchSeriesException = new TaskCanceledException("timeout") });
+        using var vm = new TvdbLookupWindowViewModel(service, new("Series", "Pilot", "01", "01"));
+
+        await vm.InitializeAsync();
+
+        Assert.False(vm.IsBusy);
+        Assert.Contains("Zeitüberschreitung", vm.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DisposeStopsWaiting_AndLateSearchCannotPopulateClosedDialog()
+    {
+        var completion = new TaskCompletionSource<IReadOnlyList<TvdbSeriesSearchResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }),
+            new FakeTvdbClient { SearchSeriesAsyncOverride = _ => completion.Task });
+        using var vm = new TvdbLookupWindowViewModel(service, new("Series", "Pilot", "01", "01"));
+        var pending = vm.InitializeAsync();
+        Assert.True(vm.IsBusy);
+
+        vm.Dispose();
+        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        completion.SetResult([new(42, "Series", null, null)]);
+        await service.SearchSeriesAsync("Series");
+
+        Assert.Empty(vm.SeriesResults);
+        Assert.False(vm.CanApply);
+        Assert.False(vm.TryBuildSelection(out _, out _));
+    }
+
+    [Fact]
+    public async Task SupersededSearchCannotOverwriteNewerResults()
+    {
+        var first = new TaskCompletionSource<IReadOnlyList<TvdbSeriesSearchResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(new() { TvdbApiKey = "key" }),
+            new FakeTvdbClient
+            {
+                SearchSeriesAsyncOverride = query => query == "First"
+                    ? first.Task
+                    : Task.FromResult<IReadOnlyList<TvdbSeriesSearchResult>>([new(2, "Second", null, null)])
+            });
+        using var vm = new TvdbLookupWindowViewModel(service, new("First", "Pilot", "01", "01"));
+        var pending = vm.SearchSeriesAsync(autoLoadEpisodes: false);
+        vm.SeriesSearchText = "Second";
+        await vm.SearchSeriesAsync(autoLoadEpisodes: false);
+        first.SetResult([new(1, "First", null, null)]);
+        await pending;
+
+        Assert.Equal(2, Assert.Single(vm.SeriesResults).Series.Id);
+        Assert.False(vm.IsBusy);
+    }
+
     private static EpisodeMetadataLookupService CreateServiceWithEpisodes(IReadOnlyList<TvdbEpisodeRecord> episodes)
     {
         return new EpisodeMetadataLookupService(
@@ -250,6 +331,7 @@ public sealed class TvdbLookupWindowViewModelTests
         public int GetSeriesEpisodesCallCount { get; private set; }
 
         public Func<string, IReadOnlyList<TvdbSeriesSearchResult>>? SearchSeriesResultFactory { get; init; }
+        public Func<string, Task<IReadOnlyList<TvdbSeriesSearchResult>>>? SearchSeriesAsyncOverride { get; init; }
 
         public Func<int, IReadOnlyList<TvdbEpisodeRecord>>? EpisodesResultFactory { get; init; }
 
@@ -264,6 +346,10 @@ public sealed class TvdbLookupWindowViewModelTests
             CancellationToken cancellationToken = default)
         {
             SearchSeriesCallCount++;
+            if (SearchSeriesAsyncOverride is not null)
+            {
+                return SearchSeriesAsyncOverride(query);
+            }
             if (SearchSeriesException is not null)
             {
                 throw SearchSeriesException;
