@@ -9,6 +9,16 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 public sealed class ManagedToolPackageSourceTests
 {
     [Fact]
+    public void TryReadSha256FromChecksumText_MatchesWholeFilenameAndSkipsInvalidLines()
+    {
+        var expected = new string('b', 64);
+        var text = $"{new string('a', 64)} *not-tool.zip\ninvalid *tool.zip\n{expected} *./tool.zip";
+
+        Assert.Equal(expected, ManagedToolParsing.TryReadSha256FromChecksumText(text, "tool.zip"));
+        Assert.Null(ManagedToolParsing.TryReadSha256FromChecksumText($"{expected} *not-tool.zip", "tool.zip"));
+    }
+
+    [Fact]
     public void ParseLatestPackageFromDownloadsPage_PicksHighestPortableMkvToolNixVersionAndChecksum()
     {
         const string downloadsHtml = """

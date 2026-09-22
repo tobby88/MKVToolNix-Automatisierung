@@ -215,14 +215,6 @@ internal static class MediathekViewPathResolver
             return null;
         }
 
-        foreach (var directCandidate in EnumerateExecutableCandidates(configuredPath, preferPortable: true))
-        {
-            if (File.Exists(directCandidate))
-            {
-                return directCandidate;
-            }
-        }
-
         return TryFindExecutableUnderRoot(configuredPath, preferPortable: true);
     }
 
@@ -282,8 +274,7 @@ internal static class MediathekViewPathResolver
                 .Where(path =>
                 {
                     var directoryName = Path.GetFileName(path);
-                    return !directoryName.StartsWith(".staging-", StringComparison.OrdinalIgnoreCase)
-                           && !directoryName.StartsWith(".download-", StringComparison.OrdinalIgnoreCase);
+                    return !directoryName.StartsWith(".", StringComparison.Ordinal);
                 })
                 .Select(path => new DirectoryInfo(path))
                 .OrderByDescending(directory => directory.LastWriteTimeUtc)
@@ -349,16 +340,14 @@ internal static class MediathekViewPathResolver
 
         try
         {
-            foreach (var directCandidate in EnumerateExecutableCandidates(rootDirectory, preferPortable))
+            foreach (var executableName in EnumerateExecutableNames(preferPortable))
             {
+                var directCandidate = Path.Combine(rootDirectory, executableName);
                 if (File.Exists(directCandidate))
                 {
                     return directCandidate;
                 }
-            }
 
-            foreach (var executableName in EnumerateExecutableNames(preferPortable))
-            {
                 var candidate = Directory
                     .EnumerateFiles(rootDirectory, executableName, SearchOption.AllDirectories)
                     .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))

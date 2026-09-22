@@ -60,6 +60,13 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         ArgumentException.ThrowIfNullOrWhiteSpace(archivePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
 
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureNoReparsePoints(destinationDirectory);
+        if (Directory.Exists(destinationDirectory) && Directory.EnumerateFileSystemEntries(destinationDirectory).Any())
+        {
+            throw new InvalidOperationException("Das Zielverzeichnis der Werkzeugextraktion muss leer sein.");
+        }
+
         Directory.CreateDirectory(destinationDirectory);
 
         await using var archive = await ArchiveFactory.OpenAsyncArchive(
@@ -76,6 +83,18 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         }
 
         var entries = SelectEntriesForTool(toolKind, allEntries);
+        // Validate the entire selected payload before writing the first file.
+        var targetPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetPath = GetArchiveEntryDestinationPath(destinationDirectory, entry.Key);
+            if (!targetPaths.Add(targetPath))
+            {
+                throw new InvalidOperationException($"Das Werkzeugarchiv enthaelt einen doppelten Zielpfad: {entry.Key}");
+            }
+        }
+
         var totalEntryCount = entries.Count;
         var totalByteCount = entries.Sum(entry => GetEntrySize(entry));
         progress?.Report(new ManagedToolExtractionProgress(0, totalEntryCount, ExtractedByteCount: 0, TotalByteCount: totalByteCount));
@@ -175,7 +194,41 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
             throw new InvalidOperationException($"Das Werkzeugarchiv enthält einen unsicheren relativen Pfad: {entryKey}");
         }
 
+        var segments = normalizedEntryKey.Split(Path.DirectorySeparatorChar);
+        if (segments.Any(segment => string.IsNullOrWhiteSpace(segment)
+                || segment is "." or ".."
+                || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+                || segment.EndsWith(".", StringComparison.Ordinal)
+                || segment.EndsWith(" ", StringComparison.Ordinal)
+                || IsReservedDeviceName(segment)))
+        {
+            throw new InvalidOperationException($"Das Werkzeugarchiv enthält einen unsicheren relativen Pfad: {entryKey}");
+        }
+
         return targetPath;
+    }
+
+    private static bool IsReservedDeviceName(string segment)
+    {
+        var name = segment.Split('.')[0];
+        return name.Equals("CON", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("NUL", StringComparison.OrdinalIgnoreCase)
+               || (name.Length == 4 && name[3] is >= '1' and <= '9'
+                   && (name.StartsWith("COM", StringComparison.OrdinalIgnoreCase)
+                       || name.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static void EnsureNoReparsePoints(string path)
+    {
+        for (var directory = new DirectoryInfo(Path.GetFullPath(path)); directory is not null; directory = directory.Parent)
+        {
+            if (directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException("Das Extraktionsziel darf keine Verzeichnisverknuepfungen enthalten.");
+            }
+        }
     }
 
     private static async Task ExtractEntryAsync(
@@ -190,12 +243,13 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
     {
         var targetDirectory = Path.GetDirectoryName(targetPath)
                               ?? throw new InvalidOperationException($"Der Zielpfad für '{entry.Key}' ist ungültig.");
+        EnsureNoReparsePoints(targetDirectory);
         Directory.CreateDirectory(targetDirectory);
 
         await using var input = await entry.OpenEntryStreamAsync(cancellationToken);
         await using var output = new FileStream(
             targetPath,
-            FileMode.Create,
+            FileMode.CreateNew,
             FileAccess.Write,
             FileShare.None,
             bufferSize: 81920,

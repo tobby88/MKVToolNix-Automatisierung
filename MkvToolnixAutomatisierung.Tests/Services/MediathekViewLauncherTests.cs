@@ -39,7 +39,7 @@ public sealed class MediathekViewLauncherTests : IDisposable
     {
         var portableDirectory = CreateDirectory("portable");
         CreateFile(Path.Combine("portable", "MediathekView.exe"));
-        var portableExecutablePath = CreateFile(Path.Combine("portable", "MediathekView_Portable.exe"));
+        var portableExecutablePath = CreateFile(Path.Combine("portable", "Portable", "MediathekView_Portable.exe"));
 
         var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings
         {
@@ -82,6 +82,11 @@ public sealed class MediathekViewLauncherTests : IDisposable
             "MediathekView_Portable.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(executablePath)!);
         File.WriteAllText(executablePath, "tool");
+        var recoveryDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview", ".replaced-14.5.0-backup");
+        Directory.CreateDirectory(recoveryDirectory);
+        File.WriteAllText(Path.Combine(recoveryDirectory, "MediathekView_Portable.exe"), "backup");
+        Directory.SetLastWriteTimeUtc(Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview", "14.5.0"), DateTime.UtcNow.AddDays(-1));
+        Directory.SetLastWriteTimeUtc(recoveryDirectory, DateTime.UtcNow);
 
         var resolved = MediathekViewPathResolver.TryResolve(new AppToolPathSettings());
 

@@ -184,7 +184,8 @@ public sealed class ManagedToolInstallerServiceTests
 
         Assert.False(result.HasWarning);
         Assert.Equal("portable-settings", File.ReadAllText(Path.Combine(newBaseDirectory, "Einstellungen", "settings.xml")));
-        Assert.False(Directory.Exists(Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview", "14.4.0")));
+        Assert.True(Directory.Exists(Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview", "14.4.0")));
+        Assert.Equal("portable-settings", File.ReadAllText(Path.Combine(oldSettingsDirectory, "settings.xml")));
     }
 
     [Fact]
@@ -692,6 +693,7 @@ public sealed class ManagedToolInstallerServiceTests
                 downloadUri,
                 "ffmpeg-master-latest-win64-gpl-shared.zip",
                 archiveHash));
+            var progressEvents = new List<ManagedToolStartupProgress>();
             var service = new ManagedToolInstallerService(
                 toolPathStore,
                 [packageSource],
@@ -703,13 +705,14 @@ public sealed class ManagedToolInstallerServiceTests
                 }),
                 new HttpClient(new FakeHttpMessageHandler((downloadUri, archiveBytes))));
 
-            var result = await service.EnsureManagedToolsAsync();
+            var result = await service.EnsureManagedToolsAsync(new CollectingProgress(progressEvents));
             var savedSettings = toolPathStore.Load();
 
             Assert.False(result.HasWarning);
             Assert.Equal(1, packageSource.CallCount);
             Assert.NotEqual(legacyFfprobePath, savedSettings.ManagedFfprobe.InstalledPath);
-            Assert.NotEmpty(savedSettings.ManagedFfprobe.InstalledPath);
+            Assert.True(!string.IsNullOrWhiteSpace(savedSettings.ManagedFfprobe.InstalledPath),
+                string.Join(Environment.NewLine, progressEvents.Select(value => $"{value.StatusText}: {value.DetailText}")));
         }
         finally
         {
@@ -1070,6 +1073,179 @@ public sealed class ManagedToolInstallerServiceTests
         Assert.NotEmpty(determinateProgress);
         Assert.True(determinateProgress.Zip(determinateProgress.Skip(1), (previous, current) => current >= previous).All(static isMonotone => isMonotone));
         Assert.Equal(100d, determinateProgress[^1], 3);
+    }
+
+    [Theory]
+    [InlineData("..", "tool.zip")]
+    [InlineData(".", "tool.zip")]
+    [InlineData(".staging-unsafe", "tool.zip")]
+    [InlineData("version.", "tool.zip")]
+    [InlineData("2.0", "../outside.zip")]
+    [InlineData("2.0", "tool.zip:stream")]
+    public async Task EnsureManagedToolsAsync_RejectsUnsafePackagePathsBeforeDownload(string version, string archiveName)
+    {
+        var store = new AppToolPathStore();
+        var settings = store.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        store.Save(settings);
+        var bytes = "test"u8.ToArray();
+        var uri = new Uri("https://example.invalid/tool.zip");
+        var handler = new FakeHttpMessageHandler((uri, bytes));
+        var extracted = false;
+        var installer = new ManagedToolInstallerService(store,
+            [new StubPackageSource(new ManagedToolPackage(ManagedToolKind.Ffprobe, version, version,
+                uri, archiveName, Convert.ToHexString(SHA256.HashData(bytes))))],
+            new StubArchiveExtractor(_ => extracted = true), new HttpClient(handler));
+
+        await installer.EnsureManagedToolsAsync();
+
+        Assert.Empty(handler.RequestedUris);
+        Assert.False(extracted);
+        Assert.Empty(store.Load().ManagedFfprobe.InstalledPath);
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_PersistsCompletedToolBeforeCancellationOfNextTool()
+    {
+        var store = new AppToolPathStore();
+        using var cancellation = new CancellationTokenSource();
+        var installer = CreateTestInstaller(store, ManagedToolKind.MkvToolNix, "2.0", directory =>
+        {
+            File.WriteAllText(Path.Combine(directory, "mkvmerge.exe"), "new");
+            File.WriteAllText(Path.Combine(directory, "mkvpropedit.exe"), "new");
+        });
+        var progress = new CallbackProgress(value =>
+        {
+            if (value.StatusText == "MKVToolNix wurde aktualisiert")
+            {
+                cancellation.Cancel();
+            }
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            installer.EnsureManagedToolsAsync(progress, cancellation.Token));
+
+        var saved = store.Load();
+        Assert.Equal("2.0", saved.ManagedMkvToolNix.InstalledVersion);
+        Assert.True(File.Exists(Path.Combine(saved.ManagedMkvToolNix.InstalledPath, "mkvmerge.exe")));
+        Assert.Null(saved.ManagedFfprobe.LastFailedCheckUtc);
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_KeepsPreviousVersionWhenSavingStateFails()
+    {
+        var store = new AppToolPathStore();
+        var oldDirectory = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "1.0");
+        Directory.CreateDirectory(oldDirectory);
+        var oldPath = Path.Combine(oldDirectory, "ffprobe.exe");
+        File.WriteAllText(oldPath, "old");
+        var settings = store.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.InstalledPath = oldPath;
+        settings.ManagedFfprobe.InstalledVersion = "1.0";
+        store.Save(settings);
+        Directory.CreateDirectory(PortableAppStorage.SettingsBackupFilePath);
+        var installer = CreateTestInstaller(store, ManagedToolKind.Ffprobe, "2.0",
+            directory => File.WriteAllText(Path.Combine(directory, "ffprobe.exe"), "new"));
+
+        var result = await installer.EnsureManagedToolsAsync();
+
+        Assert.True(result.HasWarning);
+        Assert.Equal("old", File.ReadAllText(oldPath));
+        Assert.Equal(oldPath, store.Load().ManagedFfprobe.InstalledPath);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnsureManagedToolsAsync_PreservesArbitraryMediathekDataDuringUpdateAndRepair(bool sameVersion)
+    {
+        var store = new AppToolPathStore();
+        var root = Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview");
+        var oldDirectory = Path.Combine(root, "1.0");
+        Directory.CreateDirectory(oldDirectory);
+        var oldPath = Path.Combine(oldDirectory, "MediathekView_Portable.exe");
+        File.WriteAllText(oldPath, "old");
+        File.WriteAllText(Path.Combine(oldDirectory, "custom-recording.mp4"), "user-data");
+        var settings = store.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        settings.ManagedFfprobe.AutoManageEnabled = false;
+        settings.ManagedMediathekView.AutoManageEnabled = true;
+        settings.ManagedMediathekView.InstalledPath = oldPath;
+        settings.ManagedMediathekView.InstalledVersion = "stale";
+        store.Save(settings);
+        var installer = CreateTestInstaller(store, ManagedToolKind.MediathekView, sameVersion ? "1.0" : "2.0",
+            directory => File.WriteAllText(Path.Combine(directory, "MediathekView_Portable.exe"), "new"));
+
+        var result = await installer.EnsureManagedToolsAsync();
+
+        Assert.False(result.HasWarning);
+        var preservedFile = Assert.Single(Directory.GetFiles(root, "custom-recording.mp4", SearchOption.AllDirectories));
+        Assert.Equal("user-data", File.ReadAllText(preservedFile));
+        Assert.Equal("new", File.ReadAllText(store.Load().ManagedMediathekView.InstalledPath));
+        if (sameVersion)
+        {
+            Assert.Contains(".replaced-", preservedFile, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_DoesNotCleanUpUnreferencedDirectories()
+    {
+        var store = new AppToolPathStore();
+        var settings = store.Load();
+        settings.ManagedMkvToolNix.AutoManageEnabled = false;
+        store.Save(settings);
+        var unrelated = Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "notes");
+        Directory.CreateDirectory(unrelated);
+        var notesPath = Path.Combine(unrelated, "notes.txt");
+        File.WriteAllText(notesPath, "keep");
+        var installer = CreateTestInstaller(store, ManagedToolKind.Ffprobe, "2.0",
+            directory => File.WriteAllText(Path.Combine(directory, "ffprobe.exe"), "new"));
+
+        await installer.EnsureManagedToolsAsync();
+
+        Assert.Equal("keep", File.ReadAllText(notesPath));
+    }
+
+    [Fact]
+    public async Task EnsureManagedToolsAsync_RunsExtractionOutsideWpfDispatcher()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var dispatcherThread = Environment.CurrentManagedThreadId;
+            var extractionThread = dispatcherThread;
+            var store = new AppToolPathStore();
+            var settings = store.Load();
+            settings.ManagedMkvToolNix.AutoManageEnabled = false;
+            store.Save(settings);
+            var installer = CreateTestInstaller(store, ManagedToolKind.Ffprobe, "2.0", directory =>
+            {
+                extractionThread = Environment.CurrentManagedThreadId;
+                File.WriteAllText(Path.Combine(directory, "ffprobe.exe"), "new");
+            });
+
+            await installer.EnsureManagedToolsAsync();
+
+            Assert.NotEqual(dispatcherThread, extractionThread);
+            Assert.Equal(dispatcherThread, Environment.CurrentManagedThreadId);
+        });
+    }
+
+    private static ManagedToolInstallerService CreateTestInstaller(
+        AppToolPathStore store, ManagedToolKind kind, string version, Action<string> onExtract)
+    {
+        var bytes = "test"u8.ToArray();
+        var uri = new Uri("https://example.invalid/tool.zip");
+        return new ManagedToolInstallerService(store,
+            [new StubPackageSource(new ManagedToolPackage(kind, version, version, uri, "tool.zip",
+                Convert.ToHexString(SHA256.HashData(bytes))))],
+            new StubArchiveExtractor(onExtract), new HttpClient(new FakeHttpMessageHandler((uri, bytes))));
+    }
+
+    private sealed class CallbackProgress(Action<ManagedToolStartupProgress> callback) : IProgress<ManagedToolStartupProgress>
+    {
+        public void Report(ManagedToolStartupProgress value) => callback(value);
     }
 
     private sealed class StubPackageSource(ManagedToolPackage package) : IManagedToolPackageSource

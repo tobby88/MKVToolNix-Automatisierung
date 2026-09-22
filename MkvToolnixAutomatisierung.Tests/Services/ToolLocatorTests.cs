@@ -96,6 +96,8 @@ public sealed class ToolLocatorTests : IDisposable
         var mkvPropEditPath = Path.Combine(toolDirectory, "mkvpropedit.exe");
         File.WriteAllText(mkvMergePath, "tool");
         File.WriteAllText(mkvPropEditPath, "tool");
+        // A shorter orphan executable must not mask the complete pair in the nested directory.
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(toolDirectory)!, "mkvmerge.exe"), "orphan");
 
         var settingsStore = new AppSettingsStore();
         settingsStore.Save(new CombinedAppSettings
@@ -137,6 +139,33 @@ public sealed class ToolLocatorTests : IDisposable
         }
 
         Assert.True(Directory.Exists(manualDirectory));
+    }
+
+    [Theory]
+    [InlineData(".staging-incomplete")]
+    [InlineData(".replaced-backup")]
+    public void Locators_IgnoreTemporaryAndRecoveryDirectories(string hiddenName)
+    {
+        foreach (var tool in new[] { "ffprobe", "mkvtoolnix" })
+        {
+            var active = Path.Combine(PortableAppStorage.ToolsDirectory, tool, "1.0");
+            var hidden = Path.Combine(PortableAppStorage.ToolsDirectory, tool, hiddenName);
+            Directory.CreateDirectory(active);
+            Directory.CreateDirectory(hidden);
+            foreach (var name in new[] { "ffprobe.exe", "mkvmerge.exe", "mkvpropedit.exe" })
+            {
+                File.WriteAllText(Path.Combine(active, name), "active");
+                File.WriteAllText(Path.Combine(hidden, name), "partial");
+            }
+            Directory.SetLastWriteTimeUtc(active, DateTime.UtcNow.AddDays(-1));
+            Directory.SetLastWriteTimeUtc(hidden, DateTime.UtcNow);
+        }
+
+        var store = new AppToolPathStore();
+        Assert.Equal(Path.Combine(PortableAppStorage.ToolsDirectory, "ffprobe", "1.0", "ffprobe.exe"),
+            new FfprobeLocator(store).TryFindFfprobePath());
+        Assert.Equal(Path.Combine(PortableAppStorage.ToolsDirectory, "mkvtoolnix", "1.0", "mkvmerge.exe"),
+            new MkvToolNixLocator(store).FindMkvMergePath());
     }
 
     public void Dispose()

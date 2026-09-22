@@ -410,11 +410,6 @@ internal static class ManagedToolParsing
         foreach (var rawLine in checksumText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var line = rawLine.Trim();
-            if (!line.EndsWith(archiveFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             var firstSeparatorIndex = line.IndexOfAny([' ', '\t']);
             if (firstSeparatorIndex <= 0)
             {
@@ -422,9 +417,17 @@ internal static class ManagedToolParsing
             }
 
             var candidate = line[..firstSeparatorIndex].Trim();
-            return IsValidSha256(candidate)
-                ? candidate
-                : null;
+            var listedName = line[(firstSeparatorIndex + 1)..].TrimStart().TrimStart('*');
+            if (listedName.StartsWith("./", StringComparison.Ordinal))
+            {
+                listedName = listedName[2..];
+            }
+
+            if (string.Equals(listedName, archiveFileName, StringComparison.OrdinalIgnoreCase)
+                && IsValidSha256(candidate))
+            {
+                return candidate;
+            }
         }
 
         return null;

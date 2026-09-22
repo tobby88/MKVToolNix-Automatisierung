@@ -317,24 +317,15 @@ internal static class ManagedToolResolution
             {
                 var mkvMergePath = Directory
                     .EnumerateFiles(directory, MkvMergeExecutableName, SearchOption.AllDirectories)
+                    .Where(path => File.Exists(Path.Combine(Path.GetDirectoryName(path)!, MkvPropEditExecutableName)))
                     .OrderBy(path => path.Length)
                     .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .FirstOrDefault();
-                var mkvPropEditPath = Directory
-                    .EnumerateFiles(directory, MkvPropEditExecutableName, SearchOption.AllDirectories)
-                    .OrderBy(path => path.Length)
-                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-                    .FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(mkvMergePath)
-                    && !string.IsNullOrWhiteSpace(mkvPropEditPath)
-                    && string.Equals(
-                        Path.GetDirectoryName(mkvMergePath),
-                        Path.GetDirectoryName(mkvPropEditPath),
-                        StringComparison.OrdinalIgnoreCase))
+                if (!string.IsNullOrWhiteSpace(mkvMergePath))
                 {
                     return new ResolvedMkvToolNixPaths(
                         mkvMergePath,
-                        mkvPropEditPath,
+                        Path.Combine(Path.GetDirectoryName(mkvMergePath)!, MkvPropEditExecutableName),
                         ToolPathResolutionSource.None);
                 }
             }
@@ -448,8 +439,7 @@ internal static class ManagedToolResolution
                 .Where(path =>
                 {
                     var directoryName = Path.GetFileName(path);
-                    return !directoryName.StartsWith(".staging-", StringComparison.OrdinalIgnoreCase)
-                           && !directoryName.StartsWith(".download-", StringComparison.OrdinalIgnoreCase);
+                    return !directoryName.StartsWith(".", StringComparison.Ordinal);
                 })
                 .Select(path => new DirectoryInfo(path))
                 .OrderByDescending(directory => directory.LastWriteTimeUtc)
@@ -481,7 +471,8 @@ internal static class ManagedToolResolution
             recursiveCandidates = Directory
                 .EnumerateFiles(directory.FullName, FfprobeExecutableName, SearchOption.AllDirectories)
                 .OrderBy(path => path.Count(character => character == Path.DirectorySeparatorChar || character == Path.AltDirectorySeparatorChar))
-                .ThenBy(path => path.Length);
+                .ThenBy(path => path.Length)
+                .ToArray();
         }
         catch
         {

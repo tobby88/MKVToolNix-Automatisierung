@@ -224,7 +224,65 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
             extractor.ExtractArchiveAsync(archivePath, destinationDirectory, cancellationToken: cancellationSource.Token));
 
-        Assert.Empty(Directory.EnumerateFileSystemEntries(destinationDirectory));
+        Assert.False(Directory.Exists(destinationDirectory));
+    }
+
+    [Theory]
+    [InlineData("payload.exe:stream")]
+    [InlineData("folder./payload.exe")]
+    [InlineData("folder /payload.exe")]
+    [InlineData("NUL.txt")]
+    [InlineData("COM1/file.txt")]
+    [InlineData("../outside.txt")]
+    public async Task ExtractArchive_PreflightsUnsafePathsBeforeWritingAnyPayload(string unsafeEntry)
+    {
+        var archivePath = Path.Combine(_tempDirectory, "unsafe.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("valid.txt");
+            archive.CreateEntry(unsafeEntry);
+        }
+        var destination = Path.Combine(_tempDirectory, "preflight");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ManagedToolArchiveExtractor().ExtractArchiveAsync(archivePath, destination));
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(destination));
+    }
+
+    [Fact]
+    public async Task ExtractArchive_RejectsDuplicateWindowsPaths()
+    {
+        var archivePath = Path.Combine(_tempDirectory, "duplicate.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("tool.exe");
+            archive.CreateEntry("TOOL.EXE");
+        }
+        var destination = Path.Combine(_tempDirectory, "duplicate-extracted");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ManagedToolArchiveExtractor().ExtractArchiveAsync(archivePath, destination));
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(destination));
+    }
+
+    [Fact]
+    public async Task ExtractArchive_RefusesNonemptyDestinationWithoutOverwritingFiles()
+    {
+        var archivePath = Path.Combine(_tempDirectory, "existing.zip");
+        using (var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("tool.exe");
+        }
+        var destination = CreateDirectory("existing");
+        var existing = Path.Combine(destination, "tool.exe");
+        File.WriteAllText(existing, "keep");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ManagedToolArchiveExtractor().ExtractArchiveAsync(archivePath, destination));
+
+        Assert.Equal("keep", File.ReadAllText(existing));
     }
 
     public void Dispose()

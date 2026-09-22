@@ -24,6 +24,7 @@ internal interface IManagedToolInstallerService
 /// </summary>
 internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
 {
+    private static readonly SemaphoreSlim InstallationGate = new(1, 1);
     private static readonly TimeSpan SuccessfulMetadataRefreshInterval = TimeSpan.FromHours(24);
     private static readonly TimeSpan FailedMetadataRefreshBackoffInterval = TimeSpan.FromHours(2);
     private static readonly TimeSpan DownloadReadIdleTimeout = TimeSpan.FromSeconds(30);
@@ -52,7 +53,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
     }
 
     /// <summary>
-    /// Prüft beide verwalteten Werkzeuge beim Start auf fehlende oder neuere Versionen und installiert sie bei Bedarf.
+    /// Prüft die verwalteten Werkzeuge beim Start auf fehlende oder neuere Versionen und installiert sie bei Bedarf.
     /// </summary>
     /// <param name="progress">Optionaler Fortschrittskanal für einen sichtbaren Startdialog.</param>
     /// <param name="cancellationToken">Abbruchsignal für Download und Entpacken.</param>
@@ -61,42 +62,49 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         IProgress<ManagedToolStartupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        await InstallationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            // Archiv-I/O und portable Settings-Migration dürfen den WPF-Dispatcher nicht blockieren.
+            return await Task.Run(() => EnsureManagedToolsCoreAsync(progress, cancellationToken), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            InstallationGate.Release();
+        }
+    }
+
+    private async Task<ManagedToolStartupResult> EnsureManagedToolsCoreAsync(
+        IProgress<ManagedToolStartupProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         Report(progress, "Werkzeuge werden vorbereitet...", "Prüfe automatische Werkzeugverwaltung.", 0d, false);
 
         var settings = _toolPathStore.Load();
         var warnings = new List<string>();
-        var hasChanges = false;
-        var mkvProgress = new ToolStartupProgressReporter(progress, 0d, 40d);
-        var ffprobeProgress = new ToolStartupProgressReporter(progress, 40d, 70d);
-        var mediathekViewProgress = new ToolStartupProgressReporter(progress, 70d, 100d);
-
-        hasChanges |= await EnsureManagedToolAsync(
-            settings,
-            settings.ManagedMkvToolNix,
-            ManagedToolKind.MkvToolNix,
-            warnings,
-            mkvProgress,
-            cancellationToken);
-        hasChanges |= await EnsureManagedToolAsync(
-            settings,
-            settings.ManagedFfprobe,
-            ManagedToolKind.Ffprobe,
-            warnings,
-            ffprobeProgress,
-            cancellationToken);
-        hasChanges |= await EnsureManagedToolAsync(
-            settings,
-            settings.ManagedMediathekView,
-            ManagedToolKind.MediathekView,
-            warnings,
-            mediathekViewProgress,
-            cancellationToken);
-
-        if (hasChanges)
+        (ManagedToolKind Kind, ManagedToolSettings Settings, double Start, double End)[] tools =
+        [
+            (ManagedToolKind.MkvToolNix, settings.ManagedMkvToolNix, 0d, 40d),
+            (ManagedToolKind.Ffprobe, settings.ManagedFfprobe, 40d, 70d),
+            (ManagedToolKind.MediathekView, settings.ManagedMediathekView, 70d, 100d)
+        ];
+        foreach (var tool in tools)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var previousInstalledPath = tool.Settings.InstalledPath;
+            if (!await EnsureManagedToolAsync(settings, tool.Settings, tool.Kind, warnings,
+                    new ToolStartupProgressReporter(progress, tool.Start, tool.End), cancellationToken))
+            {
+                continue;
+            }
+
             try
             {
+                // Commit each completed tool before another tool can cancel or fail.
                 _toolPathStore.Save(settings);
+                CleanupPreviousManagedVersion(tool.Kind, previousInstalledPath, tool.Settings.InstalledPath);
             }
             catch (Exception ex)
             {
@@ -107,6 +115,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         Report(progress, "Werkzeuge bereit", warnings.Count == 0
             ? "Der Start kann fortgesetzt werden."
             : "Einige Werkzeuge konnten nicht automatisch aktualisiert werden.", 100d, false);
@@ -163,6 +172,12 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 MetadataLookupProgressPercent,
                 false);
             var latestPackage = await _packageSources[toolKind].GetLatestPackageAsync(cancellationToken);
+            if (latestPackage.Kind != toolKind)
+            {
+                throw new InvalidOperationException("Die Paketquelle hat ein Paket fuer ein anderes Werkzeug geliefert.");
+            }
+
+            ValidatePackagePaths(latestPackage);
             if (HasValidManagedInstallation(toolKind, toolSettings, latestPackage.VersionToken))
             {
                 toolSettings.LastCheckedUtc = now;
@@ -180,7 +195,6 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             toolSettings.InstalledVersion = latestPackage.VersionToken;
             toolSettings.LastCheckedUtc = now;
             toolSettings.LastFailedCheckUtc = null;
-            CleanupOlderManagedVersions(toolKind, latestPackage.VersionToken, cancellationToken);
             progress?.Report(
                 $"{GetToolDisplayName(toolKind)} wurde aktualisiert",
                 $"Installiert: {latestPackage.DisplayVersion}",
@@ -240,7 +254,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 cancellationToken);
 
             var installedPathInStaging = ResolveInstalledPath(package.Kind, stagingDirectory);
-            PreserveToolStateBeforeReplacement(
+            await PreserveToolStateBeforeReplacementAsync(
                 package.Kind,
                 toolPathSettings,
                 toolSettings,
@@ -252,7 +266,8 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 installedPathInStaging);
 
             cancellationToken.ThrowIfCancellationRequested();
-            ReplaceVersionDirectoryWithStaging(stagingDirectory, versionDirectory);
+            ReplaceVersionDirectoryWithStaging(stagingDirectory, versionDirectory,
+                preservePrevious: package.Kind == ManagedToolKind.MediathekView);
             return installedPathInVersionDirectory;
         }
         finally
@@ -262,7 +277,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         }
     }
 
-    private static void PreserveToolStateBeforeReplacement(
+    private static async Task PreserveToolStateBeforeReplacementAsync(
         ManagedToolKind toolKind,
         AppToolPathSettings toolPathSettings,
         ManagedToolSettings toolSettings,
@@ -287,7 +302,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 return;
             }
 
-            CopyDirectory(sourceSettingsDirectory, targetStateDirectory, overwrite: true, cancellationToken);
+            await CopyDirectoryAsync(sourceSettingsDirectory, targetStateDirectory, cancellationToken);
             return;
         }
     }
@@ -461,29 +476,42 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             : Path.Combine(toolRootDirectory, versionDirectoryName);
     }
 
-    private static void CopyDirectory(
+    private static async Task CopyDirectoryAsync(
         string sourceDirectory,
         string targetDirectory,
-        bool overwrite,
         CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        Directory.CreateDirectory(targetDirectory);
-
-        foreach (var directoryPath in Directory.EnumerateDirectories(sourceDirectory, "*", SearchOption.AllDirectories))
+        var pending = new Stack<(string Source, string Target)>();
+        pending.Push((sourceDirectory, targetDirectory));
+        while (pending.TryPop(out var directory))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var relativeDirectory = Path.GetRelativePath(sourceDirectory, directoryPath);
-            Directory.CreateDirectory(Path.Combine(targetDirectory, relativeDirectory));
-        }
+            if ((File.GetAttributes(directory.Source) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new IOException("Verknuepfte MediathekView-Einstellungen koennen nicht sicher migriert werden.");
+            }
 
-        foreach (var filePath in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var relativeFile = Path.GetRelativePath(sourceDirectory, filePath);
-            var targetFile = Path.Combine(targetDirectory, relativeFile);
-            Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
-            File.Copy(filePath, targetFile, overwrite);
+            Directory.CreateDirectory(directory.Target);
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory.Source))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    throw new IOException("Verknuepfte MediathekView-Einstellungen koennen nicht sicher migriert werden.");
+                }
+
+                var target = Path.Combine(directory.Target, Path.GetFileName(entry));
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    pending.Push((entry, target));
+                    continue;
+                }
+
+                await using var input = new FileStream(entry, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+                await using var output = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+                await input.CopyToAsync(output, cancellationToken);
+            }
         }
     }
 
@@ -741,27 +769,16 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
     {
         var mkvMergePath = Directory
             .EnumerateFiles(extractedDirectory, "mkvmerge.exe", SearchOption.AllDirectories)
+            .Where(path => File.Exists(Path.Combine(Path.GetDirectoryName(path)!, "mkvpropedit.exe")))
             .OrderBy(path => path.Length)
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
-        var mkvPropEditPath = Directory
-            .EnumerateFiles(extractedDirectory, "mkvpropedit.exe", SearchOption.AllDirectories)
-            .OrderBy(path => path.Length)
-            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(mkvMergePath) || string.IsNullOrWhiteSpace(mkvPropEditPath))
+        if (string.IsNullOrWhiteSpace(mkvMergePath))
         {
             throw new InvalidOperationException("Die entpackte MKVToolNix-Version enthält nicht sowohl mkvmerge.exe als auch mkvpropedit.exe.");
         }
 
-        var mkvMergeDirectory = Path.GetDirectoryName(mkvMergePath);
-        var mkvPropEditDirectory = Path.GetDirectoryName(mkvPropEditPath);
-        if (!string.Equals(mkvMergeDirectory, mkvPropEditDirectory, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Die entpackten MKVToolNix-Dateien liegen nicht in einem gemeinsamen Werkzeugordner.");
-        }
-
-        return mkvMergeDirectory!;
+        return Path.GetDirectoryName(mkvMergePath)!;
     }
 
     private static string ResolveFfprobePath(string extractedDirectory)
@@ -830,7 +847,10 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             : Path.Combine(versionDirectory, installedRelativePath);
     }
 
-    private static void ReplaceVersionDirectoryWithStaging(string stagingDirectory, string versionDirectory)
+    private static void ReplaceVersionDirectoryWithStaging(
+        string stagingDirectory,
+        string versionDirectory,
+        bool preservePrevious)
     {
         var replacedDirectory = BuildReplacedVersionDirectoryPath(versionDirectory);
         var movedExistingVersion = false;
@@ -844,7 +864,10 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         try
         {
             Directory.Move(stagingDirectory, versionDirectory);
-            TryDeleteDirectory(replacedDirectory);
+            if (!preservePrevious)
+            {
+                TryDeleteDirectory(replacedDirectory);
+            }
         }
         catch
         {
@@ -913,64 +936,42 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             .ToArray());
     }
 
-    private static void CleanupOlderManagedVersions(
-        ManagedToolKind toolKind,
-        string currentVersionToken,
-        CancellationToken cancellationToken)
+    private static void ValidatePackagePaths(ManagedToolPackage package)
     {
-        var toolRootDirectory = GetToolRootDirectory(toolKind);
-        if (!Directory.Exists(toolRootDirectory))
+        var versionDirectoryName = SanitizePathSegment(package.VersionToken);
+        if (string.IsNullOrWhiteSpace(package.VersionToken)
+            || versionDirectoryName.StartsWith(".", StringComparison.Ordinal)
+            || versionDirectoryName.EndsWith(".", StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(package.ArchiveFileName)
+            || package.ArchiveFileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || package.ArchiveFileName is "." or ".."
+            || package.ArchiveFileName.EndsWith(".", StringComparison.Ordinal)
+            || package.ArchiveFileName.EndsWith(" ", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Das Werkzeugpaket enthaelt einen unsicheren Versions- oder Archivnamen.");
+        }
+    }
+
+    private static void CleanupPreviousManagedVersion(
+        ManagedToolKind toolKind,
+        string previousInstalledPath,
+        string currentInstalledPath)
+    {
+        // Portable MediathekView can store arbitrary user data, not only a folder named Downloads.
+        // Keep its old installation (including same-version replacements) as a recovery copy.
+        if (toolKind == ManagedToolKind.MediathekView
+            || PathComparisonHelper.AreSamePath(previousInstalledPath, currentInstalledPath))
         {
             return;
         }
 
-        var currentDirectoryName = SanitizePathSegment(currentVersionToken);
-        var versionDirectories = Directory.EnumerateDirectories(toolRootDirectory).ToArray();
-        foreach (var directory in versionDirectories)
+        var previousDirectory = TryGetManagedVersionDirectory(toolKind, previousInstalledPath);
+        var currentDirectory = TryGetManagedVersionDirectory(toolKind, currentInstalledPath);
+        if (previousDirectory is not null && currentDirectory is not null
+            && !PathComparisonHelper.AreSamePath(previousDirectory, currentDirectory)
+            && !Path.GetFileName(previousDirectory).StartsWith(".", StringComparison.Ordinal))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var directoryName = Path.GetFileName(directory);
-            if (string.Equals(directoryName, currentDirectoryName, StringComparison.OrdinalIgnoreCase)
-                || directoryName.StartsWith(".staging-", StringComparison.OrdinalIgnoreCase)
-                || directoryName.StartsWith(".download-", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (toolKind == ManagedToolKind.MediathekView
-                && ContainsDirectoryNamed(directory, "Downloads", cancellationToken))
-            {
-                // MediathekView kann je nach Benutzerkonfiguration direkt in seinen Programmordner laden.
-                // Solche Ordner werden nicht automatisch gelöscht, damit Updates keine Nutzdaten entfernen.
-                continue;
-            }
-
-            TryDeleteDirectory(directory);
-        }
-    }
-
-    private static bool ContainsDirectoryNamed(
-        string rootDirectory,
-        string directoryName,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            foreach (var _ in Directory.EnumerateDirectories(rootDirectory, directoryName, SearchOption.AllDirectories))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                return true;
-            }
-
-            return false;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            return false;
+            TryDeleteDirectory(previousDirectory);
         }
     }
 
@@ -1037,6 +1038,8 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         private readonly double _phaseStartPercent = phaseStartPercent;
         private readonly double _phaseRange = Math.Max(0d, phaseEndPercent - phaseStartPercent);
         private double _lastMappedProgressPercent = phaseStartPercent;
+        private long _lastReportTimestamp;
+        private string? _lastStatusText;
 
         public void Report(
             string statusText,
@@ -1048,6 +1051,16 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             {
                 return;
             }
+
+            var timestamp = Environment.TickCount64;
+            if (statusText == _lastStatusText && toolProgressPercent is < FinishedProgressPercent
+                && timestamp - _lastReportTimestamp < 100)
+            {
+                return;
+            }
+
+            _lastStatusText = statusText;
+            _lastReportTimestamp = timestamp;
 
             double? mappedPercent = toolProgressPercent is null
                 ? null
