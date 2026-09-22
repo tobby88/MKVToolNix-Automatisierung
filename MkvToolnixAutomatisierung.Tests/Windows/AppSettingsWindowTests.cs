@@ -124,6 +124,36 @@ public sealed class AppSettingsWindowTests
         });
     }
 
+    [Fact]
+    public async Task Window_ReservesFooterWidthForActionsWhenStatusIsLong()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateViewModel(new PendingEmbyClient(Task.FromResult(new EmbyServerInfo("Test", "1.0", "id"))));
+            var window = new AppSettingsWindow(viewModel) { Width = 820 };
+            try
+            {
+                var status = Assert.IsType<TextBlock>(window.FindName("SettingsStatusText"));
+                status.Text = new string('x', 2000);
+                window.Show();
+                await WpfTestHost.WaitForIdleAsync();
+                var saveButton = Assert.IsType<Button>(window.FindName("SaveButton"));
+                var footer = Assert.IsType<Grid>(status.Parent);
+
+                Assert.True(footer.ColumnDefinitions[0].Width.IsStar);
+                Assert.True(footer.ColumnDefinitions[1].Width.IsAuto);
+                Assert.Equal(TextTrimming.CharacterEllipsis, status.TextTrimming);
+                Assert.Equal(140d, saveButton.ActualWidth);
+                var right = saveButton.TransformToAncestor(footer).Transform(new Point(saveButton.ActualWidth, 0)).X;
+                Assert.True(right <= footer.ActualWidth + 1d);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient)
     {
         var settingsStore = new AppSettingsStore();

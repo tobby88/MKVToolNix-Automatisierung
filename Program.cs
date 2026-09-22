@@ -25,7 +25,6 @@ internal static class Program
             using var bootstrapper = new AppBootstrapper();
             var startupViewModel = new StartupProgressWindowViewModel();
             var startupWindow = new StartupProgressWindow(startupViewModel);
-            var startupProgress = new Progress<ManagedToolStartupProgress>(startupViewModel.Report);
             using var startupCancellation = new CancellationTokenSource();
             var startupHandled = false;
             var startupCompleted = false;
@@ -54,7 +53,16 @@ internal static class Program
 
                 try
                 {
+                    // ContentRendered runs with the WPF synchronization context, unlike Main before app.Run().
+                    var startupProgress = new Progress<ManagedToolStartupProgress>(value =>
+                    {
+                        if (!startupCompleted && !startupCancellation.IsCancellationRequested)
+                        {
+                            startupViewModel.Report(value);
+                        }
+                    });
                     var window = await bootstrapper.CreateMainWindowAsync(startupProgress, startupCancellation.Token);
+                    startupCancellation.Token.ThrowIfCancellationRequested();
                     startupCompleted = true;
                     app.MainWindow = window;
                     app.ShutdownMode = ShutdownMode.OnMainWindowClose;

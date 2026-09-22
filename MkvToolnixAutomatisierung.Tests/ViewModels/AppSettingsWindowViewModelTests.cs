@@ -416,6 +416,90 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         }
     }
 
+    [Fact]
+    public void SaveSettings_PreservesRuntimeStateUpdatedAfterOpeningDialog()
+    {
+        var store = new AppSettingsStore();
+        var viewModel = CreateViewModel(settingsStore: store);
+        var installedPath = CreateFile("updated/ffprobe.exe");
+        var checkedAt = DateTimeOffset.UtcNow;
+        store.Update(settings =>
+        {
+            settings.ToolPaths!.ManagedFfprobe.InstalledPath = installedPath;
+            settings.ToolPaths.ManagedFfprobe.InstalledVersion = "new-version";
+            settings.ToolPaths.ManagedFfprobe.LastCheckedUtc = checkedAt;
+            settings.Metadata!.ImdbDataset.LastUpdatedUtc = checkedAt;
+        });
+
+        viewModel.AutoManageFfprobe = false;
+        viewModel.SaveSettings();
+
+        var saved = store.Load();
+        Assert.Equal(installedPath, saved.ToolPaths!.ManagedFfprobe.InstalledPath);
+        Assert.Equal("new-version", saved.ToolPaths.ManagedFfprobe.InstalledVersion);
+        Assert.Equal(checkedAt, saved.ToolPaths.ManagedFfprobe.LastCheckedUtc);
+        Assert.Equal(checkedAt, saved.Metadata!.ImdbDataset.LastUpdatedUtc);
+        Assert.False(saved.ToolPaths.ManagedFfprobe.AutoManageEnabled);
+        Assert.Contains("new-version", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAndEnsureManagedToolsAsync_DoesNotSaveWhenAlreadyCancelled()
+    {
+        var store = new AppSettingsStore();
+        var installer = new RecordingManagedToolInstaller();
+        var viewModel = CreateViewModel(settingsStore: store, managedToolInstaller: installer);
+        var originalPath = store.Load().ToolPaths!.FfprobePath;
+        viewModel.FfprobePath = CreateFile("cancelled/ffprobe.exe");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            viewModel.SaveSettingsAndEnsureManagedToolsAsync(cancellation.Token));
+
+        Assert.Equal(originalPath, store.Load().ToolPaths!.FfprobePath);
+        Assert.Equal(0, installer.CallCount);
+        Assert.True(viewModel.IsInteractive);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAndEnsureManagedToolsAsync_RejectsConcurrentOperations()
+    {
+        var installer = new CancellableManagedToolInstaller();
+        var viewModel = CreateViewModel(managedToolInstaller: installer);
+        var first = viewModel.SaveSettingsAndEnsureManagedToolsAsync();
+        await installer.Started.Task;
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.SaveSettingsAndEnsureManagedToolsAsync());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.TestEmbyConnectionAsync());
+            Assert.False(viewModel.IsInteractive);
+        }
+        finally
+        {
+            viewModel.Cancel();
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        Assert.True(viewModel.IsInteractive);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAndEnsureManagedToolsAsync_QueuedProgressCannotOverwriteCompletion()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var viewModel = CreateViewModel(managedToolInstaller: new RecordingManagedToolInstaller());
+
+            await viewModel.SaveSettingsAndEnsureManagedToolsAsync();
+            var completedStatus = viewModel.StatusText;
+            await WpfTestHost.WaitForIdleAsync();
+
+            Assert.Equal("Einstellungen gespeichert; Ressourcen bereit.", completedStatus);
+            Assert.Equal(completedStatus, viewModel.StatusText);
+        });
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

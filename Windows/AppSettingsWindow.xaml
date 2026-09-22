@@ -329,14 +329,20 @@
             </TabItem>
         </TabControl>
 
-        <DockPanel Grid.Row="1"
-                   Margin="0,12,0,0"
-                   LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left"
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="SettingsStatusText"
+                       Grid.Column="0"
+                       Margin="0,0,12,0"
                        VerticalAlignment="Center"
                        Foreground="#44515D"
-                       Text="{Binding StatusText}" />
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                       Text="{Binding StatusText}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding StatusText}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
                 <Button x:Name="CancelButton"
                         Width="120"
                         Margin="0,0,12,0"
@@ -351,6 +357,6 @@
                         Click="SaveButton_Click"
                         Content="Übernehmen" />
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </Grid>
 </Window>

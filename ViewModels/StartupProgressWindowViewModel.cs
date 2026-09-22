@@ -128,8 +128,9 @@ internal sealed class StartupProgressWindowViewModel : INotifyPropertyChanged, I
         ProgressLabel = string.IsNullOrWhiteSpace(value.ProgressLabel)
             ? "Fortschritt"
             : value.ProgressLabel;
-        IsIndeterminate = value.IsIndeterminate;
-        ProgressPercent = value.ProgressPercent ?? 0d;
+        var hasValidPercent = value.ProgressPercent is { } percent && double.IsFinite(percent);
+        IsIndeterminate = value.IsIndeterminate || !hasValidPercent;
+        ProgressPercent = hasValidPercent ? Math.Clamp(value.ProgressPercent!.Value, 0d, 100d) : 0d;
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)

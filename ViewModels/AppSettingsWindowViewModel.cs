@@ -19,9 +19,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
     private readonly AppSettingsModuleServices _services;
     private readonly IUserDialogService _dialogService;
-    private readonly ManagedToolSettings _managedMkvToolNixSettings;
-    private readonly ManagedToolSettings _managedFfprobeSettings;
-    private readonly ManagedToolSettings _managedMediathekViewSettings;
+    private ManagedToolSettings _managedMkvToolNixSettings;
+    private ManagedToolSettings _managedFfprobeSettings;
+    private ManagedToolSettings _managedMediathekViewSettings;
     private string _archiveRootDirectory;
     private string _ffprobePath;
     private string _mkvToolNixDirectoryPath;
@@ -30,7 +30,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private bool _autoManageFfprobe;
     private bool _autoManageMediathekView;
     private bool _autoManageImdbDataset;
-    private readonly ImdbDatasetSettings _imdbDatasetSettings;
+    private ImdbDatasetSettings _imdbDatasetSettings;
     private string _tvdbApiKey;
     private string _tvdbPin;
     private string _embyServerUrl;
@@ -478,8 +478,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     public void SelectMediathekViewPath()
     {
         var selectedPath = _dialogService.SelectExecutable(
-            "MediathekView.exe auswählen",
-            "MediathekView.exe|MediathekView.exe|Ausführbare Dateien (*.exe)|*.exe",
+            "MediathekView auswählen",
+            "MediathekView|MediathekView.exe;MediathekView_Portable.exe|Ausführbare Dateien (*.exe)|*.exe",
             ResolveInitialDirectory(MediathekViewPath));
         if (!string.IsNullOrWhiteSpace(selectedPath))
         {
@@ -489,6 +489,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
     public async Task TestEmbyConnectionAsync()
     {
+        EnsureNotBusy();
         try
         {
             SetBusy(true, "Prüfe Emby-Verbindung...");
@@ -542,17 +543,14 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             settings.ToolPaths.FfprobePath = FfprobePath;
             settings.ToolPaths.MkvToolNixDirectoryPath = MkvToolNixDirectoryPath;
             settings.ToolPaths.MediathekViewPath = MediathekViewPath;
-            settings.ToolPaths.ManagedFfprobe = _managedFfprobeSettings.Clone();
+            // Runtime version/path/check timestamps belong to the installer, not this dialog snapshot.
             settings.ToolPaths.ManagedFfprobe.AutoManageEnabled = AutoManageFfprobe;
-            settings.ToolPaths.ManagedMkvToolNix = _managedMkvToolNixSettings.Clone();
             settings.ToolPaths.ManagedMkvToolNix.AutoManageEnabled = AutoManageMkvToolNix;
-            settings.ToolPaths.ManagedMediathekView = _managedMediathekViewSettings.Clone();
             settings.ToolPaths.ManagedMediathekView.AutoManageEnabled = AutoManageMediathekView;
 
             settings.Metadata ??= new AppMetadataSettings();
             settings.Metadata.TvdbApiKey = TvdbApiKey;
             settings.Metadata.TvdbPin = TvdbPin;
-            settings.Metadata.ImdbDataset = _imdbDatasetSettings.Clone();
             settings.Metadata.ImdbDataset.AutoManageEnabled = AutoManageImdbDataset;
             settings.Metadata.ImdbDataset.ManagementPreferenceConfigured = true;
 
@@ -560,6 +558,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         });
         _services.Archive.ApplyArchiveRootDirectoryForCurrentSession(normalizedArchiveRootDirectory);
 
+        ReloadManagedResourceState();
         RefreshDerivedState();
         StatusText = $"Einstellungen gespeichert: {SettingsFilePath}";
     }
@@ -573,6 +572,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     /// </remarks>
     public async Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
     {
+        EnsureNotBusy();
+        cancellationToken.ThrowIfCancellationRequested();
         var settingsWereSaved = false;
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _toolCheckCancellationSource = linkedCancellation;
@@ -585,13 +586,22 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             settingsWereSaved = true;
             StatusText = "Ressourcen werden geprüft...";
 
+            var progress = new Progress<ManagedToolStartupProgress>(value =>
+            {
+                if (ReferenceEquals(_toolCheckCancellationSource, linkedCancellation)
+                    && !linkedCancellation.IsCancellationRequested)
+                {
+                    UpdateManagedToolProgress(value);
+                }
+            });
             var result = await _services.ManagedTools.EnsureManagedToolsAsync(
-                new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
+                progress,
                 linkedCancellation.Token);
+            linkedCancellation.Token.ThrowIfCancellationRequested();
             var imdbResult = await _services.ImdbDataset.EnsureCurrentAsync(
-                new Progress<ManagedToolStartupProgress>(UpdateManagedToolProgress),
+                progress,
                 linkedCancellation.Token);
-            RefreshDerivedState();
+            linkedCancellation.Token.ThrowIfCancellationRequested();
 
             var warnings = result.Warnings.Concat(imdbResult.Warnings).ToArray();
             if (warnings.Length > 0)
@@ -621,9 +631,37 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         finally
         {
             _toolCheckCancellationSource = null;
-            SetBusy(false, StatusText);
-            OnPropertyChanged(nameof(CanCancel));
+            try
+            {
+                if (settingsWereSaved)
+                {
+                    ReloadManagedResourceState();
+                    RefreshDerivedState();
+                }
+            }
+            finally
+            {
+                SetBusy(false, StatusText);
+                OnPropertyChanged(nameof(CanCancel));
+            }
         }
+    }
+
+    private void EnsureNotBusy()
+    {
+        if (_isBusy)
+        {
+            throw new InvalidOperationException("Es laeuft bereits eine Einstellungs- oder Ressourcenpruefung.");
+        }
+    }
+
+    private void ReloadManagedResourceState()
+    {
+        var settings = _services.ToolPaths.Load();
+        _managedMkvToolNixSettings = settings.ManagedMkvToolNix.Clone();
+        _managedFfprobeSettings = settings.ManagedFfprobe.Clone();
+        _managedMediathekViewSettings = settings.ManagedMediathekView.Clone();
+        _imdbDatasetSettings = _services.EpisodeMetadata.LoadSettings().ImdbDataset.Clone();
     }
 
     private void RefreshDerivedState()
@@ -888,7 +926,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         if (autoManageEnabled)
         {
             lines.Add(string.Empty);
-            lines.Add("Solange diese externe Quelle verfügbar ist, wird kein zusätzlicher Download erzwungen.");
+            lines.Add("Diese externe Quelle bleibt ein Fallback. Die automatische Verwaltung kann eine portable Version herunterladen und bevorzugen.");
         }
 
         return string.Join(Environment.NewLine, lines);

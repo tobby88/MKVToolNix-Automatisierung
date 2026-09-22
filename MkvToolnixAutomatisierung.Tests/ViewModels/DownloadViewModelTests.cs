@@ -1,6 +1,7 @@
 using System.Windows;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
@@ -9,7 +10,7 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 public sealed class DownloadViewModelTests
 {
     [Fact]
-    public void StartMediathekViewCommand_StartsResolvedToolAndUpdatesStatus()
+    public async Task StartMediathekViewCommand_StartsResolvedToolAndUpdatesStatus()
     {
         var resolvedPath = new ResolvedToolPath(@"C:\Tools\MediathekView\MediathekView.exe", ToolPathResolutionSource.ManualOverride);
         var launcher = new FakeMediathekViewLauncher
@@ -18,8 +19,9 @@ public sealed class DownloadViewModelTests
             LaunchResult = MediathekViewLaunchResult.Started(resolvedPath)
         };
         var viewModel = CreateViewModel(launcher);
+        await viewModel.Initialization;
 
-        viewModel.StartMediathekViewCommand.Execute(null);
+        await viewModel.StartMediathekViewCommand.ExecuteAsync();
 
         Assert.Equal(1, launcher.LaunchCount);
         Assert.True(viewModel.IsMediathekViewAvailable);
@@ -27,7 +29,7 @@ public sealed class DownloadViewModelTests
     }
 
     [Fact]
-    public void StartMediathekViewCommand_ShowsWarningWhenToolIsMissing()
+    public async Task StartMediathekViewCommand_ShowsWarningWhenToolIsMissing()
     {
         var launcher = new FakeMediathekViewLauncher
         {
@@ -35,27 +37,53 @@ public sealed class DownloadViewModelTests
         };
         var dialogService = new CapturingDialogService();
         var viewModel = CreateViewModel(launcher, dialogService);
+        await viewModel.Initialization;
 
-        viewModel.StartMediathekViewCommand.Execute(null);
+        await viewModel.StartMediathekViewCommand.ExecuteAsync();
 
         Assert.Equal(1, dialogService.WarningCount);
         Assert.False(viewModel.IsMediathekViewAvailable);
         Assert.Contains("nicht gefunden", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void OpenToolSettingsCommand_OpensToolsPageAndRefreshesStatusAfterAcceptedSettings()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OpenToolSettingsCommand_RefreshesStatusRegardlessOfDialogResult(bool accepted)
     {
         var launcher = new FakeMediathekViewLauncher();
         var resolvedPath = new ResolvedToolPath(@"C:\Portable\MediathekView.exe", ToolPathResolutionSource.DownloadsFallback);
-        var settingsDialog = new FakeSettingsDialog(() => launcher.ResolvedPath = resolvedPath);
+        var settingsDialog = new FakeSettingsDialog(() => launcher.ResolvedPath = resolvedPath, accepted);
         var viewModel = CreateViewModel(launcher, settingsDialog: settingsDialog);
+        await viewModel.Initialization;
 
-        viewModel.OpenToolSettingsCommand.Execute(null);
+        await viewModel.OpenToolSettingsCommand.ExecuteAsync();
 
         Assert.Equal(AppSettingsPage.Tools, settingsDialog.LastInitialPage);
         Assert.True(viewModel.IsMediathekViewAvailable);
         Assert.Equal(resolvedPath.Path, viewModel.MediathekViewPathText);
+    }
+
+    [Fact]
+    public async Task Commands_RunLookupAndLaunchOutsideDispatcherAndNotifyOnDispatcher()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var uiThread = Environment.CurrentManagedThreadId;
+            var launcher = new FakeMediathekViewLauncher();
+            var viewModel = CreateViewModel(launcher);
+            var notificationThreads = new List<int>();
+            viewModel.PropertyChanged += (_, _) => notificationThreads.Add(Environment.CurrentManagedThreadId);
+
+            await viewModel.Initialization;
+            await viewModel.StartMediathekViewCommand.ExecuteAsync();
+
+            Assert.NotEqual(uiThread, launcher.ResolveThreadId);
+            Assert.NotEqual(uiThread, launcher.LaunchThreadId);
+            Assert.NotEmpty(notificationThreads);
+            Assert.All(notificationThreads, thread => Assert.Equal(uiThread, thread));
+            Assert.True(viewModel.RefreshCommand.CanExecute(null));
+        });
     }
 
     private static DownloadViewModel CreateViewModel(
@@ -77,20 +105,24 @@ public sealed class DownloadViewModelTests
         public MediathekViewLaunchResult? LaunchResult { get; set; }
 
         public int LaunchCount { get; private set; }
+        public int ResolveThreadId { get; private set; }
+        public int LaunchThreadId { get; private set; }
 
         public ResolvedToolPath? TryResolve()
         {
+            ResolveThreadId = Environment.CurrentManagedThreadId;
             return ResolvedPath;
         }
 
         public MediathekViewLaunchResult Launch()
         {
+            LaunchThreadId = Environment.CurrentManagedThreadId;
             LaunchCount++;
             return LaunchResult ?? MediathekViewLaunchResult.NotFound();
         }
     }
 
-    private sealed class FakeSettingsDialog(Action? onAccept = null) : IAppSettingsDialogService
+    private sealed class FakeSettingsDialog(Action? onAccept = null, bool accepted = true) : IAppSettingsDialogService
     {
         public AppSettingsPage? LastInitialPage { get; private set; }
 
@@ -98,7 +130,7 @@ public sealed class DownloadViewModelTests
         {
             LastInitialPage = initialPage;
             onAccept?.Invoke();
-            return true;
+            return accepted;
         }
     }
 

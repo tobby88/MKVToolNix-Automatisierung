@@ -7,6 +7,22 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
 public sealed class StartupProgressWindowViewModelTests
 {
+    [Theory]
+    [InlineData(-1d, 0d, false)]
+    [InlineData(101d, 100d, false)]
+    [InlineData(double.NaN, 0d, true)]
+    [InlineData(double.PositiveInfinity, 0d, true)]
+    [InlineData(double.NegativeInfinity, 0d, true)]
+    public void Report_NormalizesInvalidProgressValues(double value, double expected, bool indeterminate)
+    {
+        var viewModel = new StartupProgressWindowViewModel();
+
+        viewModel.Report(new ManagedToolStartupProgress("Test", ProgressPercent: value, IsIndeterminate: false));
+
+        Assert.Equal(expected, viewModel.ProgressPercent);
+        Assert.Equal(indeterminate, viewModel.IsIndeterminate);
+    }
+
     [Fact]
     public void Report_UpdatesDeterministicProgressState()
     {

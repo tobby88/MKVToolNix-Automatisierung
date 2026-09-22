@@ -14,6 +14,8 @@ namespace MkvToolnixAutomatisierung;
 internal sealed class AppBootstrapper : IDisposable
 {
     private AppComposition? _composition;
+    private bool _isCreating;
+    private bool _isDisposed;
 
     /// <summary>
     /// Baut das Hauptfenster synchron aus der verdrahteten App-Komposition.
@@ -40,9 +42,38 @@ internal sealed class AppBootstrapper : IDisposable
         IProgress<ManagedToolStartupProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        _composition = await new AppCompositionRoot().CreateAsync(progress, cancellationToken);
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_isCreating || _composition is not null)
+        {
+            throw new InvalidOperationException("Das Hauptfenster wird bereits erstellt oder wurde bereits erstellt.");
+        }
 
-        return new MainWindow(_composition.MainWindowViewModel);
+        if (SynchronizationContext.Current is not DispatcherSynchronizationContext)
+        {
+            throw new InvalidOperationException("CreateMainWindowAsync() muss auf dem WPF-Dispatcher aufgerufen werden.");
+        }
+
+        _isCreating = true;
+        AppComposition? composition = null;
+        try
+        {
+            composition = await new AppCompositionRoot().CreateAsync(progress, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            ObjectDisposedException.ThrowIf(_isDisposed, this);
+            var window = new MainWindow(composition.MainWindowViewModel);
+            _composition = composition;
+            return window;
+        }
+        catch
+        {
+            composition?.Dispose();
+            throw;
+        }
+        finally
+        {
+            _isCreating = false;
+        }
     }
 
     /// <summary>
@@ -66,6 +97,7 @@ internal sealed class AppBootstrapper : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _isDisposed = true;
         _composition?.Dispose();
         _composition = null;
     }
