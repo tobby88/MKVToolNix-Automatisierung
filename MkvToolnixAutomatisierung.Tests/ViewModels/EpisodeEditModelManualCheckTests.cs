@@ -15,6 +15,45 @@ public sealed class EpisodeEditModelManualCheckTests : IDisposable
     }
 
     [Fact]
+    public void ReplaceExcludedSourcePaths_PreservesOwnReadOnlyView()
+    {
+        var path = CreateFile("excluded.mp4");
+        var item = new TestEpisodeEditModel(null, requiresManualCheck: false, manualCheckFilePaths: []);
+        item.ReplaceExcludedSourcePaths([path]);
+
+        item.ReplaceExcludedSourcePaths(item.ExcludedSourcePaths);
+
+        Assert.Equal([path], item.ExcludedSourcePaths);
+    }
+
+    [Fact]
+    public void RequiredManualCheck_WithoutUsablePaths_IsNotImplicitlyApproved()
+    {
+        var item = new TestEpisodeEditModel(null, requiresManualCheck: true, manualCheckFilePaths: ["", " "]);
+
+        item.ApproveCurrentReviewTarget();
+
+        Assert.Empty(item.ManualCheckFilePaths);
+        Assert.True(item.HasPendingManualCheck);
+        Assert.False(item.IsManualCheckApproved);
+    }
+
+    [Fact]
+    public void SetOutputPath_SameAsAutomaticPath_NotifiesManualOriginChange()
+    {
+        var item = new TestEpisodeEditModel(null, requiresManualCheck: false, manualCheckFilePaths: []);
+        var outputPath = Path.Combine(_tempDirectory, "out.mkv");
+        item.SetAutomaticOutputPath(outputPath);
+        var changed = new List<string?>();
+        item.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        item.SetOutputPath(outputPath);
+
+        Assert.False(item.UsesAutomaticOutputPath);
+        Assert.Contains(nameof(EpisodeEditModel.UsesAutomaticOutputPath), changed);
+    }
+
+    [Fact]
     public void SetAudioDescription_RemovesObsoleteReviewTargetAndKeepsApprovedMainSource()
     {
         var mainVideoPath = CreateFile("main.mp4");

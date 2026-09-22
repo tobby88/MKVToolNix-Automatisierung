@@ -624,6 +624,12 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     /// </summary>
     protected override void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
+        if (propertyName is nameof(SeriesName) or nameof(SeasonNumber) or nameof(EpisodeNumber) or nameof(Title))
+        {
+            // Auch bei manuellem Zielpfad bleibt ein laufender Vergleich sonst scheinbar aktuell.
+            MarkComparisonInputsChanged();
+        }
+
         base.OnPropertyChanged(propertyName);
 
         if (_isApplyingSharedMetadataState)

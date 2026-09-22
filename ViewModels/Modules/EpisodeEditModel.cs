@@ -121,7 +121,10 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         _requiresMetadataReview = requiresMetadataReview;
         _isMetadataReviewApproved = isMetadataReviewApproved;
         _requiresManualCheck = requiresManualCheck;
-        _manualCheckFilePaths = manualCheckFilePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _manualCheckFilePaths = manualCheckFilePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _detectionSeedPath = requestedMainVideoPath;
         _metadataOriginalLanguage = NormalizeMetadataOriginalLanguage(metadataOriginalLanguage);

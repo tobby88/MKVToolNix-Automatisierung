@@ -337,7 +337,7 @@ internal partial class EpisodeEditModel
     public string? CurrentReviewTargetPath => _manualCheckFilePaths.FirstOrDefault(path => !_approvedReviewPaths.Contains(path));
 
     public bool IsManualCheckApproved => !RequiresManualCheck
-        || string.IsNullOrWhiteSpace(CurrentReviewTargetPath);
+        || (_manualCheckFilePaths.Count > 0 && string.IsNullOrWhiteSpace(CurrentReviewTargetPath));
 
     public bool HasPendingPlanReview => HasActionablePlanNotes && !IsPlanReviewApproved;
 
@@ -411,7 +411,7 @@ internal partial class EpisodeEditModel
 
     public string MainVideoDisplayText => HasPrimaryVideoSource
         ? MainVideoPath
-        : $"(keine frische Hauptvideoquelle erkannt){Environment.NewLine}Ausgewählte AD-Datei: {AudioDescriptionPath}";
+        : $"(keine frische Hauptvideoquelle erkannt){Environment.NewLine}Ausgewählte Zusatzquelle: {(string.IsNullOrWhiteSpace(AudioDescriptionPath) ? MainVideoPath : AudioDescriptionPath)}";
 
     public string MetadataDisplayText => $"{SeriesName} - {EpisodeCodeDisplayText} - {Title}";
 

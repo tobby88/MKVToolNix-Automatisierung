@@ -201,8 +201,8 @@ internal static class EpisodeEditTextBuilder
     public static string BuildArchiveStateTooltip(EpisodeArchiveState archiveState)
     {
         return archiveState == EpisodeArchiveState.Existing
-            ? "Für diese Episode existiert bereits eine Datei in der Serienbibliothek. Ein Vergleich entscheidet, ob etwas ergänzt oder ersetzt werden muss."
-            : "Für diese Episode liegt in der Serienbibliothek noch kein Ziel vor. Es wird eine neue MKV angelegt.";
+            ? "Am gewählten Ausgabeziel existiert bereits eine Datei. Die Planung entscheidet, ob sie ergänzt oder ersetzt wird."
+            : "Am gewählten Ausgabeziel liegt noch keine Datei vor. Es wird eine neue MKV angelegt.";
     }
 
     public static string BuildBatchStatusText(BatchEpisodeStatusKind statusKind)

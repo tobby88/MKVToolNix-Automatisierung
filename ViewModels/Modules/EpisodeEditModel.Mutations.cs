@@ -93,8 +93,13 @@ internal partial class EpisodeEditModel
 
     public virtual void SetOutputPath(string outputPath)
     {
+        var wasAutomatic = UsesAutomaticOutputPath;
         _outputPathWasManuallyChanged = true;
         OutputPath = outputPath;
+        if (wasAutomatic)
+        {
+            OnPropertyChanged(nameof(UsesAutomaticOutputPath));
+        }
     }
 
     public virtual void SetAutomaticOutputPath(string outputPath)
@@ -159,8 +164,10 @@ internal partial class EpisodeEditModel
 
     public void ReplaceExcludedSourcePaths(IEnumerable<string> excludedSourcePaths)
     {
+        // Redetection kann die eigene read-only Sicht zurueckreichen.
+        var paths = excludedSourcePaths.Where(path => !string.IsNullOrWhiteSpace(path)).ToList();
         _excludedSourcePaths.Clear();
-        foreach (var excludedSourcePath in excludedSourcePaths.Where(path => !string.IsNullOrWhiteSpace(path)))
+        foreach (var excludedSourcePath in paths)
         {
             _excludedSourcePaths.Add(excludedSourcePath);
         }
@@ -352,7 +359,10 @@ internal partial class EpisodeEditModel
     protected void SetManualCheckFiles(bool requiresManualCheck, IEnumerable<string> filePaths)
     {
         RequiresManualCheck = requiresManualCheck;
-        _manualCheckFilePaths = filePaths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _manualCheckFilePaths = filePaths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         if (!RequiresManualCheck)
         {
             _approvedReviewPaths.Clear();
