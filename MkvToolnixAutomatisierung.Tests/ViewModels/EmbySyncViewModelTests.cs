@@ -198,7 +198,7 @@ public sealed class EmbySyncViewModelTests
         Assert.Contains("Serverfortschritt", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Emby-Treffer", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("global", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("nicht bibliotheksscharf", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("keinen globalen Scan-Fallback", vm.RunScanTooltip, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1583,7 +1583,7 @@ public sealed class EmbySyncViewModelTests
     }
 
     [Fact]
-    public async Task CancelScanCommand_CancelsInFlightHttpWorkAndRestoresInteractivity()
+    public async Task CancelOperationCommand_CancelsInFlightHttpWorkAndRestoresInteractivity()
     {
         var client = new BlockingScanEmbyClient();
         var settingsStore = new AppSettingsStore();
@@ -1594,16 +1594,72 @@ public sealed class EmbySyncViewModelTests
         vm.Items.Add(new EmbySyncItemViewModel(@"Z:\Videos\Serien\Episode.mkv"));
         var scan = vm.RunScanCommand.ExecuteAsync();
         await client.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(vm.CanCancelScan);
+        Assert.True(vm.CanCancelOperation);
 
-        vm.CancelScanCommand.Execute(null);
+        vm.CancelOperationCommand.Execute(null);
         await scan.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.True(client.WasCancelled);
-        Assert.False(vm.CanCancelScan);
+        Assert.False(vm.CanCancelOperation);
         Assert.True(vm.IsInteractive);
         Assert.Contains("abgebrochen", vm.StatusText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("abgeschlossen", vm.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CancelOperation_StopsImportAnalysisAndKeepsImportedRows()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var report = WriteMetadataReport(directory, "run.metadata.json", Path.Combine(directory, "Episode.mkv"), "123");
+            var client = new BlockingScanEmbyClient();
+            var settings = new AppSettingsStore();
+            var vm = CreateViewModel(new SelectingDialogService([report]), client,
+                new AppEmbySettings { ApiKey = "test" }, settingsStore: settings);
+            new AppArchiveSettingsStore(settings).Save(new AppArchiveSettings { DefaultSeriesArchiveRootPath = directory });
+            var import = vm.SelectReportCommand.ExecuteAsync();
+            await client.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            vm.CancelOperationCommand.Execute(null);
+            await import.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(client.WasCancelled);
+            Assert.Single(vm.Items);
+            Assert.True(vm.IsInteractive);
+            Assert.Contains("abgebrochen", vm.StatusText);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public async Task CancelOperation_DuringRefreshPreservesWrittenNfoAndLeavesNextFileUntouched()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var client = new RecordingRefreshEmbyClient();
+            var vm = CreateViewModel(embyClient: client, configuredEmbySettings: new AppEmbySettings { ApiKey = "test" });
+            foreach (var name in new[] { "First", "Second" })
+            {
+                var media = Path.Combine(directory, name + ".mkv");
+                File.WriteAllText(media, string.Empty);
+                File.WriteAllText(Path.ChangeExtension(media, ".nfo"), "<episodedetails />");
+                var item = new EmbySyncItemViewModel(media, new EmbyProviderIds("12345", "tt1234567"));
+                item.ApplyImdbSelection("tt1234567");
+                item.ApplyEmbyRefreshTarget(new EmbyItem(name, name, media, new Dictionary<string, string>()));
+                vm.Items.Add(item);
+            }
+            client.BeforeRefresh = () => vm.CancelOperationCommand.Execute(null);
+            await vm.RunSyncCommand.ExecuteAsync();
+            Assert.Contains("tt1234567", File.ReadAllText(Path.Combine(directory, "First.nfo")));
+            Assert.Equal("<episodedetails />", File.ReadAllText(Path.Combine(directory, "Second.nfo")));
+            Assert.Equal("Refresh offen", vm.Items[0].StatusText);
+            Assert.Equal(1, client.RefreshCallCount);
+            Assert.True(vm.IsInteractive);
+            Assert.Contains("abgebrochen", vm.StatusText);
+        }
+        finally { Directory.Delete(directory, true); }
     }
 
     private sealed class BlockingScanEmbyClient : IEmbyClient
@@ -1864,6 +1920,7 @@ public sealed class EmbySyncViewModelTests
 
     private sealed class RecordingRefreshEmbyClient : IEmbyClient
     {
+        public Action? BeforeRefresh { get; set; }
         public int RefreshCallCount { get; private set; }
 
         public string? LastRefreshItemId { get; private set; }
@@ -1889,6 +1946,8 @@ public sealed class EmbySyncViewModelTests
         {
             RefreshCallCount++;
             LastRefreshItemId = itemId;
+            BeforeRefresh?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
             if (ThrowOnRefresh)
             {
                 throw new InvalidOperationException("Refresh fehlgeschlagen");

@@ -404,10 +404,10 @@
             <Button Grid.Column="5"
                     Margin="0,0,12,0"
                     Padding="10,6"
-                    Command="{Binding CancelScanCommand}"
-                    Content="Scan-Warten abbrechen"
-                    ToolTip="{Binding CancelScanTooltip, Mode=OneWay}"
-                    Visibility="{Binding CanCancelScan, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    Command="{Binding CancelOperationCommand}"
+                    Content="Abbrechen"
+                    ToolTip="{Binding CancelOperationTooltip, Mode=OneWay}"
+                    Visibility="{Binding CanCancelOperation, Converter={StaticResource BooleanToVisibilityConverter}}" />
             <StackPanel Grid.Column="6"
                         Width="210"
                         ToolTip="{Binding StatusText, Mode=OneWay}">

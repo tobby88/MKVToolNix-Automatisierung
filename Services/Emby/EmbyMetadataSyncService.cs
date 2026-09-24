@@ -23,8 +23,9 @@ internal sealed class EmbyMetadataSyncService
     /// <summary>
     /// Liest einen Batch-Report mit neu erzeugten Ausgabedateien.
     /// </summary>
-    public IReadOnlyList<EmbyImportEntry> LoadNewOutputReport(string reportPath)
+    public IReadOnlyList<EmbyImportEntry> LoadNewOutputReport(string reportPath, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(reportPath);
         if (!File.Exists(reportPath))
         {
@@ -36,7 +37,9 @@ internal sealed class EmbyMetadataSyncService
             throw new InvalidDataException("Der Emby-Abgleich erwartet den strukturierten JSON-Metadatenreport (*.metadata.json). Die ältere TXT-Dateiliste wird nicht mehr importiert.");
         }
 
-        return LoadStructuredOutputReport(reportPath);
+        var entries = LoadStructuredOutputReport(reportPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        return entries;
     }
 
     /// <summary>

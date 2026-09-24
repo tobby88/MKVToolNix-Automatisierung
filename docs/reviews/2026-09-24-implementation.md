@@ -17,7 +17,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
 - [x] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
 - [x] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
-- [ ] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
+- [x] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
 - [ ] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
 - [ ] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
 - [ ] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
@@ -151,3 +151,12 @@ Bibliotheks-ID. Explizite Angaben erlauben keinen heuristischen Ersatzpfad; Linu
 bleiben case-sensitive. Ohne eindeutige Bibliothek wird kein Scan gestartet, insbesondere
 kein globaler Fallback. Die kompatible automatische Zuordnung verlangt mindestens zwei
 gemeinsame Pfadsegmente. 99 gezielte Service-/ViewModel-/Settings-Tests erfolgreich.
+
+### A12
+
+Ein gemeinsamer Abbrechen-Button gilt für Import/Nachprüfung, Providerprüfungen, Scan
+und Schreiben. Netzabfragen erhalten denselben Token; eine begonnene NFO-/Reportschreibphase
+wird vollständig beendet. Teilresultate und Reviewfortschritt bleiben erhalten. Nach
+geschriebener NFO bleibt ein abgebrochener Refresh ausdrücklich offen. Modale Providerdialoge
+können selbst abgebrochen werden; einzelne synchrone Datei-/JSON-Zugriffe werden nicht mitten
+im Lesen/Schreiben zerrissen. 86 gezielte Emby-/WPF-Tests erfolgreich.

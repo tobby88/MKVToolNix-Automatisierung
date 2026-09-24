@@ -630,7 +630,7 @@ public sealed class SelectionGridInteractionTests
                     await WpfTestHost.WaitForIdleAsync();
 
                     Assert.False(grid.IsEnabled);
-                    Assert.True(viewModel.CanCancelScan);
+                    Assert.True(viewModel.CanCancelOperation);
 
                     // ScanWaitTimeoutSeconds begrenzt nur das spätere Suchen neuer Items.
                     // Ein noch laufender Emby-Bibliotheksscan darf nach diesem Zeitraum
@@ -713,12 +713,12 @@ public sealed class SelectionGridInteractionTests
                     await WpfTestHost.WaitForIdleAsync();
 
                     viewModel.RunScanCommand.Execute(null);
-                    Assert.True(await WaitUntilAsync(() => viewModel.CanCancelScan, TimeSpan.FromSeconds(2)));
+                    Assert.True(await WaitUntilAsync(() => viewModel.CanCancelOperation, TimeSpan.FromSeconds(2)));
 
-                    viewModel.CancelScanCommand.Execute(null);
+                    viewModel.CancelOperationCommand.Execute(null);
 
                     Assert.True(await WaitUntilAsync(() => viewModel.IsInteractive, TimeSpan.FromSeconds(2)));
-                    Assert.False(viewModel.CanCancelScan);
+                    Assert.False(viewModel.CanCancelOperation);
                     Assert.Contains("abgebrochen", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
                     Assert.Contains("Server-Scan", viewModel.StatusText, StringComparison.OrdinalIgnoreCase);
                     Assert.NotEqual(100, viewModel.ProgressValue);
