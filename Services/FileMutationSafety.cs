@@ -35,7 +35,7 @@ internal static class FileMutationSafety
                     throw new IOException($"Pfadprüfung fehlgeschlagen: {current}", new Win32Exception(Marshal.GetLastWin32Error()));
                 // Ältere Dateisysteme/SMB-Server unterstützen FileCaseSensitiveInfo nicht.
                 // Dort gelten weiterhin die vorhandenen exakten Ziel-Kollisionsprüfungen.
-                if (GetFileInformationByHandleEx(handle, 23, out var flags, sizeof(uint)) && (flags & 1) != 0)
+                if (GetFileInformationByHandleEx(handle, 23, out uint flags, sizeof(uint)) && (flags & 1) != 0)
                     throw new IOException($"Case-sensitive Verzeichnisse werden beim Schreiben nicht unterstützt: {current}");
             }
             current = Path.GetDirectoryName(current);
@@ -57,6 +57,27 @@ internal static class FileMutationSafety
             throw new IOException($"Dateien mit mehreren Hardlinks werden nicht verändert: {path}");
     }
 
+    /// <summary>
+    /// Ergänzt Cache-Snapshots um Dateiidentität und NTFS/SMB-Änderungszeit, ohne Medien
+    /// vollständig zu hashen. Nicht unterstützte Server behalten den Basis-Snapshot.
+    /// </summary>
+    internal static FileVersionStamp? TryReadVersion(string path)
+    {
+        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (!GetFileInformationByHandle(handle, out var information)
+            || !GetFileInformationByHandleEx(handle, 0, out FileBasicInformation basic, (uint)Marshal.SizeOf<FileBasicInformation>()))
+            return null;
+        return new FileVersionStamp(information.VolumeSerialNumber,
+            ((ulong)information.FileIndexHigh << 32) | information.FileIndexLow, basic.ChangeTime);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FileBasicInformation
+    {
+        public long CreationTime, LastAccessTime, LastWriteTime, ChangeTime;
+        public uint Attributes;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct FileInformation
     {
@@ -73,4 +94,9 @@ internal static class FileMutationSafety
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int informationClass, out uint information, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle, int informationClass, out FileBasicInformation information, uint size);
 }
+
+internal readonly record struct FileVersionStamp(uint Volume, ulong FileId, long ChangeTime);

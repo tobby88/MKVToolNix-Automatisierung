@@ -3,7 +3,7 @@ namespace MkvToolnixAutomatisierung.Services;
 /// <summary>
 /// Minimaler Dateisnapshot, um Cache-Einträge an Größe und Änderungszeit zu koppeln.
 /// </summary>
-internal readonly record struct FileStateSnapshot(long Length, DateTime LastWriteTimeUtc)
+internal readonly record struct FileStateSnapshot(long Length, DateTime LastWriteTimeUtc, FileVersionStamp? Version = null)
 {
     public static FileStateSnapshot? TryCreate(string? filePath)
     {
@@ -20,7 +20,7 @@ internal readonly record struct FileStateSnapshot(long Length, DateTime LastWrit
             }
 
             var info = new FileInfo(filePath);
-            return new FileStateSnapshot(info.Length, info.LastWriteTimeUtc);
+            return new FileStateSnapshot(info.Length, info.LastWriteTimeUtc, FileMutationSafety.TryReadVersion(filePath));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {

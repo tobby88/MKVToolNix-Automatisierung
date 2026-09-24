@@ -11,4 +11,14 @@ public interface IMediaDurationProbe
     /// <param name="filePath">Zu analysierende Mediendatei.</param>
     /// <returns>Ermittelte Laufzeit oder <see langword="null"/>, wenn keine auslesbar ist.</returns>
     TimeSpan? TryReadDuration(string filePath);
+
+    /// <summary>Liest die Laufzeit mit weitergereichtem Abbruchsignal.</summary>
+    /// <remarks>Ältere externe Implementierungen bleiben kompatibel; eingebaute Probes brechen ihr Warten sofort ab.</remarks>
+    TimeSpan? TryReadDuration(string filePath, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var result = TryReadDuration(filePath);
+        cancellationToken.ThrowIfCancellationRequested();
+        return result;
+    }
 }

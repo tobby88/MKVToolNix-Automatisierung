@@ -8,6 +8,35 @@ namespace MkvToolnixAutomatisierung.IntegrationTests.Services;
 
 public sealed class MkvMergeProbeServiceIntegrationTests : IDisposable
 {
+    [Fact]
+    public async Task InvalidateDuringIdentifyDoesNotRepublishOldGeneration()
+    {
+        var media = CreateFile("generation.mp4");
+        var started = Path.Combine(_tempDirectory, "invocations.log");
+        FakeMkvMergeTestHelper.WriteProbeFileWithDelayAndInvocationLog(media, 1200, started,
+            new { id = 0, type = "audio", codec = "AAC" });
+        var service = new MkvMergeProbeService();
+        var executable = FakeMkvMergeTestHelper.ResolveExecutablePath();
+        var pending = service.ReadContainerMetadataAsync(executable, media);
+        using var wait = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!File.Exists(started)) await Task.Delay(10, wait.Token);
+        service.Invalidate(media);
+        await pending;
+        FakeMkvMergeTestHelper.WriteProbeFile(media, new { id = 0, type = "audio", codec = "AC-3" });
+        var current = await service.ReadContainerMetadataAsync(executable, media);
+        Assert.Equal("AC-3", Assert.Single(current.Tracks).CodecLabel);
+    }
+
+    [Fact]
+    public async Task IdentifyBudgetTerminatesDelayedProcess()
+    {
+        var media = CreateFile("timeout.mp4");
+        FakeMkvMergeTestHelper.WriteProbeFileWithDelay(media, 30000, new { id = 0, type = "audio", codec = "AAC" });
+        var error = await Assert.ThrowsAsync<IOException>(() => MkvMergeIdentifyRunner.IdentifyAsync(
+            FakeMkvMergeTestHelper.ResolveExecutablePath(), media, CancellationToken.None, TimeSpan.FromMilliseconds(200)));
+        Assert.Contains("Zeitlimit", error.Message);
+    }
+
     private readonly string _tempDirectory;
 
     public MkvMergeProbeServiceIntegrationTests()

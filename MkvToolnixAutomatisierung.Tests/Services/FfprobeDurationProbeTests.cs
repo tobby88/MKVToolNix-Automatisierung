@@ -6,6 +6,24 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class FfprobeDurationProbeTests : IDisposable
 {
+    [Fact]
+    public void SynchronousInterfacePropagatesCancellationAndDoesNotCacheResult()
+    {
+        var executable = CreateFile("cancel-ffprobe.exe");
+        var media = CreateFile("cancel.mp4");
+        using var cancellation = new CancellationTokenSource();
+        var calls = 0;
+        IMediaDurationProbe probe = new FfprobeDurationProbe(new CountingFfprobeLocator(executable), (_, _, _, token) =>
+        {
+            calls++;
+            if (calls == 1) { Assert.Equal(cancellation.Token, token); cancellation.Cancel(); }
+            return Task.FromResult<TimeSpan?>(TimeSpan.FromSeconds(10));
+        });
+        Assert.ThrowsAny<OperationCanceledException>(() => probe.TryReadDuration(media, cancellation.Token));
+        Assert.Equal(TimeSpan.FromSeconds(10), probe.TryReadDuration(media));
+        Assert.Equal(2, calls);
+    }
+
     private readonly string _tempDirectory;
 
     public FfprobeDurationProbeTests()

@@ -11,6 +11,7 @@ public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 {
     private readonly ConcurrentDictionary<string, CachedFileValue<TimeSpan?>> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<string, TimeSpan?> _durationReader;
+    private readonly SemaphoreSlim _nativeProbeGate = new(1, 1);
 
     /// <summary>Initializes the optional Windows Media Player duration fallback.</summary>
     public WindowsMediaDurationProbe() : this(ReadDurationCore)
@@ -24,7 +25,12 @@ public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
 
     /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
+        => TryReadDuration(filePath, CancellationToken.None);
+
+    /// <inheritdoc />
+    public TimeSpan? TryReadDuration(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var snapshot = FileStateSnapshot.TryCreate(filePath);
         if (snapshot is null)
         {
@@ -36,9 +42,21 @@ public sealed class WindowsMediaDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = _durationReader(filePath);
+        // COM-Aufrufe selbst lassen sich nicht sicher abbrechen. Höchstens eine native
+        // Probe läuft weiter; Aufrufer warten begrenzt und veröffentlichen kein altes Resultat.
+        if (!_nativeProbeGate.Wait(0)) return null;
+        var nativeProbe = Task.Run(() =>
+        {
+            try { return _durationReader(filePath); }
+            catch { return null; }
+            finally { _nativeProbeGate.Release(); }
+        });
+        TimeSpan? duration;
+        try { duration = nativeProbe.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).GetAwaiter().GetResult(); }
+        catch (TimeoutException) { return null; }
+        cancellationToken.ThrowIfCancellationRequested();
         // COM availability and media readiness can fail transiently, just like ffprobe.
-        if (duration is { } value && value > TimeSpan.Zero)
+        if (duration is { } value && value > TimeSpan.Zero && snapshot.Equals(FileStateSnapshot.TryCreate(filePath)))
         {
             _cache[filePath] = new CachedFileValue<TimeSpan?>(snapshot.Value, duration);
         }

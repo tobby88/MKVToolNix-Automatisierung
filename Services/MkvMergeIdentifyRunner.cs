@@ -12,14 +12,17 @@ internal static class MkvMergeIdentifyRunner
     public static async Task<JsonDocument> IdentifyAsync(
         string mkvMergePath,
         string inputFilePath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var budget = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(60));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, budget.Token);
         var startInfo = CreateIdentifyStartInfo(mkvMergePath, inputFilePath);
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
-        using var registration = cancellationToken.Register(() =>
+        using var registration = linked.Token.Register(() =>
         {
             try
             {
@@ -33,29 +36,29 @@ internal static class MkvMergeIdentifyRunner
             }
         });
 
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(linked.Token);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(linked.Token);
         // Detection also calls this API synchronously; never require its caller's UI context.
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-        var standardOutput = await standardOutputTask.ConfigureAwait(false);
-        var standardError = await standardErrorTask.ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
-        return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
+        try
+        {
+            await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+            var standardOutput = await standardOutputTask.ConfigureAwait(false);
+            var standardError = await standardErrorTask.ConfigureAwait(false);
+            linked.Token.ThrowIfCancellationRequested();
+            return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
+        }
+        catch (OperationCanceledException)
+        {
+            try { await Task.WhenAll(standardOutputTask, standardErrorTask).ConfigureAwait(false); }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new IOException($"mkvmerge --identify hat das Zeitlimit überschritten: {inputFilePath}");
+        }
     }
 
     public static JsonDocument Identify(string mkvMergePath, string inputFilePath)
     {
-        var startInfo = CreateIdentifyStartInfo(mkvMergePath, inputFilePath);
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("mkvmerge konnte nicht gestartet werden.");
-
-        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-        var standardErrorTask = process.StandardError.ReadToEndAsync();
-        process.WaitForExit();
-        var standardOutput = standardOutputTask.GetAwaiter().GetResult();
-        var standardError = standardErrorTask.GetAwaiter().GetResult();
-        return ParseIdentifyResult(standardOutput, standardError, process.ExitCode);
+        return IdentifyAsync(mkvMergePath, inputFilePath, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     private static ProcessStartInfo CreateIdentifyStartInfo(string mkvMergePath, string inputFilePath)

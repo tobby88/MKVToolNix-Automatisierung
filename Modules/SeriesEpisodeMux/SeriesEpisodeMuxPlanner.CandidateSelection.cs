@@ -95,7 +95,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
             .GetAwaiter()
             .GetResult();
         cancellationToken.ThrowIfCancellationRequested();
-        var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration);
+        var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var subtitlePaths = FindExactSubtitleFiles(seed.FilePath, companionFilesByBaseName);
 
@@ -118,7 +118,7 @@ public sealed partial class SeriesEpisodeMuxPlanner
     private AudioDescriptionCandidate BuildAudioDescriptionCandidate(CandidateSeed seed, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration);
+        var durationSeconds = ReadDurationSeconds(seed.FilePath, seed.TextMetadata.Duration, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         return new AudioDescriptionCandidate(

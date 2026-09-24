@@ -8,6 +8,8 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 public sealed partial class MkvMergeProbeService
 {
+    private readonly object _cacheSync = new();
+    private long _cacheGeneration;
     private readonly ConcurrentDictionary<string, CachedFileValue<MediaTrackMetadata>> _mediaTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<AudioTrackMetadata>> _audioTrackCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CachedFileValue<ContainerMetadata>> _containerCache = new(StringComparer.OrdinalIgnoreCase);
@@ -23,9 +25,14 @@ public sealed partial class MkvMergeProbeService
             return;
         }
 
-        _mediaTrackCache.TryRemove(filePath, out _);
-        _audioTrackCache.TryRemove(filePath, out _);
-        _containerCache.TryRemove(filePath, out _);
+        filePath = Path.GetFullPath(filePath);
+        lock (_cacheSync)
+        {
+            _cacheGeneration++;
+            _mediaTrackCache.TryRemove(filePath, out _);
+            _audioTrackCache.TryRemove(filePath, out _);
+            _containerCache.TryRemove(filePath, out _);
+        }
     }
 
     /// <summary>
@@ -51,6 +58,8 @@ public sealed partial class MkvMergeProbeService
     /// </returns>
     public MediaTrackMetadata ReadPrimaryVideoMetadata(string mkvMergePath, string inputFilePath)
     {
+        inputFilePath = Path.GetFullPath(inputFilePath);
+        var generation = Interlocked.Read(ref _cacheGeneration);
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
@@ -59,7 +68,7 @@ public sealed partial class MkvMergeProbeService
 
         using var trackDocument = MkvMergeIdentifyRunner.Identify(mkvMergePath, inputFilePath);
         var metadata = MkvMergeIdentifyParser.CreatePrimaryVideoMetadata(trackDocument, inputFilePath);
-        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
+        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata, generation);
         return metadata;
     }
 
@@ -79,6 +88,8 @@ public sealed partial class MkvMergeProbeService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        inputFilePath = Path.GetFullPath(inputFilePath);
+        var generation = Interlocked.Read(ref _cacheGeneration);
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_mediaTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
@@ -88,7 +99,7 @@ public sealed partial class MkvMergeProbeService
         using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreatePrimaryVideoMetadata(trackDocument, inputFilePath);
-        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata);
+        StoreCachedValue(_mediaTrackCache, inputFilePath, snapshot, metadata, generation);
         return metadata;
     }
 
@@ -105,6 +116,8 @@ public sealed partial class MkvMergeProbeService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        inputFilePath = Path.GetFullPath(inputFilePath);
+        var generation = Interlocked.Read(ref _cacheGeneration);
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_audioTrackCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
@@ -114,7 +127,7 @@ public sealed partial class MkvMergeProbeService
         using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreateFirstAudioTrackMetadata(trackDocument, inputFilePath);
-        StoreCachedValue(_audioTrackCache, inputFilePath, snapshot, metadata);
+        StoreCachedValue(_audioTrackCache, inputFilePath, snapshot, metadata, generation);
         return metadata;
     }
 
@@ -131,6 +144,8 @@ public sealed partial class MkvMergeProbeService
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        inputFilePath = Path.GetFullPath(inputFilePath);
+        var generation = Interlocked.Read(ref _cacheGeneration);
         var snapshot = FileStateSnapshot.TryCreate(inputFilePath);
         if (_containerCache.TryGetValue(inputFilePath, out var cachedMetadata) && cachedMetadata.Matches(snapshot))
         {
@@ -140,22 +155,29 @@ public sealed partial class MkvMergeProbeService
         using var trackDocument = await MkvMergeIdentifyRunner.IdentifyAsync(mkvMergePath, inputFilePath, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         var metadata = MkvMergeIdentifyParser.CreateContainerMetadata(trackDocument, inputFilePath);
-        StoreCachedValue(_containerCache, inputFilePath, snapshot, metadata);
+        StoreCachedValue(_containerCache, inputFilePath, snapshot, metadata, generation);
         return metadata;
     }
 
-    private static void StoreCachedValue<T>(
+    private void StoreCachedValue<T>(
         ConcurrentDictionary<string, CachedFileValue<T>> cache,
         string filePath,
         FileStateSnapshot? snapshot,
-        T value)
+        T value,
+        long generation)
     {
-        if (snapshot is null)
+        var currentSnapshot = FileStateSnapshot.TryCreate(filePath);
+        lock (_cacheSync)
         {
-            cache.TryRemove(filePath, out _);
-            return;
+            // Eine während der Probe invalidierte Generation darf den Cache nicht erneut
+            // füllen. Der Lock schließt auch das Rennen zwischen Prüfung und Einfügen.
+            if (generation != _cacheGeneration) return;
+            if (snapshot is null || !snapshot.Equals(currentSnapshot))
+            {
+                cache.TryRemove(filePath, out _);
+                return;
+            }
+            cache[filePath] = new CachedFileValue<T>(snapshot.Value, value);
         }
-
-        cache[filePath] = new CachedFileValue<T>(snapshot.Value, value);
     }
 }

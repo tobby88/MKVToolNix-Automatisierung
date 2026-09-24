@@ -627,9 +627,9 @@ public sealed partial class SeriesEpisodeMuxPlanner
         return 5;
     }
 
-    private int? ReadDurationSeconds(string filePath, TimeSpan? fallbackDuration)
+    private int? ReadDurationSeconds(string filePath, TimeSpan? fallbackDuration, CancellationToken cancellationToken)
     {
-        var duration = _durationProbe.TryReadDuration(filePath) ?? fallbackDuration;
+        var duration = _durationProbe.TryReadDuration(filePath, cancellationToken) ?? fallbackDuration;
         if (duration is null)
         {
             return null;

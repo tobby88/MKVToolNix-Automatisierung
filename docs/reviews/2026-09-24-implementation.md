@@ -13,7 +13,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A05 (O02): Wiederaufnahmefähige Archivänderungen über Header, NFO und Rename.
 - [x] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
 - [x] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
-- [ ] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
+- [x] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
 - [ ] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
 - [ ] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
 - [ ] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
@@ -109,3 +109,14 @@ Ein benutzerbezogener systemweiter Mutex verhindert mehrere GUI-Prozesse auch au
 verschiedenen portablen Ordnern. Die zweite Instanz beendet sich vor Initialisierung
 und Downloads mit verständlichem Hinweis. Verwaiste Sperren nach Absturz sind wieder
 übernehmbar. Fünf Start-/Mutex-Tests erfolgreich.
+
+### A08
+
+Laufzeitprobes erhalten den Aufrufer-Token bis in ffprobe. Identify hat auch ohne
+UI-Abbruch ein 60-Sekunden-Limit. Native COM-Abfragen werden begrenzt abgewartet;
+maximal eine noch laufende native Abfrage bleibt pro Probeinstanz zurück, keine
+unbegrenzte Ansammlung hängender Threads. Invalidierte Identify-Generationen dürfen
+keine Cachewerte nachliefern. Dateisnapshots berücksichtigen verfügbare Windows-Datei-IDs
+und Änderungszeiten zusätzlich zu Größe/mtime. Kein Vollhash großer Videos; unbekannte
+Serversemantik und In-place-Änderungen innerhalb der Zeitstempelauflösung bleiben Grenzen.
+30 gezielte Unit- und sieben Prozess-Integrationstests erfolgreich.

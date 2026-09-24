@@ -21,7 +21,11 @@ public sealed class PreferredMediaDurationProbe : IMediaDurationProbe
 
     /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
+        => TryReadDuration(filePath, CancellationToken.None);
+
+    /// <inheritdoc />
+    public TimeSpan? TryReadDuration(string filePath, CancellationToken cancellationToken)
     {
-        return _preferredProbe.TryReadDuration(filePath) ?? _fallbackProbe.TryReadDuration(filePath);
+        return _preferredProbe.TryReadDuration(filePath, cancellationToken) ?? _fallbackProbe.TryReadDuration(filePath, cancellationToken);
     }
 }

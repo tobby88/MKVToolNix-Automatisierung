@@ -54,7 +54,12 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
 
     /// <inheritdoc />
     public TimeSpan? TryReadDuration(string filePath)
+        => TryReadDuration(filePath, CancellationToken.None);
+
+    /// <inheritdoc />
+    public TimeSpan? TryReadDuration(string filePath, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var ffprobePath = GetCurrentFfprobePath();
         var snapshot = FileStateSnapshot.TryCreate(filePath);
         if (string.IsNullOrWhiteSpace(ffprobePath) || snapshot is null)
@@ -67,10 +72,11 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
             return cachedValue.Value;
         }
 
-        var duration = _durationReaderAsync(filePath, ffprobePath, ProcessTimeout, CancellationToken.None)
+        var duration = _durationReaderAsync(filePath, ffprobePath, ProcessTimeout, cancellationToken)
             .ConfigureAwait(false)
             .GetAwaiter()
             .GetResult();
+        cancellationToken.ThrowIfCancellationRequested();
         StoreSuccessfulDurationOrClearCache(filePath, snapshot.Value, duration);
         return duration;
     }
@@ -244,7 +250,7 @@ public sealed class FfprobeDurationProbe : IMediaDurationProbe
         FileStateSnapshot snapshot,
         TimeSpan? duration)
     {
-        if (duration is null)
+        if (duration is null || !snapshot.Equals(FileStateSnapshot.TryCreate(filePath)))
         {
             _cache.TryRemove(filePath, out _);
             return;
