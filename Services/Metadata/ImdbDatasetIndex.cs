@@ -1106,6 +1106,8 @@ internal sealed class ImdbDatasetSearchService
             if (snapshot is null) return false;
             lock (_cacheSync)
             {
+                if (ImdbIndexInspection.TryGetVerified(_databasePath, snapshot.Value, out var verified))
+                    _availability = new CachedFileValue<bool>(snapshot.Value, verified is not null);
                 if (_availability?.Matches(snapshot) == true) return _availability.Value;
                 var available = ImdbIndexInspection.Read(_databasePath) is not null;
                 _availability = new CachedFileValue<bool>(snapshot.Value, available);

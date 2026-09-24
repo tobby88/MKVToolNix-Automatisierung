@@ -935,6 +935,25 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Null(ImdbIndexInspection.Read(database, true));
     }
 
+    [Fact]
+    public async Task FullInspectionFailure_OverridesEarlierPositiveAvailabilityForSameFileVersion()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "empty-index.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "valid");
+        using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM titles WHERE kind=2";
+            command.ExecuteNonQuery();
+        }
+        var search = new ImdbDatasetSearchService(database);
+        Assert.True(search.IsAvailable); // Structure exists, but the worker has not inspected its content yet.
+        Assert.Null(ImdbIndexInspection.Read(database, verifyIntegrity: true));
+        Assert.False(search.IsAvailable);
+    }
+
     private DatasetFiles WriteSmallDatasetArchives()
     {
         var bytes = BuildSmallDatasetByteMap();

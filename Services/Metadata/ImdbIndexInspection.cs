@@ -14,13 +14,27 @@ internal static class ImdbIndexInspection
     internal sealed record Snapshot(string Version, DateTimeOffset BuiltUtc, int Schema,
         long SeriesCount, long EpisodeCount, long AliasCount);
 
+    /// <summary>Eine spätere Vollprüfung geht einem älteren positiven UI-Struktursnapshot vor.</summary>
+    internal static bool TryGetVerified(string path, FileStateSnapshot stamp, out Snapshot? result)
+    {
+        lock (CacheLock)
+        {
+            if (Verified.TryGetValue(path, out var cached) && cached.Matches(stamp))
+            {
+                result = cached.Value;
+                return true;
+            }
+        }
+        result = null;
+        return false;
+    }
+
     public static Snapshot? Read(string path, bool verifyIntegrity = false, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var stamp = FileStateSnapshot.TryCreate(path);
         if (stamp is null) return null;
-        lock (CacheLock)
-            if (Verified.TryGetValue(path, out var cached) && cached.Matches(stamp)) return cached.Value;
+        if (TryGetVerified(path, stamp.Value, out var cached)) return cached;
         var result = ReadCore(path, verifyIntegrity, cancellationToken);
         if (verifyIntegrity && FileStateSnapshot.TryCreate(path) == stamp)
             lock (CacheLock)
