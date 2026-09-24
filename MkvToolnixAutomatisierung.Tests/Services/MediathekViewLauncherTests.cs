@@ -96,6 +96,32 @@ public sealed class MediathekViewLauncherTests : IDisposable
     }
 
     [Fact]
+    public void FallbackVersionOrder_PrefersNumericVersionAndStableReleaseOverTimestamps()
+    {
+        var directories = new[] { "9.9.0", "10.2.0-rc1", "10.2.0", "snapshot" }
+            .Select(name => new DirectoryInfo(CreateDirectory(name))).ToArray();
+        for (var index = 0; index < directories.Length; index++)
+            Directory.SetLastWriteTimeUtc(directories[index].FullName, DateTime.UtcNow.AddDays(-index));
+        Assert.Equal(new[] { "10.2.0", "10.2.0-rc1", "9.9.0", "snapshot" },
+            directories.OrderByToolVersion().Select(directory => directory.Name));
+    }
+
+    [Fact]
+    public void ExplicitDownloadOverride_IsPreservedBySettingsNormalization()
+    {
+        var settings = new AppToolPathSettings
+        {
+            FfprobePath = Path.Combine(PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory()!, "ffmpeg", "ffprobe.exe"),
+            FfprobePathExplicitlySelected = true,
+            MkvToolNixDirectoryPath = Path.Combine(PreferredDownloadDirectoryHelper.TryGetDownloadsDirectory()!, "mkvtoolnix"),
+            MkvToolNixPathExplicitlySelected = true
+        }.Clone();
+        ManagedToolResolution.NormalizeLegacyDownloadOverrides(settings);
+        Assert.NotEmpty(settings.FfprobePath);
+        Assert.NotEmpty(settings.MkvToolNixDirectoryPath);
+    }
+
+    [Fact]
     public void PathResolver_UsesPortableDownloadFallback()
     {
         var userProfileDirectory = CreateDirectory("profile");

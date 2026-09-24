@@ -77,10 +77,16 @@ public sealed class AppToolPathSettings
     /// </summary>
     public string FfprobePath { get; set; } = string.Empty;
 
+    /// <summary>Eine ausdrückliche Benutzerwahl darf nicht als historischer Download-Fallback entfernt werden.</summary>
+    public bool FfprobePathExplicitlySelected { get; set; }
+
     /// <summary>
     /// Optionaler manueller Override-Pfad zu einer MKVToolNix-Executable oder zu ihrem Installationsordner.
     /// </summary>
     public string MkvToolNixDirectoryPath { get; set; } = string.Empty;
+
+    /// <summary>Schützt einen ausdrücklich gewählten MKVToolNix-Pfad auch innerhalb des Downloads-Ordners.</summary>
+    public bool MkvToolNixPathExplicitlySelected { get; set; }
 
     /// <summary>
     /// Optionaler manueller Pfad zur installierten oder portablen MediathekView-Executable.
@@ -101,7 +107,9 @@ public sealed class AppToolPathSettings
             ManagedFfprobe = ManagedFfprobe?.Clone() ?? new ManagedToolSettings(),
             ManagedMediathekView = ManagedMediathekView?.Clone() ?? new ManagedToolSettings { AutoManageEnabled = false },
             FfprobePath = FfprobePath ?? string.Empty,
+            FfprobePathExplicitlySelected = FfprobePathExplicitlySelected,
             MkvToolNixDirectoryPath = MkvToolNixDirectoryPath ?? string.Empty,
+            MkvToolNixPathExplicitlySelected = MkvToolNixPathExplicitlySelected,
             MediathekViewPath = MediathekViewPath ?? string.Empty
         };
     }

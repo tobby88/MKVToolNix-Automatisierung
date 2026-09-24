@@ -277,7 +277,7 @@ internal static class MediathekViewPathResolver
                     return !directoryName.StartsWith(".", StringComparison.Ordinal);
                 })
                 .Select(path => new DirectoryInfo(path))
-                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .OrderByToolVersion()
                 .Select(directory => directory.FullName)
                 .ToArray();
         }
@@ -315,7 +315,7 @@ internal static class MediathekViewPathResolver
             foreach (var directory in Directory
                          .EnumerateDirectories(downloadsDirectory, "*MediathekView*", SearchOption.TopDirectoryOnly)
                          .Select(path => new DirectoryInfo(path))
-                         .OrderByDescending(directory => directory.LastWriteTimeUtc))
+                         .OrderByToolVersion())
             {
                 if (TryFindExecutableUnderRoot(directory.FullName, preferPortable: true) is { } candidate)
                 {

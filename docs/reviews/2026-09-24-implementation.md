@@ -21,7 +21,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
 - [x] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
 - [x] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
-- [ ] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
+- [x] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
 - [ ] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
 - [ ] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
@@ -195,3 +195,12 @@ Vor und nach der Übernahme portabler MediathekView-Einstellungen wird auf laufe
 MediathekView-/Java-Prozesse geprüft. Bei unklarer Java-Zuordnung wird konservativ
 verschoben statt ein möglicherweise veralteter Snapshot aktiviert. Ein solcher Aufschub
 bleibt sichtbar und setzt keinen zweistündigen Fehler-Backoff. 37 Installer-Tests grün.
+
+### A16, Teil 2
+
+Fallbackordner werden nach numerischer Version und Stable-vor-Prerelease sortiert,
+erst danach nach Datum und Name. Unversionierte Snapshots behalten einen deterministischen
+Datumsfallback. Neue manuelle Pfadwahlen erhalten einen Herkunftsmarker, damit auch ein
+Downloads-Pfad nicht später als alter automatisch erkannter Override entfernt wird.
+Historische Werte ohne Marker folgen aus Kompatibilitätsgründen der bisherigen Migration.
+72 gezielte Tool-/Settings-Tests erfolgreich.

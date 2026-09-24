@@ -402,7 +402,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 .EnumerateDirectories(toolRootDirectory)
                 .Select(directory => new DirectoryInfo(directory))
                 .Where(directory => !directory.Name.StartsWith(".", StringComparison.Ordinal))
-                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .OrderByToolVersion()
                 .ToArray();
         }
         catch
@@ -430,7 +430,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
             candidates = Directory
                 .EnumerateDirectories(downloadsDirectory, "*MediathekView*", SearchOption.TopDirectoryOnly)
                 .Select(directory => new DirectoryInfo(directory))
-                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .OrderByToolVersion()
                 .ToArray();
         }
         catch

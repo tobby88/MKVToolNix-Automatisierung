@@ -26,6 +26,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private string _ffprobePath;
     private string _mkvToolNixDirectoryPath;
     private string _mediathekViewPath;
+    private bool _ffprobePathExplicitlySelected;
+    private bool _mkvToolNixPathExplicitlySelected;
     private bool _autoManageMkvToolNix;
     private bool _autoManageFfprobe;
     private bool _autoManageMediathekView;
@@ -64,7 +66,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         _managedMediathekViewSettings = toolSettings.ManagedMediathekView.Clone();
         _archiveRootDirectory = archiveSettings;
         _ffprobePath = toolSettings.FfprobePath;
+        _ffprobePathExplicitlySelected = toolSettings.FfprobePathExplicitlySelected;
         _mkvToolNixDirectoryPath = toolSettings.MkvToolNixDirectoryPath;
+        _mkvToolNixPathExplicitlySelected = toolSettings.MkvToolNixPathExplicitlySelected;
         _mediathekViewPath = toolSettings.MediathekViewPath;
         _autoManageMkvToolNix = _managedMkvToolNixSettings.AutoManageEnabled;
         _autoManageFfprobe = _managedFfprobeSettings.AutoManageEnabled;
@@ -126,6 +130,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             }
 
             _ffprobePath = normalized;
+            _ffprobePathExplicitlySelected = normalized.Length > 0;
             RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsFfprobeAvailable));
@@ -166,6 +171,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             }
 
             _mkvToolNixDirectoryPath = normalized;
+            _mkvToolNixPathExplicitlySelected = normalized.Length > 0;
             RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsMkvToolNixAvailable));
@@ -557,7 +563,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
             settings.ToolPaths ??= new AppToolPathSettings();
             settings.ToolPaths.FfprobePath = FfprobePath;
+            settings.ToolPaths.FfprobePathExplicitlySelected = !string.IsNullOrWhiteSpace(FfprobePath);
             settings.ToolPaths.MkvToolNixDirectoryPath = MkvToolNixDirectoryPath;
+            settings.ToolPaths.MkvToolNixPathExplicitlySelected = !string.IsNullOrWhiteSpace(MkvToolNixDirectoryPath);
             settings.ToolPaths.MediathekViewPath = MediathekViewPath;
             // Runtime version/path/check timestamps belong to the installer, not this dialog snapshot.
             settings.ToolPaths.ManagedFfprobe.AutoManageEnabled = AutoManageFfprobe;
@@ -782,7 +790,9 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         return new AppToolPathSettings
         {
             FfprobePath = FfprobePath,
+            FfprobePathExplicitlySelected = _ffprobePathExplicitlySelected,
             MkvToolNixDirectoryPath = MkvToolNixDirectoryPath,
+            MkvToolNixPathExplicitlySelected = _mkvToolNixPathExplicitlySelected,
             MediathekViewPath = MediathekViewPath,
             ManagedFfprobe = _managedFfprobeSettings.Clone(),
             ManagedMkvToolNix = _managedMkvToolNixSettings.Clone(),

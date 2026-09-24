@@ -165,7 +165,7 @@ internal static class ManagedToolResolution
 
         if (TryResolveExistingExecutable(settings.FfprobePath) is { } manualOverride)
         {
-            if (LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
+            if (!settings.FfprobePathExplicitlySelected && LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
             {
                 return new ResolvedToolPath(manualOverride, ToolPathResolutionSource.DownloadsFallback);
             }
@@ -207,7 +207,7 @@ internal static class ManagedToolResolution
 
         if (TryResolveMkvToolNixPairFromConfiguredPath(settings.MkvToolNixDirectoryPath) is { } manualOverride)
         {
-            if (LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
+            if (!settings.MkvToolNixPathExplicitlySelected && LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
             {
                 return manualOverride with { Source = ToolPathResolutionSource.DownloadsFallback };
             }
@@ -257,13 +257,13 @@ internal static class ManagedToolResolution
 
         var changed = false;
 
-        if (LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
+        if (!settings.FfprobePathExplicitlySelected && LooksLikeLegacyDownloadOverride(settings.FfprobePath, settings.ManagedFfprobe))
         {
             settings.FfprobePath = string.Empty;
             changed = true;
         }
 
-        if (LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
+        if (!settings.MkvToolNixPathExplicitlySelected && LooksLikeLegacyDownloadOverride(settings.MkvToolNixDirectoryPath, settings.ManagedMkvToolNix))
         {
             settings.MkvToolNixDirectoryPath = string.Empty;
             changed = true;
@@ -383,7 +383,7 @@ internal static class ManagedToolResolution
                 .EnumerateDirectories(downloadsDirectory, "*", SearchOption.TopDirectoryOnly)
                 .Where(path => Path.GetFileName(path).Contains("ffmpeg", StringComparison.OrdinalIgnoreCase))
                 .Select(path => new DirectoryInfo(path))
-                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .OrderByToolVersion()
                 .SelectMany(FindFfprobeCandidatesInDirectory)
                 .FirstOrDefault(File.Exists);
         }
@@ -406,7 +406,7 @@ internal static class ManagedToolResolution
             foreach (var directory in Directory
                          .EnumerateDirectories(downloadsDirectory, $"{MkvToolNixDownloadsPrefix}*", SearchOption.TopDirectoryOnly)
                          .Select(path => new DirectoryInfo(path))
-                         .OrderByDescending(directory => directory.LastWriteTimeUtc))
+                         .OrderByToolVersion())
             {
                 var directToolDirectory = Path.Combine(directory.FullName, ManagedMkvToolNixDirectoryName);
                 var resolved = TryResolveMkvToolNixPairFromConfiguredPath(directToolDirectory)
@@ -442,7 +442,7 @@ internal static class ManagedToolResolution
                     return !directoryName.StartsWith(".", StringComparison.Ordinal);
                 })
                 .Select(path => new DirectoryInfo(path))
-                .OrderByDescending(directory => directory.LastWriteTimeUtc)
+                .OrderByToolVersion()
                 .Select(directory => directory.FullName)
                 .ToArray();
         }
