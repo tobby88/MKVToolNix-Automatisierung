@@ -188,3 +188,10 @@ Serien/Episoden/Aliasnamen verhindert die Aktivierung. Kleine Testbestände blei
 Version/Schema/Aufbauzeit werden aus dem aktiven Index mit den Settings abgeglichen,
 damit ein zuvor fehlgeschlagener Settings-Save keinen erneuten Download auslöst.
 81 IMDb-Tests erfolgreich; Vollprüfungen bleiben außerhalb des UI-Threads.
+
+### A16, Teil 1
+
+Vor und nach der Übernahme portabler MediathekView-Einstellungen wird auf laufende
+MediathekView-/Java-Prozesse geprüft. Bei unklarer Java-Zuordnung wird konservativ
+verschoben statt ein möglicherweise veralteter Snapshot aktiviert. Ein solcher Aufschub
+bleibt sichtbar und setzt keinen zweistündigen Fehler-Backoff. 37 Installer-Tests grün.

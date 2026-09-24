@@ -140,8 +140,10 @@ public sealed class ManagedToolInstallerServiceTests
         Assert.Single(handler.RequestedUris);
     }
 
-    [Fact]
-    public async Task EnsureManagedToolsAsync_MigratesMediathekViewSettingsDirectoryOnUpdate()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnsureManagedToolsAsync_MigratesMediathekViewSettingsDirectoryOnUpdate(bool running)
     {
         var settingsStore = new AppSettingsStore();
         var toolPathStore = new AppToolPathStore(settingsStore);
@@ -176,10 +178,22 @@ public sealed class ManagedToolInstallerServiceTests
                 "MediathekView-14.5.0-win.zip",
                 ExpectedSha512: archiveHash))],
             new ManagedToolArchiveExtractor(),
-            new HttpClient(handler));
+            new HttpClient(handler), () =>
+            {
+                if (running) throw new ToolStateInUseException("MediathekView noch aktiv");
+            });
 
         var result = await service.EnsureManagedToolsAsync();
         var savedSettings = toolPathStore.Load();
+        if (running)
+        {
+            Assert.True(result.HasWarning);
+            Assert.Equal(oldExecutablePath, savedSettings.ManagedMediathekView.InstalledPath);
+            Assert.Null(savedSettings.ManagedMediathekView.LastFailedCheckUtc);
+            Assert.False(Directory.Exists(Path.Combine(PortableAppStorage.ToolsDirectory, "mediathekview", "14.5.0")));
+            Assert.Equal("portable-settings", File.ReadAllText(Path.Combine(oldSettingsDirectory, "settings.xml")));
+            return;
+        }
         var newBaseDirectory = Directory.GetParent(Path.GetDirectoryName(savedSettings.ManagedMediathekView.InstalledPath)!)!.FullName;
 
         Assert.False(result.HasWarning);

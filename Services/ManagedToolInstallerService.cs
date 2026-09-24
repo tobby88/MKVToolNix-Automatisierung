@@ -39,17 +39,20 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
     private readonly IReadOnlyDictionary<ManagedToolKind, IManagedToolPackageSource> _packageSources;
     private readonly IManagedToolArchiveExtractor _archiveExtractor;
     private readonly HttpClient _httpClient;
+    private readonly Action _ensureMediathekViewStopped;
 
     public ManagedToolInstallerService(
         AppToolPathStore toolPathStore,
         IEnumerable<IManagedToolPackageSource> packageSources,
         IManagedToolArchiveExtractor archiveExtractor,
-        HttpClient httpClient)
+        HttpClient httpClient,
+        Action? ensureMediathekViewStopped = null)
     {
         _toolPathStore = toolPathStore;
         _packageSources = packageSources.ToDictionary(source => source.Kind);
         _archiveExtractor = archiveExtractor;
         _httpClient = httpClient;
+        _ensureMediathekViewStopped = ensureMediathekViewStopped ?? MediathekViewStateGuard.EnsureStopped;
     }
 
     /// <summary>
@@ -208,8 +211,8 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         }
         catch (Exception ex)
         {
-            toolSettings.LastFailedCheckUtc = now;
-            if (!IsToolCurrentlyUsable(toolPathSettings, toolKind))
+            toolSettings.LastFailedCheckUtc = ex is ToolStateInUseException ? null : now;
+            if (ex is ToolStateInUseException || !IsToolCurrentlyUsable(toolPathSettings, toolKind))
             {
                 warnings.Add(BuildWarningMessage(toolKind, ex));
             }
@@ -277,7 +280,7 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
         }
     }
 
-    private static async Task PreserveToolStateBeforeReplacementAsync(
+    private async Task PreserveToolStateBeforeReplacementAsync(
         ManagedToolKind toolKind,
         AppToolPathSettings toolPathSettings,
         ManagedToolSettings toolSettings,
@@ -302,7 +305,9 @@ internal sealed class ManagedToolInstallerService : IManagedToolInstallerService
                 return;
             }
 
+            _ensureMediathekViewStopped();
             await CopyDirectoryAsync(sourceSettingsDirectory, targetStateDirectory, cancellationToken);
+            _ensureMediathekViewStopped();
             return;
         }
     }
