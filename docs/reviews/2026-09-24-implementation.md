@@ -16,7 +16,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
 - [x] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
 - [x] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
-- [ ] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
+- [x] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
 - [ ] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
 - [ ] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
 - [ ] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
@@ -143,3 +143,11 @@ Vor dem ersten Dateiinhalt werden deklarierte Größe und messbarer freier Speic
 (64 MiB Reserve) geprüft; während der Extraktion zählt das Limit tatsächliche Bytes.
 Nicht benötigter ffprobe-/MKVToolNix-Payload zählt nicht zum Entpackbedarf. 20 ZIP-/7z-
 und Sicherheitsgrenzentests erfolgreich, ohne reale große Downloads.
+
+### A11
+
+Emby-Einstellungen unterstützen einen expliziten Server-Archivpfad und optional eine
+Bibliotheks-ID. Explizite Angaben erlauben keinen heuristischen Ersatzpfad; Linux-Pfade
+bleiben case-sensitive. Ohne eindeutige Bibliothek wird kein Scan gestartet, insbesondere
+kein globaler Fallback. Die kompatible automatische Zuordnung verlangt mindestens zwei
+gemeinsame Pfadsegmente. 99 gezielte Service-/ViewModel-/Settings-Tests erfolgreich.

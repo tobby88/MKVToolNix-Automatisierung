@@ -63,6 +63,20 @@ internal sealed class EmbyMetadataSyncService
         }
 
         var libraries = await _embyClient.GetLibrariesAsync(settings, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(settings.SeriesLibraryId))
+            libraries = libraries.Where(library => string.Equals(library.Id, settings.SeriesLibraryId, StringComparison.Ordinal)).ToList();
+        if (!string.IsNullOrWhiteSpace(settings.ServerArchiveRootPath))
+        {
+            // Explizite Zuordnung schlägt Suffix-Heuristik. Tippfehler dürfen keinen
+            // ähnlich benannten Serverordner als Ersatz auswählen.
+            var explicitMatches = libraries.SelectMany(library => library.Locations
+                    .Where(location => IsServerPathWithinRoot(settings.ServerArchiveRootPath, location))
+                    .Select(location => new EmbyLibraryMatch(library, location))).ToList();
+            return explicitMatches.Count == 1 ? explicitMatches[0] : null;
+        }
+        if (!string.IsNullOrWhiteSpace(settings.SeriesLibraryId))
+            return libraries.Count == 1 && libraries[0].Locations.Count == 1
+                ? new EmbyLibraryMatch(libraries[0], libraries[0].Locations[0]) : null;
         var exactMatches = libraries
             .SelectMany(library => library.Locations.Select(location => new EmbyLibraryMatch(library, location)))
             .Where(match => PathComparisonHelper.AreSamePath(match.MatchedLocation, archiveRootPath))
@@ -97,9 +111,8 @@ internal sealed class EmbyMetadataSyncService
     }
 
     /// <summary>
-    /// Startet bevorzugt einen gezielten Scan der konfigurierten Serienbibliothek.
-    /// Falls keine passende Bibliothek ermittelt werden kann, wird der globale Fallback
-    /// ausdrücklich als nicht bibliotheksscharfer Scan gemeldet.
+    /// Startet ausschließlich einen gezielten Scan der konfigurierten Serienbibliothek.
+    /// Fehlende/mehrdeutige Zuordnungen brechen ab; es gibt keinen globalen Scan-Fallback.
     /// </summary>
     public async Task<EmbyLibraryScanTriggerResult> TriggerSeriesLibraryScanAsync(
         AppEmbySettings settings,
@@ -117,18 +130,7 @@ internal sealed class EmbyMetadataSyncService
                 matchedLibrary.MatchedLocation);
         }
 
-        await _embyClient.TriggerLibraryScanAsync(settings, cancellationToken);
-        return string.IsNullOrWhiteSpace(archiveRootPath)
-            ? new EmbyLibraryScanTriggerResult(
-                UsedGlobalLibraryScan: true,
-                "Globaler Emby-Library-Scan angestoßen (nicht bibliotheksscharf), weil kein Serienbibliothekspfad konfiguriert ist.",
-                Library: null,
-                MatchedLibraryPath: null)
-            : new EmbyLibraryScanTriggerResult(
-                UsedGlobalLibraryScan: true,
-                $"Globaler Emby-Library-Scan angestoßen (nicht bibliotheksscharf), weil in Emby keine passende Serienbibliothek zur Archivwurzel gefunden wurde: {archiveRootPath}",
-                Library: null,
-                MatchedLibraryPath: null);
+        throw new InvalidOperationException("Keine eindeutige Emby-Serienbibliothek zugeordnet. Bitte unter Einstellungen > Emby den Server-Archivpfad bzw. die Bibliotheks-ID prüfen. Es wurde kein Scan gestartet.");
     }
 
     /// <summary>
@@ -467,6 +469,9 @@ internal sealed class EmbyMetadataSyncService
             lookupPaths.Add(translatedLookupPath);
         }
 
+        if (!string.IsNullOrWhiteSpace(settings.ServerArchiveRootPath) || !string.IsNullOrWhiteSpace(settings.SeriesLibraryId))
+            return lookupPaths;
+
         if (!lookupPaths.Contains(mediaFilePath, StringComparer.OrdinalIgnoreCase))
         {
             lookupPaths.Add(mediaFilePath);
@@ -485,6 +490,18 @@ internal sealed class EmbyMetadataSyncService
         if (string.IsNullOrWhiteSpace(archiveRootPath))
         {
             return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.ServerArchiveRootPath) || !string.IsNullOrWhiteSpace(settings.SeriesLibraryId))
+        {
+            var relative = PathComparisonHelper.TryGetRelativePathWithinRoot(mediaFilePath, archiveRootPath);
+            if (relative is null) return null;
+            var explicitMatch = libraryMatch ?? await FindSeriesLibraryAsync(settings, archiveRootPath, cancellationToken);
+            if (explicitMatch is null) return null;
+            if (!string.IsNullOrWhiteSpace(settings.SeriesLibraryId) && explicitMatch.Library.Id != settings.SeriesLibraryId) return null;
+            var serverRoot = string.IsNullOrWhiteSpace(settings.ServerArchiveRootPath) ? explicitMatch.MatchedLocation : settings.ServerArchiveRootPath;
+            if (!IsServerPathWithinRoot(serverRoot, explicitMatch.MatchedLocation)) return null;
+            return CombineLibraryLocationWithRelativePath(serverRoot, relative);
         }
 
         var effectiveLibraryMatch = libraryMatch
@@ -512,16 +529,25 @@ internal sealed class EmbyMetadataSyncService
         return CombineLibraryLocationWithRelativePath(effectiveLibraryMatch.MatchedLocation, translatedRelativePath);
     }
 
+    /// <summary>Prüft Serverpfade ohne die Windows-Pfadnormalisierung auf Linux-Pfade anzuwenden.</summary>
+    private static bool IsServerPathWithinRoot(string path, string root)
+    {
+        var normalized = path.Replace('\\', '/').TrimEnd('/');
+        var normalizedRoot = root.Replace('\\', '/').TrimEnd('/');
+        if (normalized.Split('/').Any(part => part is "." or "..")
+            || normalizedRoot.Split('/').Any(part => part is "." or "..")) return false;
+        // Linux-Pfade sind case-sensitive; Windows-Pfade nur bei vorhandenem Laufwerkspräfix.
+        var comparison = normalizedRoot.Length >= 2 && normalizedRoot[1] == ':'
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(normalized, normalizedRoot, comparison)
+            || normalized.StartsWith(normalizedRoot + "/", comparison);
+    }
+
     /// <summary>
-    /// Sucht eine cross-platform plausible Zuordnung zwischen lokaler Archivwurzel und Emby-Library.
+    /// Sucht eine eindeutige gemeinsame Segmentfolge zwischen lokaler Archivwurzel und
+    /// Serverbibliothek. Mindestens zwei Segmente müssen übereinstimmen; ein einzelner
+    /// generischer Ordnername wie "Serien" ist keine verlässliche Pfadzuordnung.
     /// </summary>
-    /// <remarks>
-    /// Windows- und Linux-Setups unterscheiden sich oft nur durch Präfixe oder dadurch, dass eine Seite
-    /// einen Eltern- oder Kindordner des eigentlichen Medienroots konfiguriert hat. Die Ausrichtung sucht
-    /// deshalb eine gemeinsame Segmentfolge, erlaubt aber bewusst nur Parent/Child-Beziehungen und keine
-    /// bloßen Geschwisterpfade. Bei mehreren gleich guten Treffern wird konservativ <see langword="null"/>
-    /// zurückgegeben, damit kein falscher Library-Scan angestoßen wird.
-    /// </remarks>
     private static EmbyLibraryMatch? FindComparableAlignedLibrary(
         IReadOnlyList<EmbyLibraryFolder> libraries,
         string archiveRootPath)
@@ -533,7 +559,7 @@ internal sealed class EmbyMetadataSyncService
                 Match = match,
                 Alignment = TryAlignComparableRoots(archiveRootPath, match.MatchedLocation)
             })
-            .Where(candidate => candidate.Alignment is not null)
+            .Where(candidate => candidate.Alignment is { CommonSegmentCount: >= 2 })
             .Select(candidate => new
             {
                 candidate.Match,

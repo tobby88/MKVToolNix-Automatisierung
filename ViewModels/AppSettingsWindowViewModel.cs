@@ -35,6 +35,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private string _tvdbPin;
     private string _embyServerUrl;
     private string _embyApiKey;
+    private string _embyServerArchiveRootPath;
+    private string _embySeriesLibraryId;
     private int _embyScanWaitTimeoutSeconds;
     private string _embyScanWaitTimeoutSecondsText;
     private string _statusText = "Bereit";
@@ -73,6 +75,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         _tvdbPin = metadataSettings.TvdbPin;
         _embyServerUrl = embySettings.ServerUrl;
         _embyApiKey = embySettings.ApiKey;
+        _embyServerArchiveRootPath = embySettings.ServerArchiveRootPath;
+        _embySeriesLibraryId = embySettings.SeriesLibraryId;
         _embyScanWaitTimeoutSeconds = embySettings.ScanWaitTimeoutSeconds;
         _embyScanWaitTimeoutSecondsText = _embyScanWaitTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
         SelectedPage = initialPage;
@@ -334,6 +338,18 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         {
             EmbyScanWaitTimeoutSecondsText = value.ToString(CultureInfo.InvariantCulture);
         }
+    }
+
+    public string EmbyServerArchiveRootPath
+    {
+        get => _embyServerArchiveRootPath;
+        set { _embyServerArchiveRootPath = value?.Trim() ?? string.Empty; OnPropertyChanged(); }
+    }
+
+    public string EmbySeriesLibraryId
+    {
+        get => _embySeriesLibraryId;
+        set { _embySeriesLibraryId = value?.Trim() ?? string.Empty; OnPropertyChanged(); }
     }
 
     public string EmbyScanWaitTimeoutSecondsText
@@ -694,6 +710,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         {
             ServerUrl = string.IsNullOrWhiteSpace(EmbyServerUrl) ? AppEmbySettings.DefaultServerUrl : EmbyServerUrl,
             ApiKey = EmbyApiKey,
+            ServerArchiveRootPath = EmbyServerArchiveRootPath,
+            SeriesLibraryId = EmbySeriesLibraryId,
             ScanWaitTimeoutSeconds = EmbyScanWaitTimeoutSeconds
         }.Clone();
     }

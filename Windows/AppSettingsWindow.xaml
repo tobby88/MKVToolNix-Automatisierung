@@ -272,6 +272,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="180" />
@@ -324,6 +325,15 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+                    <StackPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,16,0,0">
+                        <TextBlock Text="Explizite Pfadzuordnung (optional)" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,6,0,4" Text="Archivpfad auf dem Emby-Server" />
+                        <TextBox Text="{Binding EmbyServerArchiveRootPath, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Serverpfad, der genau dem Archivordner im Tab Archiv entspricht, z.B. /mnt/raid/Videos/Serien. Leer: automatische Zuordnung." />
+                        <TextBlock Margin="0,10,0,4" Text="Serienbibliotheks-ID (optional)" />
+                        <TextBox Text="{Binding EmbySeriesLibraryId, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Feste Emby-Bibliotheks-ID zur eindeutigen Auswahl. Bei einer falschen ID wird kein anderer Ordner gescannt." />
+                    </StackPanel>
                 </Grid>
                 </ScrollViewer>
             </TabItem>

@@ -213,7 +213,7 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
         ? ReportSelectionDetailText
         : string.Join(Environment.NewLine, _reportPaths);
 
-    public string RunScanTooltip => "Startet bevorzugt den zur Archivwurzel passenden Emby-Serienbibliotheksscan, beobachtet dessen Serverfortschritt und liest danach NFO und Emby-Treffer erneut ein. Wenn keine passende Serienbibliothek erkannt wird, ist der globale Fallback im Status und Protokoll ausdrücklich als nicht bibliotheksscharf markiert.";
+    public string RunScanTooltip => "Scannt ausschließlich die eindeutig zugeordnete Emby-Serienbibliothek, beobachtet den Serverfortschritt und prüft danach NFO und Emby-Treffer erneut. Bei unklarer Zuordnung bitte Server-Archivpfad und Bibliotheks-ID in den Einstellungen hinterlegen; es gibt keinen globalen Scan-Fallback.";
 
     public string ReviewPendingProviderIdsTooltip => "Arbeitet offene Provider-ID-Prüfungen sequenziell ab. IMDb wird zuvor automatisch mit der TVDB-Episodenverknüpfung verglichen; nur fehlende oder widersprüchliche Zuordnungen bleiben manuell offen.";
 
@@ -1119,7 +1119,9 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
     {
         var settings = LoadConfiguredSettings();
         if (!string.Equals(settings.ServerUrl.TrimEnd('/'), _lastEmbySettings.ServerUrl.TrimEnd('/'), StringComparison.Ordinal)
-            || !string.Equals(settings.ApiKey, _lastEmbySettings.ApiKey, StringComparison.Ordinal))
+            || !string.Equals(settings.ApiKey, _lastEmbySettings.ApiKey, StringComparison.Ordinal)
+            || !string.Equals(settings.ServerArchiveRootPath, _lastEmbySettings.ServerArchiveRootPath, StringComparison.Ordinal)
+            || !string.Equals(settings.SeriesLibraryId, _lastEmbySettings.SeriesLibraryId, StringComparison.Ordinal))
         {
             foreach (var item in Items)
             {

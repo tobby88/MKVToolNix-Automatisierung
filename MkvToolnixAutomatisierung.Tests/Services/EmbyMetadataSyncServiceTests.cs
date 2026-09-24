@@ -309,20 +309,47 @@ public sealed class EmbyMetadataSyncServiceTests
     }
 
     [Fact]
-    public async Task TriggerSeriesLibraryScanAsync_FallsBackToGlobalScan_WhenArchiveRootIsNotFound()
+    public async Task TriggerSeriesLibraryScanAsync_RefusesGlobalScan_WhenArchiveRootIsNotFound()
     {
         var client = new RecordingEmbyClient();
         var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
 
-        var result = await service.TriggerSeriesLibraryScanAsync(
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.TriggerSeriesLibraryScanAsync(
             new AppEmbySettings { ServerUrl = "http://t-emby:8096", ApiKey = "token" },
-            @"Z:\Videos\Serien");
+            @"Z:\Videos\Serien"));
 
-        Assert.True(result.UsedGlobalLibraryScan);
-        Assert.Equal(1, client.TriggerLibraryScanCallCount);
+        Assert.Equal(0, client.TriggerLibraryScanCallCount);
         Assert.Null(client.LastItemFileScanItemId);
-        Assert.Null(result.Library);
-        Assert.Contains("nicht bibliotheksscharf", result.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("series", "/srv/TV", true)]
+    [InlineData("wrong", "/srv/TV", false)]
+    [InlineData("series", "/srv/tv", false)]
+    [InlineData("series", "/srv/TV-other", false)]
+    public async Task ExplicitMappingDoesNotGuessWhenConfigurationIsWrong(string libraryId, string serverRoot, bool expected)
+    {
+        var path = "/srv/TV/Show/episode.mkv";
+        var client = new RecordingEmbyClient
+        {
+            Libraries = [new("series", "Serien", ["/srv/TV"], null, null)],
+            ItemByPath = new Dictionary<string, EmbyItem> { [path] = new("episode", "Episode", path, new Dictionary<string, string>()) }
+        };
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+        var settings = new AppEmbySettings { SeriesLibraryId = libraryId, ServerArchiveRootPath = serverRoot };
+        var match = await service.FindSeriesLibraryAsync(settings, @"Z:\Videos\Serien");
+        Assert.Equal(expected, match is not null);
+        var item = await service.FindItemByPathAsync(settings, @"Z:\Videos\Serien\Show\episode.mkv", @"Z:\Videos\Serien", match);
+        Assert.Equal(expected, item is not null);
+        if (expected)
+        {
+            await service.TriggerSeriesLibraryScanAsync(settings, @"Z:\Videos\Serien");
+            Assert.Equal("series", client.LastItemFileScanItemId);
+        }
+        else await Assert.ThrowsAsync<InvalidOperationException>(() => service.TriggerSeriesLibraryScanAsync(settings, @"Z:\Videos\Serien"));
+        Assert.Equal(0, client.TriggerLibraryScanCallCount);
+        Assert.Equal(serverRoot, settings.Clone().ServerArchiveRootPath);
+        Assert.Equal(libraryId, settings.Clone().SeriesLibraryId);
     }
 
     [Fact]

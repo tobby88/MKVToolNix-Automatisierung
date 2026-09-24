@@ -71,6 +71,12 @@ public sealed class AppEmbySettings
     /// </summary>
     public string ApiKey { get; set; } = string.Empty;
 
+    /// <summary>Optionaler expliziter Serverpfad zur lokal konfigurierten Archivwurzel.</summary>
+    public string ServerArchiveRootPath { get; set; } = string.Empty;
+
+    /// <summary>Optionale feste Emby-Bibliotheks-ID; falsche IDs lösen keinen Fallback aus.</summary>
+    public string SeriesLibraryId { get; set; } = string.Empty;
+
     /// <summary>
     /// Maximale Wartezeit, in der das Modul nach einem Library-Scan nach neu sichtbaren Emby-Items sucht.
     /// </summary>
@@ -86,6 +92,8 @@ public sealed class AppEmbySettings
         {
             ServerUrl = string.IsNullOrWhiteSpace(ServerUrl) ? DefaultServerUrl : ServerUrl.Trim(),
             ApiKey = ApiKey?.Trim() ?? string.Empty,
+            ServerArchiveRootPath = ServerArchiveRootPath?.Trim() ?? string.Empty,
+            SeriesLibraryId = SeriesLibraryId?.Trim() ?? string.Empty,
             ScanWaitTimeoutSeconds = Math.Clamp(ScanWaitTimeoutSeconds, 5, 600)
         };
     }
