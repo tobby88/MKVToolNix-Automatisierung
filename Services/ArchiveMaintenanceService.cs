@@ -40,7 +40,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex SeasonFolderPattern = new(@"^Season\s+(?:\d+|xx)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex SubtitleSidecarSuffixPattern = new(
-        @"^(?:\.(?:de|deu|ger|en|eng|nds|fr|fra|fre|es|spa|it|ita|nl|nld|dut|sv|swe|da|dan|no|nor|fi|fin|pl|pol|pt|por|tr|tur|forced|sdh|cc|hoh|hi))*\.(?:srt|ass|ssa|vtt|ttml|sub|idx)$",
+        @"^(?:\.(?:[a-z]{2,3}(?:-[a-z0-9]{2,8})*|forced|sdh|cc|hoh|hi))*\.(?:srt|ass|ssa|vtt|ttml|sub|idx)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly string[] SidecarSuffixes =
     [
@@ -50,7 +50,9 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         ".png",
         ".webp",
         "-thumb.jpg",
-        "-poster.jpg"
+        "-poster.jpg", "-thumb.png", "-thumb.webp", "-poster.png", "-poster.webp",
+        "-fanart.jpg", "-fanart.png", "-fanart.webp", "-banner.jpg", "-banner.png",
+        "-landscape.jpg", "-landscape.png"
     ];
 
     private readonly MkvMergeProbeService _probeService;
@@ -371,8 +373,14 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     {
         var parsedName = TryParseEpisodeFileName(filePath);
         var nfoResult = new EmbyNfoProviderIdService().ReadEpisodeMetadata(filePath);
-        var expectedTitle = ResolveExpectedTitleFromNfoAndTvdb(nfoResult,
-            expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath));
+        var isRange = parsedName is not null && EpisodeFileNameHelper.IsEpisodeRange(parsedName.EpisodeNumber);
+        // Eine einzelne NFO-TVDB-ID beschreibt nicht verlässlich die gesamte Doppelfolge.
+        // Vorhandener MKV-Titel und Dateititel bleiben unabhängig erhalten; nur explizite
+        // manuelle Korrekturen dürfen sie oder den Staffelordner ändern.
+        var expectedTitle = isRange
+            ? (string.IsNullOrWhiteSpace(container.Title) ? parsedName!.Title : container.Title)
+            : ResolveExpectedTitleFromNfoAndTvdb(nfoResult,
+                expectedMetadata?.Title ?? parsedName?.Title ?? Path.GetFileNameWithoutExtension(filePath));
         if (expectedMetadata is not null)
         {
             expectedMetadata = expectedMetadata with { Title = expectedTitle };
@@ -385,6 +393,8 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         var renameMetadata = expectedMetadata ?? (parsedName is not null && nfoResult.IsTitleLocked
             ? new ArchiveExpectedEpisodeMetadata(expectedTitle, parsedName.SeasonNumber, parsedName.EpisodeNumber, null)
             : null);
+        if (isRange)
+            renameMetadata = new ArchiveExpectedEpisodeMetadata(parsedName!.Title, parsedName.SeasonNumber, parsedName.EpisodeNumber, expectedMetadata?.OriginalLanguage);
         var renameOperation = BuildRenameOperation(filePath, parsedName, renameMetadata);
         var issues = BuildRemuxIssues(container);
         var changeNotes = ArchiveHeaderNormalizationService

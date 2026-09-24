@@ -1,3 +1,5 @@
+using MkvToolnixAutomatisierung.Services;
+
 namespace MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 
 /// <summary>
@@ -56,6 +58,7 @@ internal static class SeriesEpisodeMuxHeaderEditArgumentBuilder
 
         foreach (var headerEdit in trackHeaderEdits)
         {
+            TrackHeaderValueValidation.ValidateSelector(headerEdit.Selector);
             arguments.AddRange(
             [
                 "--edit",
@@ -64,6 +67,7 @@ internal static class SeriesEpisodeMuxHeaderEditArgumentBuilder
 
             foreach (var valueEdit in ResolveValueEdits(headerEdit))
             {
+                TrackHeaderValueValidation.Validate(valueEdit.PropertyName, valueEdit.ExpectedMkvPropEditValue);
                 arguments.AddRange(
                 [
                     "--set",

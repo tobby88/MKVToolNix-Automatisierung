@@ -10,6 +10,35 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 public sealed class ArchiveMaintenanceServiceTests
 {
     [Fact]
+    public void AnalyzeContainer_PreservesRangeTitlesAndSeasonDespiteSingleEpisodeMetadata()
+    {
+        var path = @"C:\Archiv\Serie\Season 2\Serie - S02E01-E02 - Doppelfolge.mkv";
+        var result = ArchiveMaintenanceService.AnalyzeContainer(path,
+            new ContainerMetadata("Eigener Doppeltitel", [CreateVideoTrack(0), CreateAudioTrack(1, "Deutsch - AAC")], []),
+            new ArchiveExpectedEpisodeMetadata("Nur die erste Folge", "05", "01", "de"));
+        Assert.Null(result.RenameOperation);
+        Assert.Null(result.ContainerTitleEdit);
+        Assert.Equal("Eigener Doppeltitel", result.ExpectedTitle);
+    }
+
+    [Fact]
+    public void ManualRenameIncludesRegionalSidecarsAndArtworkButNotUnrelatedFiles()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sidecar-regions-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var source = Path.Combine(root, "Episode.mkv");
+            foreach (var suffix in new[] { ".pt-BR.sdh.srt", ".zh-Hant-TW.ass", "-fanart.png", "-poster.webp", ".another-episode.srt", " Extra.nfo" })
+                File.WriteAllText(Path.Combine(root, "Episode" + suffix), "test");
+            var rename = ArchiveMaintenanceService.BuildManualRenameOperation(source, "New.mkv")!;
+            Assert.Equal(4, rename.Sidecars.Count);
+            Assert.DoesNotContain(rename.Sidecars, sidecar => sidecar.SourcePath.Contains("another") || sidecar.SourcePath.Contains("Extra"));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public void AnalyzeContainer_DoesNotTreatMissingAdOrSubtitlesAsIssue()
     {
         var analysis = ArchiveMaintenanceService.AnalyzeContainer(

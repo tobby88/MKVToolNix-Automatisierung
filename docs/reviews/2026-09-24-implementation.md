@@ -11,7 +11,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A03 (O01): Konfliktsichere NFO-/Report-Aktualisierung und entsprechende Rennfalltests.
 - [x] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
 - [x] A05 (O02): Wiederaufnahmefähige Archivänderungen über Header, NFO und Rename.
-- [ ] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
+- [x] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
 - [ ] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
 - [ ] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
 - [ ] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
@@ -92,3 +92,13 @@ Bewusste Strategie: erneuter Scan plus Freigabe der verbleibenden Differenzen, k
 blindes Replay alter Aufträge und keine riesige MKV-Vollkopie für jeden Header-Edit.
 In-place-mkvpropedit ist damit ausdrücklich nicht als atomar/rollbackfähig ausgewiesen.
 33 gezielte Tests erfolgreich. Sichtung verbliebener Belege folgt in A18.
+
+### A06
+
+Regionale/Script-Sprachsuffixe sowie gezielte zusätzliche Artwork-Suffixe werden beim
+Umbenennen mitgenommen, fremde Titelpräfixe weiterhin nicht. Track-Properties, Selektoren,
+Flagwerte und Sprachsyntax werden gemeinsam validiert; unbekannte Flagtexte werden nicht
+mehr zu Nein. Ungültige manuelle Dateinamen bleiben auch in der UI kontrollierte Fehler.
+Bei Doppelfolgen bleiben Staffel/Range, Dateititel und MKV-Titel unabhängig erhalten,
+statt einen einzelnen TVDB-Episodentitel auf die gesamte Datei anzuwenden. Manuelle
+Korrekturen bleiben möglich. 80 gezielte Archiv-/Header-Tests erfolgreich.

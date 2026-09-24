@@ -1054,6 +1054,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
 
         var fileName = TargetFileName.Trim();
+        try { WindowsPathValidation.ValidateFileName(fileName); }
+        catch (ArgumentException ex) { return ex.Message; }
         if (fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
         {
             return "Der Ziel-Dateiname enthält ungültige Zeichen.";
@@ -1068,6 +1070,9 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         {
             return BuildProviderIdValidationMessage();
         }
+
+        if (HeaderCorrections.Select(correction => correction.ValidationMessage).FirstOrDefault(message => message is not null) is { } headerError)
+            return headerError;
 
         var renameOperation = CreateCurrentRenameOperation();
         if (renameOperation is not null && TargetExistsAsDifferentFile(renameOperation.SourcePath, renameOperation.TargetPath))
@@ -1122,6 +1127,8 @@ internal sealed class ArchiveMaintenanceItemViewModel : INotifyPropertyChanged
         }
 
         var fileName = TargetFileName.Trim();
+        try { WindowsPathValidation.ValidateFileName(fileName); }
+        catch (ArgumentException) { return false; }
         return fileName.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
             && string.Equals(Path.GetExtension(fileName), ".mkv", StringComparison.OrdinalIgnoreCase);
     }
@@ -1264,7 +1271,20 @@ internal sealed class ArchiveMaintenanceHeaderCorrectionViewModel : INotifyPrope
 
     public bool IsTextValue => !IsFlag;
 
-    public bool HasChange => CreateValueEdit() is not null;
+    public bool HasChange => ValidationMessage is not null || CreateValueEdit() is not null;
+
+    public string? ValidationMessage
+    {
+        get
+        {
+            try
+            {
+                TrackHeaderValueValidation.Validate(PropertyName, IsFlag ? TrackHeaderValueValidation.FlagToRaw(TargetValue) : TargetValue.Trim());
+                return null;
+            }
+            catch (ArgumentException ex) { return ex.Message; }
+        }
+    }
 
     public string TargetValue
     {
@@ -1287,6 +1307,7 @@ internal sealed class ArchiveMaintenanceHeaderCorrectionViewModel : INotifyPrope
 
     public TrackHeaderValueEdit? CreateValueEdit()
     {
+        if (ValidationMessage is not null) return null;
         var currentValue = NormalizeDisplayValue(CurrentDisplayValue);
         var targetDisplayValue = IsFlag
             ? NormalizeFlagDisplayValue(TargetValue)
@@ -1333,9 +1354,7 @@ internal sealed class ArchiveMaintenanceHeaderCorrectionViewModel : INotifyPrope
 
     private static string ResolveFlagRawValue(string displayValue)
     {
-        return NormalizeFlagDisplayValue(displayValue).Equals("ja", StringComparison.Ordinal)
-            ? "1"
-            : "0";
+        return TrackHeaderValueValidation.FlagToRaw(displayValue);
     }
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
