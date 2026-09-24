@@ -5,6 +5,52 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class EpisodeMetadataLookupServiceTests
 {
+    [Theory]
+    [InlineData("series")]
+    [InlineData("episodes")]
+    [InlineData("imdb")]
+    public async Task SharedFactoryRace_StartsOneRequestAcrossConcurrentThreads(string kind)
+    {
+        const int callerCount = 16;
+        using var barrier = new Barrier(callerCount);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatched = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requests = 0;
+        var calls = 0;
+        async Task WaitForProvider()
+        {
+            Interlocked.Increment(ref requests);
+            await release.Task;
+        }
+        var client = new FakeTvdbClient
+        {
+            SearchSeriesAsyncOverride = async (_, _) => { await WaitForProvider(); return []; },
+            GetSeriesEpisodesAsyncOverride = async (_, _) => { await WaitForProvider(); return []; },
+            GetEpisodeImdbAsyncOverride = async () => { await WaitForProvider(); return "tt1234567"; }
+        };
+        var settings = new AppMetadataSettings { TvdbApiKey = "key" };
+        var service = new EpisodeMetadataLookupService(new FakeMetadataStore(settings), client);
+        var tasks = Enumerable.Range(0, callerCount).Select(_ => Task.Factory.StartNew(async () =>
+        {
+            Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(10)));
+            Task lookup = kind switch
+            {
+                "series" => service.SearchSeriesAsync("Series", settings),
+                "episodes" => service.LoadEpisodesAsync(1, settings),
+                _ => service.LoadEpisodeImdbIdAsync(1)
+            };
+            if (Interlocked.Increment(ref calls) == callerCount) dispatched.TrySetResult();
+            await lookup;
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap()).ToArray();
+        try
+        {
+            await dispatched.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Equal(1, Volatile.Read(ref requests));
+        }
+        finally { release.TrySetResult(); }
+        await Task.WhenAll(tasks);
+    }
+
     [Fact]
     public async Task ResolveAutomaticallyAsync_ReturnsSkippedResult_WhenApiKeyIsMissing()
     {
@@ -821,6 +867,8 @@ public sealed class EpisodeMetadataLookupServiceTests
 
         public Func<int, CancellationToken, Task<IReadOnlyList<TvdbEpisodeRecord>>>? GetSeriesEpisodesAsyncOverride { get; init; }
 
+        public Func<Task<string?>>? GetEpisodeImdbAsyncOverride { get; init; }
+
         public Exception? SearchSeriesException { get; init; }
 
         public int SearchSeriesCallCount { get; private set; }
@@ -886,7 +934,7 @@ public sealed class EpisodeMetadataLookupServiceTests
             LoadEpisodeImdbIdCallCount++;
             LastApiKey = apiKey;
             LastPin = pin;
-            return Task.FromResult(EpisodeImdbIdResultFactory?.Invoke(episodeId));
+            return GetEpisodeImdbAsyncOverride?.Invoke() ?? Task.FromResult(EpisodeImdbIdResultFactory?.Invoke(episodeId));
         }
 
         public void Dispose()

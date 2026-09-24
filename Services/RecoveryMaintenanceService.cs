@@ -122,8 +122,17 @@ internal sealed partial class RecoveryMaintenanceService(IEnumerable<string> act
         if (entry.IsDirectory)
         {
             // Kein rekursiver Move darf unbemerkt einen Link in einen fremden Datenbaum folgen.
-            foreach (var path in Directory.EnumerateFileSystemEntries(entry.Path, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 }))
-                FileMutationSafety.EnsureOrdinaryPath(path);
+            var directories = new Stack<string>();
+            directories.Push(entry.Path);
+            while (directories.TryPop(out var directory))
+            {
+                foreach (var path in Directory.EnumerateFileSystemEntries(directory))
+                {
+                    // Validate before enqueueing: recursive enumeration must not enter a junction first.
+                    FileMutationSafety.EnsureOrdinaryPath(path);
+                    if (Directory.Exists(path)) directories.Push(path);
+                }
+            }
             FileSystem.DeleteDirectory(entry.Path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);
         }
         else FileSystem.DeleteFile(entry.Path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin, UICancelOption.ThrowException);

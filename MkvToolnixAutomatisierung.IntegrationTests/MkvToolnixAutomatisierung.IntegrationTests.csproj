@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MkvToolnixAutomatisierung.csproj" />
+    <!-- Reuse the same dispatcher/service fixtures rather than add production-only test seams. -->
+    <Compile Include="..\MkvToolnixAutomatisierung.Tests\TestInfrastructure\WpfTestHost.cs" Link="TestInfrastructure\WpfTestHost.cs" />
+    <Compile Include="..\MkvToolnixAutomatisierung.Tests\TestInfrastructure\ViewModelTestContext.cs" Link="TestInfrastructure\ViewModelTestContext.cs" />
   </ItemGroup>
 
   <!-- Der Helper wird nur per MSBuild-Target gebaut und muss daher beim separaten Restore der Integrationstests

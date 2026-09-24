@@ -32,7 +32,7 @@ Einige Tests sind bewusst auf die zuletzt fehleranfälligen Provider- und Emby-P
 - Eine explizite Entscheidung `Keine IMDb-ID` wird auch ohne weitere Provider-ID in die NFO geschrieben.
 - Reports können als erledigt markiert werden, auch wenn kein Emby-Refresh nötig ist, weil die lokale NFO bereits aktuell war.
 - Getrennte TVDB-/IMDb-Absagen, ihre Rücknahme und der Wiederimport werden einschließlich echter JSON-/NFO-Dateien geprüft. Tests sichern den Wechsel zwischen `partial` und `done`, den Erhalt nicht ausgewählter Einträge, Dateinamenskollisionen und das Zurücknehmen veralteter Abschlussmarker ab. Ein WPF-Test prüft die sofortige Übernahme der Checkboxen und ihre eigene Leertastenbedienung.
-- Der Scan-Status unterscheidet zwischen gezieltem Serienbibliotheksscan und sichtbar gemeldetem globalem Fallback.
+- Der Scan verlangt eine eindeutig zugeordnete Serienbibliothek. Explizite Serverpfade und Bibliotheks-IDs sind getestet; ein globaler Fallback ist ausgeschlossen.
 
 ## FakeMkvMerge
 
@@ -50,7 +50,36 @@ Der Integrationstest-Build stößt den Build dieses Hilfsprogramms automatisch m
 
 Regressionen prüfen die Veröffentlichung temporärer Mux-Ausgaben bei Exit-Code 0/1 sowie den Erhalt vorhandener Ziele bei Fehlern, Abbruch, leeren Ausgaben und fehlerhaften Ausgabe-Callbacks. Weitere Dateisystemtests decken Rename-Rollback mit Sidecars, geschützte Cleanup-Quellen, gesperrte Sortierziele und den Erhalt portabler MediathekView-Daten ab. Alle schreibenden Tests verwenden isolierte Testordner, keine echten Medienarchive.
 
-WPF-Tests prüfen Dispatcher-Zustände, Auswahl/Fokus, Busy-Sperren und die Freigabe tatsächlich angezeigter Pläne. HTTP-Fakes und kleine echte SQLite-/GZip-Datensätze prüfen Providerantworten und Cancellation ohne externe Accounts. Das ersetzt keine vollständige Live-Emby-Prüfung, keinen echten Medienmux und keinen Leistungsbenchmark mit dem gesamten IMDb-Datenbestand.
+WPF-Tests prüfen Dispatcher-Zustände, Auswahl/Fokus, Busy-Sperren und die Freigabe tatsächlich angezeigter Pläne. HTTP-Fakes und kleine echte SQLite-/GZip-Datensätze prüfen Providerantworten und Cancellation ohne externe Accounts. Das ersetzt keine vollständige Live-Emby-Prüfung und keinen Leistungsbenchmark mit dem gesamten IMDb-Datenbestand.
+
+Zusätzliche Regressionen sichern exklusive NFO-/Report-Schreibkonflikte, vollständige
+Sortierpaket-Rollbacks, reale Hardlinks/Junctions, Extraktions-/Speicherlimits und
+Wiederherstellungs-Snapshots ab. 16 gleichzeitig gestartete Threads prüfen die drei
+TVDB-Lazy-Request-Factories. Ein echter WPF-Dispatcher plus verzögerter Provider und
+Fake-Prozess prüfen die verschachtelte Alternativquellen-Erkennung im Batch.
+10.000 Emby-Zeilen und 400 gleichnamige IMDb-Serien prüfen die Skalierungs-/Limitverträge,
+nicht eine zugesagte Laufzeit auf jedem Rechner.
+
+## Isolierter Realmedientest
+
+`RealMediaWorkflowTests` erzeugt zwei Sekunden synthetisches Video mit Audio, Untertitel
+und TXT-Anhang. Er nutzt den gemeinsamen Mux-Workflow, prüft Dauer/Tracks mit echten
+Werkzeugen, führt Header-/NFO-Änderungen aus und verschiebt MKV, NFO und Thumbnail in
+eine andere Staffel. Alle Dateien und Settings liegen in eigenen temporären Ordnern.
+Ohne explizite Werkzeugpfade wird der Test sichtbar übersprungen, nicht als erfolgreich
+ausgegeben. Es gibt keinen automatischen Download dieser Testwerkzeuge.
+
+```powershell
+$env:MKV_TEST_TOOLNIX = 'C:\Tools\mkvtoolnix'
+$env:MKV_TEST_FFMPEG = 'C:\Tools\ffmpeg\bin\ffmpeg.exe'
+$env:MKV_TEST_FFPROBE = 'C:\Tools\ffmpeg\bin\ffprobe.exe'
+dotnet test .\MkvToolnixAutomatisierung.IntegrationTests --filter FullyQualifiedName~RealMediaWorkflowTests
+```
+
+Bei Plattformtests außerhalb einer eingeschränkten Entwicklungs-Sandbox laufen lassen:
+Windows-Vorfahrenprüfungen müssen Metadaten des Benutzerpfads lesen können. Live-Emby,
+Mobilfunk/SMB-Ausfälle, Stromausfall, native Mehrmonitor-DPI und Screenreader bleiben
+separate Praxisabnahmen. Tests verändern weder das produktive Archiv noch die echte Zwischenablage.
 
 ## Lokal ausführen
 

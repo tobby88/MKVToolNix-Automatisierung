@@ -27,7 +27,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
 - [x] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
 - [x] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
-- [ ] A22 (T01-T05): Reale isolierte Tooltests, Last-/Ausfalltests und ergänzende Regressionen.
+- [x] A22 (T01-T05): Automatisierbare Realtool-/Last-/Ausfallregressionen; Praxisgrenzen separat ausgewiesen.
 - [ ] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
 - [ ] A24: README/DocFX/Screenshots aktualisieren, Gesamtstatus und Debug-EXE/DLL prüfen.
 
@@ -242,3 +242,22 @@ festgehalten. Keine ungefragte Änderung redaktioneller Mux-Regeln. Ein UTF-16-N
 prüft bytegenauen No-op und semantischen Erhalt nach echter Änderung; bestehende
 Formatablehnungs-, Clipboard-, Sprach- und Shared-Request-Tests bleiben grün.
 140 gezielte Tests erfolgreich.
+
+### A22
+
+Opt-in-Realmedientest mit vorhandenem MKVToolNix 102.0 und FFmpeg/ffprobe erfolgreich:
+synthetisches Video, gemeinsamer Mux-Workflow, Tracks/Anhänge/Laufzeit, Header-Edit,
+Provider-/NFO-Titeländerung sowie Staffelwechsel mit NFO/Thumbnail. Keine Nutzermedien
+verändert. Voller Integrationslauf zunächst 136 grün; zusätzlicher verschachtelter
+Batch-Neuerkennungstest auf echtem Dispatcher separat ebenfalls grün.
+16 gleichzeitig startende Threads prüfen jede TVDB-Request-Factory. Weitere Tests
+bestätigen Junction-Abweisung vor Bereinigung und eine nachträgliche negative IMDb-
+Vollprüfung trotz zuvor positivem UI-Cache; dabei gefundener Cachefehler separat behoben.
+
+Testlücken sind nicht mit Scheinsicherheit geschlossen: T01 Live-Emby/Live-Watching,
+T02 kompletter IMDb-Import/Peak-RAM und langsames SMB, T03 echter Strom-/Share-Ausfall
+sowie T04 native Mehrmonitor-DPI, Screenreader und echte Zwischenablage wurden nicht
+am produktiven System getestet. Kontrollierte Dateisperr-/Rollback-/Prozessabbruchtests,
+10.000 Emby-Zeilen, Dateilinks, Mindestlayout und verzögerte Status-I/O sind automatisiert.
+T05 Mehrfachfolgen, parallele TVDB-Factories, echte verschachtelte Neuerkennung und
+Aktivierung mit fehlgeschlagenem Settings-Save haben jetzt gezielte Regressionen.

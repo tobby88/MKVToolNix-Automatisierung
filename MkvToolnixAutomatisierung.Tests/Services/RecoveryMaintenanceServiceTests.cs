@@ -62,6 +62,32 @@ public sealed class RecoveryMaintenanceServiceTests : IDisposable
         Assert.False(Assert.Single(service.Scan(_root)).CanRestore);
     }
 
+    [Fact]
+    public void Recycle_RejectsNestedJunctionBeforeAnyRemoval()
+    {
+        var stage = Path.Combine(_root, ".staging-" + Guid.NewGuid().ToString("N"));
+        var protectedDirectory = Path.Combine(_root, "personal");
+        var link = Path.Combine(stage, "linked");
+        Directory.CreateDirectory(stage);
+        Directory.CreateDirectory(protectedDirectory);
+        var original = Path.Combine(protectedDirectory, "keep.txt");
+        File.WriteAllText(original, "keep");
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe") { CreateNoWindow = true, UseShellExecute = false };
+        foreach (var argument in new[] { "/c", "mklink", "/j", link, protectedDirectory }) start.ArgumentList.Add(argument);
+        using var process = System.Diagnostics.Process.Start(start)!;
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode);
+        try
+        {
+            var service = new RecoveryMaintenanceService([]);
+            var entry = Assert.Single(service.Scan(_root));
+            Assert.Throws<IOException>(() => service.Recycle(entry));
+            Assert.True(Directory.Exists(stage));
+            Assert.Equal("keep", File.ReadAllText(original));
+        }
+        finally { Directory.Delete(link); } // Remove only our junction, never recursively through it.
+    }
+
     private static string WriteBackup(string target, string text)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
