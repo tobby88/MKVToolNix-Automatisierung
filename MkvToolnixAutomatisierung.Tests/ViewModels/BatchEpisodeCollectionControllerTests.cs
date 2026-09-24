@@ -1,6 +1,8 @@
 using System.Collections;
 using System.ComponentModel;
 using System.Windows.Data;
+using System.Windows.Threading;
+using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
 using Xunit;
 
@@ -8,6 +10,43 @@ namespace MkvToolnixAutomatisierung.Tests.ViewModels;
 
 public sealed class BatchEpisodeCollectionControllerTests
 {
+    [Fact]
+    public Task OpenEditWaitsForCommitWithoutPostingIdleRetries() => WpfTestHost.RunAsync(async () =>
+    {
+        using var controller = new BatchEpisodeCollectionController();
+        var item = CreateItem(@"C:\Temp\episode.mp4", "01", "01");
+        controller.Reset([item]);
+        await WpfTestHost.WaitForIdleAsync();
+        var view = (IEditableCollectionView)controller.View;
+        var posted = 0;
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        void Posted(object? _, DispatcherHookEventArgs e) { if (e.Operation.Priority == DispatcherPriority.ContextIdle) posted++; }
+        dispatcher.Hooks.OperationPosted += Posted;
+        try
+        {
+            view.EditItem(item);
+            controller.SetFilterMode(controller.FilterModes.Single(mode => mode.Key == BatchEpisodeFilterMode.ErrorsOnly));
+            await WpfTestHost.WaitForIdleAsync();
+            Assert.Equal(0, posted);
+            view.CommitEdit();
+            await WpfTestHost.WaitForIdleAsync();
+            Assert.Equal(1, posted);
+        }
+        finally { dispatcher.Hooks.OperationPosted -= Posted; }
+    });
+
+    [Fact]
+    public Task DisposalSuppressesAlreadyQueuedRefresh() => WpfTestHost.RunAsync(async () =>
+    {
+        var controller = new BatchEpisodeCollectionController();
+        controller.SetFilterMode(controller.FilterModes.Single(mode => mode.Key == BatchEpisodeFilterMode.ErrorsOnly));
+        var calls = 0;
+        controller.CommandsChanged += () => calls++;
+        controller.Dispose();
+        await WpfTestHost.WaitForIdleAsync();
+        Assert.Equal(0, calls);
+    });
+
     [Fact]
     public void HasOpenEditTransaction_ReturnsTrue_WhenCollectionViewIsEditingItem()
     {

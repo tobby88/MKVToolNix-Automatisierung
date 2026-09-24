@@ -15,7 +15,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
 - [x] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
 - [x] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
-- [ ] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
+- [x] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
 - [ ] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
 - [ ] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
 - [ ] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
@@ -128,3 +128,10 @@ wenn alle referenzierenden/aufräumenden Pläne erfolgreich abgeschlossen sind. 
 Abbruch oder einem fehlgeschlagenen Verbraucher bleiben sie erhalten. Batch-Ausgaben
 bleiben grundsätzlich ausgeschlossen. Cleanup-Fehler ändern nicht rückwirkend die
 bereits erzeugten Ausgabereports. 20 Batch-Runner-Tests erfolgreich.
+
+### A10
+
+Batch-CollectionViews warten bei offenen Edit-Transaktionen auf deren PropertyChanged-
+Ende statt immer neue ContextIdle-Arbeit zu erzeugen. Refreshes werden zusammengefasst,
+nach Dispose verworfen und am Dispatcher der tatsächlichen View ausgeführt. Elf Tests
+erfolgreich, einschließlich echtem WPF-Dispatcher und Nachweis ohne Idle-Retry-Schleife.

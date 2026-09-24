@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
 
@@ -51,6 +50,8 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     private readonly ICollectionView _view;
     private bool _deferCollectionNotifications;
     private bool _viewRefreshPending;
+    private bool _viewRefreshScheduled;
+    private bool _disposed;
     private BatchEpisodeFilterOption _selectedFilterMode;
     private BatchEpisodeSortOption _selectedSortMode;
 
@@ -58,6 +59,7 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     {
         _items.CollectionChanged += Items_CollectionChanged;
         _view = CollectionViewSource.GetDefaultView(_items);
+        if (_view is INotifyPropertyChanged notifyingView) notifyingView.PropertyChanged += View_PropertyChanged;
         _view.Filter = FilterEpisodeItem;
 
         FilterModes =
@@ -287,6 +289,8 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _disposed = true;
+        if (_view is INotifyPropertyChanged notifyingView) notifyingView.PropertyChanged -= View_PropertyChanged;
         _items.CollectionChanged -= Items_CollectionChanged;
         DetachAllEpisodeItems();
     }
@@ -553,25 +557,20 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     /// </summary>
     private void RequestViewRefresh()
     {
-        if (_viewRefreshPending)
-        {
-            return;
-        }
-
-        var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
-        if (dispatcher is null)
-        {
-            if (!HasOpenEditTransaction(_view))
-            {
-                _view.Refresh();
-                CommandsChanged?.Invoke();
-            }
-
-            return;
-        }
-
+        if (_disposed) return;
         _viewRefreshPending = true;
+        if (_viewRefreshScheduled || HasOpenEditTransaction(_view)) return;
+        var dispatcher = (_view as DispatcherObject)?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _viewRefreshScheduled = true;
         _ = dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(ProcessPendingViewRefresh));
+    }
+
+    private void View_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // ListCollectionView meldet Commit/Cancel von EditItem/AddNew selbst. Während
+        // einer langen Bearbeitung wird daher kein Dispatcher-Idle-Polling benötigt.
+        if (_viewRefreshPending && e.PropertyName is nameof(IEditableCollectionView.IsEditingItem) or nameof(IEditableCollectionView.IsAddingNew))
+            RequestViewRefresh();
     }
 
     /// <summary>
@@ -591,12 +590,8 @@ internal sealed class BatchEpisodeCollectionController : IDisposable
     /// </summary>
     private void ProcessPendingViewRefresh()
     {
-        var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
-        if (dispatcher is not null && HasOpenEditTransaction(_view))
-        {
-            _ = dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(ProcessPendingViewRefresh));
-            return;
-        }
+        _viewRefreshScheduled = false;
+        if (_disposed || !_viewRefreshPending || HasOpenEditTransaction(_view)) return;
 
         _viewRefreshPending = false;
         _view.Refresh();
