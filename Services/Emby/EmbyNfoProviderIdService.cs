@@ -128,7 +128,9 @@ internal sealed class EmbyNfoProviderIdService
 
         try
         {
-            var document = LoadEpisodeDocument(nfoPath);
+            var update = new SmallFileUpdate(nfoPath);
+            using var snapshot = update.OpenRead();
+            var document = LoadEpisodeDocument(snapshot);
             var root = document.Root;
             if (root is null)
             {
@@ -172,7 +174,7 @@ internal sealed class EmbyNfoProviderIdService
                 return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: true, "NFO-Provider-IDs waren bereits aktuell.");
             }
 
-            SaveAtomically(document, nfoPath);
+            SaveUpdate(document, update);
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: true, Success: true, "NFO-Provider-IDs aktualisiert.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
@@ -201,7 +203,9 @@ internal sealed class EmbyNfoProviderIdService
 
         try
         {
-            var document = LoadEpisodeDocument(nfoPath);
+            var update = new SmallFileUpdate(nfoPath);
+            using var snapshot = update.OpenRead();
+            var document = LoadEpisodeDocument(snapshot);
             var root = document.Root;
             if (root is null)
             {
@@ -240,7 +244,7 @@ internal sealed class EmbyNfoProviderIdService
                 return new EmbyNfoUpdateResult(nfoPath, NfoChanged: false, Success: true, "NFO-Titelfelder waren bereits aktuell.");
             }
 
-            SaveAtomically(document, nfoPath);
+            SaveUpdate(document, update);
             return new EmbyNfoUpdateResult(nfoPath, NfoChanged: true, Success: true, "NFO-Titelfelder aktualisiert.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
@@ -519,7 +523,13 @@ internal sealed class EmbyNfoProviderIdService
 
     private static XDocument LoadEpisodeDocument(string nfoPath)
     {
-        using var reader = XmlReader.Create(nfoPath, new XmlReaderSettings
+        using var stream = File.OpenRead(nfoPath);
+        return LoadEpisodeDocument(stream);
+    }
+
+    private static XDocument LoadEpisodeDocument(Stream stream)
+    {
+        using var reader = XmlReader.Create(stream, new XmlReaderSettings
         {
             DtdProcessing = DtdProcessing.Prohibit,
             XmlResolver = null
@@ -533,34 +543,20 @@ internal sealed class EmbyNfoProviderIdService
         return document;
     }
 
-    private static void SaveAtomically(XDocument document, string nfoPath)
+    private static void SaveUpdate(XDocument document, SmallFileUpdate update)
     {
-        var directory = Path.GetDirectoryName(nfoPath);
-        var tempPath = Path.Combine(
-            string.IsNullOrWhiteSpace(directory) ? "." : directory,
-            $".{Path.GetFileName(nfoPath)}.{Guid.NewGuid():N}.tmp");
-        try
+        using var buffer = new MemoryStream();
+        // Entitize erhält bedeutungstragende CR-Zeichen, z.B. &#xD; in Beschreibungen.
+        using (var writer = XmlWriter.Create(buffer, new XmlWriterSettings
         {
-            // Entitize preserves significant CR characters (e.g. &#xD; in plot text).
-            // Default XML saving would silently normalize them on the next read.
-            using (var writer = XmlWriter.Create(tempPath, new XmlWriterSettings
-            {
-                Indent = false,
-                NewLineHandling = NewLineHandling.Entitize,
-                OmitXmlDeclaration = document.Declaration is null
-            }))
-            {
-                document.Save(writer);
-            }
-            File.Replace(tempPath, nfoPath, destinationBackupFileName: null, ignoreMetadataErrors: true);
-        }
-        finally
+            Indent = false,
+            NewLineHandling = NewLineHandling.Entitize,
+            OmitXmlDeclaration = document.Declaration is null
+        }))
         {
-            if (File.Exists(tempPath))
-            {
-                File.Delete(tempPath);
-            }
+            document.Save(writer);
         }
+        update.Commit(buffer.ToArray());
     }
 }
 

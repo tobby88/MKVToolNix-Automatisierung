@@ -299,7 +299,10 @@ internal sealed class EmbyMetadataSyncService
             throw new FileNotFoundException("Der Metadatenreport wurde vor dem Speichern entfernt oder verschoben.", reportPath);
         }
 
-        var report = BatchOutputMetadataReportJson.Deserialize(File.ReadAllText(reportPath));
+        var update = new SmallFileUpdate(reportPath);
+        using var snapshot = update.OpenRead();
+        using var reader = new StreamReader(snapshot);
+        var report = BatchOutputMetadataReportJson.Deserialize(reader.ReadToEnd());
         if (report is null)
         {
             throw new InvalidDataException("Der Metadaten-Report konnte nicht gelesen werden.");
@@ -358,18 +361,7 @@ internal sealed class EmbyMetadataSyncService
 
         if (changed)
         {
-            // Erst vollständig neben der Originaldatei schreiben. Ein abgebrochener Schreibvorgang
-            // darf weder die ursprünglichen Mux-Metadaten noch bereits bestätigte Entscheidungen verlieren.
-            var temporaryPath = reportPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                File.WriteAllText(temporaryPath, BatchOutputMetadataReportJson.Serialize(report));
-                File.Replace(temporaryPath, reportPath, destinationBackupFileName: null);
-            }
-            finally
-            {
-                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
-            }
+            update.Commit(System.Text.Encoding.UTF8.GetBytes(BatchOutputMetadataReportJson.Serialize(report)));
         }
 
         if (!isComplete && !relevantItems.Any(item => item.EmbySyncDone == true || item.EmbyReview is not null))
