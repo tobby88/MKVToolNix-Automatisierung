@@ -72,9 +72,22 @@ Die Provider-Quellen, Konfliktregeln und Schreibgrenzen sind im Artikel [Metadat
 
 ## Vorgangsgrenzen
 
-Die Modul-ViewModels melden über `IModuleInteractionState` ihren interaktiven Zustand an die Shell. Während laufender Arbeit bleiben Modulwechsel und globale Einstellungen gesperrt; im Mux-Bereich gilt dies auch für den Wechsel zwischen Einzel und Batch. Der aktive Bereich bleibt für seine vorhandenen Abbruchaktionen erreichbar. Das schützt den normalen UI-Ablauf, ersetzt aber keine Sperre gegen andere Programme oder eine zweite App-Instanz.
+Die Modul-ViewModels melden über `IModuleInteractionState` ihren interaktiven Zustand an die Shell. Während laufender Arbeit bleiben Modulwechsel und globale Einstellungen gesperrt; im Mux-Bereich gilt dies auch für den Wechsel zwischen Einzel und Batch. Der aktive Bereich bleibt für seine vorhandenen Abbruchaktionen erreichbar. Zusätzlich verhindert ein benutzerbezogener globaler Windows-Mutex konkurrierende App-Instanzen, auch aus unterschiedlichen portablen Ordnern. Andere Programme werden dadurch nicht gesperrt.
 
-Archivpflege prüft Rename-Kollisionen vor schreibenden Schritten. Fehler beim Verschieben von MKV und Sidecars lösen einen rückwärts ausgeführten Rename-Rollback aus; bei fehlgeschlagenem Rollback werden die verbleibenden Pfade gemeldet. Header-, NFO- und Dateinamensänderungen bilden trotzdem keine gemeinsame Datenbanktransaktion. Nach einem Fehler ist ein neuer Scan erforderlich.
+Archivpflege prüft Rename-Kollisionen und angeforderte NFO-Änderungen vor Header-Edits.
+Ein dauerhaftes Schrittjournal erlaubt nach Fehlern eine bewusste Wiederaufnahme durch
+neuen Scan. Header-, NFO- und Dateinamensänderungen bilden keine gemeinsame Transaktion.
+`SmallFileUpdate` vergleicht NFO-/Reportbytes unter exklusiver Sperre und hält während
+des Schreibens eine geflushte Originalsicherung bereit. `ReversibleFileMoveBatch` nimmt
+fehlgeschlagene Sortierpakete samt ersetzten Zielen zurück. `FileMutationSafety` weist
+erkannte Link-/Case-Sensitivity-Sonderfälle vor Dateimutationen ab.
+
+`LatestStatusProbe` entprellt UI-Pfadprüfungen und führt pro Instanz höchstens einen
+nativen Dateizugriff außerhalb des Dispatchers aus. Veraltete Ergebnisse werden verworfen.
+Geschäftliche Ausführungsschritte warten ausdrücklich auf benötigte aktuelle Ergebnisse;
+eine noch laufende Statusanzeige darf nicht über Reportabschluss oder Archivpräsenz entscheiden.
+Emby verwendet einen gemeinsamen Abbruchkontext, inkrementelle Zeilenzähler und einen
+kurzen Library-Snapshotcache. Ein neuer Scan löst die Bibliothek frisch auf.
 
 ## Warum DocFX
 

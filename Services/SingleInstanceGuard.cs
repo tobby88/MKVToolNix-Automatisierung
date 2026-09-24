@@ -4,7 +4,8 @@ namespace MkvToolnixAutomatisierung.Services;
 
 /// <summary>
 /// Verhindert konkurrierende App-Prozesse desselben Windows-Benutzers auch über Sitzungen
-/// und portable Installationsorte hinweg. Fremde Programme bleiben durch Datei-Sperren geschützt.
+/// und portable Installationsorte hinweg. Konflikte mit fremden Programmen benötigen weiterhin
+/// die jeweils passenden Dateisperren und Versionsprüfungen der schreibenden Services.
 /// </summary>
 internal sealed class SingleInstanceGuard : IDisposable
 {

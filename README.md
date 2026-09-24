@@ -42,7 +42,7 @@ Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Si
 
 Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/releases/1.4.2.md). Die portable EXE gibt es beim [aktuellen Release](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest).
 
-Die noch nicht veröffentlichten Review-Korrekturen mit Testnachweisen und verbleibenden Grenzen stehen im [Gesamtreview vom 22. September 2026](docs/reviews/2026-09-22/README.md).
+Die noch nicht veröffentlichten Review-Korrekturen stehen im [Gesamtreview vom 22. September 2026](docs/reviews/2026-09-22/README.md). Den aktuellen Abschlussstand aller Restpunkte mit Tests und verbleibenden Praxisgrenzen dokumentiert die [Umsetzung vom 24. September](docs/reviews/2026-09-24-implementation.md).
 
 ## Screenshots
 
@@ -78,7 +78,7 @@ Die noch nicht veröffentlichten Review-Korrekturen mit Testnachweisen und verbl
 
 - Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
 - MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten; optional kann sie die portable Windows-ZIP-Version auch selbst unter `.\Tools` herunterladen und aktuell halten.
-- Alte verwaltete MediathekView-Installationen bleiben bei Updates als Rückfallkopie erhalten, da sie beliebige eigene Downloads oder Einstellungen enthalten können. Sie benötigen zusätzlichen Speicher und sollten nur nach Prüfung der enthaltenen Benutzerdaten manuell entfernt werden.
+- Alte verwaltete MediathekView-Installationen bleiben bei Updates als Rückfallkopie erhalten, da sie beliebige eigene Downloads oder Einstellungen enthalten können. Unter `Einstellungen > Wiederherstellung` lassen sie sich gezielt prüfen. Updates mit Einstellungsübernahme werden bei laufendem MediathekView oder nicht eindeutig zuordenbaren Java-Prozessen verschoben; vorher schließen und erneut versuchen.
 - MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
 - Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
 - Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
@@ -90,6 +90,8 @@ Die noch nicht veröffentlichten Review-Korrekturen mit Testnachweisen und verbl
 Die App ist bewusst portabel gedacht und nicht für eine klassische Installation vorgesehen.
 
 Während eines laufenden Modulvorgangs sind Modulwechsel und globale Einstellungen gesperrt. So können andere Ansichten nicht gleichzeitig dieselben Quellen bearbeiten oder mitten im Abgleich die Serververbindung ändern. Die aktuelle Ansicht und ihre vorhandene Abbruchfunktion bleiben zugänglich.
+
+Pro Windows-Benutzer wird außerdem nur eine App-Instanz zugelassen, auch bei unterschiedlichen portablen Ordnern. Das verhindert konkurrierende App-Vorgänge, ersetzt aber keine Konfliktprüfung gegenüber externen Programmen wie Emby.
 
 - Es gibt keinen Installer.
 - Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
@@ -165,7 +167,7 @@ Zusätzlich beim Batch-Lauf:
 - bleibt das Batch-Protokoll im Batch-Tab sichtbar
 - können fertig verarbeitete Quellen in einen `done`-Ordner verschoben werden
 
-Bei einem Batch-Abbruch bleiben bereits abgeschlossene Ausgaben samt Metadatenreport erhalten. Die Reports werden vor dem optionalen Papierkorb-Aufräumen gespeichert. Gemeinsam von mehreren Plänen verwendete Quellen bleiben vorsichtshalber am Quellort; das Protokoll kennzeichnet diesen Quellenschutz. Doppelte Ausgabeziele und Ziele, die eine andere ausgewählte Episode als Quelle braucht, werden vor dem Schreiben blockiert.
+Bei einem Batch-Abbruch bleiben bereits abgeschlossene Ausgaben samt Metadatenreport erhalten. Die Reports werden vor dem optionalen Papierkorb-Aufräumen gespeichert. Gemeinsam von mehreren Plänen verwendete Quellen werden erst am Batchende aufgeräumt, wenn alle ihre Verbraucher erfolgreich waren. Bei Fehler oder Abbruch bleiben sie geschützt am Quellort. Doppelte Ausgabeziele und Ziele, die eine andere ausgewählte Episode als Quelle braucht, werden vor dem Schreiben blockiert.
 
 ## Typischer Workflow: Archivpflege
 
@@ -187,17 +189,31 @@ Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/For
 4. Bei Bedarf Zielordner manuell korrigieren oder einzelne Einträge abwählen.
 5. `Auswahl einsortieren`, um die Dateien in die Serienunterordner zu verschieben.
 
+Alle ausgewählten Pakete werden vor Ordneränderungen geprüft. Scheitert das Verschieben
+einer Begleitdatei, werden bereits verschobene Teile desselben Pakets zurückgenommen.
+Abgewählte Pakete bleiben unberührt; Abbruch erfolgt zwischen vollständigen Paketen.
+
 ## Typischer Workflow: Emby-Abgleich
 
 1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
 2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
 3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
-4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan wird bevorzugt auf die zur Archivwurzel passende Serienbibliothek begrenzt. Falls Emby die Bibliothek nicht eindeutig zuordnen kann, zeigt die App den globalen Fallback ausdrücklich an, statt ihn als bibliotheksscharfen Scan aussehen zu lassen. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
+4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan startet nur bei eindeutig zugeordneter Serienbibliothek, niemals als globaler Fallback. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
 5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft. Für IMDb liest das Tool zuerst die Remote-Verknüpfung der bereits bekannten TVDB-Episode. Fehlt diese oder ist TVDB vorübergehend nicht erreichbar, versucht es den optionalen lokalen IMDb-Index. Nur ein eindeutiger exakter Serien- und Episodentitel wird automatisch übernommen; Staffel/Folge dienen wegen abweichender IMDb-Nummerierungen nur als Zusatzsignal. Widersprüche und unsichere Treffer bleiben zur manuellen Prüfung offen.
 6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist. Gibt es für eine Folge bei einem Anbieter keinen passenden Eintrag, dort `Kein Eintrag` aktivieren. Diese Entscheidung gilt nur für den jeweiligen Anbieter; ein leeres ID-Feld allein gilt noch nicht als erledigt.
 7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
 
 Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs. Wenn Emby temporär nicht erreichbar ist oder eine Datei noch nicht als Item liefert, prüft die App vorhandene lokale `.nfo`-Dateien trotzdem weiter, damit ein Serverproblem nicht jede lokale Kontrolle blockiert. Dateien in Emby-Asset-Ordnern wie `trailers` oder `backdrops` bekommen normalerweise keine Episoden-NFO; solche Einträge werden erkannt und beim Provider-ID-Sync übersprungen.
+
+Bei unterschiedlichen Client-/Serverpfaden lässt sich unter `Einstellungen > Emby` der
+`Archivpfad auf dem Emby-Server` ausdrücklich dem lokalen Archivpfad zuordnen, etwa
+`Z:\Videos\Serien` zu `/mnt/raid/Videos/Serien`. Optional kann die `Serienbibliotheks-ID`
+die Auswahl zusätzlich festlegen. Falsche explizite Angaben werden nicht heuristisch
+durch einen anderen Pfad ersetzt; Linux-Serverpfade beachten Groß-/Kleinschreibung.
+
+`Abbrechen` gilt auch für Import, Prüfung und Schreiben. Abgeschlossene NFO-Änderungen
+und Prüfentscheidungen bleiben erhalten; ein noch nicht angeforderter Refresh bleibt offen.
+Das Abbrechen des Wartens stoppt keinen bereits auf dem Emby-Server laufenden Scan.
 
 Beim abschließenden Speichern sichert die App die Provider-Auswahl, bewusste `Kein Eintrag`-Entscheidungen und den Bearbeitungsstand je MKV in der JSON. Die ursprünglichen Mux-Metadaten bleiben dabei erhalten. Teilweise bearbeitete Reports kommen in `partial`; sobald alle relevanten Einträge erledigt sind, wechseln sie in den danebenliegenden Ordner `done`. Ungeklärte fehlende IDs, eine fehlende NFO oder ein noch nötiger, aber fehlgeschlagener Emby-Refresh verhindern den vollständigen Abschluss. Ohne konfigurierte Emby-Zugangsdaten zählt wie bisher der erfolgreich abgeschlossene lokale NFO-Abgleich; `trailers` und `backdrops` benötigen keinen Provider-ID-Sync.
 
@@ -331,6 +347,27 @@ Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
 - Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
 - Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
 - Portable Daten und Logs bleiben im Anwendungsordner.
+
+## Konflikte und Wiederherstellung
+
+NFO-/Reportänderungen prüfen unter exklusiver Dateisperre, ob der gelesene Inhalt noch
+aktuell ist. Ein paralleler Emby-/Benutzereingriff wird als Konflikt gemeldet, nicht still
+überschrieben. Bei echten Änderungen bleibt vor dem kurzen Schreibvorgang eine
+vollständig gesicherte Originalkopie verfügbar.
+
+Archivpflege ist über MKV-Header, NFO und Umbenennung hinweg trotzdem nicht atomar.
+Vor schreibenden Schritten wird ein `.archive-change-*.json`-Beleg angelegt. Nach einem
+Fehler können Teiländerungen bestehen: neu scannen, verbleibende Differenzen prüfen und
+erneut freigeben. Ein in-place-Header-Edit legt keine vollständige MKV-Backupkopie an.
+
+Unter `Einstellungen > Wiederherstellung` lassen sich bekannte Arbeitsreste in Tools,
+IMDb-Daten oder einem gewählten Archivordner ansehen. Aktive Installationen und Links
+sind ausgeschlossen. Geprüfte NFO-/JSON-Sicherungen können einzeln wiederhergestellt
+werden; der jetzige Inhalt wird zusätzlich gesichert. Alte Toolordner und Arbeitsreste
+können nach ausdrücklicher Bestätigung in den Papierkorb. Nichts wird pauschal entfernt,
+Archivbelege werden nicht blind erneut ausgeführt.
+
+Weitere bewusste Heuristiken und Formatgrenzen stehen unter [Regeln und Grenzen](docs/articles/behavior-contracts.md).
 
 ## Starten
 

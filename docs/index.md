@@ -7,6 +7,7 @@ Diese DocFX-Seite ergänzt die portable App um strukturierte Entwicklerdokumenta
 - [Architekturüberblick](articles/architecture.md)
 - [Metadaten- und Provider-Datenfluss](articles/metadata-providers.md)
 - [Teststrategie](articles/testing.md)
+- [Bewusste Regeln und Grenzen](articles/behavior-contracts.md)
 - [Portable Daten und Logs](articles/portable-storage.md)
 
 Die API-Referenz wird beim DocFX-Build automatisch erzeugt und ist in der fertigen Site über den Navigationspunkt `API` erreichbar.

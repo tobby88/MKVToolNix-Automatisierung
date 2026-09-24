@@ -5,9 +5,10 @@ Ziel: belegbare Fehler, Inkonsistenzen, Performance- und Wartbarkeitsprobleme
 einschließlich kleiner Befunde prüfen und direkt mit Regressionstests beheben.
 Keine funktional unbegründeten Großumbauten oder Paketupdates.
 
-**Für die weitere Auswahl:** [Konsolidierte offene Findings, Hinweise und Testlücken](open-findings.md).
-Diese Restliste berücksichtigt die späteren Korrekturen und ersetzt ältere Offen-/Übergabevermerke
-in den einzelnen Bereichsberichten. Der Stand bis `9ff3a8e` wurde inzwischen gepusht.
+**Aktueller Stand:** [Umsetzung aller Restpunkte vom 24. September](../2026-09-24-implementation.md).
+Die [ursprüngliche Restliste](open-findings.md) bleibt als historische Entscheidungsvorlage
+erhalten. Ihr Offen-Status ist überholt; aktuelle Testergebnisse und Praxisgrenzen stehen
+im Umsetzungsbericht.
 
 ## Arbeitsliste
 

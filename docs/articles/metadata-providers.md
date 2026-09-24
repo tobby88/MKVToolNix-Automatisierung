@@ -20,6 +20,16 @@ Die Anwendung trennt lokale Erkennung, TVDB, IMDb, NFO und Emby bewusst voneinan
 5. `Kein Eintrag` bestätigt je Anbieter ausdrücklich, dass keine TVDB- beziehungsweise IMDb-ID vergeben werden soll. Die IMDb-Absage bestätigt nicht zugleich eine fehlende TVDB-Zuordnung; leere Felder allein bleiben offen.
 6. `NFO speichern + Emby aktualisieren` schreibt ausschließlich tatsächlich geänderte Provider-IDs. Unveränderte NFOs werden nicht neu gespeichert und ihre Emby-Items nicht unnötig aktualisiert.
 
+Der lokale Archivpfad kann in den Einstellungen ausdrücklich auf einen Emby-Serverpfad
+abgebildet werden; optional legt eine Bibliotheks-ID die Serienbibliothek fest. Ohne
+eindeutige Zuordnung wird kein Scan gestartet. Ein globaler Fallback ist ausgeschlossen.
+Ohne explizite Zuordnung verlangt die automatische Suffixerkennung mindestens zwei
+gemeinsame Pfadsegmente, nicht nur den generischen Ordnernamen `Serien`.
+
+Abbruch gilt für Import, Prüfung, Scan-Warten und Schreiben. Bereits geschriebene NFOs
+und bestätigte Providerentscheidungen bleiben erhalten. Ein danach abgebrochener Refresh
+bleibt offen; der Server-Scan selbst wird durch das Abbrechen des Wartens nicht beendet.
+
 Der abschließende Schreibschritt speichert die aktuelle Provider-Auswahl und manuelle Freigaben im optionalen `embyReview`-Block jedes Reporteintrags. Die ursprünglichen Mux-Metadaten bleiben unverändert. `embySyncDone` und die Abschlusszeitpunkte dokumentieren die erfolgreiche Bearbeitung. Unvollständige Reports werden nach `partial`, vollständig erledigte nach `done` verschoben; Wiederimporte verwenden diese Geschwisterordner ohne weitere Verschachtelung. Erneute fehlgeschlagene Bearbeitungen nehmen einen alten Abschluss zurück. Ohne konfigurierte Emby-Zugangsdaten gilt der lokale NFO-Abgleich als Abschluss; mit Zugangsdaten bleibt ein erforderlicher, aber nicht erfolgreicher Refresh offen.
 
 Beim Wiederimport werden gespeicherte manuelle Entscheidungen übernommen. Automatische Übereinstimmungen werden dagegen erneut anhand der aktuellen Quellen geprüft. Bewusst fehlende IDs werden nicht aus Report, NFO oder Emby wieder aufgefüllt. Das Entfernen des Hakens oder eine neue ID-Eingabe erlaubt eine erneute Zuordnung.
@@ -33,6 +43,16 @@ Der sichtbare Importfortschritt kombiniert den exakten Zeilenzähler mit dem Ant
 Titelähnlichkeit ist das wichtigste Suchsignal. Staffel und Folge beeinflussen die Rangfolge, sind aber kein Ausschlusskriterium, weil IMDb und TVDB größere Serien häufig unterschiedlich nummerieren. Nur ein eindeutiger exakter Serien- und Episodentitel darf ohne Benutzerentscheidung übernommen werden.
 
 Der manuelle Dialog lädt lokale Kandidaten asynchron und hält bereits gelesene Serien- und Episodenkataloge für weitere Folgen derselben Serie im Speicher. Korrigierte Serien- oder Episodentexte lösen nach einer kurzen Entprellzeit automatisch eine neue Hintergrundsuche aus. Passende Serien werden einschließlich lokalisierter Aliasnamen angeboten; nach der Serienwahl lässt sich der Episodenkatalog auf die tatsächlich vorhandenen IMDb-Staffeln begrenzen.
+
+Ein einzelner Tippfehler am Wortanfang wird durch zusätzliche indexgestützte Präfixbereiche
+berücksichtigt. Ergebnislimits gelten konsistent auch bei warmem Cache; ein internes
+256-Zeilen-/12-Serien-Limit schneidet passende Kandidaten nicht mehr ab.
+
+Vor Aktivierung prüft der Update-Worker SQLite-Integrität und Importmengen. Ein Rückgang
+um mehr als 20 Prozent gegenüber mindestens 100 vorhandenen Serien, Episoden oder Aliasnamen
+verhindert den Austausch und verlangt Prüfung. Ein zuvor fehlgeschlagener Settings-Save
+wird beim nächsten Start mit Version/Schema/Aufbauzeit aus dem aktiven Index abgeglichen.
+Diese Plausibilitätsgrenze ist keine Vollständigkeits- oder kryptographische Herkunftsgarantie.
 
 Der Index ist ein Fallback, keine zusätzliche Online-API. Er liegt portabel unter `Data/IMDb/imdb-episodes.sqlite`; die heruntergeladenen GZip-Dateien werden nach dem Aufbau wieder entfernt. Stand September 2026 beanspruchen die Archive rund 750 MiB und der fertige Index rund 1,3 GiB. Während des atomaren Neuaufbaus sollten 4 bis 5 GiB frei sein, weil alter und neuer Index vorübergehend neben den Archiven liegen. Die IMDb-Datensätze dürfen nur entsprechend ihrer Bedingungen für persönliche, nichtkommerzielle Zwecke verwendet werden.
 

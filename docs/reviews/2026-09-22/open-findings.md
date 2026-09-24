@@ -1,5 +1,8 @@
 # Offene Punkte nach dem Gesamtreview
 
+> Historischer Befund. Aktuelle Umsetzung, Tests und verbleibende Praxisgrenzen:
+> [Abschluss vom 24. September 2026](../2026-09-24-implementation.md).
+
 Konsolidierter Stand nach `9ff3a8e`, erstellt am 2026-09-22. Die 28 bis dahin lokalen
 Commits wurden auf `GitHub/master` gepusht. Diese Liste ist eine Entscheidungsvorlage,
 keine Freigabe für weitere technische Änderungen.

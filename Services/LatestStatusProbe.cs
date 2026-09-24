@@ -5,6 +5,11 @@ namespace MkvToolnixAutomatisierung.Services;
 /// Instanz läuft gleichzeitig; nicht abbrechbare SMB-Aufrufe erzeugen keine Threadflut.
 /// Eine neuere Anforderung entwertet alte Rückmeldungen auch nach abgeschlossenem I/O.
 /// </summary>
+/// <remarks>
+/// Request/Cancel/Dispose gehören zum besitzenden UI-Kontext; nur query läuft auf einem Worker.
+/// apply und failed kehren in den beim Request erfassten Kontext zurück. Native I/O wird
+/// nicht gewaltsam beendet, deshalb wartet die nächste Abfrage auf das gemeinsame Gate.
+/// </remarks>
 internal sealed class LatestStatusProbe<T> : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);

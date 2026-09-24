@@ -29,7 +29,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
 - [x] A22 (T01-T05): Automatisierbare Realtool-/Last-/Ausfallregressionen; Praxisgrenzen separat ausgewiesen.
 - [x] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
-- [ ] A24: README/DocFX/Screenshots aktualisieren, Gesamtstatus und Debug-EXE/DLL prüfen.
+- [x] A24: README/DocFX/Screenshots aktualisieren, Gesamtstatus und Debug-EXE/DLL prüfen.
 
 ## Sicherheitsgrenzen
 
@@ -273,3 +273,17 @@ Der zuletzt gepushte Ausgangsstand `37b643d` ist auf GitHub grün:
 [Nightly](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/runs/35963483043).
 Diese Ergebnisse bestätigen nicht die noch ungepushten neuen Commits; deren Remote-CI
 kann erst nach einem weiteren Push laufen.
+
+### A24
+
+README und DocFX beschreiben jetzt Emby-Mapping ohne globalen Scan, durchgängigen Abbruch,
+konfliktsichere Metadaten, Paket-Rollback, gemeinsamen Cleanup, Einzelinstanzschutz,
+Indexprüfung und Wiederherstellung. Die historische Restliste verweist auf diesen Abschluss.
+Alle sieben README-Bilder neu gerendert; nur das Einstellungsbild hat eine Bildänderung.
+Dessen transparenter Chrome-Rand wurde beseitigt; der Generator prüft nun die Bildränder
+auch im CI-Smoke-Test. Geänderte Ansicht visuell kontrolliert.
+Regulärer Debug-Rebuild mit EXE und DLL erfolgreich, null Warnungen/Fehler.
+Debug-Konfiguration, Benutzerlogs und vorhandene Werkzeuginstallationen bleiben erhalten.
+Keine funktionale O01-O28-Arbeit offen; die oben benannten Praxisabnahmen bleiben Grenzen
+des Testnachweises, keine als erfolgreich ausgegebenen Tests. Alle Änderungen werden in
+kleinen thematischen Commits gespeichert; ein Push ist in diesem Auftrag nicht erfolgt.
