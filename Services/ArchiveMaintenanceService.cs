@@ -179,7 +179,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
                 ValidateRename(plannedRename);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
             {
                 return new ArchiveMaintenanceApplyResult(request.FilePath, currentPath, false,
                     $"Umbenennen fehlgeschlagen: {ex.Message}", outputLines);
@@ -607,6 +607,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceMediaPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetFileName);
+        WindowsPathValidation.ValidateFileName(targetFileName.Trim());
         if (targetFileName.Trim().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || !string.Equals(Path.GetExtension(targetFileName.Trim()), ".mkv", StringComparison.OrdinalIgnoreCase))
         {
@@ -614,6 +615,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         }
 
         var targetPath = BuildTargetMediaPath(sourceMediaPath, targetFileName.Trim());
+        WindowsPathValidation.ValidateFilePath(targetPath);
         return CreateRenameOperation(sourceMediaPath, targetPath);
     }
 
@@ -848,6 +850,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
     private static void ValidateRename(ArchiveRenameOperation renameOperation)
     {
+        WindowsPathValidation.ValidateFilePath(renameOperation.TargetPath);
         if (!File.Exists(renameOperation.SourcePath))
         {
             throw new FileNotFoundException("Die umzubenennende MKV wurde nicht gefunden.", renameOperation.SourcePath);
@@ -861,6 +864,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
 
         foreach (var sidecar in renameOperation.Sidecars)
         {
+            WindowsPathValidation.ValidateFilePath(sidecar.TargetPath);
             if (!File.Exists(sidecar.SourcePath))
             {
                 throw new FileNotFoundException("Eine geplante Begleitdatei fehlt. Bitte neu scannen.", sidecar.SourcePath);
