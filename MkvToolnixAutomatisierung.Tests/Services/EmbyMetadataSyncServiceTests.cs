@@ -772,6 +772,25 @@ public sealed class EmbyMetadataSyncServiceTests
         Assert.Null(analysis.EffectiveProviderIds.TvdbId);
     }
 
+    [Fact]
+    public async Task LibraryLookup_CachesMissesButNotScanProgressOrNewScanRequests()
+    {
+        var client = new RecordingEmbyClient();
+        var service = new EmbyMetadataSyncService(client, new EmbyNfoProviderIdService());
+        var settings = new AppEmbySettings();
+        for (var i = 0; i < 100; i++)
+            Assert.Null(await service.FindSeriesLibraryAsync(settings, @"Z:\Videos\Serien"));
+        Assert.Equal(1, client.LibraryCallCount);
+        await service.GetLibraryByIdAsync(settings, "id");
+        await service.GetLibraryByIdAsync(settings, "id");
+        Assert.Equal(3, client.LibraryCallCount);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.TriggerSeriesLibraryScanAsync(settings, @"Z:\Videos\Serien"));
+        Assert.Equal(4, client.LibraryCallCount);
+        settings.ServerArchiveRootPath = "/another/root";
+        await service.FindSeriesLibraryAsync(settings, @"Z:\Videos\Serien");
+        Assert.Equal(5, client.LibraryCallCount);
+    }
+
     private sealed class ThrowingEmbyClient : IEmbyClient
     {
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
@@ -811,6 +830,7 @@ public sealed class EmbyMetadataSyncServiceTests
 
     private sealed class RecordingEmbyClient : IEmbyClient
     {
+        public int LibraryCallCount { get; private set; }
         public IReadOnlyList<EmbyLibraryFolder> Libraries { get; init; } = [];
 
         public IReadOnlyDictionary<string, EmbyItem> ItemByPath { get; init; } = new Dictionary<string, EmbyItem>(StringComparer.OrdinalIgnoreCase);
@@ -824,7 +844,10 @@ public sealed class EmbyMetadataSyncServiceTests
         public List<string> FindRequests { get; } = [];
 
         public Task<IReadOnlyList<EmbyLibraryFolder>> GetLibrariesAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
-            => Task.FromResult(Libraries);
+        {
+            LibraryCallCount++;
+            return Task.FromResult(Libraries);
+        }
 
         public Task<EmbyServerInfo> GetSystemInfoAsync(AppEmbySettings settings, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Emby;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -25,7 +27,14 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
     private EmbySyncItemViewModel? _selectedItem;
     private string _reportPath = string.Empty;
     private string _statusText = "Bereit";
-    private string _logText = string.Empty;
+    private readonly StringBuilder _logBuffer = new();
+    private string? _logSnapshot;
+    private long _lastLogNotification;
+    private readonly Dictionary<EmbySyncItemViewModel, RowSummary> _rowSummaries = [];
+    private int _selectedCount;
+    private int _missingIdCount;
+    private int _incompleteIdCount;
+    private int _pendingSelectedCount;
     private string? _progressDisplayTextOverride;
     private int _progressValue;
     private bool _isBusy;
@@ -43,6 +52,7 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
         _providerReviewDialogs = providerReviewDialogs ?? new EmbyProviderReviewDialogService(_services.ImdbDatasetSearch);
         _moduleLogs = moduleLogs;
         _lastEmbySettings = _services.Settings.Load();
+        _items.CollectionChanged += ItemsOnCollectionChanged;
         Action<Exception> unexpectedCommandErrorHandler = ex => _dialogService.ShowError($"Unerwarteter Fehler:\n\n{ex.Message}");
 
         SelectReportCommand = new AsyncRelayCommand(() => RunBusyAsync(SelectReportAsync), () => !_isBusy, unexpectedCommandErrorHandler);
@@ -53,8 +63,8 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
         ReviewSelectedImdbCommand = new RelayCommand(ReviewSelectedImdb, CanReviewSelectedImdb);
         ReviewPendingProviderIdsCommand = new AsyncRelayCommand(() => RunBusyAsync(ReviewPendingProviderIdsAsync), CanReviewPendingProviderIds, unexpectedCommandErrorHandler);
         RunSyncCommand = new AsyncRelayCommand(RunSyncAsync, CanRunSync, unexpectedCommandErrorHandler);
-        SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && Items.Any(item => !item.IsSelected));
-        DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && Items.Any(item => item.IsSelected));
+        SelectAllCommand = new RelayCommand(SelectAllRunnable, () => !_isBusy && SelectedCount < ItemCount);
+        DeselectAllCommand = new RelayCommand(DeselectAll, () => !_isBusy && SelectedCount > 0);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -128,20 +138,7 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
         }
     }
 
-    public string LogText
-    {
-        get => _logText;
-        private set
-        {
-            if (_logText == value)
-            {
-                return;
-            }
-
-            _logText = value;
-            OnPropertyChanged();
-        }
-    }
+    public string LogText => _logSnapshot ??= _logBuffer.ToString();
 
     public int ProgressValue
     {
@@ -176,11 +173,11 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
 
     public int ItemCount => Items.Count;
 
-    public int SelectedCount => Items.Count(item => item.IsSelected);
+    public int SelectedCount => _selectedCount;
 
-    public int MissingIdCount => Items.Count(item => item.SupportsProviderIdSync && !item.HasProviderIds);
+    public int MissingIdCount => _missingIdCount;
 
-    public int IncompleteIdCount => Items.Count(item => item.SupportsProviderIdSync && !item.HasCompleteProviderIds);
+    public int IncompleteIdCount => _incompleteIdCount;
 
     public string SummaryText => ItemCount == 0
         ? "Noch kein Metadatenreport geladen."
@@ -1006,16 +1003,10 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
 
     private void ReplaceItems(IReadOnlyList<EmbyImportEntry> importEntries)
     {
-        foreach (var existingItem in Items)
-        {
-            existingItem.PropertyChanged -= ItemOnPropertyChanged;
-        }
-
         Items.Clear();
         foreach (var importEntry in importEntries)
         {
             var item = new EmbySyncItemViewModel(importEntry.MediaFilePath, importEntry.ProviderIds, importEntry.Review);
-            item.PropertyChanged += ItemOnPropertyChanged;
             Items.Add(item);
         }
 
@@ -1169,7 +1160,7 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
 
     private bool CanRunScan()
     {
-        return !_isBusy && HasEmbyApiSettings() && Items.Any(item => item.IsSelected);
+        return !_isBusy && HasEmbyApiSettings() && SelectedCount > 0;
     }
 
     private bool CanReviewSelectedMetadata()
@@ -1184,12 +1175,12 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
 
     private bool CanReviewPendingProviderIds()
     {
-        return !_isBusy && Items.Any(item => item.IsSelected && item.HasPendingProviderReview);
+        return !_isBusy && _pendingSelectedCount > 0;
     }
 
     private bool CanRunSync()
     {
-        return !_isBusy && Items.Any(item => item.IsSelected);
+        return !_isBusy && SelectedCount > 0;
     }
 
     private void SetBusy(bool isBusy)
@@ -1259,9 +1250,54 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
             or nameof(EmbySyncItemViewModel.RequiresTvdbReview)
             or nameof(EmbySyncItemViewModel.RequiresImdbReview))
         {
+            if (sender is EmbySyncItemViewModel item) UpdateRowSummary(item);
             RefreshSummaryAndCommands();
         }
     }
+
+    // Summen ändern sich je betroffener Zeile, nicht durch mehrere Vollscans pro PropertyChanged.
+    // CollectionChanged erfasst auch direkte Add/Remove-Aufrufe von Host und Tests.
+    private void ItemsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var item in _rowSummaries.Keys) item.PropertyChanged -= ItemOnPropertyChanged;
+            _rowSummaries.Clear();
+            _selectedCount = _missingIdCount = _incompleteIdCount = _pendingSelectedCount = 0;
+        }
+        if (e.OldItems is not null)
+            foreach (EmbySyncItemViewModel item in e.OldItems)
+            {
+                item.PropertyChanged -= ItemOnPropertyChanged;
+                if (_rowSummaries.Remove(item, out var old)) AddSummary(old, -1);
+            }
+        if (e.NewItems is not null)
+            foreach (EmbySyncItemViewModel item in e.NewItems)
+            {
+                item.PropertyChanged += ItemOnPropertyChanged;
+                UpdateRowSummary(item);
+            }
+        RefreshSummaryAndCommands();
+    }
+
+    private void UpdateRowSummary(EmbySyncItemViewModel item)
+    {
+        if (_rowSummaries.TryGetValue(item, out var previous)) AddSummary(previous, -1);
+        var current = new RowSummary(item.IsSelected, item.SupportsProviderIdSync && !item.HasProviderIds,
+            item.SupportsProviderIdSync && !item.HasCompleteProviderIds, item.IsSelected && item.HasPendingProviderReview);
+        _rowSummaries[item] = current;
+        AddSummary(current, 1);
+    }
+
+    private void AddSummary(RowSummary row, int sign)
+    {
+        if (row.Selected) _selectedCount += sign;
+        if (row.Missing) _missingIdCount += sign;
+        if (row.Incomplete) _incompleteIdCount += sign;
+        if (row.PendingSelected) _pendingSelectedCount += sign;
+    }
+
+    private readonly record struct RowSummary(bool Selected, bool Missing, bool Incomplete, bool PendingSelected);
 
     private void AppendLog(string line)
     {
@@ -1270,9 +1306,15 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
             return;
         }
 
-        LogText = string.IsNullOrWhiteSpace(LogText)
-            ? line
-            : LogText + Environment.NewLine + line;
+        if (_logBuffer.Length > 0) _logBuffer.AppendLine();
+        _logBuffer.Append(line);
+        _logSnapshot = null;
+        // Große Imports erzeugen nicht bei jeder Zeile eine neue komplette WPF-TextBox-Kopie.
+        if (!_isBusy || Environment.TickCount64 - _lastLogNotification >= 250)
+        {
+            _lastLogNotification = Environment.TickCount64;
+            OnPropertyChanged(nameof(LogText));
+        }
     }
 
     /// <summary>
@@ -1280,6 +1322,7 @@ internal sealed class EmbySyncViewModel : IModuleInteractionState, IGlobalSettin
     /// </summary>
     private void SaveVisibleLog(string operationLabel)
     {
+        OnPropertyChanged(nameof(LogText));
         if (_moduleLogs is null || string.IsNullOrWhiteSpace(LogText))
         {
             return;

@@ -18,7 +18,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
 - [x] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
 - [x] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
-- [ ] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
+- [x] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
 - [ ] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
 - [ ] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
 - [ ] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
@@ -160,3 +160,12 @@ wird vollständig beendet. Teilresultate und Reviewfortschritt bleiben erhalten.
 geschriebener NFO bleibt ein abgebrochener Refresh ausdrücklich offen. Modale Providerdialoge
 können selbst abgebrochen werden; einzelne synchrone Datei-/JSON-Zugriffe werden nicht mitten
 im Lesen/Schreiben zerrissen. 86 gezielte Emby-/WPF-Tests erfolgreich.
+
+### A13
+
+Zeilensummen und Auswahlbefehle verwenden inkrementelle Zähler statt wiederholter
+Vollscans. Ein 10.000-Zeilen-Test prüft Änderungen, Entfernen und Reset. Logzeilen werden
+gepuffert, UI-Benachrichtigungen auf höchstens vier pro Sekunde plus Abschluss begrenzt.
+Ein einzelner 30-Sekunden-Library-Snapshot erfasst auch Fehlschläge der Zuordnung; neue
+Scans und Serverfortschritt bleiben frisch. 100 identische Fehlzuordnungen benötigen im
+Test eine statt 100 Library-Abfragen. 84 gezielte Tests erfolgreich.

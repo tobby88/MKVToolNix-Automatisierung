@@ -10,6 +10,8 @@ internal sealed class EmbyMetadataSyncService
 {
     private readonly IEmbyClient _embyClient;
     private readonly EmbyNfoProviderIdService _nfoProviderIds;
+    private readonly object _libraryCacheLock = new();
+    private (string Key, DateTimeOffset Expires, EmbyLibraryMatch? Match)? _libraryCache;
 
     /// <summary>
     /// Initialisiert den Service mit API-Client und NFO-Helfer.
@@ -59,6 +61,22 @@ internal sealed class EmbyMetadataSyncService
         AppEmbySettings settings,
         string? archiveRootPath,
         CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = System.Text.Json.JsonSerializer.Serialize(new[] { settings.ServerUrl, settings.ApiKey,
+            settings.ServerArchiveRootPath, settings.SeriesLibraryId, archiveRootPath });
+        lock (_libraryCacheLock)
+            if (_libraryCache is { } cache && cache.Key == key && cache.Expires > DateTimeOffset.UtcNow)
+                return cache.Match;
+        var match = await FindSeriesLibraryCoreAsync(settings, archiveRootPath, cancellationToken);
+        // Ein begrenzter Snapshot schließt negative Treffer ein. Serverfortschritt wird
+        // ausdrücklich nicht gecacht; ein neuer Scan erzwingt ebenfalls eine neue Zuordnung.
+        lock (_libraryCacheLock) _libraryCache = (key, DateTimeOffset.UtcNow.AddSeconds(30), match);
+        return match;
+    }
+
+    private async Task<EmbyLibraryMatch?> FindSeriesLibraryCoreAsync(
+        AppEmbySettings settings, string? archiveRootPath, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(archiveRootPath))
         {
@@ -122,6 +140,7 @@ internal sealed class EmbyMetadataSyncService
         string? archiveRootPath,
         CancellationToken cancellationToken = default)
     {
+        lock (_libraryCacheLock) _libraryCache = null;
         var matchedLibrary = await FindSeriesLibraryAsync(settings, archiveRootPath, cancellationToken);
         if (matchedLibrary is not null)
         {

@@ -1662,6 +1662,28 @@ public sealed class EmbySyncViewModelTests
         finally { Directory.Delete(directory, true); }
     }
 
+    [Fact]
+    public void LargeReportSummary_RemainsConsistentAcrossEditsRemovalsAndReset()
+    {
+        var vm = CreateViewModel();
+        for (var i = 0; i < 10000; i++) vm.Items.Add(new EmbySyncItemViewModel($@"C:\Series\Episode{i}.mkv"));
+        Assert.Equal(10000, vm.SelectedCount);
+        Assert.Equal(10000, vm.MissingIdCount);
+        vm.Items[500].IsSelected = false;
+        vm.Items[501].TvdbId = "123";
+        Assert.Equal(9999, vm.SelectedCount);
+        Assert.Equal(9999, vm.MissingIdCount);
+        vm.Items.RemoveAt(500);
+        Assert.Equal(9999, vm.SelectedCount);
+        Assert.Equal(9998, vm.MissingIdCount);
+        var removed = vm.Items[0];
+        vm.Items.Clear();
+        removed.IsSelected = false;
+        Assert.Equal(0, vm.SelectedCount);
+        Assert.Equal(0, vm.MissingIdCount);
+        Assert.False(vm.RunSyncCommand.CanExecute(null));
+    }
+
     private sealed class BlockingScanEmbyClient : IEmbyClient
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
