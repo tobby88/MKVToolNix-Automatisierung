@@ -50,6 +50,12 @@ public partial class AppSettingsWindow : Window
         _viewModel.SelectArchiveRootDirectory();
     }
 
+    private void Recovery_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_viewModel.IsInteractive) return;
+        new RecoveryMaintenanceWindow(new Services.AppToolPathStore().Load()) { Owner = this }.ShowDialog();
+    }
+
     private void SelectMkvToolNixButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.SelectMkvToolNixDirectory();

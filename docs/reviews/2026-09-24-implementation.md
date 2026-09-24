@@ -23,7 +23,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
 - [x] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
-- [ ] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
+- [x] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
 - [ ] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
 - [ ] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
 - [ ] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
@@ -204,3 +204,13 @@ Datumsfallback. Neue manuelle Pfadwahlen erhalten einen Herkunftsmarker, damit a
 Downloads-Pfad nicht später als alter automatisch erkannter Override entfernt wird.
 Historische Werte ohne Marker folgen aus Kompatibilitätsgründen der bisherigen Migration.
 72 gezielte Tool-/Settings-Tests erfolgreich.
+
+### A18
+
+Einstellungen > Wiederherstellung öffnet eine explizite Sichtung bekannter Werkzeug-,
+IMDb- und frei gewählter Archiv-Arbeitsreste. Aktive Pfade und Links sind ausgeschlossen.
+Einzelaktionen verlangen Bestätigung; Entfernen geht in den Papierkorb. Nur vollständig
+geflushte SHA-256-geprüfte NFO-/JSON-Sicherungen können direkt wiederhergestellt werden,
+der aktuelle Inhalt bleibt als zusätzliche Rückfallsicherung. Alte unbestätigte Sicherungen
+und MKV-/Archivjournale sind zur manuellen Sichtung, nicht zum blinden Replay angeboten.
+Neun gezielte Recovery-/SmallFile-/Journaltests und Debug-Build erfolgreich.

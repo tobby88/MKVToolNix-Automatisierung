@@ -42,12 +42,16 @@ internal sealed class SmallFileUpdate
             throw new IOException($"Die Datei wurde während der Bearbeitung geändert und nicht überschrieben. Bitte neu prüfen: {_path}");
         if (_original.AsSpan().SequenceEqual(updated)) return;
 
-        var backupPath = Path.Combine(Path.GetDirectoryName(_path)!, $".{Path.GetFileName(_path)}.edit-{Guid.NewGuid():N}.tmp");
-        using (var backup = new FileStream(backupPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(_original));
+        var backupPath = Path.Combine(Path.GetDirectoryName(_path)!, $".{Path.GetFileName(_path)}.edit-{Guid.NewGuid():N}-{hash}.tmp");
+        // Erst nach vollständigem Flush als wiederherstellbare Sicherung veröffentlichen.
+        // Ein Absturz während des Kopierens hinterlässt nur eine erkennbare .writing-Datei.
+        using (var backup = new FileStream(backupPath + ".writing", FileMode.CreateNew, FileAccess.Write, FileShare.None))
         {
             backup.Write(_original);
             backup.Flush(flushToDisk: true);
         }
+        File.Move(backupPath + ".writing", backupPath);
 
         try
         {

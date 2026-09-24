@@ -337,6 +337,12 @@
                 </Grid>
                 </ScrollViewer>
             </TabItem>
+            <TabItem Header="Wiederherstellung">
+                <StackPanel Margin="16" IsEnabled="{Binding IsInteractive}">
+                    <TextBlock Text="Arbeitsreste, alte Werkzeugversionen und Sicherungen nach unterbrochenen Vorgängen gezielt prüfen." TextWrapping="Wrap" />
+                    <Button Content="Arbeitsreste und Sicherungen ansehen..." HorizontalAlignment="Left" Margin="0,12,0,0" Padding="12,8" Click="Recovery_Click" />
+                </StackPanel>
+            </TabItem>
         </TabControl>
 
         <Grid Grid.Row="1" Margin="0,12,0,0">
