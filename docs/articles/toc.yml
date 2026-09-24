@@ -1,3 +1,5 @@
+- name: Entwicklung und Veröffentlichung
+  href: development.md
 - name: Architektur
   href: architecture.md
 - name: Metadaten und Provider

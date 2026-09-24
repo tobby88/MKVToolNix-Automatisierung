@@ -4,6 +4,7 @@ Diese DocFX-Seite ergänzt die portable App um strukturierte Entwicklerdokumenta
 
 ## Einstieg
 
+- [Entwicklung, Builds und Veröffentlichungen](articles/development.md)
 - [Architekturüberblick](articles/architecture.md)
 - [Metadaten- und Provider-Datenfluss](articles/metadata-providers.md)
 - [Teststrategie](articles/testing.md)

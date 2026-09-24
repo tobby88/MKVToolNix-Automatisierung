@@ -1,457 +1,94 @@
 # MKVToolNix-Automatisierung
 
-[![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
-[![Nightly EXE](https://img.shields.io/badge/nightly-win--x64%20exe-1f6feb)](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/download/nightly/MkvToolnixAutomatisierung-nightly-win-x64.exe)
 [![Latest release](https://img.shields.io/github/v/release/tobby88/MKVToolNix-Automatisierung)](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest)
+[![CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml/badge.svg)](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/ci-docs.yml)
 [![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE.md)
 
-## Wichtiger Hinweis
+Eine portable Windows-App, die Serienaufnahmen aus Mediatheken zu übersichtlichen MKV-Dateien zusammenführt: Video, Ton, Audiodeskription und Untertitel, ohne erneute Videokodierung. Bereits vorhandene Archivdateien werden verglichen, damit bessere Quellen alte Spuren ersetzen und zusätzliche Inhalte ergänzt werden können.
 
-Dieses Projekt wurde vollständig KI-gestützt erstellt und weiterentwickelt.  
-Verantwortlich für Konzeption, Code-Erstellung, Überarbeitungen und große Teile der Dokumentation ist die KI, nicht ein klassisch manuell entwickeltes Teamprojekt.
+Das Projekt ist auf deutschsprachige Mediathek-Downloads und ein eigenes Serienarchiv zugeschnitten, nicht als universeller Videoeditor gedacht. Emby ist eine optionale Ergänzung.
 
-## Worum es geht
+![Batch-Mux mit Episodenübersicht und geplanter Verwendung](docs/images/readme/mux-batch.png)
 
-Diese Anwendung automatisiert wiederkehrende Muxing-Abläufe für Serienepisoden aus Mediathek-Downloads.  
-Sie ist dafür gedacht, frische Download-Dateien nicht jedes Mal manuell in MKVToolNix zusammenzuklicken, sondern die fachlichen Entscheidungen möglichst weit vorab zu treffen und dann reproduzierbar auszuführen.
+## Download und erster Start
 
-Dabei geht es nicht nur um ein simples "Datei A plus Untertitel B muxen", sondern um den typischen Serien-Alltag:
+1. Die EXE aus dem [aktuellen Release](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest) herunterladen. Dort stehen auch die Änderungen zur jeweiligen Version.
+2. **Windows x64 und die .NET 10 Desktop Runtime** bereitstellen. Die App selbst braucht keinen Installer.
+3. Die EXE in einen beschreibbaren Ordner legen und starten, nicht unter `Program Files`. MKVToolNix und ffprobe werden automatisch heruntergeladen und anschließend aktuell gehalten; eigene Installationen lassen sich alternativ in den Einstellungen hinterlegen.
+4. Unter **Einstellungen** den Serienarchivpfad festlegen. MediathekView, TVDB und Emby bei Bedarf ebenfalls konfigurieren.
 
-- eine einzelne Episode schnell prüfen und muxen
-- einen ganzen Download-Ordner gesammelt verarbeiten
-- vorhandene Dateien in der Serienbibliothek erkennen und sinnvoll weiterverwenden
-- neue, bessere oder zusätzliche Spuren ergänzen, ohne gute vorhandene Inhalte blind wegzuwerfen
-- Audiodeskription, Untertitel und TXT-Begleitdateien konsistent mitziehen
-- Tracknamen vereinheitlichen, damit die Bibliothek über längere Zeit sauber bleibt
+Einstellungen, Protokolle und verwaltete Werkzeuge bleiben in `Data`, `Logs` und `Tools` neben der EXE. Für die Ersteinrichtung und Online-Metadaten wird eine Internetverbindung benötigt.
 
-Die App ist bewusst auf einen konkreten persönlichen Workflow zugeschnitten. Sie will nicht jede denkbare MKV-Konstellation generisch erschlagen, sondern Serienepisoden aus deutsch geprägten Mediathek-Quellen zuverlässig und mit möglichst wenig manuellem Nacharbeiten verarbeiten.
+Zum Ausprobieren neuer Änderungen gibt es zusätzlich eine [Nightly-EXE](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/download/nightly/MkvToolnixAutomatisierung-nightly-win-x64.exe). Sie ist eine Vorabversion, kein reguläres Release.
 
-## Module
+## Vom Download ins Archiv
 
-- `Download`: zum Starten der installierten oder portablen MediathekView-Variante als erstem Workflow-Schritt
-- `Einsortieren`: für lose MediathekView-Dateien, die anhand erkannter Serienordner in Unterordner verschoben werden sollen
-- `Muxen`: gemeinsamer Arbeitsbereich für Einzel- und Batch-Mux mit derselben Erkennungs-, Planungs- und Archivvergleichslogik
-- `Emby-Abgleich`: für neu erzeugte MKV-Dateien, deren NFO-Provider-IDs mit Emby abgeglichen werden sollen
-- `Archivpflege`: für bestehende Archiv-MKVs, deren Header oder Dateinamen nachträglich vereinheitlicht werden sollen
+| Modul | Wofür es da ist |
+| --- | --- |
+| **Download** | MediathekView starten und dort Sendungen herunterladen. Eine vorhandene Installation lässt sich verwenden; die portable Variante kann die App auch selbst herunterladen und aktualisieren. |
+| **Einsortieren** | Zusammengehörige Downloads erkennen und ausgewählte Videos samt Begleitdateien in Serienordner einsortieren. Abgewählte Einträge bleiben unberührt. |
+| **Muxen** | Eine Episode im **Einzel-Mux** oder einen ganzen Quellordner im **Batch-Mux** prüfen und verarbeiten. Quellen zuordnen, mit dem Archiv vergleichen und MKVs erstellen oder aktualisieren. |
+| **Emby-Abgleich** | Die beim Muxen erzeugten Reports laden, TVDB-/IMDb-IDs prüfen und bestätigte Änderungen in vorhandene NFO-Dateien und Emby übernehmen. |
+| **Archivpflege** | Bestehende MKVs prüfen und ausgewählte Titel, Dateinamen, Spurnamen und Flags korrigieren. Zugehörige NFOs und Vorschaubilder werden bei Umbenennungen mitgenommen. |
 
-## Wartungsrelease 1.4.2
+### Muxen: erst prüfen, dann schreiben
 
-- Schnellerer Aufbau des IMDb-Offlineindex, Durchsatzanzeige beim Import und erneutes Angebot abgebrochener Updates.
-- Emby-Reports werden nach `partial` und `done` getrennt; bewusste Entscheidungen gegen eine TVDB- oder IMDb-ID bleiben beim erneuten Laden erhalten.
-- Aktualisierte Laufzeitbibliotheken und Dokumentationswerkzeuge.
+Nach der Quellenwahl zeigt **Geplante Verwendung**, welche Inhalte erhalten, ergänzt oder ersetzt werden. Unter **Korrekturen und Ausgabe** lassen sich unter anderem Metadaten, Sprachen und Ausgabeziele anpassen. Videos und Begleitdateien können zur Kontrolle geöffnet werden; markierte Pflichtchecks müssen vor dem Start erledigt sein.
 
-Alle Änderungen und Updatehinweise stehen in den [Release-Notes zu 1.4.2](docs/releases/1.4.2.md). Die portable EXE gibt es beim [aktuellen Release](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/latest).
+Einzel- und Batch-Mux verwenden dieselben Regeln. Gute vorhandene Inhalte bleiben erhalten, wenn kein passender Ersatz vorliegt. Sind nur Titel oder Spureneigenschaften zu korrigieren, reicht eine Header-Anpassung ohne vollständiges Neumuxen.
 
-Die noch nicht veröffentlichten Review-Korrekturen stehen im [Gesamtreview vom 22. September 2026](docs/reviews/2026-09-22/README.md). Den aktuellen Abschlussstand aller Restpunkte mit Tests und verbleibenden Praxisgrenzen dokumentiert die [Umsetzung vom 24. September](docs/reviews/2026-09-24-implementation.md).
+Typische Quellen sind MP4-Videos, zusätzliche AD-Aufnahmen, Untertitel in ASS/SRT/VTT und TXT-Begleitdateien. Die Ausgabe ist MKV. Nach dem Lauf stehen Protokolle, eine Liste neuer Dateien und ein JSON-Report für den Emby-Abgleich unter `Logs` bereit. Erfolgreich verarbeitete Quellen können anschließend aufgeräumt werden.
 
-## Screenshots
+## Metadaten und Emby
+
+**TVDB** unterstützt die Zuordnung zu Serien und Episoden; dafür werden eigene TVDB-Zugangsdaten benötigt. **IMDb** kann über die TVDB-Verknüpfung, einen optionalen lokalen Suchindex oder browsergestützt abgeglichen werden. Unsichere Treffer lassen sich manuell auswählen; für Bonusmaterial ist auch eine bewusste Entscheidung gegen eine Provider-ID möglich.
+
+Der **IMDb-Offlineindex** ist freiwillig. Vor Downloads fragt die App nach und zeigt vorhandenen und verfügbaren Datenstand an. Als Richtwerte gelten **rund 750 MiB Download, 1,3 GiB dauerhaft belegter Speicher und 4 bis 5 GiB freier Speicher während eines Updates** (Stand September 2026). Die Datenmengen wachsen; die automatische Verwaltung lässt sich in den Einstellungen abschalten.
+
+Für **Emby** werden Serveradresse und API-Key hinterlegt. Liegt das Archiv auf dem Server unter einem anderen Pfad als unter Windows, muss auch diese Zuordnung in den Einstellungen stimmen. Nach dem Laden eines Mux-Reports prüft die App automatisch NFOs und Emby-Einträge. Bei noch unbekannten Dateien kann ein Scan der zugeordneten Serienbibliothek angestoßen werden.
+
+Nach den Pflichtchecks schreibt **NFO speichern + Emby aktualisieren** nur tatsächliche Änderungen und aktualisiert die betroffenen Emby-Einträge. Emby muss die NFO zuvor angelegt haben. Teilweise bearbeitete Reports landen in `partial`, vollständig erledigte in `done`; beide lassen sich später erneut öffnen.
+
+## Wichtig beim Arbeiten am Archiv
+
+- **Vorschau und Pflichtchecks ernst nehmen:** Automatische Zuordnungen können falsch sein. Ähnliche Titel oder Laufzeiten garantieren keine identischen Schnittfassungen oder synchronen Tonspuren.
+- **Wichtige Dateien sichern:** Muxen und Archivpflege können vorhandene Dateien ändern. Direkte Header-Änderungen erzeugen keine vollständige MKV-Sicherung.
+- **Freien Speicher einplanen:** Beim Ersetzen einer MKV wird zusätzlich Platz für die neue Datei benötigt.
+- **Bei Fehlern Protokoll prüfen:** Nach einem abgebrochenen Archivpflege-Schritt erneut scannen und verbleibende Änderungen prüfen. Unter **Einstellungen > Wiederherstellung** lassen sich Sicherungen und Arbeitsreste gezielt ansehen.
+
+## Weitere Ansichten
+
+<details>
+<summary>Screenshots der übrigen Module und Einstellungen anzeigen</summary>
 
 ### Download
 
-![Download](docs/images/readme/download.png)
+![MediathekView starten und verwalten](docs/images/readme/download.png)
 
 ### Einsortieren
 
-![Einsortieren](docs/images/readme/download-sort.png)
+![Downloads und Begleitdateien einsortieren](docs/images/readme/download-sort.png)
 
-### Muxen: Einzel-Mux
+### Einzel-Mux
 
-![Muxen: Einzel-Mux](docs/images/readme/mux-single.png)
-
-### Muxen: Batch-Mux
-
-![Muxen: Batch-Mux](docs/images/readme/mux-batch.png)
+![Eine Episode prüfen und muxen](docs/images/readme/mux-single.png)
 
 ### Emby-Abgleich
 
-![Emby-Abgleich](docs/images/readme/emby-sync.png)
+![Metadaten und Bearbeitungsstand in Emby abgleichen](docs/images/readme/emby-sync.png)
 
 ### Archivpflege
 
-![Archivpflege](docs/images/readme/archive-maintenance.png)
+![Geplante Änderungen an vorhandenen Archivdateien](docs/images/readme/archive-maintenance.png)
 
-### Einstellungen: Metadaten
+### Einstellungen
 
-![Einstellungen: Metadaten](docs/images/readme/settings-metadata.png)
+![TVDB und optionalen IMDb-Offlineindex konfigurieren](docs/images/readme/settings-metadata.png)
 
-## Voraussetzungen
+</details>
 
-- Die veröffentlichte `.exe` benötigt die `.NET 10 Desktop Runtime`; für Builds aus dem Quellcode wird das `.NET 10 SDK` benötigt.
-- MediathekView bleibt das externe Download-Werkzeug. Die App kann eine installierte Version oder eine portable Variante im Downloadordner starten; optional kann sie die portable Windows-ZIP-Version auch selbst unter `.\Tools` herunterladen und aktuell halten.
-- Alte verwaltete MediathekView-Installationen bleiben bei Updates als Rückfallkopie erhalten, da sie beliebige eigene Downloads oder Einstellungen enthalten können. Unter `Einstellungen > Wiederherstellung` lassen sie sich gezielt prüfen. Updates mit Einstellungsübernahme werden bei laufendem MediathekView oder nicht eindeutig zuordenbaren Java-Prozessen verschoben; vorher schließen und erneut versuchen.
-- MKVToolNix und `ffprobe.exe` werden beim Start automatisch unter `.\Tools` bereitgestellt und aktualisiert, solange kein manueller Override in den Einstellungen gesetzt ist.
-- Wenn `ffprobe` nicht bereitgestellt werden kann, nutzt die App für Laufzeiten den Windows-Fallback.
-- Ein TVDB-API-Key ist optional. Er wird nur benötigt, wenn Serien- und Episodendaten über TVDB geprüft oder verbessert werden sollen.
-- Ein lokaler IMDb-Episodenindex ist optional. Die App bietet ihn beim ersten Start an und prüft danach höchstens einmal täglich die offiziellen IMDb-Datensätze; vor jedem großen Download fragt sie ausdrücklich nach. Stand September 2026 sind rund 750 MiB Download, etwa 1,3 GiB dauerhafter Speicher und während eines atomaren Neuaufbaus vorsichtshalber 4 bis 5 GiB freier Speicher einzuplanen. Die Verwaltung kann in den Einstellungen deaktiviert werden.
-- Ein Emby-API-Key ist optional. Er wird nur für den nachgelagerten `Emby-Abgleich` benötigt.
+## Projekt und Lizenz
 
-## Portable Modus
+Das Projekt wird für einen persönlichen Workflow KI-gestützt entwickelt. Technische Hintergründe und API-Dokumentation sind getrennt in der [Entwicklerdokumentation](docs/index.md) beschrieben.
 
-Die App ist bewusst portabel gedacht und nicht für eine klassische Installation vorgesehen.
-
-Während eines laufenden Modulvorgangs sind Modulwechsel und globale Einstellungen gesperrt. So können andere Ansichten nicht gleichzeitig dieselben Quellen bearbeiten oder mitten im Abgleich die Serververbindung ändern. Die aktuelle Ansicht und ihre vorhandene Abbruchfunktion bleiben zugänglich.
-
-Pro Windows-Benutzer wird außerdem nur eine App-Instanz zugelassen, auch bei unterschiedlichen portablen Ordnern. Das verhindert konkurrierende App-Vorgänge, ersetzt aber keine Konfliktprüfung gegenüber externen Programmen wie Emby.
-
-- Es gibt keinen Installer.
-- Einstellungen werden lokal unter `.\Data\settings.json` neben der Anwendung gespeichert.
-- Verwendete Unterordner für portable Laufzeitdaten sind `.\Data`, `.\Logs` und `.\Tools`; `.\Logs` enthält Mux-Artefakte und allgemeine Modulprotokolle als fortlaufende Sitzungslogs. Der optionale IMDb-Index liegt unter `.\Data\IMDb` und benötigt derzeit rund 1,3 GiB.
-- Bei Single-File-Releases legt die App eine fehlende `README.md` beim Start neben der `.exe` an.
-- Der Anwendungsordner muss beschreibbar sein.
-- Die App sollte deshalb nicht aus `C:\Program Files` gestartet werden.
-
-## Erststart
-
-1. App starten.
-2. Über `Einstellungen` die selten geänderten Dinge zentral hinterlegen:
-   - Standard-Archivpfad
-   - optional MediathekView-Pfad oder automatische MediathekView-Verwaltung
-   - bei Bedarf manuelle Overrides für MKVToolNix oder `ffprobe`
-   - optional TVDB-API-Key und PIN
-   - automatische Verwaltung des lokalen IMDb-Episodenindex bei Bedarf deaktivieren
-   - optional Emby-Server und API-Key
-3. Im Hauptfenster darunter kurz prüfen, ob `Archiv`, `MKVToolNix` und die Laufzeitermittlung als bereit angezeigt werden.
-4. Danach dem Workflow von oben nach unten folgen: `Download`, `Einsortieren`, `Muxen`, `Emby-Abgleich` und optional `Archivpflege`.
-
-## Typischer Workflow: Download
-
-1. Im Modul `Download` `MediathekView starten` ausführen.
-2. Falls die App nicht gefunden wird, in `Einstellungen` den Pfad zur installierten oder portablen `MediathekView.exe` bzw. `MediathekView_Portable.exe` setzen oder die automatische portable MediathekView-Verwaltung aktivieren.
-3. Sendungen wie gewohnt in MediathekView herunterladen.
-4. Danach im Modul `Einsortieren` mit den erzeugten Download-Dateien weiterarbeiten.
-
-## Typischer Workflow: Muxen
-
-Das Modul `Muxen` bündelt zwei Arbeitsweisen, die fachlich möglichst gleich laufen sollen:
-
-- `Einzel-Mux` ist für eine gezielt ausgewählte Episode gedacht, wenn man bewusst Datei für Datei prüfen oder nacharbeiten möchte.
-- `Batch-Mux` verarbeitet einen ganzen Quellordner, zeigt alle erkannten Episoden tabellarisch an und arbeitet danach die ausgewählten Einträge nacheinander ab.
-
-Beide Tabs verwenden dieselbe zentrale Mux-Planung. Das betrifft insbesondere lokale Dateierkennung, TVDB-Abgleich, Archivtreffer, Spurenauswahl, AD-/Untertitel-Logik, TXT-Anhänge, Header-Normalisierung und die Ausgabe der Emby-Metadatenreports. Unterschiede sollen nur dort bestehen, wo sie durch die Bedienung nötig sind: Einzel-Mux arbeitet direkt an einer Episode, Batch-Mux verwaltet mehrere Einträge mit Auswahl, Sortierung und Sammelaktionen.
-
-Die Vorschau zeigt nicht nur den `mkvmerge`-Aufruf, sondern fasst auch zusammen, was mit vorhandenen Archivspuren, neuen Quellen und direkten Header-Anpassungen passieren soll. Wenn eine bestehende Archiv-MKV bereits alle benötigten Inhalte enthält, kann die App statt eines kompletten Remux auch nur relevante Matroska-Headerdaten direkt aktualisieren.
-
-Ein vollständiger Mux schreibt zunächst in einen eigenen `.mux-*`-Unterordner am Ausgabeziel, ausschließlich mit der Endung `.tmp`. So liegt während des Schreibens keine zusätzliche MKV für Embys Live-Erkennung vor. Erst nach erfolgreichem Mux wird die fertige Datei auf den endgültigen Namen verschoben; ein vorhandenes Archivziel bleibt bis dahin erhalten. Dafür muss am Ziel genügend freier Speicher für die neue Datei vorhanden sein. Direkte Header-Änderungen erfolgen dagegen weiterhin an der vorhandenen Datei.
-
-### Einzel-Mux-Tab
-
-1. `Hauptvideo wählen`.
-2. Automatische Erkennung für Quelle, Begleitdateien und Metadaten prüfen.
-3. Falls angezeigt, `Quelle prüfen / freigeben` und/oder `TVDB prüfen`.
-4. Bei Bedarf im Bereich `Korrekturen und Ausgabe` manuell nachbessern, etwa Sprache, Originalsprache, AD, Untertitel, Anhänge oder Ausgabepfad.
-5. Mit den `Öffnen`-Aktionen bei Bedarf Hauptvideo, AD, Untertitel, Anhänge oder vorhandene Archivdateien vorab in der Standardanwendung prüfen.
-6. `Vorschau erzeugen`, um den geplanten Mux- oder Header-Edit-Vorgang zu kontrollieren.
-7. `Muxen`, um die MKV zu erstellen oder die vorhandene MKV direkt zu aktualisieren.
-
-### Batch-Mux-Tab
-
-1. Quellordner wählen.
-2. Scan abwarten und gefundene Episoden prüfen.
-3. Bei Bedarf Einträge auswählen, abwählen, sortieren oder im Detailbereich korrigieren.
-4. Offene Pflichtprüfungen mit `Pflichtchecks starten` oder einzeln im Detailbereich erledigen.
-5. Mit den `Öffnen`-Aktionen bei Bedarf alle zugehörigen Videos, AD-Dateien, Untertitel, Anhänge oder Archivdateien eines Eintrags prüfen.
-6. `Batch starten`.
-7. Danach Protokoll, neue Bibliotheksdateien und den optionalen `done`-Ordner prüfen.
-
-Nach jedem Mux-Lauf:
-
-- bleibt das Protokoll in der GUI sichtbar
-- wird das vollständige Protokoll zusätzlich unter `.\Logs` gespeichert
-- wird eine TXT-Liste neu erzeugter Ausgabedateien gespeichert, damit sie anschließend schnell geprüft werden können
-- wird zusätzlich ein strukturierter JSON-Metadatenreport `Neu erzeugte Ausgabedateien - ...metadata.json` geschrieben, den das Tool für den Emby-Abgleich importieren kann
-- öffnet die App den Report mit neu erzeugten Dateien automatisch, wenn neue Ausgabedateien entstanden sind
-- räumt die App erfolgreich verarbeitete Quelldateien auf und entfernt im Einzel-Mux auch leere Quellordner
-
-Zusätzlich beim Batch-Lauf:
-
-- bleibt das Batch-Protokoll im Batch-Tab sichtbar
-- können fertig verarbeitete Quellen in einen `done`-Ordner verschoben werden
-
-Bei einem Batch-Abbruch bleiben bereits abgeschlossene Ausgaben samt Metadatenreport erhalten. Die Reports werden vor dem optionalen Papierkorb-Aufräumen gespeichert. Gemeinsam von mehreren Plänen verwendete Quellen werden erst am Batchende aufgeräumt, wenn alle ihre Verbraucher erfolgreich waren. Bei Fehler oder Abbruch bleiben sie geschützt am Quellort. Doppelte Ausgabeziele und Ziele, die eine andere ausgewählte Episode als Quelle braucht, werden vor dem Schreiben blockiert.
-
-## Typischer Workflow: Archivpflege
-
-Die `Archivpflege` ist der nachgelagerte Kontrollschritt für bereits vorhandene MKV-Dateien im Serienarchiv. Sie verwendet dieselben Header-Regeln wie der Mux-Archivvergleich, führt aber keinen automatischen Voll-Remux aus.
-
-1. Serienarchiv oder einen Serienunterordner wählen; danach startet der Scan automatisch.
-2. `Scannen` wiederholt die rekursive Prüfung aller `.mkv`-Dateien bei Bedarf.
-3. In der Tabelle kontrollieren, ob ein Eintrag nur direkte Header-/Dateinamenänderungen braucht oder ob ein manueller Remux-Hinweis vorliegt.
-4. Im Detailbereich die konkreten Änderungen prüfen und bei Bedarf den Bereich `Manuelle Korrektur` aufklappen, um Ziel-Dateiname, MKV-Titel oder einzelne Track-Zielwerte anzupassen.
-5. Nur freigegebene Zeilen auswählen und `Ausgewählte Änderungen anwenden`.
-
-Direkt schreibbar sind derzeit MKV-Titel, Tracknamen, Sprachwerte, Standard-/Forced-/Original-/Accessibility-Flags sowie sichere Dateinamen-Normalisierungen inklusive gleichnamiger Emby-Begleitdateien. Automatisch erkannte Sollwerte sind vor dem Schreiben manuell überschreibbar; die App schreibt weiterhin nur ausgewählte Zeilen. Wenn eine gleichnamige `.nfo` eine TVDB-Episoden-ID enthält und für die Serie bereits ein TVDB-Mapping gespeichert ist, wird der TVDB-Titel als Sollwert genutzt; sonst bleibt der lokale Dateiname der Fallback. Fehlende AD- oder Untertitelspuren werden bewusst nicht als Problem gemeldet: das Archivpflege-Modul bewertet den vorhandenen Bestand und fordert keine Inhalte an, die nie gemuxt wurden. Doppelte AD-Spuren oder doppelte Untertitel-Slots werden dagegen als Remux-Hinweis markiert, weil diese Fälle nicht sauber per Header-Edit aufzulösen sind.
-
-## Typischer Workflow: Einsortieren
-
-1. MediathekView-Downloadordner wählen oder den vorgeschlagenen Standardordner nutzen.
-2. `Neu scannen`, um lose Dateien in der Wurzel zu gruppieren.
-3. Zielordner und Hinweise prüfen.
-4. Bei Bedarf Zielordner manuell korrigieren oder einzelne Einträge abwählen.
-5. `Auswahl einsortieren`, um die Dateien in die Serienunterordner zu verschieben.
-
-Alle ausgewählten Pakete werden vor Ordneränderungen geprüft. Scheitert das Verschieben
-einer Begleitdatei, werden bereits verschobene Teile desselben Pakets zurückgenommen.
-Abgewählte Pakete bleiben unberührt; Abbruch erfolgt zwischen vollständigen Paketen.
-
-## Typischer Workflow: Emby-Abgleich
-
-1. Emby-Zugangsdaten zentral über `Einstellungen` hinterlegen.
-2. Einen oder mehrere nach einem Batch- oder Einzel-Lauf erzeugte Metadatenreports `Neu erzeugte Ausgabedateien - ...metadata.json` über `Reports wählen` laden.
-3. Nach `Reports wählen` prüft das Tool automatisch lokale `.nfo`-Dateien und, falls konfiguriert, auch bereits sichtbare Emby-Einträge.
-4. Wenn Emby neue Dateien noch nicht kennt, `Emby scannen` ausführen und den Serverfortschritt abwarten. Der Scan startet nur bei eindeutig zugeordneter Serienbibliothek, niemals als globaler Fallback. Danach prüft das Tool die betroffenen Einträge erneut automatisch.
-5. Offene Provider-ID-Prüfungen mit `Pflichtchecks starten` abarbeiten. TVDB wird nur bei widersprüchlichen Quellen aktiv geprüft. Für IMDb liest das Tool zuerst die Remote-Verknüpfung der bereits bekannten TVDB-Episode. Fehlt diese oder ist TVDB vorübergehend nicht erreichbar, versucht es den optionalen lokalen IMDb-Index. Nur ein eindeutiger exakter Serien- und Episodentitel wird automatisch übernommen; Staffel/Folge dienen wegen abweichender IMDb-Nummerierungen nur als Zusatzsignal. Widersprüche und unsichere Treffer bleiben zur manuellen Prüfung offen.
-6. Einzelne Zeilen können weiterhin direkt über die `TVDB`- und `IMDb`-Buttons nachbearbeitet werden. Die ID-Zellen sind zusätzlich editierbar, wenn eine ID direkt bekannt ist. Gibt es für eine Folge bei einem Anbieter keinen passenden Eintrag, dort `Kein Eintrag` aktivieren. Diese Entscheidung gilt nur für den jeweiligen Anbieter; ein leeres ID-Feld allein gilt noch nicht als erledigt.
-7. `NFO speichern + Emby aktualisieren`, um geänderte TVDB-/IMDb-IDs in die `.nfo` zurückzuschreiben und nur betroffene Emby-Einträge gezielt zu refreshen.
-
-Die erste Emby-Ausbaustufe erzeugt bewusst keine neue NFO aus dem Nichts. Emby soll die Episoden-NFO zunächst selbst anlegen; das Tool ergänzt danach nur die Provider-IDs. Wenn Emby temporär nicht erreichbar ist oder eine Datei noch nicht als Item liefert, prüft die App vorhandene lokale `.nfo`-Dateien trotzdem weiter, damit ein Serverproblem nicht jede lokale Kontrolle blockiert. Dateien in Emby-Asset-Ordnern wie `trailers` oder `backdrops` bekommen normalerweise keine Episoden-NFO; solche Einträge werden erkannt und beim Provider-ID-Sync übersprungen.
-
-Bei unterschiedlichen Client-/Serverpfaden lässt sich unter `Einstellungen > Emby` der
-`Archivpfad auf dem Emby-Server` ausdrücklich dem lokalen Archivpfad zuordnen, etwa
-`Z:\Videos\Serien` zu `/mnt/raid/Videos/Serien`. Optional kann die `Serienbibliotheks-ID`
-die Auswahl zusätzlich festlegen. Falsche explizite Angaben werden nicht heuristisch
-durch einen anderen Pfad ersetzt; Linux-Serverpfade beachten Groß-/Kleinschreibung.
-
-`Abbrechen` gilt auch für Import, Prüfung und Schreiben. Abgeschlossene NFO-Änderungen
-und Prüfentscheidungen bleiben erhalten; ein noch nicht angeforderter Refresh bleibt offen.
-Das Abbrechen des Wartens stoppt keinen bereits auf dem Emby-Server laufenden Scan.
-
-Beim abschließenden Speichern sichert die App die Provider-Auswahl, bewusste `Kein Eintrag`-Entscheidungen und den Bearbeitungsstand je MKV in der JSON. Die ursprünglichen Mux-Metadaten bleiben dabei erhalten. Teilweise bearbeitete Reports kommen in `partial`; sobald alle relevanten Einträge erledigt sind, wechseln sie in den danebenliegenden Ordner `done`. Ungeklärte fehlende IDs, eine fehlende NFO oder ein noch nötiger, aber fehlgeschlagener Emby-Refresh verhindern den vollständigen Abschluss. Ohne konfigurierte Emby-Zugangsdaten zählt wie bisher der erfolgreich abgeschlossene lokale NFO-Abgleich; `trailers` und `backdrops` benötigen keinen Provider-ID-Sync.
-
-Reports aus beiden Ordnern können erneut gewählt werden. Gespeicherte manuelle Entscheidungen werden wiederhergestellt. `Kein Eintrag` lässt sich durch Entfernen des Hakens oder durch Eintragen einer ID zurücknehmen. Beim erneuten Speichern wird der Status neu bewertet; ein wieder offener Report wechselt aus `done` zurück nach `partial`. Unveränderte NFOs werden nicht erneut geschrieben; ein Emby-Refresh wird nur bei Änderungen oder abweichenden Server-IDs angefordert. Eine bereits erfolgreich angeforderte Aktualisierung wird in derselben Sitzung ohne neue NFO-Änderung oder erneute Serverprüfung nicht wiederholt. `done` bestätigt den lokalen Abschluss und die erforderliche Refresh-Anforderung, nicht den beobachteten Abschluss der Metadatenarbeit auf dem Server.
-
-Für die verbleibenden manuellen IMDb-Fälle zeigt der Dialog zunächst Kandidaten aus dem lokalen Index und darunter gezielte Browser-Suchen aus Serienname, Episodentitel und optionalem Episodencode. Die lokale Suche läuft asynchron und aktualisiert sich nach einer kurzen Eingabepause automatisch. Sie bietet passende Serien einschließlich deutscher Aliasnamen an; nach Auswahl einer Serie können alle Episoden oder nur die tatsächlich vorhandenen IMDb-Staffeln angezeigt werden. Ähnliche Episodentitel stehen oben, während Staffel und Folge wegen möglicher Abweichungen zu TVDB nur als Zusatzsignal dienen. Nach einer aus dem Dialog gestarteten Browsersuche wird eine neu kopierte gültige IMDb-ID oder URL bei der ersten Rückkehr automatisch übernommen, sofern die ID-Eingabe zwischenzeitlich nicht manuell verändert wurde. Alter Zwischenablageinhalt überschreibt keine Vorbelegung. Alternativ bleiben direkte Eingabe und `Zwischenablage übernehmen` möglich. Die Entscheidung `Keine IMDb-ID` wird auch dann in die lokale NFO übernommen, wenn keine weitere Provider-ID vorhanden ist. TVDB-Netzwerk- oder Dienstfehler werden als verständliche Statusmeldung protokolliert und lassen den manuellen Fallback offen; Endlos-Pagination oder wiederholte Provider-Tokens werden intern begrenzt.
-
-### Optionaler IMDb-Offlineindex
-
-Der Offlineindex wird unter `.\Data\IMDb\imdb-episodes.sqlite` gespeichert. Für einen Neuaufbau lädt die App `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` in einen temporären Ordner, liest sie sequenziell ein, übernimmt nur Serien, Episoden und deutsche Aliase und löscht die großen Roharchive anschließend wieder. Ein UTF-8-Byteparser verwirft irrelevante Zeilen vor der String-Erzeugung; eine kompakte Episodenzuordnung, auf tatsächlich abgefragte Episodenfelder begrenzte Datensätze und ein größerer temporärer SQLite-Cache vermeiden unnötige Berechnungen und Datenbankänderungen. Während des Indexaufbaus werden dafür zusätzlich einige hundert MiB Arbeitsspeicher verwendet. Ein vorhandener Index wird erst nach einem vollständig erfolgreichen Import atomar ersetzt. Wird die Nachfrage abgelehnt oder schlägt der Vorgang fehl, startet die App sofort mit dem bisherigen Stand weiter.
-
-Während des Imports zeigt der Startdialog neben der exakten Zahl gelesener Datensätze auch die aktuelle Datei (`1/3` bis `3/3`), deren geschätzten Prozentstand und den über alle drei Archive gewichteten Gesamtstand. Die Prozentwerte basieren auf den tatsächlich gelesenen Archivbytes; ein zusätzlicher vollständiger Zähllauf wird bewusst vermieden.
-
-Vor einem angebotenen Update stellt die Nachfrage den vorhandenen und den verfügbaren Datenstand mit Revisionsdatum und kurzer Versionskennung direkt gegenüber. Bei älteren Indexen, für die noch keine Quelldatenrevision gespeichert wurde, zeigt sie ersatzweise das Datum des letzten erfolgreichen Indexaufbaus.
-
-Auch Änderungen an den Importregeln können einen Neuaufbau erfordern. Die aktuelle Schemafassung 4 berücksichtigt korrigierte Episodenzuordnungen und Unicode-Normalisierung. Ein bestehender Index bleibt bis zum erfolgreichen, ausdrücklich genehmigten Neuaufbau verwendbar; der große Download erfolgt nicht ungefragt. Abbruch wirkt auch während der abschließenden SQLite-Indexierung.
-
-Speicherbedarf, Stand September 2026:
-
-- ungefähr 750 MiB für die drei temporär heruntergeladenen GZip-Archive
-- ungefähr 1,3 GiB dauerhaft für `.\Data\IMDb\imdb-episodes.sqlite`
-- empfohlen 4 bis 5 GiB freier Speicher während eines Updates, weil alter Index, neuer Index und Roharchive bis zum erfolgreichen atomaren Austausch gleichzeitig vorhanden sein können
-
-Die offiziellen Datensätze wachsen fortlaufend; diese Werte sind deshalb Richtwerte und können bei späteren Aktualisierungen steigen.
-
-Die IMDb-Datensätze sind ausschließlich für persönliche und nicht kommerzielle Nutzung vorgesehen. Quelle: [IMDb Non-Commercial Datasets](https://www.imdb.com/interfaces/). Information courtesy of IMDb ([https://www.imdb.com](https://www.imdb.com)). Used with permission.
-
-## Unterstützte Dateien
-
-Im aktuellen Serien-Modul werden verwendet:
-
-- Hauptvideo: `.mp4`
-- optionale Audiodeskription: `.mp4`
-- optionale Untertitel: `.srt`, `.ass`, `.vtt`
-- optionale TXT-Begleitdatei: `.txt`
-- vorhandene Archivdateien zum Vergleich und zur Wiederverwendung: `.mkv`
-- vorhandene Archivdateien zur nachgelagerten Pflege: `.mkv` plus gleichnamige `.nfo`-/Bild-Begleitdateien bei sicheren Umbenennungen
-
-`.ttml` wird nicht gemuxt, aber als Begleitdatei für Cleanup und Aufräumen berücksichtigt.
-
-## Fachliche Regeln
-
-Dieser Abschnitt beschreibt bewusst die wichtigsten fachlichen Entscheidungen der App. Er ist nicht als exakte technische Spezifikation gedacht, sondern als gut lesbare Zusammenfassung dessen, was das Tool normalerweise tut und warum.
-
-### Videoauswahl
-
-- Es werden nur Quellen derselben Episode gemeinsam betrachtet.
-- Bei unterschiedlichen Laufzeiten bleibt nur die fachlich passende Laufzeitgruppe übrig. Kleinere Abweichungen werden toleriert, klar unpassende Dateien fliegen heraus.
-- Zusätzlich vergleicht die Planung die präzisen Medienlaufzeiten der gemeinsam verwendeten Video-, Audio-, AD- und Untertitelquellen über `ffprobe`. Abweichende Sendefassungen mit kurzem Zusatzvorspann oder -abspann werden als möglicher Schnittkonflikt hervorgehoben, bevor daraus asynchrone Spuren entstehen können.
-- Frische Videospuren werden pro Sprach-/Codec-Slot ausgewählt. Das bedeutet: Für `Deutsch + H.264`, `Deutsch + H.265`, `Plattdeutsch + H.264` oder `English + H.264` bleibt jeweils nur die beste Quelle übrig.
-- Innerhalb eines Slots gewinnt zuerst die höhere Auflösung, dann die größere Datei und danach die Sender-Priorität.
-- Die Ausgabereihenfolge der Videospuren ist sprachlich bewusst fest: `Deutsch`, `Plattdüütsch`, `English`.
-- Innerhalb derselben Sprache steht `H.264` vor `H.265`.
-- Wenn zu einer Sprache sowohl `H.264` als auch `H.265` vorhanden sind, können beide erhalten bleiben. `H.265` ersetzt also nicht pauschal `H.264`.
-- Im Archivabgleich kann eine vorhandene Videospur desselben Slots durch eine neue ersetzt werden, wenn die neue fachlich besser ist, insbesondere bei höherer Auflösung.
-
-### Archivabgleich und Sonderfolgen
-
-- Wenn das geplante Ziel bereits im Archiv existiert, liest die App die vorhandene MKV ein und entscheidet, ob Inhalte wiederverwendet, ersetzt, ergänzt oder nur Headerdaten korrigiert werden müssen.
-- Vorhandene Archivspuren werden nicht blind verworfen. Besonders normale Audiospuren und bereits vorhandene AD-/Untertitelspuren werden weiterverwendet, wenn sie den fachlichen Slot bereits abdecken.
-- Bei nicht eindeutig TVDB-zuordenbaren Sonder- oder Bonusfolgen sucht die App zusätzlich in typischen Sonderordnern der Serie, etwa `Specials`, `Season 0`, `Trailers` und `Backdrops`.
-- Wenn dort eine passende Archivdatei gefunden wird, kann sie als Ziel und Metadatenquelle dienen. Das spart manuelle Nacharbeit bei Bonusmaterial ohne sauberen TVDB- oder IMDb-Eintrag.
-- Hinweise wie Mehrfachfolge, Archivtreffer oder ungewöhnliche Quellen müssen vor dem Muxen bewusst geprüft werden, wenn sie als Pflichtprüfung angezeigt werden.
-- Eine im Pflichtcheck ausdrücklich verworfene Medienquelle bleibt zunächst ausgeschlossen. Wenn eine andere Quelle derselben Episode erfolgreich verarbeitet wird, räumt der Batch-Lauf die verworfene Datei samt direkter Sidecars ebenfalls auf, damit eine bekannte defekte Quelle beim nächsten Scan nicht erneut angeboten wird.
-
-### Audio und Audiodeskription
-
-- Normale Audiospuren aus frischen Quellen bleiben erhalten und werden nicht mehr auf die erste Tonspur reduziert.
-- Audiodeskriptionsspuren werden getrennt behandelt und sollen nicht als normale Tonspur im Set landen.
-- Als AD gelten Spuren mit passendem Accessibility-Flag oder mit klaren Hinweisen wie `sehbehinder...` oder `audiodeskrip...` im Namen.
-- Falls die Heuristik bei einer frischen Quelldatei ausnahmsweise jede Audiospur als AD einordnen würde, bleibt die Auswahl konservativ und lässt die Audiospur lieber stehen, statt die Quelle stumm zu planen.
-- Beim Ersetzen einer vorhandenen Archiv-Hauptquelle bleiben vorhandene normale Archiv-Audiospuren für Sprachen erhalten, die in den frischen ausgewählten Quellen nicht mehr abgedeckt sind.
-- Eine separate AD-Datei wird weiterhin als eigener Sonderfall behandelt.
-
-### Untertitel
-
-- Unterstützt werden externe `.ass`, `.srt` und `.vtt`.
-- Externe Untertitel werden derzeit konservativ als `hörgeschädigte` behandelt, solange nichts Sicheres erkannt wird.
-- Bleibt die bisherige Hauptquelle erhalten, bleiben auch bereits eingebettete Untertitel erhalten. Externe Untertitel ergänzen dann nur fehlende Slots.
-- Wird die Hauptquelle durch eine bessere ersetzt, ersetzen ausgewählte neue Untertitel die Archivuntertitel im gleichen Slot. Das Verbessern einer zusätzlichen Videospur allein löst keinen Untertitelersatz aus.
-- Ein Slot besteht aus `Typ + Sprache + Rolle (normal/hörgeschädigt und Forced)`. Andere Formate, Sprachen oder Rollen gelten nicht als Ersatz; vorhandene Untertitel ohne passenden Ersatz bleiben immer erhalten.
-- Nicht unterstützte Untertitelcodecs werden nicht stillschweigend als vollwertig weitergemuxte Standard-Untertitel behandelt.
-
-### TXT-Begleitdateien und eingebettete TXT-Anhänge
-
-- Zu jeder tatsächlich verwendeten frischen Videodatei wird die passende benachbarte `.txt` mitgenommen.
-- Ungenutzte frische Hauptquellen ziehen ihre TXT nicht mehr versehentlich mit.
-- Manuell ausgewählte TXT-Anhänge bleiben davon unabhängig erhalten.
-- Bereits in der Ziel-MKV eingebettete TXT-Anhänge werden konservativ behandelt und möglichst nicht unnötig verworfen.
-- Für eingebettete TXT-Anhänge nutzt die App eine Heuristik aus Dateiname und Inhalt, insbesondere aus `Titel` und `URL`.
-- Daraus können Sprache, Auflösung und teils auch Codec abgeleitet werden, zum Beispiel `Plattdüütsch`, `FHD`, `HD`, `H.264` oder `H.265`.
-- Ein eingebetteter TXT-Anhang wird nur dann automatisch entfernt, wenn seine Zuordnung zu einer ersetzten alten Videospur wirklich eindeutig ist.
-- Wenn die Zuordnung nicht sicher ist, bleibt der TXT-Anhang erhalten.
-- Zusätzlich bleibt der alte explizit sichere Fallback aktiv: `genau eine vorhandene Videospur + genau eine TXT`, wenn diese Videospur ersetzt wird.
-
-### Direkte Header-Anpassungen
-
-- Wenn am Ziel bereits alle benötigten Inhalte vorhanden sind, kann die App statt eines Remux nur die Matroska-Header aktualisieren.
-- Verglichen und bei Bedarf angepasst werden Tracknamen, Sprachen, Standard-Flags, Originalsprache, Forced-Flags, Accessibility-Flags und der MKV-Titel.
-- Die Vorschau zeigt nur relevante Änderungen an, damit sichtbar bleibt, was vorher falsch war und was geändert wird.
-- Normale Hauptspuren, also nicht AD und nicht hörgeschädigte Untertitel, sollen als Standard geeignet markiert sein. Spezialspuren werden bewusst getrennt behandelt.
-- Die Archivpflege nutzt dieselbe Header-Regelbasis nachträglich für vorhandene Archivdateien. Sie ergänzt keine fehlenden Spuren, meldet aber doppelte AD- oder Untertitel-Slots als Remux-Fall.
-
-### Sender-Priorität und manuelle Prüfung
-
-- Die Sender-Priorität ist nur ein Tie-Breaker, nicht das Hauptkriterium.
-- Bevorzugt werden aktuell vor allem `ZDF`, danach `ARD` / `Das Erste`, dann `RBB` und `Arte`.
-- `SRF` wird nicht pauschal verworfen, aber bewusst zurückhaltender behandelt und in der Regel zur manuellen Prüfung markiert.
-
-### Tracknamen
-
-Die App setzt Tracknamen bewusst einheitlich, damit die Bibliothek langfristig lesbar bleibt.
-
-Typische Formate sind:
-
-- Video: `Deutsch - FHD - H.264`
-- Audio: `Deutsch - AAC`
-- Audiodeskription: `Deutsch (sehbehinderte) - AAC`
-- Untertitel: `Deutsch (hörgeschädigte) - SRT`
-
-Sprachbezeichnungen werden in ihrer eigenen Sprache geschrieben:
-
-- `Deutsch`
-- `Plattdüütsch`
-- `English`
-
-## Hinweise für die Nutzung
-
-- MKVToolNix und `ffprobe` werden standardmäßig automatisch im portablen `.\Tools`-Ordner verwaltet; MediathekView kann dort optional ebenfalls automatisch verwaltet werden.
-- Manuelle Toolpfad-Overrides in den Einstellungen haben Vorrang vor den automatisch verwalteten Tools.
-- Der Startordner für Videoquellen bevorzugt `Downloads\MediathekView\Downloads`, fällt aber automatisch auf `Dokumente` zurück, wenn der Ordner nicht existiert.
-- Die Standard-Serienbibliothek, Toolpfade und API-Schlüssel werden zentral im Einstellungsdialog gepflegt und lokal in `.\Data\settings.json` gespeichert.
-- Portable Daten und Logs bleiben im Anwendungsordner.
-
-## Konflikte und Wiederherstellung
-
-NFO-/Reportänderungen prüfen unter exklusiver Dateisperre, ob der gelesene Inhalt noch
-aktuell ist. Ein paralleler Emby-/Benutzereingriff wird als Konflikt gemeldet, nicht still
-überschrieben. Bei echten Änderungen bleibt vor dem kurzen Schreibvorgang eine
-vollständig gesicherte Originalkopie verfügbar.
-
-Archivpflege ist über MKV-Header, NFO und Umbenennung hinweg trotzdem nicht atomar.
-Vor schreibenden Schritten wird ein `.archive-change-*.json`-Beleg angelegt. Nach einem
-Fehler können Teiländerungen bestehen: neu scannen, verbleibende Differenzen prüfen und
-erneut freigeben. Ein in-place-Header-Edit legt keine vollständige MKV-Backupkopie an.
-
-Unter `Einstellungen > Wiederherstellung` lassen sich bekannte Arbeitsreste in Tools,
-IMDb-Daten oder einem gewählten Archivordner ansehen. Aktive Installationen und Links
-sind ausgeschlossen. Geprüfte NFO-/JSON-Sicherungen können einzeln wiederhergestellt
-werden; der jetzige Inhalt wird zusätzlich gesichert. Alte Toolordner und Arbeitsreste
-können nach ausdrücklicher Bestätigung in den Papierkorb. Nichts wird pauschal entfernt,
-Archivbelege werden nicht blind erneut ausgeführt.
-
-Weitere bewusste Heuristiken und Formatgrenzen stehen unter [Regeln und Grenzen](docs/articles/behavior-contracts.md).
-
-## Starten
-
-```powershell
-dotnet build
-dotnet run
-```
-
-im Projektordner:
-
-`<dein-projektordner>\mkvtoolnix-Automatisierung`
-
-## Entwicklerdokumentation
-
-Das Projekt ist zusätzlich mit XML-Dokumentationskommentaren und einer DocFX-Konfiguration versehen.
-
-Lokal erzeugen:
-
-```powershell
-dotnet tool restore
-.\scripts\build-docs.ps1
-```
-
-Lokale Vorschau im Browser:
-
-```powershell
-.\scripts\build-docs.ps1 -Serve
-```
-
-Das Skript bereinigt vorher alte generierte Artefakte unter `.\docs\api` und `.\docs\_site`, damit lokal keine veralteten DocFX-Seiten liegen bleiben.  
-Die erzeugte Seite landet unter `.\docs\_site`.  
-Auf GitHub ist außerdem ein Workflow unter `.github/workflows/ci-docs.yml` vorbereitet, der Build, Unit-Tests, Integrationstests und den DocFX-Site-Build automatisiert ausführt und die Dokumentation bei Pushes auf `master` optional nach GitHub Pages deployen kann.
-
-Zusätzlich hält `.github/dependabot.yml` Versionsupdates für GitHub Actions und NuGet-Pakete automatisch im Blick.
-
-README-Screenshots neu erzeugen:
-
-```powershell
-.\scripts\generate-readme-screenshots.ps1
-```
-
-Die PNGs landen danach unter `.\docs\images\readme\`.
-Der CI-Workflow rendert die Screenshots zusätzlich als Smoke-Test, damit der Generator nicht unbemerkt bricht. Da Windows-Runner und lokaler Desktop PNGs leicht unterschiedlich rendern können, blockiert die normale CI aber nicht auf Bild-Diffs. Für gelegentliche automatische Aktualisierungen gibt es stattdessen `.github/workflows/readme-screenshots.yml`; dieser Workflow läuft wöchentlich oder manuell und öffnet bei geänderten Bildern einen PR. Falls die Repository-Einstellung GitHub Actions das Erstellen von PRs verbietet, pusht der Workflow den Branch trotzdem und gibt eine Notice mit dem manuellen PR-Link aus.
-
-### Releases
-
-Gelegentliche Releases laufen manuell über `.github/workflows/release.yml`. Der Workflow baut in `Release`, führt Tests seriell aus, erzeugt Release-Notes, setzt danach das Git-Tag und veröffentlicht eine framework-dependent Single-File-Exe für `win-x64` auf GitHub.
-
-Lokal kann derselbe Release-Typ mit `.\scripts\publish-release.ps1 -Version 1.4.1` gebaut werden. Die erzeugte `.exe` liegt danach unter `.\artifacts\release\` und benötigt auf dem Zielsystem die passende `.NET Desktop Runtime 10`; MKVToolNix und `ffprobe` werden beim Start in `.\Tools` verwaltet, MediathekView optional bei aktivierter Einstellung.
-
-Zusätzlich kann `.github/workflows/nightly.yml` einen rollenden Vorabstand `nightly` erzeugen. Der Nightly-Build läuft geplant einmal pro Nacht oder manuell per `workflow_dispatch`, verwendet denselben framework-dependent Single-File-Build wie ein Release und erstellt das GitHub-Prerelease nur dann automatisch neu, wenn seit dem letzten Nightly neue Commits auf `master` dazugekommen sind.
-
-Praktische Links:
-
-- direkte Nightly-Exe: [MkvToolnixAutomatisierung-nightly-win-x64.exe](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/download/nightly/MkvToolnixAutomatisierung-nightly-win-x64.exe)
-- Nightly-Prerelease-Seite: [releases/tag/nightly](https://github.com/tobby88/MKVToolNix-Automatisierung/releases/tag/nightly)
-- Nightly-Workflow-Historie: [actions/workflows/nightly.yml](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/workflows/nightly.yml)
-
-## Projektaufbau
-
-- `MainWindow.xaml`: Shell mit Modulnavigation und Tool-Status
-- `ViewModels/MainWindowViewModel.cs`: Shell-ViewModel
-- `Composition/`: Composition-Root und fachlich getrennte DI-Registrierungsmodule
-- `Views/`: WPF-Views für die einzelnen Module
-- `ViewModels/Modules/`: ViewModels der einzelnen Module
-- `Services/`: technische Dienste wie Dialoge, Toolsuche und Prozessausführung
-- `Services/Emby/`: Emby-API-Zugriff, NFO-Provider-ID-Abgleich und Emby-Settings
-- `Services/AppModuleServices.cs`: kleinere Service-Bundles für Einzelmodus, Batch und Shell statt eines globalen Sammelobjekts
-- `Modules/SeriesEpisodeMux/`: Fachlogik für Erkennung, Planung, Archivabgleich und Muxing
-
-Die App verwendet `Microsoft.Extensions.DependencyInjection`, bleibt aber bewusst bei einem klaren Composition Root. `IServiceProvider` wird nicht durch die Fachlogik gereicht; aufgelöst wird nur zentral beim App-Start.
-
-## Weitergabe und Lizenz
-
-Dieses Repository steht unter `CC BY-NC-SA 4.0`, siehe [LICENSE.md](LICENSE.md).
-
-Praktisch bedeutet das:
-
-- Nutzung und Weitergabe sind erlaubt
-- kommerzielle Nutzung ist nicht erlaubt
-- geänderte und weitergegebene Fassungen müssen wieder unter derselben Lizenz stehen
-- der ursprüngliche Autor muss genannt bleiben
-
-Wichtig:
-
-- Creative Commons empfiehlt diese Lizenzfamilie selbst nicht für Software. Sie wurde hier trotzdem bewusst gewählt, weil sie die gewünschten Bedingungen für dieses Repository am besten abbildet.
-- Dieses Projekt ist wegen der `NC`-Klausel nicht als klassische Open-Source-Lizenz im OSI-Sinne zu verstehen.
+Es gilt **CC BY-NC-SA 4.0**, siehe [Lizenz](LICENSE.md). Die optionalen [IMDb-Datensätze](https://www.imdb.com/interfaces/) sind für persönliche, nicht kommerzielle Nutzung vorgesehen. Information courtesy of IMDb ([IMDb](https://www.imdb.com)). Used with permission.
