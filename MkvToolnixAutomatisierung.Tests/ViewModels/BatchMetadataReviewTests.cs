@@ -328,7 +328,7 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
-    public void CreateFromDetection_ExistingCustomOutputTarget_StaysReady()
+    public async Task CreateFromDetection_ExistingCustomOutputTarget_StaysReady()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-custom-target-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDirectory);
@@ -354,7 +354,7 @@ public sealed class BatchMetadataReviewTests
                 isSelected: false,
                 isArchiveTargetPath: false);
 
-            item.RefreshArchivePresence();
+            await item.RefreshArchivePresence();
 
             Assert.Equal(EpisodeArchiveState.Existing, item.ArchiveState);
             Assert.False(item.HasArchiveComparisonTarget);
@@ -719,7 +719,7 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
-    public void SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
+    public async Task SetPlanNotes_MultipartHint_PromotesBatchReviewState_AndHintText()
     {
         var item = BatchEpisodeItemViewModel.CreateFromDetection(
             requestedMainVideoPath: @"C:\Temp\episode.mp4",
@@ -740,7 +740,7 @@ public sealed class BatchMetadataReviewTests
         item.SetPlanNotes([
             "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
         ]);
-        item.RefreshArchivePresence();
+        await item.RefreshArchivePresence();
 
         Assert.True(item.HasActionablePlanNotes);
         Assert.Equal("Mehrfachfolge prüfen", item.ReviewHint);
@@ -748,7 +748,7 @@ public sealed class BatchMetadataReviewTests
         Assert.Equal(BatchEpisodeStatusKind.ReviewPending, item.StatusKind);
 
         item.ApprovePlanReview();
-        item.RefreshArchivePresence();
+        await item.RefreshArchivePresence();
 
         Assert.False(item.HasPendingPlanReview);
         Assert.False(item.HasActionablePlanNotes);
@@ -757,37 +757,40 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
-    public void ReviewPendingSourcesCommand_ApprovesPendingPlanReviewHints()
+    public async Task ReviewPendingSourcesCommand_ApprovesPendingPlanReviewHints()
     {
-        var dialogService = new FakeDialogService();
-        var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
-        var item = BatchEpisodeItemViewModel.CreateFromDetection(
-            requestedMainVideoPath: @"C:\Temp\episode.mp4",
-            CreateLocalGuess(),
-            CreateDetectedEpisode(),
-            new EpisodeMetadataResolutionResult(
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var dialogService = new FakeDialogService();
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialogService);
+            var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                requestedMainVideoPath: @"C:\Temp\episode.mp4",
                 CreateLocalGuess(),
-                Selection: null,
-                StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
-                ConfidenceScore: 0,
-                RequiresReview: false,
-                QueryWasAttempted: false,
-                QuerySucceeded: false),
-            outputPath: @"C:\Temp\output.mkv",
-            statusKind: BatchEpisodeStatusKind.Ready,
-            isSelected: true);
-        item.SetPlanNotes([
-            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
-        ]);
-        item.RefreshArchivePresence();
-        viewModel.EpisodeItems.Add(item);
-        viewModel.SelectedEpisodeItem = item;
+                CreateDetectedEpisode(),
+                new EpisodeMetadataResolutionResult(
+                    CreateLocalGuess(),
+                    Selection: null,
+                    StatusText: "TVDB-Automatik wurde nicht ausgeführt.",
+                    ConfidenceScore: 0,
+                    RequiresReview: false,
+                    QueryWasAttempted: false,
+                    QuerySucceeded: false),
+                outputPath: @"C:\Temp\output.mkv",
+                statusKind: BatchEpisodeStatusKind.Ready,
+                isSelected: true);
+            item.SetPlanNotes([
+                "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+            ]);
+            await item.RefreshArchivePresence();
+            viewModel.EpisodeItems.Add(item);
+            viewModel.SelectedEpisodeItem = item;
 
-        viewModel.ReviewPendingSourcesCommand.Execute(null);
+            await viewModel.ReviewPendingSourcesCommand.ExecuteAsync();
 
-        Assert.Equal(1, dialogService.ConfirmPlanReviewCallCount);
-        Assert.False(item.HasPendingPlanReview);
-        Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+            Assert.Equal(1, dialogService.ConfirmPlanReviewCallCount);
+            Assert.False(item.HasPendingPlanReview);
+            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+        });
     }
 
     [Fact]
@@ -812,30 +815,33 @@ public sealed class BatchMetadataReviewTests
     [Fact]
     public async Task RunBatchCommand_PendingReviewCancellation_ReportsRemainingReviewTypes()
     {
-        var workflow = new RejectingManualSourceWorkflow();
-        var dialogService = new FakeDialogService();
-        var viewModel = CreateBatchViewModel(workflow, dialogService);
-        var manualItem = CreateManualCheckItem();
-        var metadataItem = CreatePendingReviewItem();
-        var planItem = CreateReadyItem(@"C:\Temp\plan.mp4", @"C:\Temp\plan.mkv");
-        planItem.SetPlanNotes([
-            "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
-        ]);
-        planItem.RefreshArchivePresence();
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var workflow = new RejectingManualSourceWorkflow();
+            var dialogService = new FakeDialogService();
+            var viewModel = CreateBatchViewModel(workflow, dialogService);
+            var manualItem = CreateManualCheckItem();
+            var metadataItem = CreatePendingReviewItem();
+            var planItem = CreateReadyItem(@"C:\Temp\plan.mp4", @"C:\Temp\plan.mkv");
+            planItem.SetPlanNotes([
+                "In der Bibliothek existiert zusätzlich eine Mehrfachfolge mit demselben Titel (S2014E05-E06). Bitte prüfen, ob die aktuelle Quelle zu einer Doppel- oder Mehrfachfolge gehört."
+            ]);
+            await planItem.RefreshArchivePresence();
 
-        viewModel.EpisodeItems.Add(manualItem);
-        viewModel.EpisodeItems.Add(metadataItem);
-        viewModel.EpisodeItems.Add(planItem);
+            viewModel.EpisodeItems.Add(manualItem);
+            viewModel.EpisodeItems.Add(metadataItem);
+            viewModel.EpisodeItems.Add(planItem);
 
-        viewModel.RunBatchCommand.Execute(null);
-        Assert.True(await WaitUntilAsync(() => dialogService.LastWarningMessage is not null, TimeSpan.FromSeconds(3)));
+            viewModel.RunBatchCommand.Execute(null);
+            Assert.True(await WaitUntilAsync(() => dialogService.LastWarningMessage is not null, TimeSpan.FromSeconds(3)));
 
-        Assert.Equal(1, workflow.ManualSourceReviewCallCount);
-        Assert.Equal(0, dialogService.ConfirmBatchExecutionCallCount);
-        Assert.Contains("1 Quellenprüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("1 TVDB-Prüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("1 Archiv-/Planhinweis", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("Batch abgebrochen: Prüfungen offen", viewModel.StatusText);
+            Assert.Equal(1, workflow.ManualSourceReviewCallCount);
+            Assert.Equal(0, dialogService.ConfirmBatchExecutionCallCount);
+            Assert.Contains("1 Quellenprüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("1 TVDB-Prüfung", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("1 Archiv-/Planhinweis", dialogService.LastWarningMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Batch abgebrochen: Prüfungen offen", viewModel.StatusText);
+        });
     }
 
     [Fact]
@@ -1143,83 +1149,91 @@ public sealed class BatchMetadataReviewTests
     }
 
     [Fact]
-    public void HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStartsCoveringIt()
+    public async Task HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStartsCoveringIt()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
-        var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
-        var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
-        Directory.CreateDirectory(oldArchiveRoot);
-        Directory.CreateDirectory(newArchiveRoot);
-        try
+        await WpfTestHost.RunAsync(async () =>
         {
-            var outputPath = Path.Combine(newArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
-            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            File.WriteAllText(outputPath, "existing");
-
-            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
-            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
-            var item = CreateReadyItem(@"C:\Temp\manual-archive.mp4", outputPath);
-            item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: false);
-            item.RefreshArchivePresence();
-            viewModel.EpisodeItems.Add(item);
-
-            Assert.False(item.HasArchiveComparisonTarget);
-            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
-
-            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
-
-            viewModel.HandleArchiveConfigurationChanged();
-
-            Assert.True(item.HasArchiveComparisonTarget);
-            Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
+            var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
+            var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
+            Directory.CreateDirectory(oldArchiveRoot);
+            Directory.CreateDirectory(newArchiveRoot);
+            try
             {
-                Directory.Delete(tempDirectory, recursive: true);
+                var outputPath = Path.Combine(newArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                File.WriteAllText(outputPath, "existing");
+
+                var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+                GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
+                var item = CreateReadyItem(@"C:\Temp\manual-archive.mp4", outputPath);
+                item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: false);
+                await item.RefreshArchivePresence();
+                viewModel.EpisodeItems.Add(item);
+
+                Assert.False(item.HasArchiveComparisonTarget);
+                Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
+
+                GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
+
+                viewModel.HandleArchiveConfigurationChanged();
+                await item.ArchiveStateCheck;
+
+                Assert.True(item.HasArchiveComparisonTarget);
+                Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
             }
-        }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        });
     }
 
     [Fact]
-    public void HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStopsCoveringIt()
+    public async Task HandleArchiveConfigurationChanged_ReclassifiesManualOutputPath_WhenArchiveRootStopsCoveringIt()
     {
-        var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
-        var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
-        var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
-        Directory.CreateDirectory(oldArchiveRoot);
-        Directory.CreateDirectory(newArchiveRoot);
-        try
+        await WpfTestHost.RunAsync(async () =>
         {
-            var outputPath = Path.Combine(oldArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
-            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            File.WriteAllText(outputPath, "existing");
-
-            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
-            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
-            var item = CreateReadyItem(@"C:\Temp\manual-unarchive.mp4", outputPath);
-            item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: true);
-            item.RefreshArchivePresence();
-            viewModel.EpisodeItems.Add(item);
-
-            Assert.True(item.HasArchiveComparisonTarget);
-            Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
-
-            GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
-
-            viewModel.HandleArchiveConfigurationChanged();
-
-            Assert.False(item.HasArchiveComparisonTarget);
-            Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
-        }
-        finally
-        {
-            if (Directory.Exists(tempDirectory))
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "batch-archive-root-tests", Guid.NewGuid().ToString("N"));
+            var oldArchiveRoot = Path.Combine(tempDirectory, "Archive-A");
+            var newArchiveRoot = Path.Combine(tempDirectory, "Archive-B");
+            Directory.CreateDirectory(oldArchiveRoot);
+            Directory.CreateDirectory(newArchiveRoot);
+            try
             {
-                Directory.Delete(tempDirectory, recursive: true);
+                var outputPath = Path.Combine(oldArchiveRoot, "Beispielserie", "Season 1", "Beispielserie - S01E02 - Pilot.mkv");
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                File.WriteAllText(outputPath, "existing");
+
+                var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow());
+                GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(oldArchiveRoot);
+                var item = CreateReadyItem(@"C:\Temp\manual-unarchive.mp4", outputPath);
+                item.SetOutputPathWithContext(outputPath, isArchiveTargetPath: true);
+                await item.RefreshArchivePresence();
+                viewModel.EpisodeItems.Add(item);
+
+                Assert.True(item.HasArchiveComparisonTarget);
+                Assert.Equal(BatchEpisodeStatusKind.ComparisonPending, item.StatusKind);
+
+                GetBatchServices(viewModel).Archive.ConfigureArchiveRootDirectory(newArchiveRoot);
+
+                viewModel.HandleArchiveConfigurationChanged();
+                await item.ArchiveStateCheck;
+
+                Assert.False(item.HasArchiveComparisonTarget);
+                Assert.Equal(BatchEpisodeStatusKind.Ready, item.StatusKind);
             }
-        }
+            finally
+            {
+                if (Directory.Exists(tempDirectory))
+                {
+                    Directory.Delete(tempDirectory, recursive: true);
+                }
+            }
+        });
     }
 
     [Fact]

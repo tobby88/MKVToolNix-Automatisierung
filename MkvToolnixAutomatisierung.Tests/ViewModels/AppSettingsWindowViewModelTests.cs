@@ -25,7 +25,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void SaveSettings_PersistsAllManagedSettings()
+    public async Task SaveSettings_PersistsAllManagedSettings()
     {
         var archiveRoot = CreateDirectory("archive");
         var mkvToolNixDirectory = CreateDirectory("mkvtoolnix");
@@ -106,9 +106,13 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal("http://emby-test:8096", savedSettings.Emby?.ServerUrl);
         Assert.Equal("emby-key", savedSettings.Emby?.ApiKey);
         Assert.Equal(300, savedSettings.Emby?.ScanWaitTimeoutSeconds);
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsArchiveAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsFfprobeAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsMkvToolNixAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsMediathekViewAvailable);
         Assert.Contains("Einstellungen gespeichert", viewModel.StatusText, StringComparison.Ordinal);
     }
@@ -201,7 +205,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ToolStatus_ShowsManagedInstallationEvenWhenAutoManageIsDisabled()
+    public async Task ToolStatus_ShowsManagedInstallationEvenWhenAutoManageIsDisabled()
     {
         var mkvToolNixDirectory = CreateDirectory("managed-mkvtoolnix");
         _ = CreateFile(Path.Combine("managed-mkvtoolnix", "mkvmerge.exe"));
@@ -229,16 +233,20 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
         var viewModel = CreateViewModel(settingsStore: settingsStore);
 
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsMkvToolNixAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsFfprobeAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.Equal("MKVToolNix bereit (verwaltet)", viewModel.MkvToolNixStatusText);
+        await viewModel.PendingStatusCheck;
         Assert.Equal("ffprobe bereit (verwaltet)", viewModel.FfprobeStatusText);
         Assert.Contains("Automatische Updates sind deaktiviert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
         Assert.Contains("Automatische Updates sind deaktiviert", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ToolStatus_ShowsSystemPathFallbackForFfprobe()
+    public async Task ToolStatus_ShowsSystemPathFallbackForFfprobe()
     {
         var pathDirectory = CreateDirectory("path-tools");
         var ffprobePath = CreateFile(Path.Combine("path-tools", "ffprobe.exe"));
@@ -249,7 +257,9 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             Environment.SetEnvironmentVariable("PATH", $"{pathDirectory}{Path.PathSeparator}{originalPath}");
             var viewModel = CreateViewModel();
 
+            await viewModel.PendingStatusCheck;
             Assert.True(viewModel.IsFfprobeAvailable);
+            await viewModel.PendingStatusCheck;
             Assert.Equal("ffprobe bereit (PATH)", viewModel.FfprobeStatusText);
             Assert.Contains(ffprobePath, viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
         }
@@ -260,7 +270,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ToolStatus_ShowsDownloadsFallbackForMkvToolNix()
+    public async Task ToolStatus_ShowsDownloadsFallbackForMkvToolNix()
     {
         var userProfileDirectory = CreateDirectory("sandbox-profile");
         var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
@@ -282,7 +292,9 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
             var viewModel = CreateViewModel();
 
+            await viewModel.PendingStatusCheck;
             Assert.True(viewModel.IsMkvToolNixAvailable);
+            await viewModel.PendingStatusCheck;
             Assert.Equal("MKVToolNix bereit (Fallback)", viewModel.MkvToolNixStatusText);
             Assert.Contains(mkvMergePath, viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
             Assert.Contains(mkvPropEditPath, viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
@@ -299,7 +311,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ToolStatus_ShowsPortableDownloadsFallbackForMediathekView()
+    public async Task ToolStatus_ShowsPortableDownloadsFallbackForMediathekView()
     {
         var userProfileDirectory = CreateDirectory("sandbox-profile-mediathekview");
         var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
@@ -317,7 +329,9 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
             var viewModel = CreateViewModel();
 
+            await viewModel.PendingStatusCheck;
             Assert.True(viewModel.IsMediathekViewAvailable);
+            await viewModel.PendingStatusCheck;
             Assert.Equal("MediathekView bereit (portable)", viewModel.MediathekViewStatusText);
             Assert.Contains(mediathekViewPath, viewModel.MediathekViewStatusTooltip, StringComparison.Ordinal);
         }
@@ -329,7 +343,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void ToolStatus_PrefersManualOverrideEvenWhenAutoManageRemainsEnabled()
+    public async Task ToolStatus_PrefersManualOverrideEvenWhenAutoManageRemainsEnabled()
     {
         var manualMkvToolNixDirectory = CreateDirectory("manual-mkvtoolnix");
         _ = CreateFile(Path.Combine("manual-mkvtoolnix", "mkvmerge.exe"));
@@ -354,13 +368,15 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
         var viewModel = CreateViewModel(settingsStore: settingsStore);
 
+        await viewModel.PendingStatusCheck;
         Assert.True(viewModel.IsMkvToolNixAvailable);
+        await viewModel.PendingStatusCheck;
         Assert.Equal("MKVToolNix bereit (Override)", viewModel.MkvToolNixStatusText);
         Assert.Contains("übersteuert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ToolStatus_TreatsLegacyDownloadOverrideAsFallbackWhenAutoManageIsEnabled()
+    public async Task ToolStatus_TreatsLegacyDownloadOverrideAsFallbackWhenAutoManageIsEnabled()
     {
         var userProfileDirectory = CreateDirectory("sandbox-profile");
         var downloadsDirectory = Path.Combine(userProfileDirectory, "Downloads");
@@ -404,7 +420,9 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
 
             var viewModel = CreateViewModel(settingsStore: settingsStore);
 
+            await viewModel.PendingStatusCheck;
             Assert.Equal("MKVToolNix bereit (Fallback)", viewModel.MkvToolNixStatusText);
+            await viewModel.PendingStatusCheck;
             Assert.Equal("ffprobe bereit (Fallback)", viewModel.FfprobeStatusText);
             Assert.DoesNotContain("übersteuert", viewModel.MkvToolNixStatusTooltip, StringComparison.Ordinal);
             Assert.DoesNotContain("übersteuert", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
@@ -417,7 +435,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     }
 
     [Fact]
-    public void SaveSettings_PreservesRuntimeStateUpdatedAfterOpeningDialog()
+    public async Task SaveSettings_PreservesRuntimeStateUpdatedAfterOpeningDialog()
     {
         var store = new AppSettingsStore();
         var viewModel = CreateViewModel(settingsStore: store);
@@ -440,6 +458,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         Assert.Equal(checkedAt, saved.ToolPaths.ManagedFfprobe.LastCheckedUtc);
         Assert.Equal(checkedAt, saved.Metadata!.ImdbDataset.LastUpdatedUtc);
         Assert.False(saved.ToolPaths.ManagedFfprobe.AutoManageEnabled);
+        await viewModel.PendingStatusCheck;
         Assert.Contains("new-version", viewModel.FfprobeStatusTooltip, StringComparison.Ordinal);
     }
 

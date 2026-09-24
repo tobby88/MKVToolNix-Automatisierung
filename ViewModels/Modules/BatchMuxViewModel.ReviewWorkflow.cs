@@ -207,7 +207,7 @@ internal sealed partial class BatchMuxViewModel
                     }
 
                     item.ApprovePlanReview();
-                    item.RefreshArchivePresence();
+                    await item.RefreshArchivePresence();
                 }
 
                 RefreshOverview();

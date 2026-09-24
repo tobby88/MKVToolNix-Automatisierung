@@ -596,7 +596,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
-    public void RefreshArchivePresence_PreservesExistingUsageSummary_DuringStatusChanges()
+    public async Task RefreshArchivePresence_PreservesExistingUsageSummary_DuringStatusChanges()
     {
         var outputPath = Path.Combine(_tempDirectory, "existing", "Episode.mkv");
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
@@ -615,7 +615,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         item.SetPlanSummary("Letzte berechnete Planung");
         item.SetUsageSummary(usageSummary);
 
-        item.RefreshArchivePresence(BatchEpisodeStatusKind.Running);
+        await item.RefreshArchivePresence(BatchEpisodeStatusKind.Running);
 
         Assert.Equal(BatchEpisodeStatusKind.Running, item.StatusKind);
         Assert.Equal("Letzte berechnete Planung", item.PlanSummaryText);
@@ -624,7 +624,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
     }
 
     [Fact]
-    public void RefreshArchivePresence_PreservesCustomWarningStatusText_WhenStatusKindStaysTheSame()
+    public async Task RefreshArchivePresence_PreservesCustomWarningStatusText_WhenStatusKindStaysTheSame()
     {
         var outputPath = Path.Combine(_tempDirectory, "existing-warning", "Episode.mkv");
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
@@ -632,7 +632,7 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         var item = CreateBatchEpisodeItem(outputPath);
 
         item.SetStatus(BatchEpisodeStatusKind.Warning, "Warnung (mkvmerge meldet Warnungen)");
-        item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning);
+        await item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning);
 
         Assert.Equal(BatchEpisodeStatusKind.Warning, item.StatusKind);
         Assert.Equal("Warnung (mkvmerge meldet Warnungen)", item.Status);

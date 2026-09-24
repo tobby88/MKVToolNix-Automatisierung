@@ -433,13 +433,21 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(EffectiveOriginalLanguage));
     }
 
-    protected void RefreshArchiveState()
+    protected void RefreshArchiveState(Action? completed = null, bool immediate = false)
     {
-        SetArchiveState(ResolveArchiveState(OutputPath));
+        var path = OutputPath;
+        if (!string.Equals(_archiveStatePath, path, StringComparison.OrdinalIgnoreCase)) SetArchiveState(EpisodeArchiveState.New);
+        _archiveStatePath = path;
+        _archiveProbe.Request(() => ResolveArchiveState(path), state =>
+        {
+            SetArchiveState(state);
+            completed?.Invoke();
+        }, delayMilliseconds: immediate ? 0 : 100);
     }
 
     protected void SetArchiveState(EpisodeArchiveState archiveState)
     {
+        _archiveProbe.Cancel();
         if (_archiveState == archiveState)
         {
             return;

@@ -57,6 +57,9 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private string _originalLanguageOverride = string.Empty;
     private string _metadataOriginalLanguage = string.Empty;
     private EpisodeArchiveState _archiveState = EpisodeArchiveState.New;
+    private readonly LatestStatusProbe<EpisodeArchiveState> _archiveProbe = new();
+    private string _archiveStatePath = string.Empty;
+    public Task ArchiveStateCheck => _archiveProbe.Completion;
     private readonly HashSet<string> _excludedSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _rejectedManualCheckSourcePaths = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _approvedReviewPaths = new(StringComparer.OrdinalIgnoreCase);
@@ -112,7 +115,8 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         _attachmentPaths = attachmentPaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _relatedEpisodeFilePaths = relatedEpisodeFilePaths.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToList();
         _outputPath = outputPath;
-        _archiveState = initialArchiveState ?? ResolveArchiveState(outputPath);
+        _archiveStatePath = outputPath;
+        _archiveState = initialArchiveState ?? EpisodeArchiveState.New;
         _title = title;
         _metadataStatusText = metadataStatusText;
         _tvdbSelection = tvdbSelection;
@@ -128,6 +132,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
         _notes = notes.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _detectionSeedPath = requestedMainVideoPath;
         _metadataOriginalLanguage = NormalizeMetadataOriginalLanguage(metadataOriginalLanguage);
+        if (initialArchiveState is null) RefreshArchiveState();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

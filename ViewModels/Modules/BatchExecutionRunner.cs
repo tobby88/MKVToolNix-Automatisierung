@@ -141,7 +141,7 @@ internal sealed class BatchExecutionRunner
             }
             var item = workItem.Item;
             var plan = workItem.Plan;
-            item.RefreshArchivePresence();
+            await item.RefreshArchivePresence();
             var outputExistedBeforeRun = item.ArchiveState == EpisodeArchiveState.Existing;
             var outputSnapshotBeforeRun = FileStateSnapshot.TryCreate(item.OutputPath);
             item.SetStatus(BatchEpisodeStatusKind.Running);
@@ -198,7 +198,7 @@ internal sealed class BatchExecutionRunner
                     completedConsumers.Add(workItem);
                     item.SetStatus(BatchEpisodeStatusKind.Success);
                     successCount++;
-                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Success);
+                    await item.RefreshArchivePresence(BatchEpisodeStatusKind.Success);
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {
                         AddNewOutput(newOutputFiles, newOutputMetadata, item);
@@ -231,7 +231,7 @@ internal sealed class BatchExecutionRunner
                     completedConsumers.Add(workItem);
                     warningCount++;
                     var warningStatusText = BuildWarningStatusText(plan, result);
-                    item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning, warningStatusText);
+                    await item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning, warningStatusText);
                     appendLog($"  WARNUNG: {warningStatusText}");
                     if (!outputExistedBeforeRun && item.ArchiveState == EpisodeArchiveState.Existing)
                     {

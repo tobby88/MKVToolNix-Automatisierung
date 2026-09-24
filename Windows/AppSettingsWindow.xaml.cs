@@ -27,6 +27,7 @@ public partial class AppSettingsWindow : Window
     private void AppSettingsWindow_Closed(object? sender, EventArgs e)
     {
         _viewModel.CloseRequested -= ViewModelOnCloseRequested;
+        _viewModel.Dispose();
     }
 
     private void AppSettingsWindow_Closing(object? sender, CancelEventArgs e)

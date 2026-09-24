@@ -79,7 +79,7 @@ internal sealed partial class BatchMuxViewModel : IModuleInteractionState, IArch
         OpenSelectedAudioDescriptionCommand = new RelayCommand(OpenSelectedAudioDescription, () => IsInteractive && !string.IsNullOrWhiteSpace(SelectedEpisodeItem?.AudioDescriptionPath));
         OpenSelectedSubtitlesCommand = new RelayCommand(OpenSelectedSubtitles, () => IsInteractive && SelectedEpisodeItem?.SubtitlePaths.Count > 0);
         OpenSelectedAttachmentsCommand = new RelayCommand(OpenSelectedAttachments, () => IsInteractive && SelectedEpisodeItem?.AttachmentPaths.Count > 0);
-        OpenSelectedOutputCommand = new RelayCommand(OpenSelectedOutput, () => IsInteractive && File.Exists(SelectedEpisodeItem?.OutputPath));
+        OpenSelectedOutputCommand = new RelayCommand(OpenSelectedOutput, () => IsInteractive && SelectedEpisodeItem?.ArchiveState == EpisodeArchiveState.Existing);
         ReviewSelectedMetadataCommand = new AsyncRelayCommand(ReviewSelectedMetadataAsync, () => IsInteractive && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);
         RefreshAllComparisonsCommand = new AsyncRelayCommand(RefreshAllComparisonsAsync, () => IsInteractive && EpisodeItems.Any(), unexpectedCommandErrorHandler);
         RedetectSelectedEpisodeCommand = new AsyncRelayCommand(RedetectSelectedEpisodeAsync, () => IsInteractive && SelectedEpisodeItem is not null, unexpectedCommandErrorHandler);

@@ -12,7 +12,7 @@ namespace MkvToolnixAutomatisierung.ViewModels;
 /// <summary>
 /// Zentrales ViewModel für selten geänderte App-Konfiguration wie Archivpfad, Toolpfade, TVDB und Emby.
 /// </summary>
-internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INotifyDataErrorInfo
+internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INotifyDataErrorInfo, IDisposable
 {
     private const int MinimumEmbyScanWaitTimeoutSeconds = 5;
     private const int MaximumEmbyScanWaitTimeoutSeconds = 600;
@@ -47,6 +47,10 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private ResolvedToolPath? _resolvedFfprobePath;
     private ResolvedMkvToolNixPaths? _resolvedMkvToolNixPaths;
     private ResolvedToolPath? _resolvedMediathekViewPath;
+    private readonly LatestStatusProbe<PathStatus> _pathStatus = new();
+    private bool _archiveAvailable;
+    private bool _imdbAvailable;
+    public Task PendingStatusCheck => _pathStatus.Completion;
 
     public AppSettingsWindowViewModel(
         AppSettingsModuleServices services,
@@ -84,7 +88,6 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         _embyScanWaitTimeoutSeconds = embySettings.ScanWaitTimeoutSeconds;
         _embyScanWaitTimeoutSecondsText = _embyScanWaitTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
         SelectedPage = initialPage;
-        RefreshToolResolutionState();
         RefreshDerivedState();
     }
 
@@ -111,6 +114,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             }
 
             _archiveRootDirectory = normalized;
+            RefreshToolResolutionState();
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsArchiveAvailable));
             OnPropertyChanged(nameof(ArchiveStatusText));
@@ -263,11 +267,11 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
     public string ImdbDatasetStatusText => !AutoManageImdbDataset
         ? "Offlineindex deaktiviert"
-        : File.Exists(PortableAppStorage.ImdbDatabaseFilePath)
+        : _imdbAvailable
             ? "Offlineindex bereit"
             : "Offlineindex noch nicht installiert";
 
-    public string ImdbDatasetStatusTooltip => !File.Exists(PortableAppStorage.ImdbDatabaseFilePath)
+    public string ImdbDatasetStatusTooltip => !_imdbAvailable
         ? "Noch keine lokale IMDb-Datenbank vorhanden. Nach dem Übernehmen wird vor dem großen Download gefragt."
         : _imdbDatasetSettings.LastUpdatedUtc is { } updated
             ? $"Lokaler IMDb-Episodenindex: {PortableAppStorage.ImdbDatabaseFilePath}{Environment.NewLine}Zuletzt aktualisiert: {updated.ToLocalTime():g}"
@@ -409,7 +413,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
     public bool HasErrors => EmbyScanWaitTimeoutValidationMessage is not null;
 
-    public bool IsArchiveAvailable => !string.IsNullOrWhiteSpace(ArchiveRootDirectory) && Directory.Exists(ArchiveRootDirectory);
+    public bool IsArchiveAvailable => _archiveAvailable;
 
     public string ArchiveStatusText => IsArchiveAvailable ? "Archiv bereit" : "Archiv fehlt";
 
@@ -803,10 +807,35 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     private void RefreshToolResolutionState()
     {
         var currentSettings = BuildCurrentToolSettings();
-        _resolvedFfprobePath = ManagedToolResolution.TryResolveFfprobe(currentSettings);
-        _resolvedMkvToolNixPaths = ManagedToolResolution.TryResolveMkvToolNix(currentSettings);
-        _resolvedMediathekViewPath = MediathekViewPathResolver.TryResolve(currentSettings);
+        var archive = ArchiveRootDirectory;
+        _pathStatus.Request(() => new PathStatus(
+            Directory.Exists(archive), File.Exists(PortableAppStorage.ImdbDatabaseFilePath),
+            ManagedToolResolution.TryResolveFfprobe(currentSettings),
+            ManagedToolResolution.TryResolveMkvToolNix(currentSettings),
+            MediathekViewPathResolver.TryResolve(currentSettings)), status =>
+        {
+            _archiveAvailable = status.ArchiveAvailable;
+            _imdbAvailable = status.ImdbAvailable;
+            _resolvedFfprobePath = status.Ffprobe;
+            _resolvedMkvToolNixPaths = status.MkvToolNix;
+            _resolvedMediathekViewPath = status.MediathekView;
+            NotifyPathStatusChanged();
+        }, error => StatusText = $"Pfadstatus konnte nicht geprüft werden: {error.Message}");
     }
+
+    private void NotifyPathStatusChanged()
+    {
+        foreach (var property in new[] { nameof(IsArchiveAvailable), nameof(ArchiveStatusText), nameof(ArchiveStatusTooltip),
+            nameof(IsFfprobeAvailable), nameof(FfprobeStatusText), nameof(FfprobeStatusTooltip),
+            nameof(IsMkvToolNixAvailable), nameof(MkvToolNixStatusText), nameof(MkvToolNixStatusTooltip),
+            nameof(IsMediathekViewAvailable), nameof(MediathekViewStatusText), nameof(MediathekViewStatusTooltip),
+            nameof(ImdbDatasetStatusText), nameof(ImdbDatasetStatusTooltip) }) OnPropertyChanged(property);
+    }
+
+    private sealed record PathStatus(bool ArchiveAvailable, bool ImdbAvailable, ResolvedToolPath? Ffprobe,
+        ResolvedMkvToolNixPaths? MkvToolNix, ResolvedToolPath? MediathekView);
+
+    public void Dispose() => _pathStatus.Dispose();
 
     private string BuildFfprobeTooltip()
     {

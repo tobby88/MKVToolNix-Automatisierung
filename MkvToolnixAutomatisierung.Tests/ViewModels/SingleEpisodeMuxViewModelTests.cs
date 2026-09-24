@@ -298,7 +298,7 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
-    public void OpenFileCommands_OpenTheConfiguredSourceComponents()
+    public async Task OpenFileCommands_OpenTheConfiguredSourceComponents()
     {
         var dialogService = new CapturingDialogService();
         var viewModel = new SingleEpisodeMuxViewModel(
@@ -315,6 +315,7 @@ public sealed class SingleEpisodeMuxViewModelTests
         viewModel.SetAttachments([@"C:\Temp\metadaten.txt"]);
         viewModel.SetOutputPath(outputPath);
 
+        await viewModel.ArchiveStateCheck;
         viewModel.OpenMainVideoCommand.Execute(null);
         viewModel.OpenAudioDescriptionCommand.Execute(null);
         viewModel.OpenSubtitlesCommand.Execute(null);

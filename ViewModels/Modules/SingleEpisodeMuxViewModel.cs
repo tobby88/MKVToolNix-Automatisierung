@@ -66,7 +66,7 @@ internal sealed partial class SingleEpisodeMuxViewModel : EpisodeEditModel, IArc
         OpenAudioDescriptionCommand = new RelayCommand(OpenAudioDescription, () => IsInteractive && !string.IsNullOrWhiteSpace(AudioDescriptionPath));
         OpenSubtitlesCommand = new RelayCommand(OpenSubtitles, () => IsInteractive && SubtitlePaths.Count > 0);
         OpenAttachmentsCommand = new RelayCommand(OpenAttachments, () => IsInteractive && AttachmentPaths.Count > 0);
-        OpenOutputCommand = new RelayCommand(OpenOutput, () => IsInteractive && File.Exists(OutputPath));
+        OpenOutputCommand = new RelayCommand(OpenOutput, () => IsInteractive && ArchiveState == EpisodeArchiveState.Existing);
         SelectOutputCommand = new RelayCommand(SelectOutput, () => IsInteractive);
         RescanCommand = new AsyncRelayCommand(RescanFromMainVideoAsync, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);
         OpenTvdbLookupCommand = new AsyncRelayCommand(OpenTvdbLookupAsync, () => IsInteractive && !string.IsNullOrWhiteSpace(MainVideoPath), unexpectedCommandErrorHandler);

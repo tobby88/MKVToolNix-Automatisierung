@@ -24,7 +24,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
 - [x] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
-- [ ] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
+- [x] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
 - [ ] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
 - [ ] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
 - [ ] A22 (T01-T05): Reale isolierte Tooltests, Last-/Ausfalltests und ergänzende Regressionen.
@@ -214,3 +214,14 @@ geflushte SHA-256-geprüfte NFO-/JSON-Sicherungen können direkt wiederhergestel
 der aktuelle Inhalt bleibt als zusätzliche Rückfallsicherung. Alte unbestätigte Sicherungen
 und MKV-/Archivjournale sind zur manuellen Sichtung, nicht zum blinden Replay angeboten.
 Neun gezielte Recovery-/SmallFile-/Journaltests und Debug-Build erfolgreich.
+
+### A19
+
+Settings-Tool-/Archivstatus und Mux-Editor-Archivpräsenz werden entprellt auf Workern
+geprüft. Pro Probe läuft höchstens ein nativer I/O-Aufruf; neuere Eingaben und geschlossene
+Settings verwerfen alte Antworten. Open-Output-CanExecute liest nur den Statussnapshot.
+Batch-Ausführung wartet an den fachlichen Grenzen ausdrücklich auf die frische Präsenz,
+damit neue Ausgaben/Teilreports nicht von einer noch laufenden UI-Prüfung abhängen.
+127 gezielte Tests grün, einschließlich Dispatcherfreiheit, Stale-Result-Schutz und
+erfolgreichem Reportabschluss trotz späteren Abbruchs. Native SMB-Zugriffe selbst sind
+nicht gewaltsam abbrechbar; sie blockieren nicht mehr diese Status-UI.

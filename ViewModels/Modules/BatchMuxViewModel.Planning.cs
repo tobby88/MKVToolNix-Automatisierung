@@ -53,7 +53,7 @@ internal sealed partial class BatchMuxViewModel
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    item.RefreshArchivePresence();
+                    await item.RefreshArchivePresence();
                     throw;
                 }
             }
@@ -124,7 +124,7 @@ internal sealed partial class BatchMuxViewModel
 
             // Das Anklicken eines Eintrags soll die letzte gültige Anzeige beibehalten, bis die
             // aktualisierte Planung fertig vorliegt. Sonst springt der Status kurz zurück.
-            item.RefreshArchivePresence(item.StatusKind);
+            await item.RefreshArchivePresence(item.StatusKind);
         }
         else
         {
@@ -133,7 +133,7 @@ internal sealed partial class BatchMuxViewModel
                 return;
             }
 
-            item.RefreshArchivePresence();
+            await item.RefreshArchivePresence();
         }
 
         var outputExists = item.ArchiveState == EpisodeArchiveState.Existing;

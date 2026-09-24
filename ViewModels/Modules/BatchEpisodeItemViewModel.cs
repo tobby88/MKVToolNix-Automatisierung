@@ -470,7 +470,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     /// <summary>
     /// Aktualisiert Status und Archivpräsenz, wenn sich die Zieldatei außerhalb der Zeile geändert hat.
     /// </summary>
-    public void RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null, string? statusText = null)
+    public Task RefreshArchivePresence(BatchEpisodeStatusKind? statusOverride = null, string? statusText = null)
     {
         if (statusText is null
             && statusOverride is BatchEpisodeStatusKind requestedStatus
@@ -480,6 +480,7 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
         }
 
         ApplyArchiveState(statusOverride, preservePlanSummary: true, statusText: statusText);
+        return ArchiveStateCheck;
     }
 
     /// <summary>
@@ -493,7 +494,13 @@ internal sealed class BatchEpisodeItemViewModel : EpisodeEditModel
     {
         if (refreshArchiveState)
         {
-            RefreshArchiveState();
+            var statusAtRequest = StatusKind;
+            RefreshArchiveState(() =>
+            {
+                if (StatusKind == statusAtRequest)
+                    ApplyArchiveState(statusOverride, preservePlanSummary, refreshArchiveState: false, statusText);
+            }, immediate: true);
+            return;
         }
 
         var outputExists = ArchiveState == EpisodeArchiveState.Existing;
