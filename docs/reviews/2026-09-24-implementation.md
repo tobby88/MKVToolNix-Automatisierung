@@ -19,7 +19,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
 - [x] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
 - [x] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
-- [ ] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
+- [x] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
 - [ ] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
 - [ ] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
@@ -169,3 +169,12 @@ gepuffert, UI-Benachrichtigungen auf höchstens vier pro Sekunde plus Abschluss 
 Ein einzelner 30-Sekunden-Library-Snapshot erfasst auch Fehlschläge der Zuordnung; neue
 Scans und Serverfortschritt bleiben frisch. 100 identische Fehlzuordnungen benötigen im
 Test eine statt 100 Library-Abfragen. 84 gezielte Tests erfolgreich.
+
+### A14
+
+Die Serien-Kandidatensuche verliert keine Treffer mehr an einem willkürlichen
+256-Zeilen-/12-Serien-Limit. Das öffentliche Ergebnislimit gilt auch bei größerer Anfrage
+und bereits warmem Cache. Ein Edit am Wortanfang (Tausch, Ersetzen, fehlender/zusätzlicher
+Buchstabe) wird über zusätzliche indexgestützte Präfixbereiche gefunden. Exakte Namen
+benötigen diese Erweiterung nicht. 41 IMDb-Tests erfolgreich, darunter 400 gleichnamige
+Serien und vier Wortanfangsfehler; keine vollständigen IMDb-Daten heruntergeladen.

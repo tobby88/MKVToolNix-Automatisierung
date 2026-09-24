@@ -1318,6 +1318,7 @@ internal sealed class ImdbDatasetSearchService
         var aliasTable = HasDedicatedSeriesAliasTable(connection) ? "series_aliases" : "aliases";
         foreach (var prefix in BuildSeriesSearchPrefixes(normalizedSeries))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             using var command = connection.CreateCommand();
             // Jede Quelle nutzt einen passenden Präfixindex. Der Aliaszweig liefert den deutschen
             // Anzeigenamen, während Primär- und Originaltitel weiterhin englische Suchtexte finden.
@@ -1345,8 +1346,7 @@ internal sealed class ImdbDatasetSearchService
                        titles.start_year
                 FROM candidate_titles
                 INNER JOIN titles ON titles.id = candidate_titles.id
-                ORDER BY candidate_titles.normalized_title
-                LIMIT 256;
+                ORDER BY candidate_titles.normalized_title;
                 """;
             command.Parameters.AddWithValue("$prefix", prefix);
             command.Parameters.AddWithValue("$prefixUpper", prefix + '\uffff');
@@ -1362,6 +1362,10 @@ internal sealed class ImdbDatasetSearchService
                     reader.GetString(4),
                     reader.IsDBNull(5) ? null : reader.GetInt32(5)));
             }
+
+            // Exakte Namen sind vor den unscharfen Bereichen dran. Alle gleichnamigen Serien
+            // bleiben erhalten; keine beliebige SQL-Zeilenbegrenzung darf eine davon verbergen.
+            if (prefix == normalizedSeries && rows.Any(row => row.NormalizedTitle == normalizedSeries)) break;
         }
 
         var rankedCandidates = rows
@@ -1392,14 +1396,13 @@ internal sealed class ImdbDatasetSearchService
         var exactCandidates = rankedCandidates.Where(candidate => candidate.ExactTitleMatch).ToArray();
         if (exactCandidates.Length > 0)
         {
-            return exactCandidates.Take(12).ToArray();
+            return exactCandidates;
         }
 
         var bestSimilarity = rankedCandidates.FirstOrDefault()?.TitleSimilarity ?? 0;
         return rankedCandidates
             .Where(candidate => candidate.TitleSimilarity >= 12
                 && candidate.TitleSimilarity >= bestSimilarity - 6)
-            .Take(12)
             .ToArray();
     }
 
@@ -1518,7 +1521,7 @@ internal sealed class ImdbDatasetSearchService
 
     private static IReadOnlyList<string> BuildSeriesSearchPrefixes(string normalizedSeries)
     {
-        var prefixes = new List<string> { normalizedSeries };
+        var prefixes = new HashSet<string>(StringComparer.Ordinal) { normalizedSeries };
         if (normalizedSeries.Length >= 4)
         {
             var stablePrefix = normalizedSeries[..Math.Min(4, normalizedSeries.Length)].TrimEnd();
@@ -1528,7 +1531,27 @@ internal sealed class ImdbDatasetSearchService
             }
         }
 
-        return prefixes;
+        if (normalizedSeries.Length >= 5)
+        {
+            // Ein Edit in den ersten vier Zeichen: Ersetzen, Vertauschen, fehlendes oder
+            // zusätzliches Zeichen. Jeder Kandidat bleibt ein B-Tree-Präfixbereich, kein LIKE %.
+            const string alphabet = "abcdefghijklmnopqrstuvwxyz0123456789 äöüß";
+            var head = normalizedSeries[..4];
+            for (var index = 0; index < head.Length; index++)
+            {
+                prefixes.Add(normalizedSeries.Remove(index, 1)[..4]);
+                foreach (var character in alphabet)
+                {
+                    prefixes.Add(head[..index] + character + head[(index + 1)..]);
+                    prefixes.Add((head[..index] + character + head[index..])[..4]);
+                }
+                if (index < 3)
+                    prefixes.Add(head[..index] + head[index + 1] + head[index] + head[(index + 2)..]);
+            }
+        }
+
+        return prefixes.OrderBy(prefix => prefix == normalizedSeries ? 0 : 1)
+            .ThenBy(prefix => prefix, StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>

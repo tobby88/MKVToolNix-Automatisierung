@@ -106,6 +106,13 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.False(fuzzySeries.ExactTitleMatch);
         Assert.True(fuzzySeries.TitleSimilarity >= 16);
 
+        foreach (var query in new[] { "XOKO Leipzig", "OSKO Leipzig", "OKO Leipzig", "SXOKO Leipzig" })
+        {
+            var firstLetterTypo = Assert.Single(searchService.SearchSeriesCandidates(query));
+            Assert.Equal("SOKO Leipzig", firstLetterTypo.DisplayTitle);
+            Assert.False(firstLetterTypo.ExactTitleMatch);
+        }
+
         var browsedEpisodes = await searchService.BrowseSeriesEpisodesAsync(
             localizedSeries,
             "Dunkle Warheit",
@@ -874,6 +881,29 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         using var gzip = new GZipStream(source, CompressionMode.Decompress);
         using var reader = new StreamReader(gzip, Encoding.UTF8);
         return reader.ReadToEnd();
+    }
+
+    [Fact]
+    public async Task SeriesCandidates_HonorRequestedLimitBeyondInternalLegacyCaps()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "many-series.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "many");
+        using (var connection = new SqliteConnection($"Data Source={database};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                WITH RECURSIVE numbers(n) AS (VALUES(1) UNION ALL SELECT n + 1 FROM numbers WHERE n < 400)
+                INSERT INTO titles(id, kind, primary_title, normalized_primary, original_title, normalized_original)
+                SELECT 'tt9000' || n, 1, 'Same Series', 'same series', 'Same Series', 'same series' FROM numbers;
+                """;
+            command.ExecuteNonQuery();
+        }
+        var search = new ImdbDatasetSearchService(database);
+        Assert.Equal(5, search.SearchSeriesCandidates("Same Series", 5).Count);
+        Assert.Equal(300, search.SearchSeriesCandidates("Same Series", 300).Count);
+        Assert.Equal(400, search.SearchSeriesCandidates("Same Series", 500).Count);
     }
 
     private DatasetFiles WriteSmallDatasetArchives()
