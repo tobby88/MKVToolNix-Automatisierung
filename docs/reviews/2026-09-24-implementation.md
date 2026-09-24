@@ -9,7 +9,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A01 (O06, O12): Windows-Dateinamen/Pfadlängen und umgeleitete Downloads-Ordner.
 - [x] A02 (O05): Physische Pfadgrenzen und Alias-/Link-Schutz für schreibende Operationen.
 - [x] A03 (O01): Konfliktsichere NFO-/Report-Aktualisierung und entsprechende Rennfalltests.
-- [ ] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
+- [x] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
 - [ ] A05 (O02): Wiederherstellbare Archivänderungen über Header, NFO und Rename.
 - [ ] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
 - [ ] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
@@ -72,3 +72,12 @@ wird durch eine vorab geflushte Original-Sicherung geschützt; normale Fehler we
 zurückgerollt, bei hartem Prozessabbruch bleibt eine `.edit-*.tmp`-Sicherung erhalten.
 Unveränderte NFOs werden weiterhin nicht geschrieben. 96 gezielte Tests erfolgreich.
 Die Wiederherstellungsoberfläche für Absturzsicherungen folgt in A18.
+
+### A04
+
+Alle ausgewählten Pakete werden vor relevanten Ordnerumbenennungen geprüft. Ungültige
+oder fehlende Quellen lösen keine Ordnerumbenennung mehr aus. Video, Untertitel und
+Defekt-Teilmenge werden gemeinsam verschoben; ein späterer Fehler rollt frühere Moves
+und ersetzte Ziele zurück. Abbruch erfolgt zwischen vollständigen Paketen. Alte einzelne
+Move-/Replace-Helfer wurden entfernt. 53 Sortier-/Pakettests erfolgreich, einschließlich
+echter Sidecar-Sperre nach bereits erfolgreichem Videoersatz und Defekt-Teilrollback.

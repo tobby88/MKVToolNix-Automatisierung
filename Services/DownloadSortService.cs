@@ -321,6 +321,19 @@ internal sealed class DownloadSortService
         var movedFileCount = 0;
         var skippedGroupCount = 0;
 
+        // Vor einer Ordnerumbenennung müssen alle ausgewählten Auftragspakete bewertet sein.
+        // Sonst könnte ein später wegen fehlender Quellen abgewiesener Auftrag bereits
+        // einen fremden/alten Serienordner verändert haben. Die Hauptschleife prüft erneut.
+        var eligibleRequests = new HashSet<DownloadSortMoveRequest>();
+        for (var index = 0; index < moveRequests.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var candidate = moveRequests[index];
+            var state = EvaluateTarget(rootDirectory, candidate.FilePaths, candidate.TargetFolderName, folderRenames, candidate.DefectiveFilePaths).State;
+            if (state is DownloadSortItemState.Ready or DownloadSortItemState.ReadyWithReplacement or DownloadSortItemState.Defective)
+                eligibleRequests.Add(candidate);
+        }
+
         foreach (var renamePlan in folderRenames
                      .Where(plan => moveRequests.Any(request =>
                          string.Equals(
@@ -347,6 +360,9 @@ internal sealed class DownloadSortService
             {
                 continue;
             }
+
+            if (!eligibleRequests.Any(request => string.Equals(NormalizeTargetFolderName(request.TargetFolderName), renamePlan.TargetFolderName, StringComparison.OrdinalIgnoreCase)))
+                continue;
 
             var isCaseOnlyRename = IsCaseOnlyPathChange(sourcePath, destinationPath);
             if (!isCaseOnlyRename && Directory.Exists(destinationPath))
@@ -459,22 +475,27 @@ internal sealed class DownloadSortService
             var groupMovedCount = 0;
             var regularMovedCount = 0;
             var defectiveMovedCount = 0;
-            if (targetDirectory is not null)
+            try
             {
-                regularMovedCount = MoveFiles(regularFilePaths, targetDirectory, targetFolderName, logLines, cancellationToken);
-                groupMovedCount += regularMovedCount;
+                var moves = regularFilePaths.OrderBy(GetExtensionPriority)
+                    .Select(path => new ReversibleFileMoveBatch.Move(path, Path.Combine(targetDirectory!, Path.GetFileName(path)), true))
+                    .Concat(defectiveFilePaths.OrderBy(GetExtensionPriority)
+                        .Select(path => new ReversibleFileMoveBatch.Move(path, Path.Combine(defectiveDirectory, Path.GetFileName(path)), false)))
+                    .ToList();
+                ReversibleFileMoveBatch.Execute(moves);
+                regularMovedCount = regularFilePaths.Count;
+                defectiveMovedCount = defectiveFilePaths.Count;
+                groupMovedCount = moves.Count;
+                foreach (var move in moves)
+                {
+                    if (replacementDecision.ReplaceableConflicts.Any(conflict => PathComparisonHelper.AreSamePath(conflict.TargetPath, move.Target)))
+                        logLines.Add($"ERSETZT: '{Path.GetFileName(move.Target)}' in '{targetFolderName}'");
+                    logLines.Add($"VERSCHOBEN: '{Path.GetFileName(move.Source)}' -> '{Path.GetRelativePath(rootDirectory, move.Target)}'");
+                }
             }
-
-            if (defectiveFilePaths.Count > 0)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                defectiveMovedCount = MoveFiles(
-                    defectiveFilePaths,
-                    defectiveDirectory,
-                    DefectiveFolderName,
-                    logLines,
-                    cancellationToken,
-                    allowReplacement: false);
-                groupMovedCount += defectiveMovedCount;
+                logLines.Add($"FEHLER: {request.DisplayName}: {ex.Message}");
             }
 
             movedFileCount += groupMovedCount;
@@ -515,152 +536,6 @@ internal sealed class DownloadSortService
             WasCanceled: cancellationToken.IsCancellationRequested);
     }
 
-    /// <summary>
-    /// Verschiebt eine vorbereitete Teilmenge von Dateien in genau einen Zielordner und protokolliert
-    /// einzelne Move-Fehler. Nach einem Fehler bleiben die restlichen Begleiter bei der Quelle.
-    /// </summary>
-    private static int MoveFiles(
-        IReadOnlyList<string> filePaths,
-        string targetDirectory,
-        string targetFolderName,
-        ICollection<string> logLines,
-        CancellationToken cancellationToken,
-        bool allowReplacement = true)
-    {
-        var movedCount = 0;
-        foreach (var filePath in filePaths.OrderBy(GetExtensionPriority))
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-
-            var destinationPath = Path.Combine(targetDirectory, Path.GetFileName(filePath));
-            if (Path.GetFullPath(filePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            try
-            {
-                Directory.CreateDirectory(targetDirectory);
-                if (!allowReplacement)
-                {
-                    // Der Defekt-Ordner ist kein Ersatzziel. Auch eine erst nach der
-                    // Vorprüfung erschienene Datei darf hier niemals überschrieben werden.
-                    File.Move(filePath, destinationPath, overwrite: false);
-                }
-                else if (!MoveFileSafely(filePath, destinationPath, targetFolderName, logLines))
-                {
-                    break;
-                }
-
-                movedCount++;
-                logLines.Add($"VERSCHOBEN: '{Path.GetFileName(filePath)}' -> '{targetFolderName}\\{Path.GetFileName(destinationPath)}'");
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                logLines.Add($"FEHLER: '{Path.GetFileName(filePath)}' konnte nicht nach '{targetFolderName}' verschoben werden: {ex.Message}");
-                // Insbesondere nach einem Video-Fehler müssen die Sidecars bei der Quelle bleiben.
-                break;
-            }
-        }
-
-        return movedCount;
-    }
-
-    /// <summary>
-    /// Verschiebt eine einzelne Datei und ersetzt gleichnamige Zieldateien nur, wenn deren
-    /// Snapshot zwischen Konfliktprüfung und eigentlichem Ersetzen unverändert geblieben ist.
-    /// </summary>
-    private static bool MoveFileSafely(
-        string sourcePath,
-        string destinationPath,
-        string targetFolderName,
-        ICollection<string> logLines)
-    {
-        if (!File.Exists(sourcePath))
-        {
-            logLines.Add($"UEBERSPRUNGEN: '{Path.GetFileName(sourcePath)}' existiert nicht mehr. Bitte neu scannen.");
-            return false;
-        }
-
-        if (!File.Exists(destinationPath))
-        {
-            File.Move(sourcePath, destinationPath, overwrite: false);
-            return true;
-        }
-
-        var initialTargetSnapshot = FileStateSnapshot.TryCreate(destinationPath);
-        if (initialTargetSnapshot is null)
-        {
-            File.Move(sourcePath, destinationPath, overwrite: false);
-            return true;
-        }
-
-        if (!TryGetFileLength(sourcePath, out var sourceLengthBytes))
-        {
-            logLines.Add($"UEBERSPRUNGEN: '{Path.GetFileName(sourcePath)}' existiert nicht mehr. Bitte neu scannen.");
-            return false;
-        }
-
-        var conflict = new DownloadSortTargetFileConflict(
-            sourcePath,
-            destinationPath,
-            sourceLengthBytes,
-            initialTargetSnapshot.Value.Length);
-        if (ShouldKeepExistingTargetFile(conflict))
-        {
-            logLines.Add($"KONFLIKT: '{Path.GetFileName(sourcePath)}' wurde nicht nach '{targetFolderName}' verschoben: {BuildBlockingConflictNote(conflict)}");
-            return false;
-        }
-
-        var temporaryPath = CreateTemporaryReplacementPath(destinationPath);
-        File.Move(sourcePath, temporaryPath, overwrite: false);
-        try
-        {
-            var latestTargetSnapshot = FileStateSnapshot.TryCreate(destinationPath);
-            if (!initialTargetSnapshot.Equals(latestTargetSnapshot))
-            {
-                File.Move(temporaryPath, sourcePath, overwrite: false);
-                logLines.Add($"KONFLIKT: '{Path.GetFileName(sourcePath)}' wurde nicht nach '{targetFolderName}' verschoben, weil sich die Zieldatei während des Sortierens geändert hat.");
-                return false;
-            }
-
-            File.Move(temporaryPath, destinationPath, overwrite: true);
-            logLines.Add($"ERSETZT: '{Path.GetFileName(destinationPath)}' in '{targetFolderName}'");
-            return true;
-        }
-        catch
-        {
-            if (File.Exists(temporaryPath) && !File.Exists(sourcePath))
-            {
-                File.Move(temporaryPath, sourcePath, overwrite: false);
-            }
-
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Erzeugt einen versteckten temporären Pfad direkt im Zielordner, damit das spätere
-    /// Ersetzen auf demselben Volume bleibt und nicht durch Cross-Volume-Moves überrascht wird.
-    /// </summary>
-    private static string CreateTemporaryReplacementPath(string destinationPath)
-    {
-        var targetDirectory = Path.GetDirectoryName(destinationPath) ?? ".";
-        var targetFileName = Path.GetFileName(destinationPath);
-        for (var index = 0; index < 10_000; index++)
-        {
-            var candidate = Path.Combine(targetDirectory, $".{targetFileName}.replace-{Guid.NewGuid():N}.tmp");
-            if (!File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new IOException($"Es konnte kein temporärer Ersatzpfad für '{targetFileName}' erzeugt werden.");
-    }
 
     private static string? FindExistingTargetFile(IReadOnlyList<string> filePaths, string targetDirectory)
     {
