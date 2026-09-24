@@ -3,6 +3,8 @@ obj/
 TestResults/
 .codex-function-test/
 .claude/
+# Private working notes are not part of the published project documentation.
+/.local-notes/
 .appdata/
 .dotnet-cli/
 .codex-dotnet-home/
