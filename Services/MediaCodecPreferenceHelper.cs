@@ -5,6 +5,11 @@ namespace MkvToolnixAutomatisierung.Services;
 /// </summary>
 internal static class MediaCodecPreferenceHelper
 {
+    /// <summary>
+    /// Liefert die bewusst H.264-bevorzugende Codec-Reihenfolge, nicht eine gemessene
+    /// Bildqualitätsrangfolge. Auflösung und andere Qualitätsmerkmale werden vom Planer
+    /// getrennt bewertet; ein neuerer Codec allein rechtfertigt keinen Austausch.
+    /// </summary>
     public static int GetVideoCodecPreferenceRank(string codecLabel)
     {
         return codecLabel.ToUpperInvariant() switch

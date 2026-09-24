@@ -6,6 +6,30 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class EmbyNfoProviderIdServiceTests
 {
+    [Fact]
+    public void Utf16Nfo_NoOpPreservesBytes_RealEditPreservesXmlMeaning()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var media = Path.Combine(directory, "Episode.mkv");
+            var nfo = Path.ChangeExtension(media, ".nfo");
+            File.WriteAllText(nfo, "<?xml version=\"1.0\" encoding=\"utf-16\"?><episodedetails><!--retained--><title>Lippmann wird vermißt</title><uniqueid type=\"tvdb\">7</uniqueid><custom source=\"local\"> A &amp; B </custom></episodedetails>", System.Text.Encoding.Unicode);
+            var original = File.ReadAllBytes(nfo);
+            var service = new EmbyNfoProviderIdService();
+            Assert.False(service.UpdateProviderIds(media, new("7", null)).NfoChanged);
+            Assert.Equal(original, File.ReadAllBytes(nfo));
+            Assert.True(service.UpdateProviderIds(media, new("8", null)).NfoChanged);
+            var root = System.Xml.Linq.XDocument.Load(nfo).Root!;
+            Assert.Equal("Lippmann wird vermißt", root.Element("title")!.Value);
+            Assert.Equal(" A & B ", root.Element("custom")!.Value);
+            Assert.Equal("local", root.Element("custom")!.Attribute("source")!.Value);
+            Assert.Single(root.Nodes().OfType<System.Xml.Linq.XComment>());
+            Assert.Equal("8", service.ReadProviderIds(media).ProviderIds.TvdbId);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]

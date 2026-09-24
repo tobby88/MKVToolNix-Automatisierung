@@ -4,5 +4,7 @@
   href: metadata-providers.md
 - name: Tests
   href: testing.md
+- name: Regeln und Grenzen
+  href: behavior-contracts.md
 - name: Portable Daten
   href: portable-storage.md

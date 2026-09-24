@@ -26,7 +26,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
 - [x] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
 - [x] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
-- [ ] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
+- [x] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
 - [ ] A22 (T01-T05): Reale isolierte Tooltests, Last-/Ausfalltests und ergänzende Regressionen.
 - [ ] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
 - [ ] A24: README/DocFX/Screenshots aktualisieren, Gesamtstatus und Debug-EXE/DLL prüfen.
@@ -233,3 +233,12 @@ Statusdetails sind scrollbar, ebenso im Wiederherstellungsdialog. Das Startfenst
 ist vergrößerbar und hält den Fortschritt außerhalb des scrollbaren Detailbereichs.
 Zehn WPF-Tests grün, darunter Mindestgrößen mit langen Meldungen und DIP-Skalierung
 100/150/200 Prozent. Dies ist kein Ersatz für native Mehrmonitor-DPI-/Screenreader-Abnahme.
+
+### A21
+
+Bewusste Sprach-/HI-/Codec-/AD-Regeln, Schnittfassungsgrenzen, NFO-Semantik und
+Browser-/Shared-Request-Verträge sind als DocFX-Artikel und an den zentralen APIs
+festgehalten. Keine ungefragte Änderung redaktioneller Mux-Regeln. Ein UTF-16-NFO-Test
+prüft bytegenauen No-op und semantischen Erhalt nach echter Änderung; bestehende
+Formatablehnungs-, Clipboard-, Sprach- und Shared-Request-Tests bleiben grün.
+140 gezielte Tests erfolgreich.

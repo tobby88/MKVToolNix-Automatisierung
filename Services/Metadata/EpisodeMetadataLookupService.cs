@@ -6,6 +6,12 @@ namespace MkvToolnixAutomatisierung.Services.Metadata;
 /// <summary>
 /// Führt TVDB-Suche, Caching und automatische Auswahlregeln für Serien- und Episodenmetadaten zusammen.
 /// </summary>
+/// <remarks>
+/// Ein Dialogabbruch beendet nur dessen Warten: Andere Aufrufer können dieselbe laufende
+/// Anfrage benötigen. Lazy-Tasks verhindern doppelte Requests auch bei gleichzeitigem
+/// Factory-Zugriff. Erfolgscache-Limits begrenzen Einträge, nicht RAM-Bytes oder die Zahl
+/// unterschiedlicher gleichzeitig laufender Anfragen; der Client begrenzt deren Laufzeit.
+/// </remarks>
 internal sealed class EpisodeMetadataLookupService
 {
     internal static readonly TimeSpan SuccessfulLookupCacheLifetime = TimeSpan.FromMinutes(30);

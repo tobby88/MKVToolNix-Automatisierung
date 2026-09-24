@@ -6,6 +6,12 @@ namespace MkvToolnixAutomatisierung.Services.Emby;
 /// <summary>
 /// Liest und aktualisiert Provider-IDs in Emby-kompatiblen Episoden-NFO-Dateien neben MKV-Dateien.
 /// </summary>
+/// <remarks>
+/// Unveränderte Dokumente werden bytegenau belassen. Bei einer echten Änderung bleiben
+/// fremde XML-Inhalte semantisch erhalten, nicht zwingend Encoding, BOM oder Einrückung.
+/// DTDs, fremde Namespaces und mehrere Wurzeln sind keine unterstützten NFO-Formate.
+/// Veröffentlichungen vergleichen den Lesesnapshot unter exklusiver Dateisperre.
+/// </remarks>
 internal sealed class EmbyNfoProviderIdService
 {
     /// <summary>
