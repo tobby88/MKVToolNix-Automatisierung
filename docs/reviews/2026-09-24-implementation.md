@@ -22,7 +22,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [ ] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
 - [ ] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
 - [ ] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
-- [ ] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
+- [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
 - [ ] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
 - [ ] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
 - [ ] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
@@ -135,3 +135,11 @@ Batch-CollectionViews warten bei offenen Edit-Transaktionen auf deren PropertyCh
 Ende statt immer neue ContextIdle-Arbeit zu erzeugen. Refreshes werden zusammengefasst,
 nach Dispose verworfen und am Dispatcher der tatsächlichen View ausgeführt. Elf Tests
 erfolgreich, einschließlich echtem WPF-Dispatcher und Nachweis ohne Idle-Retry-Schleife.
+
+### A17 (vorgezogen)
+
+Toolarchive sind auf 100.000 Dateien und 8 GiB tatsächlich entpackten Payload begrenzt.
+Vor dem ersten Dateiinhalt werden deklarierte Größe und messbarer freier Speicher
+(64 MiB Reserve) geprüft; während der Extraktion zählt das Limit tatsächliche Bytes.
+Nicht benötigter ffprobe-/MKVToolNix-Payload zählt nicht zum Entpackbedarf. 20 ZIP-/7z-
+und Sicherheitsgrenzentests erfolgreich, ohne reale große Downloads.

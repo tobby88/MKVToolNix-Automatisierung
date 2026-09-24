@@ -7,6 +7,37 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class ManagedToolArchiveExtractorTests : IDisposable
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExtractArchive_RejectsOversizedPayloadOrInsufficientSpaceBeforeFirstFile(bool oversized)
+    {
+        var archive = Path.Combine(_tempDirectory, "budget.zip");
+        using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+        {
+            using var first = zip.CreateEntry("tool.exe").Open();
+            first.Write(new byte[4096]);
+        }
+        var destination = Path.Combine(_tempDirectory, "budget-target");
+        var extractor = new ManagedToolArchiveExtractor(oversized ? 2048 : 8192, _ => oversized ? long.MaxValue : 1024);
+        await Assert.ThrowsAsync<IOException>(() => extractor.ExtractArchiveAsync(archive, destination));
+        Assert.Empty(Directory.EnumerateFiles(destination, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task ExtractArchive_BudgetOnlyCountsSelectedToolPayload()
+    {
+        var archive = Path.Combine(_tempDirectory, "selected-budget.zip");
+        using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+        {
+            using (var binary = zip.CreateEntry("bin/ffprobe.exe").Open()) binary.Write(new byte[100]);
+            using (var docs = zip.CreateEntry("doc/large.txt").Open()) docs.Write(new byte[4096]);
+        }
+        var destination = Path.Combine(_tempDirectory, "selected-target");
+        await new ManagedToolArchiveExtractor(128, _ => null).ExtractArchiveAsync(archive, destination, toolKind: ManagedToolKind.Ffprobe);
+        Assert.Single(Directory.EnumerateFiles(destination, "*", SearchOption.AllDirectories));
+    }
+
     private readonly string _tempDirectory;
 
     public ManagedToolArchiveExtractorTests()

@@ -29,6 +29,19 @@ internal interface IManagedToolArchiveExtractor
 /// </summary>
 internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
+    private const long FreeSpaceReserve = 64L * 1024 * 1024;
+    private readonly long _maximumExtractedBytes;
+    private readonly Func<string, long?> _availableSpace;
+
+    /// <summary>Begrenzt den benötigten Tool-Payload auf 8 GiB und lässt 64 MiB frei.</summary>
+    public ManagedToolArchiveExtractor() : this(8L * 1024 * 1024 * 1024, ReadAvailableSpace) { }
+
+    internal ManagedToolArchiveExtractor(long maximumExtractedBytes, Func<string, long?> availableSpace)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumExtractedBytes);
+        _maximumExtractedBytes = maximumExtractedBytes;
+        _availableSpace = availableSpace;
+    }
     private static readonly IReadOnlyDictionary<ManagedToolKind, HashSet<string>> RequiredToolExecutables =
         new Dictionary<ManagedToolKind, HashSet<string>>
         {
@@ -79,6 +92,8 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
             if (!entry.IsDirectory)
             {
                 allEntries.Add(entry);
+                if (allEntries.Count > 100_000)
+                    throw new IOException("Das Werkzeugarchiv enthält mehr als 100.000 Dateien und wird nicht entpackt.");
             }
         }
 
@@ -96,7 +111,15 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         }
 
         var totalEntryCount = entries.Count;
-        var totalByteCount = entries.Sum(entry => GetEntrySize(entry));
+        long totalByteCount = 0;
+        foreach (var entry in entries)
+        {
+            var size = GetEntrySize(entry);
+            if (size > _maximumExtractedBytes - totalByteCount)
+                throw new IOException("Die entpackte Werkzeuggröße überschreitet das Sicherheitslimit.");
+            totalByteCount += size;
+        }
+        EnsureAvailableSpace(destinationDirectory, totalByteCount);
         progress?.Report(new ManagedToolExtractionProgress(0, totalEntryCount, ExtractedByteCount: 0, TotalByteCount: totalByteCount));
 
         var extractedEntryCount = 0;
@@ -105,7 +128,8 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             var targetPath = GetArchiveEntryDestinationPath(destinationDirectory, entry.Key);
-            await ExtractEntryAsync(
+            EnsureAvailableSpace(destinationDirectory, GetEntrySize(entry));
+            var writtenBytes = await ExtractEntryAsync(
                 entry,
                 targetPath,
                 extractedEntryCount,
@@ -116,7 +140,7 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
                 cancellationToken);
 
             extractedEntryCount++;
-            extractedByteCount += GetEntrySize(entry);
+            extractedByteCount += writtenBytes;
             progress?.Report(new ManagedToolExtractionProgress(
                 extractedEntryCount,
                 totalEntryCount,
@@ -231,7 +255,7 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
         }
     }
 
-    private static async Task ExtractEntryAsync(
+    private async Task<long> ExtractEntryAsync(
         IArchiveEntry entry,
         string targetPath,
         int completedEntryCount,
@@ -265,6 +289,9 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
                 break;
             }
 
+            // Tatsächliche Bytes begrenzen, nicht nur die vom Archiv behauptete Größe.
+            if (bytesRead > _maximumExtractedBytes - completedByteCount - entryByteCount)
+                throw new IOException("Die tatsächliche entpackte Werkzeuggröße überschreitet das Sicherheitslimit.");
             await output.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
             entryByteCount += bytesRead;
             progress?.Report(new ManagedToolExtractionProgress(
@@ -273,6 +300,24 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
                 entry.Key,
                 CalculateInProgressByteCount(completedByteCount, entryByteCount, totalByteCount),
                 totalByteCount));
+        }
+        return entryByteCount;
+    }
+
+    private void EnsureAvailableSpace(string destination, long requiredBytes)
+    {
+        if (_availableSpace(destination) is { } available && requiredBytes > Math.Max(0, available - FreeSpaceReserve))
+            throw new IOException($"Nicht genügend freier Speicher zum Entpacken: {requiredBytes / (1024 * 1024)} MiB plus 64 MiB Reserve benötigt.");
+    }
+
+    private static long? ReadAvailableSpace(string destination)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(destination))!).AvailableFreeSpace; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Manche UNC-Server liefern keine Kapazität. Größenlimit und echte I/O-Fehler
+            // bleiben wirksam; ein nicht messbarer Wert ist nicht gleich null freier Platz.
+            return null;
         }
     }
 
