@@ -128,10 +128,20 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
+        var journal = new ArchiveChangeJournal(request);
         try
         {
             FileMutationSafety.EnsureOrdinaryFile(request.FilePath);
-            return await ApplyCoreAsync(request, output, cancellationToken);
+            var result = await ApplyCoreAsync(request, output, journal, cancellationToken);
+            if (result.Success) journal.Complete();
+            else if (journal.Stage is not null)
+                result = result with { Message = result.Message + " " + journal.RecoveryMessage };
+            return result;
+        }
+        catch
+        {
+            if (journal.Stage is not null) output?.Report(journal.RecoveryMessage);
+            throw;
         }
         finally
         {
@@ -144,6 +154,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     private async Task<ArchiveMaintenanceApplyResult> ApplyCoreAsync(
         ArchiveMaintenanceApplyRequest request,
         IProgress<string>? output,
+        ArchiveChangeJournal journal,
         CancellationToken cancellationToken)
     {
         if (!request.HasWritableChanges)
@@ -187,6 +198,18 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
             }
         }
 
+        if (request.ProviderIdEdit is not null || request.NfoTextEdit is not null)
+        {
+            var nfo = (_nfoProviderIds ?? new EmbyNfoProviderIdService()).ReadEpisodeMetadata(currentPath);
+            if (!nfo.NfoExists || nfo.WarningMessage is not null)
+                return new ArchiveMaintenanceApplyResult(request.FilePath, currentPath, false,
+                    nfo.WarningMessage ?? "NFO-Datei fehlt. Es wurden keine Archivänderungen vorgenommen.", outputLines);
+        }
+
+        if (request.ProviderIdEdit is { ProviderIds.HasAny: false, RemoveImdbId: false })
+            return new ArchiveMaintenanceApplyResult(request.FilePath, currentPath, false,
+                "Keine Provider-ID-Änderung angegeben. Es wurden keine Archivänderungen vorgenommen.", outputLines);
+
         if (request.NfoTextEdit is { } plannedTextEdit)
         {
             var nfo = (_nfoProviderIds ?? new EmbyNfoProviderIdService()).ReadEpisodeMetadata(currentPath);
@@ -208,6 +231,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
                 currentPath,
                 request.ContainerTitleEdit,
                 request.TrackHeaderEdits);
+            journal.BeforeStep("MKV-Header");
             var exitCode = await _executionService.ExecuteAsync(
                 mkvPropEditPath,
                 arguments,
@@ -230,6 +254,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         if (request.ProviderIdEdit is not null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            journal.BeforeStep("NFO-Provider-IDs");
             var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
             var updateResult = providerIdService.UpdateProviderIds(
                 currentPath,
@@ -250,6 +275,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         if (request.NfoTextEdit is not null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            journal.BeforeStep("NFO-Titel und Sperren");
             var providerIdService = _nfoProviderIds ?? new EmbyNfoProviderIdService();
             var updateResult = providerIdService.UpdateTextFields(
                 currentPath,
@@ -273,6 +299,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         if (request.RenameOperation is not null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            journal.BeforeStep("MKV und Begleitdateien umbenennen");
             try
             {
                 currentPath = ApplyRename(request.RenameOperation);

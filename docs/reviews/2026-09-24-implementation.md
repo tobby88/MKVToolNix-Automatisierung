@@ -10,7 +10,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A02 (O05): Physische Pfadgrenzen und Alias-/Link-Schutz für schreibende Operationen.
 - [x] A03 (O01): Konfliktsichere NFO-/Report-Aktualisierung und entsprechende Rennfalltests.
 - [x] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
-- [ ] A05 (O02): Wiederherstellbare Archivänderungen über Header, NFO und Rename.
+- [x] A05 (O02): Wiederaufnahmefähige Archivänderungen über Header, NFO und Rename.
 - [ ] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
 - [ ] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
 - [ ] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
@@ -81,3 +81,14 @@ Defekt-Teilmenge werden gemeinsam verschoben; ein späterer Fehler rollt früher
 und ersetzte Ziele zurück. Abbruch erfolgt zwischen vollständigen Paketen. Alte einzelne
 Move-/Replace-Helfer wurden entfernt. 53 Sortier-/Pakettests erfolgreich, einschließlich
 echter Sidecar-Sperre nach bereits erfolgreichem Videoersatz und Defekt-Teilrollback.
+
+### A05
+
+NFO-Lesbarkeit und leere Provider-Aufträge werden vor Headeränderungen geprüft.
+Vor jedem schreibenden Archivschritt wird der freigegebene Auftrag mit Schrittname
+dauerhaft protokolliert. Fehler/Abbruch benennen ausdrücklich mögliche Teiländerungen
+und den Wiederaufnahmebeleg. Erfolgreiche Vorgänge entfernen den Beleg.
+Bewusste Strategie: erneuter Scan plus Freigabe der verbleibenden Differenzen, kein
+blindes Replay alter Aufträge und keine riesige MKV-Vollkopie für jeden Header-Edit.
+In-place-mkvpropedit ist damit ausdrücklich nicht als atomar/rollbackfähig ausgewiesen.
+33 gezielte Tests erfolgreich. Sichtung verbliebener Belege folgt in A18.
