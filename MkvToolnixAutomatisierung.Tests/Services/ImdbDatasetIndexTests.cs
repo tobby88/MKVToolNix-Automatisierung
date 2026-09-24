@@ -329,12 +329,15 @@ public sealed class ImdbDatasetIndexTests : IDisposable
                 AutoManageEnabled = true,
                 ManagementPreferenceConfigured = true,
                 InstalledVersion = "previous-version",
+                InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion,
                 // Simuliert den von älteren Versionen bereits zu früh gespeicherten Prüfzeitpunkt.
                 LastCheckedUtc = interruptedCheckTimestamp
             }
         });
         var databasePath = Path.Combine(_tempDirectory, "existing-index.sqlite");
-        await File.WriteAllTextAsync(databasePath, "previous-index");
+        var previousFiles = WriteSmallDatasetArchives();
+        await new ImdbDatasetIndexBuilder().BuildAsync(databasePath, previousFiles.Basics, previousFiles.Episodes, previousFiles.Aliases, "previous-version");
+        var previousBytes = await File.ReadAllBytesAsync(databasePath);
         using var cancellationSource = new CancellationTokenSource();
         var firstConsent = new FixedConsent(true);
         var manager = new ImdbDatasetManager(
@@ -358,7 +361,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(interruptedCheckTimestamp, store.CurrentSettings.ImdbDataset.LastCheckedUtc);
         Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
         Assert.Equal("previous-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
-        Assert.Equal("previous-index", await File.ReadAllTextAsync(databasePath));
+        Assert.Equal(previousBytes, await File.ReadAllBytesAsync(databasePath));
         Assert.Equal(1, firstConsent.CallCount);
         Assert.Equal(1, handler.GetRequestCount);
 
@@ -472,6 +475,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
             _tempDirectory,
             databasePath);
         await initialManager.EnsureCurrentAsync();
+        ExecuteSql(databasePath, $"UPDATE metadata SET value='{ImdbDatasetIndexBuilder.SchemaVersion - 1}' WHERE key='schema'");
         store.Update(settings =>
         {
             settings.ImdbDataset.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion - 1;
@@ -778,6 +782,7 @@ public sealed class ImdbDatasetIndexTests : IDisposable
     [Fact]
     public async Task EnsureCurrentAsync_ReportsActivatedIndex_WhenFinalSettingsSaveFails()
     {
+        var failSave = true;
         var files = WriteSmallDatasetArchives();
         var database = Path.Combine(_tempDirectory, "active.sqlite");
         await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "old-version");
@@ -785,13 +790,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         {
             BeforeUpdateCommit = settings =>
             {
-                if (settings.ImdbDataset.InstalledVersion != "old-version")
+                if (failSave && settings.ImdbDataset.InstalledVersion != "old-version")
                 {
                     throw new IOException("settings-write-failed");
                 }
             }
         };
-        using var http = new HttpClient(new DatasetHttpHandler(BuildSmallDatasetByteMap()));
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var http = new HttpClient(handler);
         var manager = new ImdbDatasetManager(store, http, new(), new FixedConsent(true), _tempDirectory, database);
 
         var result = await manager.EnsureCurrentAsync();
@@ -805,6 +811,11 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal("old-version", store.CurrentSettings.ImdbDataset.InstalledVersion);
         Assert.False(store.CurrentSettings.ImdbDataset.LastCheckCompleted);
         Assert.Empty(Directory.GetDirectories(_tempDirectory, ".staging-*"));
+        failSave = false;
+        var recovered = await manager.EnsureCurrentAsync();
+        Assert.False(recovered.HasWarning);
+        Assert.Equal(3, handler.GetRequestCount);
+        Assert.Equal(ReadText(database, "SELECT value FROM metadata WHERE key='version'"), store.CurrentSettings.ImdbDataset.InstalledVersion);
     }
 
     [Theory]
@@ -904,6 +915,24 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         Assert.Equal(5, search.SearchSeriesCandidates("Same Series", 5).Count);
         Assert.Equal(300, search.SearchSeriesCandidates("Same Series", 300).Count);
         Assert.Equal(400, search.SearchSeriesCandidates("Same Series", 500).Count);
+    }
+
+    [Fact]
+    public async Task IndexInspection_RejectsCorruptionAndDetectsUnplausibleReplacement()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "integrity.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "valid");
+        var search = new ImdbDatasetSearchService(database);
+        Assert.True(search.IsAvailable);
+        var healthy = Assert.IsType<ImdbIndexInspection.Snapshot>(ImdbIndexInspection.Read(database, true));
+        Assert.True(healthy.EpisodeCount > 0);
+        Assert.Throws<InvalidDataException>(() => ImdbIndexInspection.EnsurePlausibleReplacement(
+            healthy, healthy with { EpisodeCount = 1000 }));
+        ImdbIndexInspection.EnsurePlausibleReplacement(healthy, healthy);
+        await File.WriteAllTextAsync(database, "not a database");
+        Assert.False(search.IsAvailable);
+        Assert.Null(ImdbIndexInspection.Read(database, true));
     }
 
     private DatasetFiles WriteSmallDatasetArchives()

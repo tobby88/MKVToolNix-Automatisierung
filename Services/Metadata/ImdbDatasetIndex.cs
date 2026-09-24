@@ -191,7 +191,8 @@ internal sealed class ImdbDatasetIndexBuilder
 
         ReportFinalizationProgress(progress, "Versionsinformationen werden gespeichert.", finalizationStepCount, finalizationStepCount);
         await using var metadataCommand = connection.CreateCommand();
-        metadataCommand.CommandText = "INSERT INTO metadata(key, value) VALUES ('version', $version), ('builtUtc', $builtUtc);";
+        metadataCommand.CommandText = "INSERT INTO metadata(key, value) VALUES ('version', $version), ('builtUtc', $builtUtc), ('schema', $schema);";
+        metadataCommand.Parameters.AddWithValue("$schema", SchemaVersion.ToString(CultureInfo.InvariantCulture));
         metadataCommand.Parameters.AddWithValue("$version", versionToken);
         metadataCommand.Parameters.AddWithValue("$builtUtc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
         ImdbSqliteCancellation.Run(connection, cancellationToken, metadataCommand.ExecuteNonQuery);
@@ -1087,6 +1088,7 @@ internal sealed class ImdbDatasetSearchService
     private readonly string _databasePath;
     private readonly object _cacheSync = new();
     private SearchCache? _cache;
+    private CachedFileValue<bool>? _availability;
 
     public ImdbDatasetSearchService(string? databasePath = null)
     {
@@ -1096,7 +1098,21 @@ internal sealed class ImdbDatasetSearchService
     /// <summary>
     /// Gibt an, ob ein fertig aufgebauter lokaler IMDb-Index gelesen werden kann.
     /// </summary>
-    public bool IsAvailable => File.Exists(_databasePath);
+    public bool IsAvailable
+    {
+        get
+        {
+            var snapshot = FileStateSnapshot.TryCreate(_databasePath);
+            if (snapshot is null) return false;
+            lock (_cacheSync)
+            {
+                if (_availability?.Matches(snapshot) == true) return _availability.Value;
+                var available = ImdbIndexInspection.Read(_databasePath) is not null;
+                _availability = new CachedFileValue<bool>(snapshot.Value, available);
+                return available;
+            }
+        }
+    }
 
     /// <summary>
     /// Liefert nur dann einen automatisch verwendbaren Treffer, wenn Titel und Serie exakt passen

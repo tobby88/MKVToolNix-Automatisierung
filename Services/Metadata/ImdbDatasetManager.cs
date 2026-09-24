@@ -200,20 +200,34 @@ internal sealed class ImdbDatasetManager
             return new ImdbDatasetStartupResult([]);
         }
 
-        var databaseExists = File.Exists(_databasePath);
-        if ((databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
-            && datasetSettings.LastCheckCompleted
-            && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
-            && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
-            && lastCheckedUtc <= DateTimeOffset.UtcNow
-            && DateTimeOffset.UtcNow - lastCheckedUtc < SuccessfulCheckInterval)
-        {
-            return new ImdbDatasetStartupResult([]);
-        }
-
         var newIndexActivated = false;
         try
         {
+            Report(progress, "IMDb: Vorhandener Index wird geprüft...", "Prüfe Datenbankintegrität und aktivierten Datenstand.", null, true, "Index");
+            var installed = await Task.Run(() => ImdbIndexInspection.Read(_databasePath, verifyIntegrity: true, cancellationToken), cancellationToken);
+            var databaseExists = installed is not null;
+            if (installed is not null && (datasetSettings.InstalledVersion != installed.Version
+                || datasetSettings.InstalledSchemaVersion != installed.Schema))
+            {
+                // Der Index ist die Wahrheit nach einem erfolgreichen Replace mit fehlgeschlagenem
+                // Settings-Save. Ein erneutes HEAD reicht; kein erneuter großer Download nötig.
+                datasetSettings.InstalledVersion = installed.Version;
+                datasetSettings.InstalledSchemaVersion = installed.Schema;
+                datasetSettings.LastUpdatedUtc = installed.BuiltUtc;
+                datasetSettings.InstalledRevisionUtc = null;
+                datasetSettings.LastCheckCompleted = false;
+                PersistDatasetSettings(datasetSettings);
+            }
+            if ((databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
+                && datasetSettings.LastCheckCompleted
+                && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
+                && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
+                && lastCheckedUtc <= DateTimeOffset.UtcNow
+                && DateTimeOffset.UtcNow - lastCheckedUtc < SuccessfulCheckInterval)
+            {
+                return new ImdbDatasetStartupResult([]);
+            }
+
             Report(progress, "IMDb-Daten werden geprüft...", "Prüfe offizielle Datensatzrevisionen.", 0d, false);
             var remoteFiles = await LoadRemoteMetadataAsync(cancellationToken);
             var versionToken = BuildVersionToken(remoteFiles);
@@ -261,7 +275,7 @@ internal sealed class ImdbDatasetManager
             datasetSettings.LastCheckCompleted = false;
             PersistDatasetSettings(datasetSettings);
             cancellationToken.ThrowIfCancellationRequested();
-            await DownloadAndBuildAsync(remoteFiles, versionToken, progress, cancellationToken);
+            await DownloadAndBuildAsync(remoteFiles, versionToken, installed, progress, cancellationToken);
             newIndexActivated = true;
             datasetSettings.InstalledVersion = versionToken;
             datasetSettings.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
@@ -314,6 +328,7 @@ internal sealed class ImdbDatasetManager
     private async Task DownloadAndBuildAsync(
         IReadOnlyList<ImdbRemoteDatasetFile> remoteFiles,
         string versionToken,
+        ImdbIndexInspection.Snapshot? previousIndex,
         IProgress<ManagedToolStartupProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -398,6 +413,10 @@ internal sealed class ImdbDatasetManager
                 null,
                 true,
                 "Index");
+            var candidate = await Task.Run(() => ImdbIndexInspection.Read(stagedDatabasePath, verifyIntegrity: true, cancellationToken), cancellationToken)
+                ?? throw new InvalidDataException("Der neue IMDb-Index hat die Integritätsprüfung nicht bestanden.");
+            ImdbIndexInspection.EnsurePlausibleReplacement(candidate, previousIndex);
+            cancellationToken.ThrowIfCancellationRequested();
             ReplaceDatabaseAtomically(stagedDatabasePath, _databasePath);
         }
         finally

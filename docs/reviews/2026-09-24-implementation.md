@@ -20,7 +20,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
 - [x] A13 (O11): Gemessene/gezielte Emby-Listen-, Log- und Lookup-Verbesserungen.
 - [x] A14 (O09): IMDb-Kandidatensuche und konsistente Ergebnislimits.
-- [ ] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
+- [x] A15 (O22): Indexintegrität, Importplausibilität und Aktivierungs-/Settings-Abgleich.
 - [ ] A16 (O17, O19): MediathekView-Migrationsschutz und deterministische Toolauswahl.
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
 - [ ] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
@@ -178,3 +178,13 @@ und bereits warmem Cache. Ein Edit am Wortanfang (Tausch, Ersetzen, fehlender/zu
 Buchstabe) wird über zusätzliche indexgestützte Präfixbereiche gefunden. Exakte Namen
 benötigen diese Erweiterung nicht. 41 IMDb-Tests erfolgreich, darunter 400 gleichnamige
 Serien und vier Wortanfangsfehler; keine vollständigen IMDb-Daten heruntergeladen.
+
+### A15
+
+Verfügbarkeit prüft SQLite-Struktur/Abschlussmarker statt nur Dateiexistenz. Der Update-
+Worker prüft aktive und neue Datenbanken mit `quick_check`; Ergebnisse gelten nur für
+denselben Dateisnapshot. Ein Rückgang um mehr als 20 Prozent bei mindestens 100 bisherigen
+Serien/Episoden/Aliasnamen verhindert die Aktivierung. Kleine Testbestände bleiben erlaubt.
+Version/Schema/Aufbauzeit werden aus dem aktiven Index mit den Settings abgeglichen,
+damit ein zuvor fehlgeschlagener Settings-Save keinen erneuten Download auslöst.
+81 IMDb-Tests erfolgreich; Vollprüfungen bleiben außerhalb des UI-Threads.
