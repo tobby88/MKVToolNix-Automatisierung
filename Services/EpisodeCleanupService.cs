@@ -101,6 +101,8 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
                 try
                 {
                     var destinationPath = BuildUniqueTargetPath(targetDirectory, Path.GetFileName(sourceFilePath));
+                    FileMutationSafety.EnsureOrdinaryFile(sourceFilePath);
+                    FileMutationSafety.EnsureOrdinaryPath(destinationPath);
                     _moveFile(sourceFilePath, destinationPath);
                     movedFiles.Add(destinationPath);
                 }
@@ -144,6 +146,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
 
                 try
                 {
+                    FileMutationSafety.EnsureOrdinaryFile(filePath);
                     _recycleFile(filePath);
                     recycledFiles.Add(filePath);
                 }
@@ -186,6 +189,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
 
         try
         {
+            FileMutationSafety.EnsureOrdinaryPath(directoryPath);
             if (Directory.EnumerateFileSystemEntries(directoryPath).Any())
             {
                 return;
@@ -224,6 +228,7 @@ internal sealed class EpisodeCleanupService : IEpisodeCleanupService
             {
                 try
                 {
+                    FileMutationSafety.EnsureOrdinaryPath(currentDirectory);
                     if (!Directory.Exists(currentDirectory) || Directory.EnumerateFileSystemEntries(currentDirectory).Any())
                     {
                         break;

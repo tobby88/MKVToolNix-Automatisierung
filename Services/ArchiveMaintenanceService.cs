@@ -130,6 +130,7 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
+            FileMutationSafety.EnsureOrdinaryFile(request.FilePath);
             return await ApplyCoreAsync(request, output, cancellationToken);
         }
         finally
@@ -851,6 +852,8 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
     private static void ValidateRename(ArchiveRenameOperation renameOperation)
     {
         WindowsPathValidation.ValidateFilePath(renameOperation.TargetPath);
+        FileMutationSafety.EnsureOrdinaryFile(renameOperation.SourcePath);
+        FileMutationSafety.EnsureOrdinaryFile(renameOperation.TargetPath);
         if (!File.Exists(renameOperation.SourcePath))
         {
             throw new FileNotFoundException("Die umzubenennende MKV wurde nicht gefunden.", renameOperation.SourcePath);
@@ -865,6 +868,8 @@ internal sealed class ArchiveMaintenanceService : IArchiveMaintenanceService
         foreach (var sidecar in renameOperation.Sidecars)
         {
             WindowsPathValidation.ValidateFilePath(sidecar.TargetPath);
+            FileMutationSafety.EnsureOrdinaryFile(sidecar.SourcePath);
+            FileMutationSafety.EnsureOrdinaryFile(sidecar.TargetPath);
             if (!File.Exists(sidecar.SourcePath))
             {
                 throw new FileNotFoundException("Eine geplante Begleitdatei fehlt. Bitte neu scannen.", sidecar.SourcePath);

@@ -14,6 +14,7 @@ internal sealed class MuxOutputTransaction : IDisposable
     public MuxOutputTransaction(string outputPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
+        FileMutationSafety.EnsureOrdinaryFile(_outputPath);
         _originalState = FileStateSnapshot.TryCreate(_outputPath);
         var outputDirectory = Path.GetDirectoryName(_outputPath)!;
         // Gleicher Zielordner/Datenträger: Die Veröffentlichung benötigt keinen zweiten
@@ -35,6 +36,7 @@ internal sealed class MuxOutputTransaction : IDisposable
     public void Commit(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        FileMutationSafety.EnsureOrdinaryFile(_outputPath);
         if (!File.Exists(TemporaryOutputPath) || new FileInfo(TemporaryOutputPath).Length == 0)
         {
             throw new IOException("MKVToolNix hat keine vollständige Ausgabedatei erzeugt. Die bisherige Zieldatei bleibt unverändert.");

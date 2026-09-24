@@ -379,7 +379,7 @@ internal sealed class DownloadSortService
             if (!TryNormalizeDirectRootFilePaths(rootDirectory, request.FilePaths, out var safeFilePaths, out var unsafeFilePath))
             {
                 skippedGroupCount++;
-                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Quelldatei '{Path.GetFileName(unsafeFilePath)}' liegt nicht direkt im gewaehlten Download-Ordner.");
+                logLines.Add($"UEBERSPRUNGEN: {request.DisplayName} -> Quelldatei '{Path.GetFileName(unsafeFilePath)}' liegt nicht direkt im gewaehlten Download-Ordner oder ist gesperrt/verlinkt und nicht sicher prüfbar.");
                 continue;
             }
 
@@ -1349,6 +1349,8 @@ internal sealed class DownloadSortService
         }
 
         childPath = candidatePath;
+        try { FileMutationSafety.EnsureOrdinaryPath(candidatePath); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
         return !File.Exists(candidatePath)
             && (!Directory.Exists(candidatePath) || (File.GetAttributes(candidatePath) & FileAttributes.ReparsePoint) == 0);
     }
@@ -1444,6 +1446,12 @@ internal sealed class DownloadSortService
 
             if (!normalizedFilePaths.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
             {
+                try { FileMutationSafety.EnsureOrdinaryFile(fullPath); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    unsafeFilePath = filePath;
+                    return false;
+                }
                 normalizedFilePaths.Add(fullPath);
             }
         }

@@ -7,7 +7,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 ## Arbeitspakete
 
 - [x] A01 (O06, O12): Windows-Dateinamen/Pfadlängen und umgeleitete Downloads-Ordner.
-- [ ] A02 (O05): Physische Pfadgrenzen und Alias-/Link-Schutz für schreibende Operationen.
+- [x] A02 (O05): Physische Pfadgrenzen und Alias-/Link-Schutz für schreibende Operationen.
 - [ ] A03 (O01): Konfliktsichere NFO-/Report-Aktualisierung und entsprechende Rennfalltests.
 - [ ] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
 - [ ] A05 (O02): Wiederherstellbare Archivänderungen über Header, NFO und Rename.
@@ -49,3 +49,15 @@ liefern den tatsächlich konfigurierten Downloads-Pfad, mit isolierbarem Profil-
 63 gezielte Unit-Tests erfolgreich.
 Grundlagen: [Windows-Dateinamen](https://learn.microsoft.com/windows/desktop/FileIO/naming-a-file)
 und [Known Folders](https://learn.microsoft.com/en-us/windows/win32/shell/known-folders).
+
+### A02
+
+Schreibgrenzen in Archivpflege, Sortierung, Mux-Veröffentlichung und Quellcleanup prüfen
+vorhandene Pfadvorfahren auf Reparse-Points sowie unterstützte Windows-Case-Sensitive-Flags.
+Mehrfach verlinkte Dateien werden vor Änderungen abgewiesen. Es gibt bewusst keine
+automatische Auflösung fremder UNC-/Link-Aliase in zugelassene Quellordner. Exakte
+Zielkollisionen bleiben zusätzlich geprüft. Kein Sicherheitsversprechen gegen nachträglichen
+Pfadaustausch durch lokale Angreifer oder nicht kooperierende SMB-Server.
+100 gezielte Tests erfolgreich, darunter echte isolierte Hardlinks und Junctions.
+Die nativen Vorfahrenprüfungen erfordern beim Testlauf außerhalb des App-Betriebs
+eine Ausführung außerhalb der Codex-Dateisystem-Sandbox.

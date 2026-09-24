@@ -964,7 +964,7 @@ public sealed class DownloadSortServiceTests : IDisposable
         Assert.True(File.Exists(text));
         Assert.Equal("must survive", File.ReadAllText(targetText));
         Assert.True(File.Exists(Path.Combine(_rootDirectory, "Other", Path.GetFileName(other))));
-        Assert.Contains(result.LogLines, line => line.StartsWith("FEHLER:", StringComparison.Ordinal));
+        Assert.Contains(result.LogLines, line => line.StartsWith("UEBERSPRUNGEN:", StringComparison.Ordinal));
         Assert.DoesNotContain(result.LogLines, line => line.StartsWith("ERSETZT:", StringComparison.Ordinal));
     }
 
