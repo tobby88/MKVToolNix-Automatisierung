@@ -1,5 +1,6 @@
 bin/
 obj/
+TestResults/
 .codex-function-test/
 .claude/
 .appdata/

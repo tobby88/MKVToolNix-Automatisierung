@@ -28,7 +28,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
 - [x] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
 - [x] A22 (T01-T05): Automatisierbare Realtool-/Last-/Ausfallregressionen; Praxisgrenzen separat ausgewiesen.
-- [ ] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
+- [x] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
 - [ ] A24: README/DocFX/Screenshots aktualisieren, Gesamtstatus und Debug-EXE/DLL prüfen.
 
 ## Sicherheitsgrenzen
@@ -261,3 +261,15 @@ am produktiven System getestet. Kontrollierte Dateisperr-/Rollback-/Prozessabbru
 10.000 Emby-Zeilen, Dateilinks, Mindestlayout und verzögerte Status-I/O sind automatisiert.
 T05 Mehrfachfolgen, parallele TVDB-Factories, echte verschachtelte Neuerkennung und
 Aktivierung mit fehlgeschlagenem Settings-Save haben jetzt gezielte Regressionen.
+
+### A23
+
+Release-Abschlusslauf: 1.247 Unit-/WPF-Tests und 137 Integrationstests erfolgreich,
+kein übersprungener Test (Realtool-Umgebungsvariablen lokal gesetzt). DocFX mit
+`--warningsAsErrors`: null Warnungen/Fehler. Screenshot-Generator ebenfalls erfolgreich.
+TRX-Dateien bleiben lokal unter den jetzt ignorierten `TestResults`-Ordnern.
+Der zuletzt gepushte Ausgangsstand `37b643d` ist auf GitHub grün:
+[CI and Docs](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/runs/35744180643),
+[Nightly](https://github.com/tobby88/MKVToolNix-Automatisierung/actions/runs/35963483043).
+Diese Ergebnisse bestätigen nicht die noch ungepushten neuen Commits; deren Remote-CI
+kann erst nach einem weiteren Push laufen.
