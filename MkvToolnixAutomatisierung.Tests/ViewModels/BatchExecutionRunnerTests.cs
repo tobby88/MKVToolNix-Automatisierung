@@ -33,8 +33,10 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         Assert.Equal(20, preparation.TotalCopyBytes);
     }
 
-    [Fact]
-    public async Task ExecutePlansAsync_DoesNotMoveInputsOfOtherPlans_OrBatchOutputs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecutePlansAsync_DefersSharedInputsUntilEveryConsumerSucceeds_AndNeverMovesOutputs(bool secondFails)
     {
         var firstOutput = Path.Combine(_tempDirectory, "first.mkv");
         var secondOutput = Path.Combine(_tempDirectory, "second.mkv");
@@ -57,6 +59,11 @@ public sealed class BatchExecutionRunnerTests : IDisposable
         {
             ExecuteMuxOverride = (plan, _) =>
             {
+                if (ReferenceEquals(plan, secondPlan))
+                {
+                    Assert.DoesNotContain(secondSource, movedSources);
+                    if (secondFails) return Task.FromResult(new MuxExecutionResult(2, false, 0));
+                }
                 File.WriteAllText(plan.OutputFilePath, "mux output");
                 return Task.FromResult(new MuxExecutionResult(0, false, 100));
             }
@@ -67,7 +74,8 @@ public sealed class BatchExecutionRunnerTests : IDisposable
             [new(firstItem, firstPlan, [uniqueCleanup, secondSource, secondOutput]), new(secondItem, secondPlan, [])],
             Path.Combine(_tempDirectory, "done"), new BatchRunProgressTracker(2, (_, _) => { }), _ => { });
 
-        Assert.Equal([uniqueCleanup], movedSources);
+        Assert.Equal(secondFails ? [uniqueCleanup] : new[] { uniqueCleanup, secondSource }, movedSources);
+        Assert.DoesNotContain(secondOutput, movedSources);
         Assert.True(File.Exists(secondSource));
     }
 

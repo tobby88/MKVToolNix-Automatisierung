@@ -108,8 +108,11 @@ internal sealed class BatchExecutionRunner
         var failedDoneMoveFiles = new List<string>();
         var newOutputFiles = new List<string>();
         var newOutputMetadata = new List<BatchOutputMetadataEntry>();
+        var completedConsumers = new HashSet<BatchExecutionWorkItem>(ReferenceEqualityComparer.Instance);
+        var deferredCleanup = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var inputOwners = executablePlans
-            .SelectMany(entry => GetPlanInputFiles(entry.Plan).Select(path => (Path: path, Entry: entry)))
+            .SelectMany(entry => GetPlanInputFiles(entry.Plan).Concat(BuildDoneCleanupFileList(entry))
+                .Distinct(StringComparer.OrdinalIgnoreCase).Select(path => (Path: path, Entry: entry)))
             .GroupBy(value => value.Path, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.Select(value => value.Entry).ToList(), StringComparer.OrdinalIgnoreCase);
         var outputPaths = executablePlans.Select(entry => entry.Plan.OutputFilePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -122,8 +125,8 @@ internal sealed class BatchExecutionRunner
                 break;
             }
             var workItem = executablePlans[index];
-            // Gemeinsam genutzte Quellen bleiben bewusst liegen, auch wenn eine andere Episode
-            // später fehlschlägt. Kein Done-Move darf einen weiteren vorbereiteten Plan zerstören.
+            // Gemeinsame Quellen bleiben bis zum Abschluss aller Verbraucher liegen.
+            // Bei Fehler oder Abbruch eines Verbrauchers dürfen sie auch am Batch-Ende nicht weg.
             var cleanupCandidates = BuildDoneCleanupFileList(workItem);
             var cleanupWorkItem = workItem with
             {
@@ -133,6 +136,7 @@ internal sealed class BatchExecutionRunner
             };
             if (cleanupWorkItem.CleanupFiles.Count != cleanupCandidates.Count)
             {
+                deferredCleanup.UnionWith(cleanupCandidates.Except(cleanupWorkItem.CleanupFiles, StringComparer.OrdinalIgnoreCase));
                 appendLog("QUELLENSCHUTZ: Gemeinsam verwendete Quellen oder Batch-Ziele bleiben am bisherigen Ort.");
             }
             var item = workItem.Item;
@@ -148,6 +152,7 @@ internal sealed class BatchExecutionRunner
             {
                 if (plan.SkipMux)
                 {
+                    completedConsumers.Add(workItem);
                     upToDateCount++;
                     item.SetStatus(BatchEpisodeStatusKind.UpToDate);
                     appendLog($"  KEIN MUX: {plan.SkipReason ?? "Zieldatei bereits aktuell."}");
@@ -190,6 +195,7 @@ internal sealed class BatchExecutionRunner
 
                 if (outcomeKind == MuxExecutionOutcomeKind.Success)
                 {
+                    completedConsumers.Add(workItem);
                     item.SetStatus(BatchEpisodeStatusKind.Success);
                     successCount++;
                     item.RefreshArchivePresence(BatchEpisodeStatusKind.Success);
@@ -222,6 +228,7 @@ internal sealed class BatchExecutionRunner
                 }
                 else if (outcomeKind == MuxExecutionOutcomeKind.Warning)
                 {
+                    completedConsumers.Add(workItem);
                     warningCount++;
                     var warningStatusText = BuildWarningStatusText(plan, result);
                     item.RefreshArchivePresence(BatchEpisodeStatusKind.Warning, warningStatusText);
@@ -281,6 +288,36 @@ internal sealed class BatchExecutionRunner
             }
 
             progressTracker.ReportItemCompleted(index + 1);
+        }
+
+        if (!wasCanceled && !cancellationToken.IsCancellationRequested)
+        {
+            var releasable = deferredCleanup.Where(path => !outputPaths.Contains(path)
+                && inputOwners.TryGetValue(path, out var owners) && owners.All(completedConsumers.Contains)).ToList();
+            if (releasable.Count > 0)
+            {
+                try
+                {
+                    var cleanup = await _cleanupService.MoveFilesToDirectoryAsync(releasable, doneDirectory, cancellationToken: cancellationToken);
+                    movedDoneFiles.AddRange(cleanup.MovedFiles);
+                    failedDoneMoveFiles.AddRange(cleanup.FailedFiles);
+                    wasCanceled = cleanup.WasCanceled;
+                    foreach (var path in cleanup.MovedFiles) appendLog($"BATCH-DONE: Gemeinsame Quelle nach allen Verbrauchern verschoben: {path}");
+                    if (cleanup.FailedFiles.Count > 0)
+                    {
+                        warningCount++;
+                        appendLog("BATCH-DONE: Nicht verschoben: " + string.Join(", ", cleanup.FailedFiles));
+                    }
+                    _cleanupService.DeleteEmptyParentDirectories(releasable, Path.GetDirectoryName(doneDirectory));
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { wasCanceled = true; }
+                catch (Exception ex)
+                {
+                    warningCount++;
+                    failedDoneMoveFiles.AddRange(releasable);
+                    appendLog($"BATCH-DONE: Gemeinsame Quellen bleiben erhalten: {ex.Message}");
+                }
+            }
         }
 
         return new BatchExecutionOutcome(

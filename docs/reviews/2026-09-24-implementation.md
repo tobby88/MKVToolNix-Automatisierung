@@ -14,7 +14,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
 - [x] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
 - [x] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
-- [ ] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
+- [x] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
 - [ ] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
 - [ ] A11 (O16): Explizite Emby-Zuordnung, kein unbeabsichtigter globaler Scan.
 - [ ] A12 (O15): Durchgängiger Emby-Abbruch mit Erhalt von Teilresultaten.
@@ -120,3 +120,11 @@ keine Cachewerte nachliefern. Dateisnapshots berücksichtigen verfügbare Window
 und Änderungszeiten zusätzlich zu Größe/mtime. Kein Vollhash großer Videos; unbekannte
 Serversemantik und In-place-Änderungen innerhalb der Zeitstempelauflösung bleiben Grenzen.
 30 gezielte Unit- und sieben Prozess-Integrationstests erfolgreich.
+
+### A09
+
+Gemeinsam genutzte Quellen werden bis zum Ende zurückgestellt und erst verschoben,
+wenn alle referenzierenden/aufräumenden Pläne erfolgreich abgeschlossen sind. Bei
+Abbruch oder einem fehlgeschlagenen Verbraucher bleiben sie erhalten. Batch-Ausgaben
+bleiben grundsätzlich ausgeschlossen. Cleanup-Fehler ändern nicht rückwirkend die
+bereits erzeugten Ausgabereports. 20 Batch-Runner-Tests erfolgreich.
