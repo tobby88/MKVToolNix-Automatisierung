@@ -12,7 +12,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A04 (O03, O04): Vollständige Sortier-Vorprüfung und paketweises Rollback.
 - [x] A05 (O02): Wiederaufnahmefähige Archivänderungen über Header, NFO und Rename.
 - [x] A06 (O07, O08, O25): Sidecar-Muster, strikte Trackwerte und Mehrfachfolgen-Regeln.
-- [ ] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
+- [x] A07 (O21): Schutz vor konkurrierenden App-Instanzen.
 - [ ] A08 (O14, O23): Abbrechbare Probes, Timeouts und generationensichere Caches.
 - [ ] A09 (O20): Batchweiter Cleanup gemeinsam genutzter Quellen nach Erfolg aller Verbraucher.
 - [ ] A10 (O26): Ereignisgesteuerter Grid-Refresh statt Idle-Polling.
@@ -102,3 +102,10 @@ mehr zu Nein. Ungültige manuelle Dateinamen bleiben auch in der UI kontrolliert
 Bei Doppelfolgen bleiben Staffel/Range, Dateititel und MKV-Titel unabhängig erhalten,
 statt einen einzelnen TVDB-Episodentitel auf die gesamte Datei anzuwenden. Manuelle
 Korrekturen bleiben möglich. 80 gezielte Archiv-/Header-Tests erfolgreich.
+
+### A07
+
+Ein benutzerbezogener systemweiter Mutex verhindert mehrere GUI-Prozesse auch aus
+verschiedenen portablen Ordnern. Die zweite Instanz beendet sich vor Initialisierung
+und Downloads mit verständlichem Hinweis. Verwaiste Sperren nach Absturz sind wieder
+übernehmbar. Fünf Start-/Mutex-Tests erfolgreich.

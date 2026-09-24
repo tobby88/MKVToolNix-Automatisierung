@@ -16,6 +16,13 @@ internal static class Program
     {
         try
         {
+            using var instance = SingleInstanceGuard.TryAcquire();
+            if (instance is null)
+            {
+                MessageBox.Show("Die Anwendung läuft bereits. Bitte die vorhandene Instanz verwenden oder zuerst schließen.",
+                    "Bereits gestartet", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             var app = new Application
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown
