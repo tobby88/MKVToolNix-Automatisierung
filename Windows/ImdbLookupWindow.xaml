@@ -179,13 +179,20 @@
             </Grid>
         </GroupBox>
 
-        <DockPanel Grid.Row="4" Margin="0,12,0,0" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Grid Grid.Row="4" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ScrollViewer x:Name="FooterStatusScroller" MaxHeight="80" Margin="0,0,12,0"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
+            </ScrollViewer>
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Orientation="Horizontal">
                 <Button Width="150" Margin="0,0,12,0" Padding="10,6" Click="NoImdbButton_Click" Content="Keine IMDb-ID" />
                 <Button Width="120" Margin="0,0,12,0" Padding="10,6" IsCancel="True" Click="CancelButton_Click" Content="Abbrechen" />
                 <Button Width="140" Padding="10,6" IsEnabled="{Binding CanApply}" Click="ApplyButton_Click" Content="Übernehmen" />
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </Grid>
 </Window>

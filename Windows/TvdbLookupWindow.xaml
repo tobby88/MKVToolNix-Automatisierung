@@ -138,12 +138,16 @@
             </GroupBox>
         </Grid>
 
-        <DockPanel Grid.Row="2" Margin="0,12,0,0" LastChildFill="False">
-            <TextBlock DockPanel.Dock="Left"
-                       VerticalAlignment="Center"
-                       TextWrapping="Wrap"
-                       Text="{Binding StatusText}" />
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ScrollViewer x:Name="FooterStatusScroller" MaxHeight="80" Margin="0,0,12,0"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock VerticalAlignment="Center" Text="{Binding StatusText}" TextWrapping="Wrap" />
+            </ScrollViewer>
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom" Orientation="Horizontal">
                 <Button Width="190"
                         Margin="0,0,12,0"
                         Padding="10,6"
@@ -176,6 +180,6 @@
                     </Button.Style>
                 </Button>
             </StackPanel>
-        </DockPanel>
+        </Grid>
     </Grid>
 </Window>

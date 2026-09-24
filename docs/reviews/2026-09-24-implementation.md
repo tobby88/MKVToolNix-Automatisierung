@@ -25,7 +25,7 @@ Die ursprüngliche Liste unter `2026-09-22/open-findings.md` bleibt als Ausgangs
 - [x] A17 (O24): Begrenzte Extraktionsgröße und Speicherplatzprüfung.
 - [x] A18 (O18): Sichere Wiederherstellung/Bereinigung erkannter Arbeits-/Backupreste.
 - [x] A19 (O10): Asynchrone UI-Pfadstatusprüfungen ohne veraltete Rückmeldungen.
-- [ ] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
+- [x] A20 (O13): Layouttests und gezielte Korrekturen für lange Texte/kleine Fenster.
 - [ ] A21 (O27, O28): Explizite Erkennungs-/Format-/Interaktionsverträge und Grenzfalltests.
 - [ ] A22 (T01-T05): Reale isolierte Tooltests, Last-/Ausfalltests und ergänzende Regressionen.
 - [ ] A23 (T06): GitHub-CI des Ausgangsstands prüfen, lokale vollständige Abschlussprüfung.
@@ -225,3 +225,11 @@ damit neue Ausgaben/Teilreports nicht von einer noch laufenden UI-Prüfung abhä
 127 gezielte Tests grün, einschließlich Dispatcherfreiheit, Stale-Result-Schutz und
 erfolgreichem Reportabschluss trotz späteren Abbruchs. Native SMB-Zugriffe selbst sind
 nicht gewaltsam abbrechbar; sie blockieren nicht mehr diese Status-UI.
+
+### A20
+
+TVDB-/IMDb-Fußzeilen reservieren die Aktionsbreite unabhängig von langen Meldungen.
+Statusdetails sind scrollbar, ebenso im Wiederherstellungsdialog. Das Startfenster
+ist vergrößerbar und hält den Fortschritt außerhalb des scrollbaren Detailbereichs.
+Zehn WPF-Tests grün, darunter Mindestgrößen mit langen Meldungen und DIP-Skalierung
+100/150/200 Prozent. Dies ist kein Ersatz für native Mehrmonitor-DPI-/Screenreader-Abnahme.

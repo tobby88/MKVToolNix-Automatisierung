@@ -30,7 +30,9 @@
                 <Button x:Name="RecycleButton" Content="In den Papierkorb" IsEnabled="False" Padding="10,6" Click="Recycle_Click" />
                 <Button x:Name="CancelScanButton" Content="Prüfung abbrechen" IsEnabled="False" Padding="10,6" Margin="8,0,0,0" Click="Cancel_Click" />
             </WrapPanel>
-            <TextBlock x:Name="StatusText" Text="Bitte einen Prüfbereich wählen." TextWrapping="Wrap" Margin="0,10,0,0" MaxHeight="90" />
+            <ScrollViewer MaxHeight="90" Margin="0,10,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock x:Name="StatusText" Text="Bitte einen Prüfbereich wählen." TextWrapping="Wrap" />
+            </ScrollViewer>
         </StackPanel>
     </Grid>
 </Window>

@@ -3,19 +3,19 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Startet..."
         Width="520"
-        Height="220"
+        Height="300"
         MinWidth="480"
-        MinHeight="210"
+        MinHeight="260"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
+        ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="True"
         Background="#F3F4F6">
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock FontSize="18"
@@ -25,13 +25,17 @@
         <TextBlock Grid.Row="1"
                    Margin="0,12,0,0"
                    FontWeight="SemiBold"
+                   TextWrapping="Wrap"
                    Text="{Binding StatusText, Mode=OneWay}" />
 
-        <TextBlock Grid.Row="2"
-                   Margin="0,6,0,0"
+        <!-- Details consume only the remaining height; progress must stay visible. -->
+        <ScrollViewer x:Name="DetailScroller" Grid.Row="2" Margin="0,6,0,0"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <TextBlock
                    Foreground="#44515D"
                    TextWrapping="Wrap"
                    Text="{Binding DetailText, Mode=OneWay}" />
+        </ScrollViewer>
 
         <Grid Grid.Row="3" Margin="0,18,0,0">
             <Grid.ColumnDefinitions>
@@ -39,7 +43,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <ProgressBar Grid.Column="0"
+            <ProgressBar x:Name="StartupProgressBar" Grid.Column="0"
                          Height="18"
                          Minimum="0"
                          Maximum="100"
