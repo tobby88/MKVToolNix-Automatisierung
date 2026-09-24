@@ -145,44 +145,53 @@ internal static class Program
             PixelFormats.Pbgra32);
         renderBitmap.Render(host);
 
-        var outputPath = Path.Combine(outputDirectory, fileName);
-        using var stream = File.Create(outputPath);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
-        encoder.Save(stream);
+        SaveScreenshot(outputDirectory, fileName, renderBitmap);
     }
 
     /// <summary>
-    /// Rendert ein echtes WPF-Fenster ohne sichtbares Aktivieren. Das einmalige Offscreen-Öffnen ist
-    /// nötig, damit TabControl und Footer ihre produktiven Größen erhalten, bevor das Client-Visual
-    /// in die Bitmap geschrieben wird.
+    /// Rendert den echten Dialoginhalt mit fester Clientgröße ohne native Fensterrahmen.
+    /// Window.ActualHeight enthält nicht gerenderte Chrome-Pixel und erzeugt sonst leere Ränder.
     /// </summary>
     private static void RenderWindowScreenshot(
         string outputDirectory,
         string fileName,
         Window window)
     {
-        window.WindowStartupLocation = WindowStartupLocation.Manual;
-        window.Left = -32000;
-        window.Top = -32000;
-        window.Height = 620;
-        window.Background = Brushes.White;
-        window.ShowActivated = false;
-        window.ShowInTaskbar = false;
-        window.Show();
+        var content = (FrameworkElement)window.Content;
+        content.DataContext = window.DataContext;
+        window.Content = null;
+        var host = new Border { Background = Brushes.White, Child = content };
+        var width = (int)window.Width;
+        const int height = 620;
+        host.Measure(new Size(width, height));
+        host.Arrange(new Rect(0, 0, width, height));
+        host.UpdateLayout();
         DrainDispatcher();
-
-        window.UpdateLayout();
-        var width = Math.Max(1, (int)Math.Ceiling(window.ActualWidth));
-        var height = Math.Max(1, (int)Math.Ceiling(window.ActualHeight));
         var renderBitmap = new RenderTargetBitmap(
             width,
             height,
             96,
             96,
             PixelFormats.Pbgra32);
-        renderBitmap.Render(window);
+        renderBitmap.Render(host);
 
+        SaveScreenshot(outputDirectory, fileName, renderBitmap);
+    }
+
+    private static void SaveScreenshot(string outputDirectory, string fileName, RenderTargetBitmap renderBitmap)
+    {
+        // Rounded corners may be transparent, but the middle of every image edge must be painted.
+        // This is also exercised by the CI screenshot smoke run, without platform-specific PNG diffs.
+        var pixel = new byte[4];
+        foreach (var point in new[]
+                 {
+                     new Point(renderBitmap.PixelWidth / 2, 0), new Point(renderBitmap.PixelWidth / 2, renderBitmap.PixelHeight - 1),
+                     new Point(0, renderBitmap.PixelHeight / 2), new Point(renderBitmap.PixelWidth - 1, renderBitmap.PixelHeight / 2)
+                 })
+        {
+            renderBitmap.CopyPixels(new Int32Rect((int)point.X, (int)point.Y, 1, 1), pixel, 4, 0);
+            if (pixel[3] == 0) throw new InvalidOperationException($"Unpainted screenshot edge: {fileName} at {point}.");
+        }
         var outputPath = Path.Combine(outputDirectory, fileName);
         using var stream = File.Create(outputPath);
         var encoder = new PngBitmapEncoder();

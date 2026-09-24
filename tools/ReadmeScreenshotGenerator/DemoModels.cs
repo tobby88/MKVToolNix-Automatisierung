@@ -278,10 +278,10 @@ internal sealed class DemoEmbySyncViewModel
 {
     public bool IsInteractive { get; init; }
     // Die Demo zeigt den Ruhezustand. Ohne diese Bindung würde WPF den Abbruchbutton
-    // trotz fehlenden Scans anzeigen und unnötig Platz in der Aktionsleiste belegen.
-    public bool CanCancelScan { get; init; }
-    public ICommand CancelScanCommand { get; init; } = new NoOpRelayCommand();
-    public string CancelScanTooltip { get; init; } = string.Empty;
+    // trotz fehlenden Vorgangs anzeigen und unnötig Platz in der Aktionsleiste belegen.
+    public bool CanCancelOperation { get; init; }
+    public ICommand CancelOperationCommand { get; init; } = new NoOpRelayCommand();
+    public string CancelOperationTooltip { get; init; } = string.Empty;
     public string ProgressDisplayText { get; init; } = string.Empty;
     public string ReportPath { get; init; } = string.Empty;
     public string ReportSelectionSummaryText { get; init; } = string.Empty;
