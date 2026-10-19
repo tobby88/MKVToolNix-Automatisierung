@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MkvToolnixAutomatisierung.Composition;
 using MkvToolnixAutomatisierung.Modules.SeriesEpisodeMux;
 using MkvToolnixAutomatisierung.Services;
+using MkvToolnixAutomatisierung.Services.Metadata;
 using MkvToolnixAutomatisierung.Tests.TestInfrastructure;
 using MkvToolnixAutomatisierung.ViewModels;
 using MkvToolnixAutomatisierung.ViewModels.Modules;
@@ -140,6 +141,15 @@ public sealed class AppCompositionRootTests
     {
         settingsStore.Save(new CombinedAppSettings
         {
+            // Keep composition tests independent of live IMDb requests and consent dialogs.
+            Metadata = new AppMetadataSettings
+            {
+                ImdbDataset = new ImdbDatasetSettings
+                {
+                    AutoManageEnabled = false,
+                    ManagementPreferenceConfigured = true
+                }
+            },
             ToolPaths = new AppToolPathSettings
             {
                 ManagedMkvToolNix = new ManagedToolSettings
