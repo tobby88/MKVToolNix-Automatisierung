@@ -469,6 +469,22 @@ public sealed class SingleEpisodeMuxViewModelTests
     }
 
     [Fact]
+    public void EnsureKnownEpisodeCodeForExecution_AllowsExplicitlyKeptUnnumberedLocalDetection()
+    {
+        var dialogService = new CapturingDialogService();
+        var viewModel = new SingleEpisodeMuxViewModel(
+            ViewModelTestContext.CreateSingleEpisodeServices(), dialogService);
+        viewModel.ApplyLocalMetadataGuess();
+        viewModel.ApproveMetadataReview("Lokale Erkennung wurde bewusst beibehalten.");
+        viewModel.SetOutputPath(Path.Combine(Path.GetTempPath(), "bonus", "trailer.mkv"));
+
+        Assert.True(InvokeEnsureKnownEpisodeCodeForExecution(viewModel));
+        Assert.Empty(dialogService.WarningMessages);
+        Assert.Equal("xx", viewModel.SeasonNumber);
+        Assert.Equal("xx", viewModel.EpisodeNumber);
+    }
+
+    [Fact]
     public void ClearCompletedSingleEpisodeInput_ClearsDialogButKeepsFinalRunStatus()
     {
         var viewModel = CreateViewModel();

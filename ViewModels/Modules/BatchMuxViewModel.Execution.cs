@@ -28,7 +28,7 @@ internal sealed partial class BatchMuxViewModel
         }
 
         var unresolvedEpisodeCodeItems = readyItems
-            .Where(item => !EpisodeFileNameHelper.HasKnownEpisodeCode(item.SeasonNumber, item.EpisodeNumber))
+            .Where(item => item.HasUnresolvedEpisodeCode)
             .ToList();
         if (unresolvedEpisodeCodeItems.Count > 0)
         {
@@ -39,7 +39,7 @@ internal sealed partial class BatchMuxViewModel
 
             _dialogService.ShowWarning(
                 "Episodencode fehlt",
-                $"{unresolvedEpisodeCodeItems.Count} ausgewählte Episode(n) haben noch Staffel oder Folge 'xx'. Bitte TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren.");
+                $"{unresolvedEpisodeCodeItems.Count} ausgewählte Episode(n) haben noch Staffel oder Folge 'xx'. Bitte TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren. Für unnummeriertes Bonusmaterial im TVDB-Dialog 'Lokale Erkennung behalten' bestätigen.");
             SetStatus("Batch blockiert: Episodencode fehlt", ProgressValue);
             return;
         }
@@ -74,7 +74,7 @@ internal sealed partial class BatchMuxViewModel
             }
 
             // Metadaten-/Quellenreviews können den Episodencode nach der ersten Prüfung ändern.
-            if (readyItems.Any(item => !EpisodeFileNameHelper.HasKnownEpisodeCode(item.SeasonNumber, item.EpisodeNumber)))
+            if (readyItems.Any(item => item.HasUnresolvedEpisodeCode))
             {
                 _dialogService.ShowWarning("Episodencode fehlt", "Nach der Prüfung ist mindestens ein Episodencode noch offen. Bitte Staffel/Folge korrigieren.");
                 SetStatus("Batch blockiert: Episodencode fehlt", ProgressValue);

@@ -32,6 +32,7 @@ internal partial class EpisodeEditModel
 
             _seriesName = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
             OnPropertyChanged(nameof(MetadataDisplayText));
         }
     }
@@ -49,6 +50,7 @@ internal partial class EpisodeEditModel
 
             _seasonNumber = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
             OnPropertyChanged(nameof(EpisodeCodeDisplayText));
             OnPropertyChanged(nameof(MetadataDisplayText));
         }
@@ -67,6 +69,7 @@ internal partial class EpisodeEditModel
 
             _episodeNumber = normalized;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
             OnPropertyChanged(nameof(EpisodeCodeDisplayText));
             OnPropertyChanged(nameof(MetadataDisplayText));
         }
@@ -282,6 +285,21 @@ internal partial class EpisodeEditModel
 
     public bool HasPendingMetadataReview => RequiresMetadataReview && !IsMetadataReviewApproved;
 
+    /// <summary>
+    /// Meldet einen fehlenden Episodencode, solange die lokale Zuordnung nicht bewusst
+    /// ohne Nummerierung freigegeben wurde. Gilt gemeinsam für Einzel- und Batch-Mux.
+    /// </summary>
+    /// <remarks>
+    /// Ein automatischer Nichttreffer oder eine allgemeine Metadatenfreigabe genügt nicht.
+    /// Die Ausnahme gilt nur für die im TVDB-Dialog beibehaltene Serie und Nummerierung;
+    /// Titelkorrekturen und die Wahl des Ausgabeziels bleiben danach möglich.
+    /// </remarks>
+    public bool HasUnresolvedEpisodeCode =>
+        !EpisodeFileNameHelper.HasKnownEpisodeCode(SeasonNumber, EpisodeNumber)
+        && !(IsMetadataReviewApproved
+            && _keptLocalEpisodeIdentity is { } localIdentity
+            && localIdentity == (SeriesName, SeasonNumber, EpisodeNumber));
+
     public bool RequiresMetadataReview
     {
         get => _requiresMetadataReview;
@@ -310,6 +328,7 @@ internal partial class EpisodeEditModel
 
             _isMetadataReviewApproved = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
             NotifyMetadataReviewStatePropertiesChanged();
         }
     }

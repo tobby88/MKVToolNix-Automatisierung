@@ -19,6 +19,12 @@ Sie sind keine Zusage, dass zwei heuristisch zugeordnete Dateien dieselbe Schnit
   weder Synchronität noch identische Schnitte. Quellenprüfung und manuelle Freigabe bleiben nötig.
 - Eine einzelne TVDB-ID überschreibt bei Mehrfachfolgen nicht automatisch den Titel und die
   Staffel der gesamten Datei. Dateititel und Container-Titel bleiben dabei getrennt erhalten.
+- Unnummeriertes Bonusmaterial darf nach der bewussten Wahl „Lokale Erkennung behalten“
+  im TVDB-Dialog auch ohne Staffel-/Episodencode gemuxt werden. Das gewählte Ausgabeziel
+  bleibt erhalten; Einzel- und Batch-Mux verlangen keinen erfundenen Code. Ein automatischer
+  Nichttreffer oder eine allgemeine Metadatenfreigabe ersetzt diese Entscheidung nicht.
+  Eine neue Erkennung oder TVDB-Auswahl hebt die Ausnahme auf; ebenso gilt sie nicht für
+  nachträglich geänderte Serien- oder Nummerierungsdaten.
 
 ## NFO und Dateischreiben
 

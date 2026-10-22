@@ -214,14 +214,14 @@ internal sealed partial class SingleEpisodeMuxViewModel
 
     private bool EnsureKnownEpisodeCodeForExecution()
     {
-        if (EpisodeFileNameHelper.HasKnownEpisodeCode(SeasonNumber, EpisodeNumber))
+        if (!HasUnresolvedEpisodeCode)
         {
             return true;
         }
 
         _dialogService.ShowWarning(
             "Episodencode fehlt",
-            "Staffel oder Folge ist noch 'xx'. Bitte vor dem Muxen die TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren.");
+            "Staffel oder Folge ist noch 'xx'. Bitte TVDB-Zuordnung prüfen oder Staffel/Folge manuell korrigieren. Für unnummeriertes Bonusmaterial im TVDB-Dialog 'Lokale Erkennung behalten' bestätigen.");
         SetExecutionStatus(SingleEpisodeExecutionStatusKind.Warning);
         SetStatus("Episodencode fehlt", 0);
         return false;

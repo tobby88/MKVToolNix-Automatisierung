@@ -197,6 +197,7 @@ internal partial class EpisodeEditModel
 
     public virtual void ApplyTvdbSelection(TvdbEpisodeSelection selection)
     {
+        ClearLocalEpisodeCodeApproval();
         SetTvdbSelection(selection);
         SeriesName = selection.TvdbSeriesName;
         SeasonNumber = selection.SeasonNumber;
@@ -204,6 +205,10 @@ internal partial class EpisodeEditModel
         Title = selection.EpisodeTitle;
     }
 
+    /// <summary>
+    /// Übernimmt die bewusst beibehaltene lokale Erkennung und merkt deren Nummerierung.
+    /// Erst die anschließende Metadatenfreigabe erlaubt damit auch unnummeriertes Bonusmaterial.
+    /// </summary>
     public virtual void ApplyLocalMetadataGuess()
     {
         SetTvdbSelection(null);
@@ -211,6 +216,8 @@ internal partial class EpisodeEditModel
         SeasonNumber = LocalSeasonNumber;
         EpisodeNumber = LocalEpisodeNumber;
         Title = LocalTitle;
+        _keptLocalEpisodeIdentity = (SeriesName, SeasonNumber, EpisodeNumber);
+        OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
     }
 
     public virtual void ApproveMetadataReview(string statusText)
@@ -241,6 +248,7 @@ internal partial class EpisodeEditModel
 
     protected void SetMetadataResolutionState(EpisodeMetadataResolutionResult resolution)
     {
+        ClearLocalEpisodeCodeApproval();
         SetTvdbSelection(resolution.Selection);
         MetadataStatusText = resolution.StatusText;
         RequiresMetadataReview = resolution.RequiresReview;
@@ -319,6 +327,7 @@ internal partial class EpisodeEditModel
 
     protected void SetLocalMetadataGuess(EpisodeMetadataGuess guess)
     {
+        ClearLocalEpisodeCodeApproval();
         _localSeriesName = guess.SeriesName;
         _localSeasonNumber = guess.SeasonNumber;
         _localEpisodeNumber = guess.EpisodeNumber;
@@ -431,6 +440,18 @@ internal partial class EpisodeEditModel
         OnPropertyChanged(nameof(TvdbSeriesName));
         OnPropertyChanged(nameof(TvdbEpisodeId));
         OnPropertyChanged(nameof(EffectiveOriginalLanguage));
+    }
+
+    private void ClearLocalEpisodeCodeApproval()
+    {
+        if (_keptLocalEpisodeIdentity is null)
+        {
+            return;
+        }
+
+        // Redetection and a TVDB choice must never inherit another local decision.
+        _keptLocalEpisodeIdentity = null;
+        OnPropertyChanged(nameof(HasUnresolvedEpisodeCode));
     }
 
     protected void RefreshArchiveState(Action? completed = null, bool immediate = false)

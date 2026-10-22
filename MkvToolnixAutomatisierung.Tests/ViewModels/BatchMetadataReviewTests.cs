@@ -262,6 +262,64 @@ public sealed class BatchMetadataReviewTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunBatchCommand_UnnumberedBonusRequiresExplicitLocalChoice(bool keepLocalDetection)
+    {
+        await WithTemporaryBatchAsync(async root =>
+        {
+            var dialog = new FakeDialogService { ConfirmBatchExecutionResult = false };
+            var viewModel = CreateBatchViewModel(new FakeEpisodeReviewWorkflow(), dialog);
+            SetBatchDirectories(viewModel, root);
+            var source = Path.Combine(root, "trailer.mp4");
+            File.WriteAllText(source, "temporary source");
+            var output = Path.Combine(root, "trailer.mkv");
+            var guess = new EpisodeMetadataGuess("Beispielserie", "Trailer", "xx", "xx");
+            var item = BatchEpisodeItemViewModel.CreateFromDetection(
+                source,
+                guess,
+                CreateDetectedEpisode() with
+                {
+                    MainVideoPath = source,
+                    SeasonNumber = "xx",
+                    EpisodeNumber = "xx",
+                    SuggestedTitle = "Trailer"
+                },
+                new EpisodeMetadataResolutionResult(guess, null, "Kein TVDB-Treffer.", 0,
+                    RequiresReview: false, QueryWasAttempted: true, QuerySucceeded: true),
+                outputPath: output,
+                statusKind: BatchEpisodeStatusKind.Ready,
+                isSelected: true);
+            item.SetOutputPath(output);
+            if (keepLocalDetection)
+            {
+                // These are the mutations performed by the TVDB dialog's local-choice branch.
+                item.ApplyLocalMetadataGuess();
+            }
+            item.ApproveMetadataReview("Metadaten freigegeben.");
+            viewModel.EpisodeItems.Add(item);
+            await StorePlanAsync(viewModel, item, CreateExecutionPlan(source, output));
+
+            await viewModel.RunBatchCommand.ExecuteAsync();
+
+            Assert.Equal(output, item.OutputPath);
+            Assert.Equal("xx", item.SeasonNumber);
+            Assert.Equal("xx", item.EpisodeNumber);
+            Assert.Equal(keepLocalDetection ? 1 : 0, dialog.ConfirmBatchExecutionCallCount);
+            if (keepLocalDetection)
+            {
+                Assert.Empty(dialog.WarningMessages);
+                Assert.Equal("Abgebrochen", viewModel.StatusText);
+            }
+            else
+            {
+                Assert.Equal("Episodencode fehlt", Assert.Single(dialog.WarningMessages).Title);
+            }
+            viewModel.SelectedEpisodeItem = null;
+        });
+    }
+
     [Fact]
     public async Task RunBatchCommand_DuplicateFinalOutputPaths_BlockEvenWithoutPlannerWarning()
     {

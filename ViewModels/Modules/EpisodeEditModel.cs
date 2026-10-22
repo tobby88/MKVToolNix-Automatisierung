@@ -45,6 +45,7 @@ internal partial class EpisodeEditModel : INotifyPropertyChanged, IEpisodePlanIn
     private EpisodeUsageSummary? _usageSummary;
     private bool _requiresMetadataReview;
     private bool _isMetadataReviewApproved = true;
+    private (string Series, string Season, string Episode)? _keptLocalEpisodeIdentity;
     private bool _outputPathWasManuallyChanged;
     private bool _requiresManualCheck;
     private List<string> _manualCheckFilePaths = [];
