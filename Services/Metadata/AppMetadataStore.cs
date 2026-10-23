@@ -196,6 +196,13 @@ public sealed class ImdbDatasetSettings
     public DateTimeOffset? LastUpdatedUtc { get; set; }
 
     /// <summary>
+    /// Erfolgreiche Integritätsprüfung des aktiven Dateistands. Unveränderte Datenbanken
+    /// benötigen beim nächsten App-Start nur eine kurze Struktur- und Versionsprüfung.
+    /// Null bei älteren Einstellungen oder nach fehlgeschlagener Prüfung.
+    /// </summary>
+    public ImdbIndexVerification? VerifiedIndex { get; set; }
+
+    /// <summary>
     /// Erzeugt eine unabhängige Kopie für atomare Settings-Updates.
     /// </summary>
     public ImdbDatasetSettings Clone() => new()
@@ -208,7 +215,8 @@ public sealed class ImdbDatasetSettings
         LastCheckedUtc = LastCheckedUtc,
         LastCheckCompleted = LastCheckCompleted,
         LastCheckedSchemaVersion = LastCheckedSchemaVersion,
-        LastUpdatedUtc = LastUpdatedUtc
+        LastUpdatedUtc = LastUpdatedUtc,
+        VerifiedIndex = VerifiedIndex
     };
 }
 

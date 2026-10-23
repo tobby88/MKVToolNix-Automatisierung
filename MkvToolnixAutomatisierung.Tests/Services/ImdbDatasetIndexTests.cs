@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using MkvToolnixAutomatisierung.Services;
 using MkvToolnixAutomatisierung.Services.Metadata;
@@ -933,6 +934,209 @@ public sealed class ImdbDatasetIndexTests : IDisposable
         await File.WriteAllTextAsync(database, "not a database");
         Assert.False(search.IsAvailable);
         Assert.Null(ImdbIndexInspection.Read(database, true));
+    }
+
+    [Fact]
+    public async Task StartupInspection_ReusesPersistedVerificationAndPreservesImportCounts()
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        var fullChecks = 0;
+        var first = ImdbIndexInspection.ReadForStartup(database, null, onFullVerification: () => fullChecks++);
+        var checkpoint = Assert.IsType<ImdbIndexVerification>(first.Verification);
+        var persisted = JsonSerializer.Deserialize<ImdbIndexVerification>(JsonSerializer.Serialize(checkpoint));
+
+        var restarted = ImdbIndexInspection.ReadForStartup(database, persisted, onFullVerification: () => fullChecks++);
+
+        Assert.Equal(1, fullChecks);
+        Assert.Equal(first.Index, restarted.Index);
+        Assert.Equal(checkpoint, restarted.Verification);
+        Assert.True(restarted.Index!.SeriesCount > 0);
+        Assert.True(restarted.Index.EpisodeCount > 0);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartupInspection_RechecksChangedFileEvenWithRestoredSizeAndTimestamp(bool replaceFile)
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        var first = ImdbIndexInspection.ReadForStartup(database, null);
+        Assert.NotNull(first.Verification);
+        var length = new FileInfo(database).Length;
+        var lastWrite = File.GetLastWriteTimeUtc(database);
+        if (replaceFile)
+        {
+            File.Copy(database, database + ".replacement");
+            File.Move(database + ".replacement", database, overwrite: true);
+        }
+        else
+        {
+            ExecuteSql(database, "UPDATE metadata SET value='other' WHERE key='version'");
+        }
+        File.SetLastWriteTimeUtc(database, lastWrite);
+        Assert.Equal(length, new FileInfo(database).Length);
+        var fullChecks = 0;
+
+        var result = ImdbIndexInspection.ReadForStartup(database, first.Verification,
+            onFullVerification: () => fullChecks++);
+
+        Assert.Equal(1, fullChecks);
+        Assert.NotNull(result.Index);
+        Assert.NotNull(result.Verification);
+        Assert.NotEqual(first.Verification.FileStamp, result.Verification.FileStamp);
+    }
+
+    [Theory]
+    [InlineData("rules")]
+    [InlineData("version")]
+    [InlineData("schema")]
+    [InlineData("counts")]
+    [InlineData("path")]
+    public async Task StartupInspection_DoesNotTrustMismatchedVerification(string mismatch)
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        var original = Assert.IsType<ImdbIndexVerification>(ImdbIndexInspection.ReadForStartup(database, null).Verification);
+        var changed = mismatch switch
+        {
+            "rules" => original with { FileStamp = "obsolete" },
+            "version" => original with { DatasetVersion = "outdated" },
+            "schema" => original with { SchemaVersion = original.SchemaVersion - 1 },
+            "counts" => original with { EpisodeCount = 0 },
+            _ => original with { DatabasePath = database + ".other" }
+        };
+        var fullChecks = 0;
+
+        var result = ImdbIndexInspection.ReadForStartup(database, changed, onFullVerification: () => fullChecks++);
+
+        Assert.Equal(1, fullChecks);
+        Assert.Equal(original, result.Verification);
+    }
+
+    [Fact]
+    public async Task StartupInspection_CancellationDoesNotProduceVerification()
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        using var cancellation = new CancellationTokenSource();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => ImdbIndexInspection.ReadForStartup(
+            database, null, cancellation.Token, () => cancellation.Cancel()));
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_RestartUsesSavedVerificationWithoutFullCheckOrDownload()
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var httpClient = new HttpClient(handler);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings { ManagementPreferenceConfigured = true }
+        });
+        var database = Path.Combine(_tempDirectory, "restart.sqlite");
+        var initial = new ImdbDatasetManager(store, httpClient, new ImdbDatasetIndexBuilder(),
+            new FixedConsent(true), _tempDirectory, database);
+        Assert.False((await initial.EnsureCurrentAsync()).HasWarning);
+        Assert.NotNull(store.CurrentSettings.ImdbDataset.VerifiedIndex);
+        var restoredSettings = JsonSerializer.Deserialize<AppMetadataSettings>(JsonSerializer.Serialize(store.CurrentSettings))!;
+        var restoredStore = new FakeMetadataStore(restoredSettings);
+        var restartHandler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var restartClient = new HttpClient(restartHandler);
+        var restarted = new ImdbDatasetManager(restoredStore, restartClient, new ImdbDatasetIndexBuilder(),
+            new FixedConsent(true), _tempDirectory, database);
+        var progress = new RecordingProgress<ManagedToolStartupProgress>();
+
+        var result = await restarted.EnsureCurrentAsync(progress);
+
+        Assert.False(result.HasWarning);
+        Assert.Equal(0, restartHandler.HeadRequestCount);
+        Assert.Equal(0, restartHandler.GetRequestCount);
+        Assert.DoesNotContain(progress.Values, value => value.StatusText.Contains("Datenbankintegrität", StringComparison.Ordinal));
+        Assert.Equal(store.CurrentSettings.ImdbDataset.VerifiedIndex, restoredStore.CurrentSettings.ImdbDataset.VerifiedIndex);
+    }
+
+    [Fact]
+    public async Task EnsureCurrentAsync_FailedFullCheckClearsPersistedVerification()
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        var first = ImdbIndexInspection.ReadForStartup(database, null);
+        Assert.NotNull(first.Verification);
+        ExecuteSql(database, "DELETE FROM titles WHERE kind=2");
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                ManagementPreferenceConfigured = true,
+                InstalledVersion = "valid",
+                InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion,
+                VerifiedIndex = first.Verification
+            }
+        });
+        using var client = new HttpClient(new DatasetHttpHandler(BuildSmallDatasetByteMap()));
+        var manager = new ImdbDatasetManager(store, client, new ImdbDatasetIndexBuilder(),
+            new FixedConsent(false), _tempDirectory, database);
+
+        var result = await manager.EnsureCurrentAsync();
+
+        Assert.False(result.HasWarning);
+        Assert.Null(store.CurrentSettings.ImdbDataset.VerifiedIndex);
+        Assert.False(new ImdbDatasetSearchService(database).IsAvailable);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnsureCurrentAsync_LegacyIndexIsVerifiedOnceEvenWithRecentRemoteCheck(bool cancelFirstCheck)
+    {
+        var database = await BuildInspectionDatabaseAsync();
+        var checkedUtc = DateTimeOffset.UtcNow;
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings
+            {
+                ManagementPreferenceConfigured = true,
+                InstalledVersion = "valid",
+                InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion,
+                LastCheckCompleted = true,
+                LastCheckedUtc = checkedUtc,
+                LastCheckedSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion
+            }
+        });
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var client = new HttpClient(handler);
+        var manager = new ImdbDatasetManager(store, client, new ImdbDatasetIndexBuilder(),
+            new FixedConsent(false), _tempDirectory, database);
+        if (cancelFirstCheck)
+        {
+            using var cancellation = new CancellationTokenSource();
+            var cancelProgress = new ActionProgress<ManagedToolStartupProgress>(value =>
+            {
+                if (value.StatusText.Contains("Datenbankintegrität", StringComparison.Ordinal)) cancellation.Cancel();
+            });
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => manager.EnsureCurrentAsync(cancelProgress, cancellation.Token));
+            Assert.Null(store.CurrentSettings.ImdbDataset.VerifiedIndex);
+        }
+        var initialProgress = new RecordingProgress<ManagedToolStartupProgress>();
+
+        var initial = await manager.EnsureCurrentAsync(initialProgress);
+        var restarted = new ImdbDatasetManager(new FakeMetadataStore(store.Load()), client,
+            new ImdbDatasetIndexBuilder(), new FixedConsent(false), _tempDirectory, database);
+        var restartProgress = new RecordingProgress<ManagedToolStartupProgress>();
+        var restart = await restarted.EnsureCurrentAsync(restartProgress);
+
+        Assert.False(initial.HasWarning);
+        Assert.False(restart.HasWarning);
+        Assert.NotNull(store.CurrentSettings.ImdbDataset.VerifiedIndex);
+        Assert.Equal(checkedUtc, store.CurrentSettings.ImdbDataset.LastCheckedUtc);
+        Assert.Equal(0, handler.HeadRequestCount);
+        Assert.Contains(initialProgress.Values, value => value.StatusText.Contains("Datenbankintegrität", StringComparison.Ordinal));
+        Assert.DoesNotContain(restartProgress.Values, value => value.StatusText.Contains("Datenbankintegrität", StringComparison.Ordinal));
+    }
+
+    private async Task<string> BuildInspectionDatabaseAsync()
+    {
+        var files = WriteSmallDatasetArchives();
+        var database = Path.Combine(_tempDirectory, "inspection.sqlite");
+        await new ImdbDatasetIndexBuilder().BuildAsync(database, files.Basics, files.Episodes, files.Aliases, "valid");
+        return database;
     }
 
     [Fact]

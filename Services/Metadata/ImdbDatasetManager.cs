@@ -203,8 +203,14 @@ internal sealed class ImdbDatasetManager
         var newIndexActivated = false;
         try
         {
-            Report(progress, "IMDb: Vorhandener Index wird geprüft...", "Prüfe Datenbankintegrität und aktivierten Datenstand.", null, true, "Index");
-            var installed = await Task.Run(() => ImdbIndexInspection.Read(_databasePath, verifyIntegrity: true, cancellationToken), cancellationToken);
+            Report(progress, "IMDb: Vorhandener Index wird geprüft...", "Prüfe Dateistand und Datenbankstruktur.", null, true, "Prüfung");
+            var inspection = await Task.Run(() => ImdbIndexInspection.ReadForStartup(
+                _databasePath, datasetSettings.VerifiedIndex, cancellationToken,
+                () => Report(progress, "IMDb: Datenbankintegrität wird geprüft...",
+                    "Vollprüfung des neuen oder geänderten Datenstands.", null, true, "Prüfung")), cancellationToken);
+            var installed = inspection.Index;
+            var settingsChanged = datasetSettings.VerifiedIndex != inspection.Verification;
+            datasetSettings.VerifiedIndex = inspection.Verification;
             var databaseExists = installed is not null;
             if (installed is not null && (datasetSettings.InstalledVersion != installed.Version
                 || datasetSettings.InstalledSchemaVersion != installed.Schema))
@@ -216,8 +222,9 @@ internal sealed class ImdbDatasetManager
                 datasetSettings.LastUpdatedUtc = installed.BuiltUtc;
                 datasetSettings.InstalledRevisionUtc = null;
                 datasetSettings.LastCheckCompleted = false;
-                PersistDatasetSettings(datasetSettings);
+                settingsChanged = true;
             }
+            if (settingsChanged) PersistDatasetSettings(datasetSettings);
             if ((databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
                 && datasetSettings.LastCheckCompleted
                 && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
@@ -275,7 +282,7 @@ internal sealed class ImdbDatasetManager
             datasetSettings.LastCheckCompleted = false;
             PersistDatasetSettings(datasetSettings);
             cancellationToken.ThrowIfCancellationRequested();
-            await DownloadAndBuildAsync(remoteFiles, versionToken, installed, progress, cancellationToken);
+            datasetSettings.VerifiedIndex = await DownloadAndBuildAsync(remoteFiles, versionToken, installed, progress, cancellationToken);
             newIndexActivated = true;
             datasetSettings.InstalledVersion = versionToken;
             datasetSettings.InstalledSchemaVersion = ImdbDatasetIndexBuilder.SchemaVersion;
@@ -325,7 +332,7 @@ internal sealed class ImdbDatasetManager
         return results;
     }
 
-    private async Task DownloadAndBuildAsync(
+    private async Task<ImdbIndexVerification?> DownloadAndBuildAsync(
         IReadOnlyList<ImdbRemoteDatasetFile> remoteFiles,
         string versionToken,
         ImdbIndexInspection.Snapshot? previousIndex,
@@ -418,6 +425,7 @@ internal sealed class ImdbDatasetManager
             ImdbIndexInspection.EnsurePlausibleReplacement(candidate, previousIndex);
             cancellationToken.ThrowIfCancellationRequested();
             ReplaceDatabaseAtomically(stagedDatabasePath, _databasePath);
+            return ImdbIndexInspection.CreateVerification(_databasePath, candidate);
         }
         finally
         {
