@@ -246,13 +246,20 @@
                               Grid.ColumnSpan="2"
                               Header="IMDb-Offlineindex (optional)">
                         <StackPanel Margin="12">
-                            <CheckBox Content="Offizielle IMDb-Datensätze lokal verwalten"
+                            <CheckBox Content="Beim Start automatisch auf IMDb-Updates prüfen"
                                       IsChecked="{Binding AutoManageImdbDataset}"
                                       ToolTip="Prüft beim Start höchstens täglich auf neue Daten. Vor jedem mehrere hundert MiB großen Download wird ausdrücklich nachgefragt." />
                             <TextBlock Margin="24,8,0,0"
                                        Foreground="#4D5B68"
                                        Text="{Binding ImdbDatasetStatusText}"
                                        ToolTip="{Binding ImdbDatasetStatusTooltip}" />
+                            <Button x:Name="UpdateImdbDatasetButton"
+                                    Margin="24,10,0,4"
+                                    HorizontalAlignment="Left"
+                                    Padding="10,6"
+                                    Click="UpdateImdbDatasetButton_Click"
+                                    Content="Jetzt prüfen / aktualisieren"
+                                    ToolTip="Prüft sofort erneut, auch nach einem übersprungenen Startangebot und bei deaktivierter Automatik. Vor dem Download wird nachgefragt." />
                             <TextBlock Margin="24,4,0,0"
                                        Foreground="#4D5B68"
                                        Text="Lokaler Fallback für fehlende TVDB-IMDb-Verknüpfungen. Rohdateien werden nach dem Indexaufbau entfernt. Nur für persönliche, nichtkommerzielle Nutzung."
@@ -346,6 +353,10 @@
         </TabControl>
 
         <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -373,6 +384,27 @@
                         Click="SaveButton_Click"
                         Content="Übernehmen" />
             </StackPanel>
+            <Grid x:Name="ResourceProgressPanel" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsCheckingResources}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ProgressBar Height="14" VerticalAlignment="Center" Maximum="100"
+                             Value="{Binding ResourceProgress.ProgressPercent, Mode=OneWay}"
+                             IsIndeterminate="{Binding ResourceProgress.IsIndeterminate, Mode=OneWay}" />
+                <TextBlock Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"
+                           Text="{Binding ResourceProgress.ProgressText}" />
+            </Grid>
         </Grid>
     </Grid>
 </Window>

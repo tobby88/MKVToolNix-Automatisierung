@@ -99,6 +99,21 @@ public partial class AppSettingsWindow : Window
         }
     }
 
+    private async void UpdateImdbDatasetButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await _viewModel.UpdateImdbDatasetAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "IMDb-Fehler", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.Cancel();

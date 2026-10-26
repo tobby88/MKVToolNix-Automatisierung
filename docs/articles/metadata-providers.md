@@ -38,6 +38,14 @@ Beim Wiederimport werden gespeicherte manuelle Entscheidungen übernommen. Autom
 
 Der optionale Index wird aus `title.basics.tsv.gz`, `title.episode.tsv.gz` und `title.akas.tsv.gz` aufgebaut. Die App lädt die großen Rohdaten nur nach ausdrücklicher Zustimmung und ersetzt den aktiven Index erst nach einem vollständig erfolgreichen Lauf. Beim Import hält sie die numerischen Episodenzuordnungen kurzzeitig in einer kompakten Wertstruktur, sodass jede Serie und Episode nur einmal vollständig in die temporäre SQLite-Datenbank geschrieben werden muss. Deutsche Aliase werden vor SQLite über einen platzsparenden Titel-ID-Filter begrenzt; der abschließende Indexbau darf einen größeren temporären Seitencache und mehrere SQLite-Hilfsthreads verwenden.
 
+Unter `Einstellungen > Metadaten` startet `Jetzt prüfen / aktualisieren` eine manuelle
+Prüfung. `EnsureCurrentAsync(forceCheck: true)` umgeht dafür das Tagesintervall und eine
+deaktivierte Startautomatik, behält aber Versionsvergleich und Downloadzustimmung bei.
+Ein bereits aktueller Index wird nicht erneut heruntergeladen. Die Aktion speichert keine
+anderen noch offenen Dialogänderungen und startet keine Werkzeugupdates. Fortschritt und
+Abbruch nutzen dieselbe Vorgangssteuerung wie die Ressourcenprüfung nach dem Übernehmen;
+der Dialog bleibt anschließend offen und lässt einen erneuten Versuch zu.
+
 Der sichtbare Importfortschritt kombiniert den exakten Zeilenzähler mit dem Anteil bereits gelesener komprimierter Bytes. Dadurch können sowohl Datei- als auch Gesamtprozent über alle drei Archive angezeigt werden, ohne die großen TSV-Dateien vor dem eigentlichen Import ein zweites Mal vollständig zu dekomprimieren.
 
 Titelähnlichkeit ist das wichtigste Suchsignal. Staffel und Folge beeinflussen die Rangfolge, sind aber kein Ausschlusskriterium, weil IMDb und TVDB größere Serien häufig unterschiedlich nummerieren. Nur ein eindeutiger exakter Serien- und Episodentitel darf ohne Benutzerentscheidung übernommen werden.

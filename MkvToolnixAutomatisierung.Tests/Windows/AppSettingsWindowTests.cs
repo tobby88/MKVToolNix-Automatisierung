@@ -91,6 +91,61 @@ public sealed class AppSettingsWindowTests
     }
 
     [Fact]
+    public async Task Window_ImdbUpdateButtonShowsProgressAndAllowsCancellation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "settings-imdb-window", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            await WpfTestHost.RunAsync(async () =>
+            {
+                var handler = new ImdbCheckHttpHandler { WaitForCancellation = true };
+                using var client = new HttpClient(handler);
+                var manager = new ImdbDatasetManager(new AppMetadataStore(new AppSettingsStore()), client,
+                    new ImdbDatasetIndexBuilder(), new DecliningImdbDatasetConsent(), root, Path.Combine(root, "index.sqlite"));
+                var viewModel = CreateViewModel(new PendingEmbyClient(Task.FromResult(new EmbyServerInfo("Test", "1", "id"))), manager);
+                viewModel.SelectedPage = AppSettingsPage.Metadata;
+                var window = new AppSettingsWindow(viewModel);
+                var update = Assert.IsType<Button>(window.FindName("UpdateImdbDatasetButton"));
+                var cancel = Assert.IsType<Button>(window.FindName("CancelButton"));
+                var progress = Assert.IsType<Grid>(window.FindName("ResourceProgressPanel"));
+                try
+                {
+                    window.Show();
+                    await WpfTestHost.WaitForIdleAsync();
+                    Assert.True(update.IsEnabled); // Manual use does not depend on the automatic-update checkbox.
+                    Assert.Equal(Visibility.Collapsed, progress.Visibility);
+                    update.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                    await WpfTestHost.WaitForIdleAsync();
+                    Assert.False(update.IsEnabled);
+                    Assert.True(cancel.IsEnabled);
+                    Assert.Equal(Visibility.Visible, progress.Visibility);
+
+                    cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    for (var i = 0; i < 100 && !viewModel.IsInteractive; i++) await Task.Delay(10);
+                    await WpfTestHost.WaitForIdleAsync();
+
+                    Assert.True(viewModel.IsInteractive);
+                    Assert.True(window.IsVisible);
+                    Assert.True(update.IsEnabled);
+                    Assert.Equal(Visibility.Collapsed, progress.Visibility);
+                    Assert.Equal("IMDb-Aktualisierung abgebrochen.", viewModel.StatusText);
+                }
+                finally
+                {
+                    if (!viewModel.IsInteractive) viewModel.Cancel();
+                    window.Close();
+                }
+            });
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Window_SeparatesArchiveAndMetadataRows_AndProvidesScrollContainers()
     {
         await WpfTestHost.RunAsync(() =>
@@ -154,7 +209,7 @@ public sealed class AppSettingsWindowTests
         });
     }
 
-    private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient)
+    private static AppSettingsWindowViewModel CreateViewModel(IEmbyClient embyClient, ImdbDatasetManager? imdbDatasetManager = null)
     {
         var settingsStore = new AppSettingsStore();
         var metadataStore = new AppMetadataStore(settingsStore);
@@ -171,7 +226,7 @@ public sealed class AppSettingsWindowTests
             new AppEmbySettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient, new EmbyNfoProviderIdService()),
             new NoOpManagedToolInstaller(),
-            CreateDisabledImdbDatasetManager(metadataStore));
+            imdbDatasetManager ?? CreateDisabledImdbDatasetManager(metadataStore));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Emby);
     }
 

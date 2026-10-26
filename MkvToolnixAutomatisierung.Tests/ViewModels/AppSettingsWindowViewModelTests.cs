@@ -519,6 +519,75 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task UpdateImdbDatasetAsync_OnlyChecksImdbAndPreservesUnsavedDialogValues()
+    {
+        await WpfTestHost.RunAsync(async () =>
+        {
+            var store = new AppSettingsStore();
+            var handler = new ImdbCheckHttpHandler();
+            using var client = new HttpClient(handler);
+            var installer = new RecordingManagedToolInstaller();
+            var manager = new ImdbDatasetManager(new AppMetadataStore(store), client, new ImdbDatasetIndexBuilder(),
+                new DecliningImdbDatasetConsent(), _tempDirectory, Path.Combine(_tempDirectory, "manual.sqlite"));
+            using var viewModel = CreateViewModel(settingsStore: store, managedToolInstaller: installer, imdbDatasetManager: manager);
+            var savedKey = store.Load().Metadata!.TvdbApiKey;
+            viewModel.TvdbApiKey = "unsaved-key";
+            viewModel.EmbyScanWaitTimeoutSecondsText = "invalid";
+            var closed = false;
+            viewModel.CloseRequested += (_, _) => closed = true;
+
+            await viewModel.UpdateImdbDatasetAsync();
+            await viewModel.UpdateImdbDatasetAsync();
+            await WpfTestHost.WaitForIdleAsync();
+
+            Assert.Equal(6, handler.RequestCount);
+            Assert.Equal(0, installer.CallCount);
+            Assert.Equal(savedKey, store.Load().Metadata!.TvdbApiKey);
+            Assert.Equal("unsaved-key", viewModel.TvdbApiKey);
+            Assert.False(store.Load().Metadata!.ImdbDataset.AutoManageEnabled);
+            Assert.False(closed);
+            Assert.True(viewModel.IsInteractive);
+            Assert.False(viewModel.IsCheckingResources);
+            Assert.Equal("IMDb-Prüfung abgeschlossen.", viewModel.StatusText);
+        });
+    }
+
+    [Fact]
+    public async Task UpdateImdbDatasetAsync_CanCancelAndRetry_AndBlocksConcurrentOperations()
+    {
+        var store = new AppSettingsStore();
+        var handler = new ImdbCheckHttpHandler { WaitForCancellation = true };
+        using var client = new HttpClient(handler);
+        var manager = new ImdbDatasetManager(new AppMetadataStore(store), client, new ImdbDatasetIndexBuilder(),
+            new DecliningImdbDatasetConsent(), _tempDirectory, Path.Combine(_tempDirectory, "cancelled-manual.sqlite"));
+        using var viewModel = CreateViewModel(settingsStore: store, imdbDatasetManager: manager);
+        var operation = viewModel.UpdateImdbDatasetAsync();
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            Assert.True(viewModel.IsCheckingResources);
+            Assert.True(viewModel.CanCancel);
+            Assert.False(viewModel.CanSave);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.UpdateImdbDatasetAsync());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => viewModel.SaveSettingsAndEnsureManagedToolsAsync());
+        }
+        finally
+        {
+            viewModel.Cancel();
+        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+        Assert.Equal("IMDb-Aktualisierung abgebrochen.", viewModel.StatusText);
+        Assert.False(viewModel.IsCheckingResources);
+        Assert.True(viewModel.IsInteractive);
+
+        handler.WaitForCancellation = false;
+        await viewModel.UpdateImdbDatasetAsync();
+
+        Assert.Equal("IMDb-Prüfung abgeschlossen.", viewModel.StatusText);
+        Assert.True(viewModel.IsInteractive);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))
@@ -530,7 +599,8 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
     private AppSettingsWindowViewModel CreateViewModel(
         IEmbyClient? embyClient = null,
         AppSettingsStore? settingsStore = null,
-        IManagedToolInstallerService? managedToolInstaller = null)
+        IManagedToolInstallerService? managedToolInstaller = null,
+        ImdbDatasetManager? imdbDatasetManager = null)
     {
         settingsStore ??= new AppSettingsStore();
         var metadataStore = new AppMetadataStore(settingsStore);
@@ -547,7 +617,7 @@ public sealed class AppSettingsWindowViewModelTests : IDisposable
             new AppEmbySettingsStore(settingsStore),
             new EmbyMetadataSyncService(embyClient ?? new StubEmbyClient(new EmbyServerInfo("Test-Emby", "4.9.0", "emby-1")), new EmbyNfoProviderIdService()),
             managedToolInstaller ?? new RecordingManagedToolInstaller(),
-            CreateDisabledImdbDatasetManager(metadataStore));
+            imdbDatasetManager ?? CreateDisabledImdbDatasetManager(metadataStore));
         return new AppSettingsWindowViewModel(services, new NullDialogService(), AppSettingsPage.Archive);
     }
 

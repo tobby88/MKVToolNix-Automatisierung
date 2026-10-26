@@ -245,7 +245,8 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     }
 
     /// <summary>
-    /// Aktiviert den optionalen lokalen IMDb-Index. Große Updates werden trotzdem niemals ohne Nachfrage geladen.
+    /// Aktiviert die automatische IMDb-Updateprüfung beim Start. Ein vorhandener Index
+    /// und die manuelle Aktualisierung bleiben auch ohne Automatik nutzbar.
     /// </summary>
     public bool AutoManageImdbDataset
     {
@@ -265,14 +266,12 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         }
     }
 
-    public string ImdbDatasetStatusText => !AutoManageImdbDataset
-        ? "Offlineindex deaktiviert"
-        : _imdbAvailable
-            ? "Offlineindex bereit"
-            : "Offlineindex noch nicht installiert";
+    public string ImdbDatasetStatusText => _imdbAvailable
+        ? "Offlineindex bereit"
+        : "Offlineindex noch nicht installiert";
 
     public string ImdbDatasetStatusTooltip => !_imdbAvailable
-        ? "Noch keine lokale IMDb-Datenbank vorhanden. Nach dem Übernehmen wird vor dem großen Download gefragt."
+        ? "Noch keine lokale IMDb-Datenbank vorhanden. Mit 'Jetzt prüfen / aktualisieren' kann sie nach Bestätigung heruntergeladen werden."
         : _imdbDatasetSettings.LastUpdatedUtc is { } updated
             ? $"Lokaler IMDb-Episodenindex: {PortableAppStorage.ImdbDatabaseFilePath}{Environment.NewLine}Zuletzt aktualisiert: {updated.ToLocalTime():g}"
             : $"Lokaler IMDb-Episodenindex: {PortableAppStorage.ImdbDatabaseFilePath}";
@@ -410,6 +409,11 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     public bool CanSave => IsInteractive && !HasErrors;
 
     public bool CanCancel => !_isBusy || _toolCheckCancellationSource is not null;
+
+    /// <summary>Zeigt den gemeinsamen Fortschritt von Ressourcenprüfung und manueller IMDb-Aktualisierung.</summary>
+    public StartupProgressWindowViewModel ResourceProgress { get; } = new();
+
+    public bool IsCheckingResources => _toolCheckCancellationSource is not null;
 
     public bool HasErrors => EmbyScanWaitTimeoutValidationMessage is not null;
 
@@ -598,7 +602,17 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
     /// Dadurch ist nach dem Aktivieren von MKVToolNix, ffprobe, MediathekView oder IMDb-Offlineindex kein
     /// App-Neustart nötig. Der Dialog bleibt offen, damit Download-, Import- und Entpackstatus sichtbar bleiben.
     /// </remarks>
-    public async Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
+    public Task SaveSettingsAndEnsureManagedToolsAsync(CancellationToken cancellationToken = default)
+        => RunResourceOperationAsync(imdbOnly: false, cancellationToken);
+
+    /// <summary>
+    /// Prüft IMDb sofort erneut, auch nach abgelehntem Startangebot oder bei deaktivierter Automatik.
+    /// Der Dialog bleibt offen; noch nicht übernommene Einstellungen werden dabei nicht gespeichert.
+    /// </summary>
+    public Task UpdateImdbDatasetAsync(CancellationToken cancellationToken = default)
+        => RunResourceOperationAsync(imdbOnly: true, cancellationToken);
+
+    private async Task RunResourceOperationAsync(bool imdbOnly, CancellationToken cancellationToken)
     {
         EnsureNotBusy();
         cancellationToken.ThrowIfCancellationRequested();
@@ -606,13 +620,18 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
         using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _toolCheckCancellationSource = linkedCancellation;
         OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(IsCheckingResources));
 
         try
         {
-            SetBusy(true, "Einstellungen werden gespeichert...");
-            SaveSettings();
-            settingsWereSaved = true;
-            StatusText = "Ressourcen werden geprüft...";
+            SetBusy(true, imdbOnly ? "IMDb-Aktualisierung wird geprüft..." : "Einstellungen werden gespeichert...");
+            ResourceProgress.Report(new ManagedToolStartupProgress(StatusText, null, null, true));
+            if (!imdbOnly)
+            {
+                SaveSettings();
+                settingsWereSaved = true;
+                StatusText = "Ressourcen werden geprüft...";
+            }
 
             var progress = new Progress<ManagedToolStartupProgress>(value =>
             {
@@ -622,36 +641,40 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
                     UpdateManagedToolProgress(value);
                 }
             });
-            var result = await _services.ManagedTools.EnsureManagedToolsAsync(
-                progress,
-                linkedCancellation.Token);
+            var toolWarnings = Array.Empty<string>();
+            if (!imdbOnly)
+            {
+                var result = await _services.ManagedTools.EnsureManagedToolsAsync(progress, linkedCancellation.Token);
+                toolWarnings = result.Warnings.ToArray();
+            }
             linkedCancellation.Token.ThrowIfCancellationRequested();
             var imdbResult = await _services.ImdbDataset.EnsureCurrentAsync(
                 progress,
-                linkedCancellation.Token);
+                linkedCancellation.Token,
+                forceCheck: imdbOnly);
             linkedCancellation.Token.ThrowIfCancellationRequested();
 
-            var warnings = result.Warnings.Concat(imdbResult.Warnings).ToArray();
+            var warnings = toolWarnings.Concat(imdbResult.Warnings).ToArray();
             if (warnings.Length > 0)
             {
-                StatusText = "Einstellungen gespeichert; Ressourcenprüfung mit Warnungen.";
-                _dialogService.ShowWarning("Ressourcenverwaltung", string.Join(Environment.NewLine + Environment.NewLine, warnings));
+                StatusText = imdbOnly ? "IMDb-Prüfung mit Warnungen abgeschlossen." : "Einstellungen gespeichert; Ressourcenprüfung mit Warnungen.";
+                _dialogService.ShowWarning(imdbOnly ? "IMDb-Offlineindex" : "Ressourcenverwaltung", string.Join(Environment.NewLine + Environment.NewLine, warnings));
             }
             else
             {
-                StatusText = "Einstellungen gespeichert; Ressourcen bereit.";
+                StatusText = imdbOnly ? "IMDb-Prüfung abgeschlossen." : "Einstellungen gespeichert; Ressourcen bereit.";
             }
         }
         catch (OperationCanceledException) when (linkedCancellation.IsCancellationRequested)
         {
-            StatusText = settingsWereSaved
+            StatusText = imdbOnly ? "IMDb-Aktualisierung abgebrochen." : settingsWereSaved
                 ? "Einstellungen gespeichert; Ressourcenprüfung abgebrochen."
                 : "Einstellungen konnten nicht gespeichert werden.";
             throw;
         }
         catch
         {
-            StatusText = settingsWereSaved
+            StatusText = imdbOnly ? "IMDb-Aktualisierung fehlgeschlagen." : settingsWereSaved
                 ? "Einstellungen gespeichert; Ressourcenprüfung fehlgeschlagen."
                 : "Einstellungen konnten nicht gespeichert werden.";
             throw;
@@ -661,7 +684,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             _toolCheckCancellationSource = null;
             try
             {
-                if (settingsWereSaved)
+                if (settingsWereSaved || imdbOnly)
                 {
                     ReloadManagedResourceState();
                     RefreshDerivedState();
@@ -671,6 +694,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
             {
                 SetBusy(false, StatusText);
                 OnPropertyChanged(nameof(CanCancel));
+                OnPropertyChanged(nameof(IsCheckingResources));
             }
         }
     }
@@ -1061,6 +1085,7 @@ internal sealed class AppSettingsWindowViewModel : INotifyPropertyChanged, INoti
 
     private void UpdateManagedToolProgress(ManagedToolStartupProgress progress)
     {
+        ResourceProgress.Report(progress);
         StatusText = string.IsNullOrWhiteSpace(progress.DetailText)
             ? progress.StatusText
             : $"{progress.StatusText} {progress.DetailText}";

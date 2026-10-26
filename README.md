@@ -43,7 +43,7 @@ Typische Quellen sind MP4-Videos, zusätzliche AD-Aufnahmen, Untertitel in ASS/S
 
 **TVDB** unterstützt die Zuordnung zu Serien und Episoden; dafür werden eigene TVDB-Zugangsdaten benötigt. **IMDb** kann über die TVDB-Verknüpfung, einen optionalen lokalen Suchindex oder browsergestützt abgeglichen werden. Unsichere Treffer lassen sich manuell auswählen; für Bonusmaterial ist auch eine bewusste Entscheidung gegen eine Provider-ID möglich.
 
-Der **IMDb-Offlineindex** ist freiwillig. Vor Downloads fragt die App nach und zeigt vorhandenen und verfügbaren Datenstand an. Als Richtwerte gelten **rund 750 MiB Download, 1,3 GiB dauerhaft belegter Speicher und 4 bis 5 GiB freier Speicher während eines Updates** (Stand September 2026). Die Datenmengen wachsen; die automatische Verwaltung lässt sich in den Einstellungen abschalten.
+Der **IMDb-Offlineindex** ist freiwillig. Vor Downloads fragt die App nach und zeigt vorhandenen und verfügbaren Datenstand an. Unter **Einstellungen > Metadaten > Jetzt prüfen / aktualisieren** lässt sich ein übersprungenes Update jederzeit nachholen, auch ohne automatische Startprüfung. Als Richtwerte gelten **rund 750 MiB Download, 1,3 GiB dauerhaft belegter Speicher und 4 bis 5 GiB freier Speicher während eines Updates** (Stand September 2026). Die Datenmengen wachsen; die automatische Verwaltung lässt sich in den Einstellungen abschalten.
 
 Für **Emby** werden Serveradresse und API-Key hinterlegt. Liegt das Archiv auf dem Server unter einem anderen Pfad als unter Windows, muss auch diese Zuordnung in den Einstellungen stimmen. Nach dem Laden eines Mux-Reports prüft die App automatisch NFOs und Emby-Einträge. Bei noch unbekannten Dateien kann ein Scan der zugeordneten Serienbibliothek angestoßen werden.
 

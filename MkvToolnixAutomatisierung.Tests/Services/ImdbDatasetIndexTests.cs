@@ -318,6 +318,59 @@ public sealed class ImdbDatasetIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureCurrentAsync_ManualCheckInstallsAfterDeclinedStartupCheck()
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var client = new HttpClient(handler);
+        var consent = new FixedConsent(false);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings { ManagementPreferenceConfigured = true }
+        });
+        var manager = new ImdbDatasetManager(store, client, new ImdbDatasetIndexBuilder(), consent,
+            _tempDirectory, Path.Combine(_tempDirectory, "manual.sqlite"));
+
+        Assert.False((await manager.EnsureCurrentAsync()).HasWarning);
+        Assert.False((await manager.EnsureCurrentAsync()).HasWarning);
+        Assert.Equal(1, consent.CallCount);
+        Assert.Equal(3, handler.HeadRequestCount);
+
+        consent.Response = true;
+        var manual = await manager.EnsureCurrentAsync(forceCheck: true);
+
+        Assert.False(manual.HasWarning);
+        Assert.Equal(2, consent.CallCount);
+        Assert.Equal(6, handler.HeadRequestCount);
+        Assert.Equal(3, handler.GetRequestCount);
+        Assert.True(new ImdbDatasetSearchService(Path.Combine(_tempDirectory, "manual.sqlite")).IsAvailable);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnsureCurrentAsync_ManualCheckWorksWithoutEnablingAutomaticManagement(bool configured)
+    {
+        var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
+        using var client = new HttpClient(handler);
+        var consent = new FixedConsent(false);
+        var store = new FakeMetadataStore(new AppMetadataSettings
+        {
+            ImdbDataset = new ImdbDatasetSettings { AutoManageEnabled = false, ManagementPreferenceConfigured = configured }
+        });
+        var manager = new ImdbDatasetManager(store, client, new ImdbDatasetIndexBuilder(), consent,
+            _tempDirectory, Path.Combine(_tempDirectory, "manual-disabled.sqlite"));
+
+        var result = await manager.EnsureCurrentAsync(forceCheck: true);
+
+        Assert.False(result.HasWarning);
+        Assert.Equal(1, consent.CallCount);
+        Assert.Equal(3, handler.HeadRequestCount);
+        Assert.Equal(0, handler.GetRequestCount);
+        Assert.False(store.CurrentSettings.ImdbDataset.AutoManageEnabled);
+        Assert.Equal(configured, store.CurrentSettings.ImdbDataset.ManagementPreferenceConfigured);
+    }
+
+    [Fact]
     public async Task EnsureCurrentAsync_OffersUpdateAgainImmediately_WhenDownloadIsCanceled()
     {
         var handler = new DatasetHttpHandler(BuildSmallDatasetByteMap());
@@ -416,11 +469,14 @@ public sealed class ImdbDatasetIndexTests : IDisposable
 
         var first = await manager.EnsureCurrentAsync(progress);
         var second = await manager.EnsureCurrentAsync();
+        var manual = await manager.EnsureCurrentAsync(forceCheck: true);
 
         Assert.False(first.HasWarning);
         Assert.False(second.HasWarning);
+        Assert.False(manual.HasWarning);
         Assert.True(File.Exists(databasePath));
         Assert.Equal(1, consent.CallCount);
+        Assert.Equal(6, handler.HeadRequestCount);
         Assert.Equal(3, handler.GetRequestCount);
         Assert.False(string.IsNullOrWhiteSpace(store.CurrentSettings.ImdbDataset.InstalledVersion));
         Assert.Equal(
@@ -1276,12 +1332,13 @@ public sealed class ImdbDatasetIndexTests : IDisposable
 
     private sealed class FixedConsent(bool response) : IImdbDatasetUpdateConsent
     {
+        public bool Response { get; set; } = response;
         public int CallCount { get; private set; }
 
         public bool ConfirmUpdate(ImdbDatasetUpdateOffer offer)
         {
             CallCount++;
-            return response;
+            return Response;
         }
     }
 

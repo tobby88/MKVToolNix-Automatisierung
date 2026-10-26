@@ -162,16 +162,23 @@ internal sealed class ImdbDatasetManager
     }
 
     /// <summary>
-    /// Prüft höchstens täglich auf Änderungen. Der eigentliche große Download erfolgt immer erst nach Zustimmung.
+    /// Prüft automatisch höchstens täglich auf Änderungen. Der eigentliche große Download erfolgt immer erst nach Zustimmung.
     /// </summary>
+    /// <param name="progress">Fortschritt für Prüfung, Download und Indexaufbau.</param>
+    /// <param name="cancellationToken">Bricht den laufenden Vorgang ab.</param>
+    /// <param name="forceCheck">
+    /// Explizite manuelle Prüfung: umgeht das Tagesintervall und die deaktivierte Automatik
+    /// für diesen Aufruf, ohne die Einstellung zu ändern oder die Downloadzustimmung zu überspringen.
+    /// </param>
     public async Task<ImdbDatasetStartupResult> EnsureCurrentAsync(
         IProgress<ManagedToolStartupProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool forceCheck = false)
     {
         await _updateSync.WaitAsync(cancellationToken);
         try
         {
-            return await EnsureCurrentCoreAsync(progress, cancellationToken);
+            return await EnsureCurrentCoreAsync(progress, cancellationToken, forceCheck);
         }
         finally
         {
@@ -181,12 +188,13 @@ internal sealed class ImdbDatasetManager
 
     private async Task<ImdbDatasetStartupResult> EnsureCurrentCoreAsync(
         IProgress<ManagedToolStartupProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceCheck)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var settings = _metadataStore.Load();
         var datasetSettings = settings.ImdbDataset ?? new ImdbDatasetSettings();
-        if (!datasetSettings.ManagementPreferenceConfigured)
+        if (!datasetSettings.ManagementPreferenceConfigured && !forceCheck)
         {
             // Migration für Installationen, deren settings.json vor Einführung des IMDb-Index
             // entstanden ist. Ein später bewusst deaktivierter Index bleibt dagegen deaktiviert.
@@ -195,7 +203,7 @@ internal sealed class ImdbDatasetManager
             PersistDatasetSettings(datasetSettings);
         }
 
-        if (!datasetSettings.AutoManageEnabled)
+        if (!datasetSettings.AutoManageEnabled && !forceCheck)
         {
             return new ImdbDatasetStartupResult([]);
         }
@@ -225,7 +233,8 @@ internal sealed class ImdbDatasetManager
                 settingsChanged = true;
             }
             if (settingsChanged) PersistDatasetSettings(datasetSettings);
-            if ((databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
+            if (!forceCheck
+                && (databaseExists || string.IsNullOrWhiteSpace(datasetSettings.InstalledVersion))
                 && datasetSettings.LastCheckCompleted
                 && datasetSettings.LastCheckedSchemaVersion == ImdbDatasetIndexBuilder.SchemaVersion
                 && datasetSettings.LastCheckedUtc is { } lastCheckedUtc
