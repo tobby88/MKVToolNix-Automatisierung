@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using MkvToolnixAutomatisierung.Services;
@@ -7,6 +8,41 @@ namespace MkvToolnixAutomatisierung.Tests.Services;
 
 public sealed class ManagedToolArchiveExtractorTests : IDisposable
 {
+    /// <summary>
+    /// Uses the existing tiny real LZMA2 payload with a larger declared dictionary,
+    /// not a large download or generated 7z writer dependency. Extraction must
+    /// preserve the complete payload at the official package's 256 MiB boundary,
+    /// while a 512 MiB request must fail before any output file is created.
+    /// </summary>
+    [Theory]
+    [InlineData((byte)28, true)]
+    [InlineData((byte)32, true)]
+    [InlineData((byte)34, false)]
+    public async Task ExtractArchive_Lzma2DictionaryAcceptsPortableToolBoundaryButRejectsLargerAllocations(byte dictionaryProperty, bool accepted)
+    {
+        var archivePath = Path.Combine(_tempDirectory, "dictionary.7z");
+        var destination = Path.Combine(_tempDirectory, "dictionary-target");
+        WriteEmbeddedSevenZipFixture(archivePath, dictionaryProperty);
+        var extractor = new ManagedToolArchiveExtractor();
+        Assert.Equal(256L * 1024 * 1024, SharpCompress.Common.DictionarySizeLimits.Lzma2);
+        if (!accepted)
+        {
+            var error = await Assert.ThrowsAsync<SharpCompress.Common.InvalidFormatException>(() =>
+                extractor.ExtractArchiveAsync(archivePath, destination));
+            Assert.Contains("268435456", error.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateFiles(destination, "*", SearchOption.AllDirectories));
+            return;
+        }
+
+        await extractor.ExtractArchiveAsync(archivePath, destination);
+        var baselineArchive = Path.Combine(_tempDirectory, "baseline.7z");
+        var baselineDestination = Path.Combine(_tempDirectory, "baseline-target");
+        WriteEmbeddedSevenZipFixture(baselineArchive);
+        await extractor.ExtractArchiveAsync(baselineArchive, baselineDestination);
+        Assert.Equal(File.ReadAllBytes(Path.Combine(baselineDestination, "7Zip.Tar.tar")),
+            File.ReadAllBytes(Path.Combine(destination, "7Zip.Tar.tar")));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -331,7 +367,7 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         return path;
     }
 
-    private static void WriteEmbeddedSevenZipFixture(string archivePath)
+    private static void WriteEmbeddedSevenZipFixture(string archivePath, byte? dictionaryProperty = null)
     {
         // Dieses winzige LZMA-7z-Fixture stammt aus den MIT-lizenzierten SharpCompress-Testdaten.
         // Es hält den Lesetest deterministisch und unabhängig von externen Werkzeugen oder der
@@ -344,7 +380,35 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
             + "gI4ABwsBAAEhIQEDDKgAAAgKAV3XFwsAAAUBGQoAAAAAAAAAAAAAERsANwBa"
             + "AGkAcAAuAFQAYQByAC4AdABhAHIAAAAZABQKAQAAJgdey9fZARUGAQAggKSB"
             + "AAA=";
-        File.WriteAllBytes(archivePath, Convert.FromBase64String(sevenZipTarArchiveBase64));
+        var bytes = Convert.FromBase64String(sevenZipTarArchiveBase64);
+        if (dictionaryProperty is { } property)
+        {
+            // This fixture has a plain 7z next-header with exactly one LZMA2
+            // coder (flags 0x21, method 0x21, one-byte property originally 3).
+            // Only its dictionary declaration changes. Repair both checksums so
+            // failures exercise decoder limits rather than a corrupt header.
+            var headerOffset = checked(32 + (int)BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(12, 8)));
+            var headerSize = checked((int)BinaryPrimitives.ReadUInt64LittleEndian(bytes.AsSpan(20, 8)));
+            var header = bytes.AsSpan(headerOffset, headerSize);
+            var index = header.IndexOf(new byte[] { 0x21, 0x21, 0x01, 0x03 });
+            Assert.True(index >= 0);
+            Assert.Equal(-1, header[(index + 4)..].IndexOf(new byte[] { 0x21, 0x21, 0x01, 0x03 }));
+            header[index + 3] = property;
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(28, 4), FixtureCrc32(header));
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8, 4), FixtureCrc32(bytes.AsSpan(12, 20)));
+        }
+        File.WriteAllBytes(archivePath, bytes);
+    }
+
+    private static uint FixtureCrc32(ReadOnlySpan<byte> bytes)
+    {
+        var crc = uint.MaxValue;
+        foreach (var value in bytes)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ ((crc & 1) != 0 ? 0xedb88320u : 0);
+        }
+        return ~crc;
     }
 
     private sealed class CollectingProgress(List<ManagedToolExtractionProgress> events) : IProgress<ManagedToolExtractionProgress>

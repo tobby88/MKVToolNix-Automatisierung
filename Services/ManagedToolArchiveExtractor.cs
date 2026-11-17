@@ -1,4 +1,5 @@
 using SharpCompress.Archives;
+using SharpCompress.Common;
 using SharpCompress.Readers;
 
 namespace MkvToolnixAutomatisierung.Services;
@@ -29,6 +30,19 @@ internal interface IManagedToolArchiveExtractor
 /// </summary>
 internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
+    /// <summary>
+    /// Configures the process-wide decoder policy once, before this application's
+    /// archive consumer starts. Official MKVToolNix 103.0 portable archives declare
+    /// a 256 MiB LZMA2 dictionary; SharpCompress 0.50.9 defaults to 64 MiB. Retain a
+    /// finite 256 MiB cap rather than disabling the new allocation protection.
+    /// Other codecs keep their upstream limits. Never change this per extraction,
+    /// since concurrent readers share SharpCompress's static policy.
+    /// </summary>
+    static ManagedToolArchiveExtractor()
+    {
+        DictionarySizeLimits.Lzma2 = 256L * 1024 * 1024;
+    }
+
     private const long FreeSpaceReserve = 64L * 1024 * 1024;
     private readonly long _maximumExtractedBytes;
     private readonly Func<string, long?> _availableSpace;
