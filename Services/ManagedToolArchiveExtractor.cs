@@ -32,9 +32,9 @@ internal sealed class ManagedToolArchiveExtractor : IManagedToolArchiveExtractor
 {
     /// <summary>
     /// Configures the process-wide decoder policy once, before this application's
-    /// archive consumer starts. Official MKVToolNix 103.0 portable archives declare
-    /// a 256 MiB LZMA2 dictionary; SharpCompress 0.50.9 defaults to 64 MiB. Retain a
-    /// finite 256 MiB cap rather than disabling the new allocation protection.
+    /// archive consumer starts. Allow up to 256 MiB of retained LZMA2 history for
+    /// portable MKVToolNix archives that declare a 256 MiB dictionary. SharpCompress
+    /// 0.50.11 limits actual decoder history, not the dictionary size in the header.
     /// Other codecs keep their upstream limits. Never change this per extraction,
     /// since concurrent readers share SharpCompress's static policy.
     /// </summary>

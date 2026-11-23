@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using MkvToolnixAutomatisierung.Services;
+using SharpCompress.Common;
 using Xunit;
 
 namespace MkvToolnixAutomatisierung.Tests.Services;
@@ -10,29 +11,20 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
 {
     /// <summary>
     /// Uses the existing tiny real LZMA2 payload with a larger declared dictionary,
-    /// not a large download or generated 7z writer dependency. Extraction must
-    /// preserve the complete payload at the official package's 256 MiB boundary,
-    /// while a 512 MiB request must fail before any output file is created.
+    /// not a large download. Since SharpCompress 0.50.11 the header does not
+    /// reserve that much memory, so all declarations must preserve the payload.
     /// </summary>
     [Theory]
-    [InlineData((byte)28, true)]
-    [InlineData((byte)32, true)]
-    [InlineData((byte)34, false)]
-    public async Task ExtractArchive_Lzma2DictionaryAcceptsPortableToolBoundaryButRejectsLargerAllocations(byte dictionaryProperty, bool accepted)
+    [InlineData((byte)28)] // 64 MiB
+    [InlineData((byte)32)] // 256 MiB
+    [InlineData((byte)34)] // 512 MiB declared, but not needed by this payload
+    public async Task ExtractArchive_Lzma2AcceptsLargeDeclaredDictionariesForSmallPayloads(byte dictionaryProperty)
     {
         var archivePath = Path.Combine(_tempDirectory, "dictionary.7z");
         var destination = Path.Combine(_tempDirectory, "dictionary-target");
         WriteEmbeddedSevenZipFixture(archivePath, dictionaryProperty);
         var extractor = new ManagedToolArchiveExtractor();
-        Assert.Equal(256L * 1024 * 1024, SharpCompress.Common.DictionarySizeLimits.Lzma2);
-        if (!accepted)
-        {
-            var error = await Assert.ThrowsAsync<SharpCompress.Common.InvalidFormatException>(() =>
-                extractor.ExtractArchiveAsync(archivePath, destination));
-            Assert.Contains("268435456", error.Message, StringComparison.Ordinal);
-            Assert.Empty(Directory.EnumerateFiles(destination, "*", SearchOption.AllDirectories));
-            return;
-        }
+        Assert.Equal(256L * 1024 * 1024, DictionarySizeLimits.Lzma2);
 
         await extractor.ExtractArchiveAsync(archivePath, destination);
         var baselineArchive = Path.Combine(_tempDirectory, "baseline.7z");
@@ -41,6 +33,31 @@ public sealed class ManagedToolArchiveExtractorTests : IDisposable
         await extractor.ExtractArchiveAsync(baselineArchive, baselineDestination);
         Assert.Equal(File.ReadAllBytes(Path.Combine(baselineDestination, "7Zip.Tar.tar")),
             File.ReadAllBytes(Path.Combine(destination, "7Zip.Tar.tar")));
+    }
+
+    [Fact]
+    public async Task ExtractArchive_Lzma2RejectsPayloadThatExceedsRetainedHistoryLimit()
+    {
+        var archivePath = Path.Combine(_tempDirectory, "history.7z");
+        var destination = Path.Combine(_tempDirectory, "history-target");
+        WriteEmbeddedSevenZipFixture(archivePath);
+        var extractor = new ManagedToolArchiveExtractor();
+
+        // Unit tests run serially. Reduce the global limit only within this test
+        // so the real decoder crosses it with a tiny fixture, then restore it.
+        var originalLimit = DictionarySizeLimits.Lzma2;
+        try
+        {
+            DictionarySizeLimits.Lzma2 = 1024;
+            var error = await Assert.ThrowsAsync<InvalidFormatException>(() =>
+                extractor.ExtractArchiveAsync(archivePath, destination));
+            Assert.Contains("LZMA2 dictionary history", error.Message, StringComparison.Ordinal);
+            Assert.Contains("1024", error.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DictionarySizeLimits.Lzma2 = originalLimit;
+        }
     }
 
     [Theory]
